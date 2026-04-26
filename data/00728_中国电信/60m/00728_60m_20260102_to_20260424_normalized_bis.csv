@@ -1,0 +1,22 @@
+﻿bi_id,direction,start_fx_id,end_fx_id,start_ts,end_ts,high,low,start_norm_idx,end_norm_idx,is_confirmed,status,note
+0,down,0,23,2026-01-02 11:30,2026-01-21 15:00,5.54,5.06,1,63,True,confirmed,auto_generated
+1,up,23,26,2026-01-21 15:00,2026-01-23 11:30,5.26,5.06,63,69,True,confirmed,auto_generated
+2,down,26,27,2026-01-23 11:30,2026-01-27 16:00,5.26,5.09,69,76,True,confirmed,auto_generated
+3,up,27,28,2026-01-27 16:00,2026-01-28 15:00,5.47,5.09,76,81,True,confirmed,auto_generated
+4,down,28,44,2026-01-28 15:00,2026-02-10 16:00,5.47,4.87,81,123,True,confirmed,auto_generated
+5,up,44,47,2026-02-10 16:00,2026-02-12 12:00,4.93,4.87,123,132,True,confirmed,auto_generated
+6,down,47,48,2026-02-12 12:00,2026-02-13 10:30,4.93,4.86,132,136,True,confirmed,auto_generated
+7,up,48,55,2026-02-13 10:30,2026-02-25 11:30,5.02,4.86,136,157,True,confirmed,auto_generated
+8,down,55,60,2026-02-25 11:30,2026-03-02 10:30,5.02,4.9,157,173,True,confirmed,auto_generated
+9,up,60,80,2026-03-02 10:30,2026-03-17 12:00,5.17,4.9,173,230,True,confirmed,auto_generated
+10,down,80,96,2026-03-17 12:00,2026-03-30 14:00,5.17,4.75,230,272,True,confirmed,auto_generated
+11,up,96,115,2026-03-30 14:00,2026-04-14 10:30,5.03,4.75,272,309,True,confirmed,auto_generated
+12,down,115,120,2026-04-14 10:30,2026-04-16 10:30,5.03,4.86,309,321,True,confirmed,auto_generated
+13,up,120,132,2026-04-16 10:30,2026-04-23 16:00,5.15,4.86,321,352,False,preprocessing,auto_generated
+14,down,121,124,2026-04-16 14:00,2026-04-20 10:30,4.94,4.88,324,331,True,confirmed,auto_generated
+15,up,124,132,2026-04-20 10:30,2026-04-23 16:00,5.15,4.88,331,352,False,preprocessing,auto_generated
+16,down,125,133,2026-04-21 12:00,2026-04-24 11:30,5.06,4.9,339,354,False,preprocessing,auto_generated
+17,up,126,132,2026-04-21 15:00,2026-04-23 16:00,5.15,5.02,340,352,False,preprocessing,auto_generated
+18,down,127,133,2026-04-21 16:00,2026-04-24 11:30,5.07,4.9,341,354,False,preprocessing,auto_generated
+19,up,128,132,2026-04-22 10:30,2026-04-23 16:00,5.15,5.01,342,352,False,preprocessing,auto_generated
+20,down,130,133,2026-04-23 12:00,2026-04-24 11:30,5.13,4.9,349,354,False,preprocessing,auto_generated

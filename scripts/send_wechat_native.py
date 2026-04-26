@@ -152,7 +152,7 @@ def switch_chat(
 
         # Use keyboard navigation rather than a fixed click position because
         # WeChat search result layouts vary between versions and window sizes.
-        for _ in range(max(result_index, 1)):
+        for _ in range(max(result_index - 1, 0)):
             tap(win32con.VK_DOWN)
             time.sleep(0.15)
         tap(win32con.VK_RETURN)
