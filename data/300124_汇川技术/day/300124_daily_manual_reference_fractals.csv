@@ -1,0 +1,13 @@
+fx_id,fx_type,ts,price,is_confirmed,note
+0,top,2025-10-09,91.0,True,confirmed
+1,bottom,2025-11-21,68.25,True,confirmed
+2,top,2025-12-11,75.48,True,confirmed
+3,bottom,2025-12-17,69.98,True,confirmed
+4,top,2026-01-16,82.15,True,confirmed
+5,bottom,2026-01-30,73.21,True,confirmed
+6,top,2026-02-10,78.59,True,confirmed
+7,bottom,2026-03-04,67.62,True,confirmed
+8,top,2026-03-13,72.79,True,confirmed
+9,bottom,2026-03-24,65.0,True,confirmed
+10,top,2026-03-31,68.88,False,pre_bi_candidate
+11,bottom,2026-04-07,64.55,False,invalid_next_bottom_no_independent_bar

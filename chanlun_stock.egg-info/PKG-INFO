@@ -1,0 +1,101 @@
+Metadata-Version: 2.4
+Name: chanlun-stock
+Version: 0.1.0
+Summary: Chan theory-based stock analysis helper in Python
+Author-email: Developer <dev@example.com>
+License: MIT
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: pandas>=1.5.0
+Requires-Dist: numpy>=1.23.0
+Requires-Dist: pydantic>=2.0
+Requires-Dist: matplotlib>=3.5.0
+Requires-Dist: mplfinance>=0.12.0
+Requires-Dist: typer>=0.9.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0; extra == "dev"
+Requires-Dist: black>=23.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.0; extra == "dev"
+Provides-Extra: visualization
+Requires-Dist: plotly>=5.0; extra == "visualization"
+Requires-Dist: jupyter>=1.0; extra == "visualization"
+
+# Chanlun Stock Analysis
+
+基于缠论（Chan theory / 缠论）的 Python 股票辅助分析工具。
+
+## 功能
+
+- K 线数据读取与清洗
+- 缠论结构识别：分型、笔、线段、中枢
+- 信号解释与可视化
+- 回测验证框架
+
+## 项目结构
+
+```
+chanlun-stock/
+├── src/
+│   └── chanlun/
+│       ├── models.py           # 数据结构定义
+│       ├── normalize.py        # 包含关系处理
+│       ├── fractal.py          # 分型识别
+│       ├── bi.py               # 笔识别
+│       ├── zhongshu.py         # 中枢识别
+│       ├── data/
+│       │   ├── reader.py       # K线读取
+│       │   └── cleaner.py      # 数据清洗
+│       ├── strategy/
+│       │   └── signals.py      # 信号定义
+│       ├── backtest/
+│       │   └── engine.py       # 回测引擎
+│       ├── visualization/
+│       │   └── plotter.py      # 可视化
+│       └── cli.py              # CLI入口
+├── tests/
+│   ├── test_normalize.py
+│   ├── test_fractal.py
+│   ├── test_bi.py
+│   └── test_zhongshu.py
+├── docs/
+│   └── chanlun-rule-spec.md    # 规则规格
+├── pyproject.toml
+├── requirements.txt
+└── README.md
+```
+
+## 快速开始
+
+```bash
+# 安装依赖
+pip install -e .
+
+# 运行演示
+python src/chanlun/main.py path/to/data.csv
+
+# 运行测试
+pytest tests/
+```
+
+## 开发流程
+
+1. 准备样例 K 线 CSV 数据
+2. 运行 `reader.py` 验证数据载入
+3. 逐个验证规则模块（分型、笔、中枢）
+4. 补全测试案例
+5. 迭代规则细化
+
+## 第一阶段里程碑
+
+- [ ] 数据结构与读取
+- [ ] 包含关系处理
+- [ ] 分型识别与去重
+- [ ] 笔识别与确认
+- [ ] 最小中枢识别
+- [ ] 样例可视化与验证
+
+## 许可
+
+MIT

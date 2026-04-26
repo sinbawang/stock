@@ -1,0 +1,21 @@
+﻿bi_id,direction,start_fx_id,end_fx_id,start_ts,end_ts,high,low,start_norm_idx,end_norm_idx,is_confirmed,status,note
+0,up,0,3,2026-03-26 14:30,2026-03-27 14:00,21.7,21.21,2,13,True,confirmed,auto_generated
+1,down,3,4,2026-03-27 14:00,2026-03-30 10:00,21.7,21.01,13,18,True,confirmed,auto_generated
+2,up,4,7,2026-03-30 10:00,2026-03-31 10:30,21.8,21.01,18,30,True,confirmed,auto_generated
+3,down,7,12,2026-03-31 10:30,2026-03-31 15:00,21.8,21.34,30,42,True,confirmed,auto_generated
+4,up,12,17,2026-03-31 15:00,2026-04-01 14:30,22.85,21.34,42,53,True,confirmed,auto_generated
+5,down,17,28,2026-04-01 14:30,2026-04-03 13:30,22.85,21.66,53,76,True,confirmed,auto_generated
+6,up,28,31,2026-04-03 13:30,2026-04-07 10:00,21.97,21.66,76,82,True,confirmed,auto_generated
+7,down,31,34,2026-04-07 10:00,2026-04-07 13:15,21.97,21.54,82,88,True,confirmed,auto_generated
+8,up,34,47,2026-04-07 13:15,2026-04-10 10:15,23.14,21.54,88,125,True,confirmed,auto_generated
+9,down,47,52,2026-04-10 10:15,2026-04-13 10:00,23.14,21.78,125,139,True,confirmed,auto_generated
+10,up,52,67,2026-04-13 10:00,2026-04-16 13:30,23.36,21.78,139,178,True,confirmed,auto_generated
+11,down,67,72,2026-04-16 13:30,2026-04-17 11:15,23.36,22.14,178,185,True,confirmed,auto_generated
+12,up,72,75,2026-04-17 11:15,2026-04-17 14:00,22.32,22.14,185,190,True,confirmed,auto_generated
+13,down,75,76,2026-04-17 14:00,2026-04-20 10:30,22.32,21.7,190,196,True,confirmed,auto_generated
+14,up,76,85,2026-04-20 10:30,2026-04-21 10:15,22.18,21.7,196,208,True,confirmed,auto_generated
+15,down,85,96,2026-04-21 10:15,2026-04-23 11:30,22.18,21.21,208,234,False,preprocessing,auto_generated
+16,down,87,96,2026-04-21 14:45,2026-04-23 11:30,21.93,21.21,215,234,False,preprocessing,auto_generated
+17,down,89,96,2026-04-22 10:00,2026-04-23 11:30,21.83,21.21,218,234,False,preprocessing,auto_generated
+18,up,90,95,2026-04-22 13:30,2026-04-23 10:00,21.64,21.49,221,229,True,confirmed,auto_generated
+19,down,95,96,2026-04-23 10:00,2026-04-23 11:30,21.64,21.21,229,234,False,preprocessing,auto_generated

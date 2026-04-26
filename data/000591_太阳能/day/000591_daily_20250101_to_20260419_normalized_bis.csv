@@ -1,0 +1,15 @@
+﻿bi_id,direction,start_fx_id,end_fx_id,start_ts,end_ts,high,low,start_norm_idx,end_norm_idx,is_confirmed,status,note
+0,up,0,1,2025-01-13 00:00,2025-01-20 00:00,4.391,4.071,5,10,True,confirmed,auto_generated
+1,down,1,4,2025-01-20 00:00,2025-01-24 00:00,4.391,4.241,10,14,True,confirmed,auto_generated
+2,up,4,7,2025-01-24 00:00,2025-02-10 00:00,4.661,4.241,14,18,True,confirmed,auto_generated
+3,down,7,14,2025-02-10 00:00,2025-03-05 00:00,4.661,4.241,18,34,True,confirmed,auto_generated
+4,up,14,17,2025-03-05 00:00,2025-03-26 00:00,4.561,4.241,34,48,True,confirmed,auto_generated
+5,down,17,20,2025-03-26 00:00,2025-04-07 00:00,4.561,3.951,48,54,True,confirmed,auto_generated
+6,up,20,46,2025-04-07 00:00,2025-07-23 00:00,4.627,3.951,54,118,True,confirmed,auto_generated
+7,down,46,53,2025-07-23 00:00,2025-08-14 00:00,4.627,4.367,118,133,True,confirmed,auto_generated
+8,up,53,60,2025-08-14 00:00,2025-09-03 00:00,4.927,4.367,133,144,True,confirmed,auto_generated
+9,down,60,65,2025-09-03 00:00,2025-09-23 00:00,4.927,4.427,144,154,True,confirmed,auto_generated
+10,up,65,78,2025-09-23 00:00,2025-11-11 00:00,4.917,4.427,154,176,True,confirmed,auto_generated
+11,down,78,89,2025-11-11 00:00,2025-12-11 00:00,4.917,4.317,176,195,True,confirmed,auto_generated
+12,up,89,110,2025-12-11 00:00,2026-03-11 00:00,6.8,4.317,195,243,True,confirmed,auto_generated
+13,down,110,117,2026-03-11 00:00,2026-04-13 00:00,6.8,5.16,243,260,False,preprocessing,auto_generated

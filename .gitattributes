@@ -1,0 +1,4 @@
+* text=auto
+
+# Keep generated packaging metadata stable across platforms.
+*.egg-info/**/*.txt text eol=lf

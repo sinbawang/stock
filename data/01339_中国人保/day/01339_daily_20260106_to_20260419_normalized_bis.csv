@@ -1,0 +1,5 @@
+﻿bi_id,direction,start_fx_id,end_fx_id,start_ts,end_ts,high,low,start_norm_idx,end_norm_idx,is_confirmed,status,note
+0,down,0,5,2026-01-07 00:00,2026-01-26 00:00,7.63,6.39,1,13,True,confirmed,auto_generated
+1,up,5,10,2026-01-26 00:00,2026-02-23 00:00,7.05,6.39,13,25,True,confirmed,auto_generated
+2,down,10,21,2026-02-23 00:00,2026-03-30 00:00,7.05,5.23,25,47,True,confirmed,auto_generated
+3,up,21,24,2026-03-30 00:00,2026-04-10 00:00,5.67,5.23,47,51,False,preprocessing,auto_generated

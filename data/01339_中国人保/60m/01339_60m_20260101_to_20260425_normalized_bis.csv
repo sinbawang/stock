@@ -1,0 +1,11 @@
+﻿bi_id,direction,start_fx_id,end_fx_id,start_ts,end_ts,high,low,start_norm_idx,end_norm_idx,is_confirmed,status,note
+0,up,0,1,2026-03-23 15:30,2026-03-25 10:30,6.11,5.74,4,10,True,confirmed,auto_generated
+1,down,1,6,2026-03-25 10:30,2026-03-30 10:30,6.11,5.23,10,24,True,confirmed,auto_generated
+2,up,6,14,2026-03-30 10:30,2026-04-10 10:30,5.67,5.23,24,46,True,confirmed,auto_generated
+3,down,14,22,2026-04-10 10:30,2026-04-15 14:30,5.67,5.35,46,64,True,confirmed,auto_generated
+4,up,22,26,2026-04-15 14:30,2026-04-16 16:00,5.47,5.35,64,72,True,confirmed,auto_generated
+5,down,26,29,2026-04-16 16:00,2026-04-20 10:30,5.47,5.21,72,78,True,confirmed,auto_generated
+6,up,29,32,2026-04-20 10:30,2026-04-22 10:30,5.49,5.21,78,88,True,confirmed,auto_generated
+7,down,32,39,2026-04-22 10:30,2026-04-24 10:30,5.49,5.27,88,99,False,preprocessing,auto_generated
+8,down,34,39,2026-04-22 13:30,2026-04-24 10:30,5.48,5.27,90,99,False,preprocessing,auto_generated
+9,down,36,39,2026-04-22 15:30,2026-04-24 10:30,5.48,5.27,92,99,False,preprocessing,auto_generated

@@ -1,0 +1,3 @@
+﻿zs_id,start_bi_id,end_bi_id,zs_low,zs_high,peak_low,peak_high,start_ts,end_ts,bi_ids,is_terminated
+0,2,5,256.91,259.7,236.87,285.79,2026-03-24 10:30,2026-04-02 14:15,"2,3,4,5",False
+1,7,10,244.0,255.95,243.14,269.8,2026-04-07 09:45,2026-04-13 10:15,"7,8,9,10",False

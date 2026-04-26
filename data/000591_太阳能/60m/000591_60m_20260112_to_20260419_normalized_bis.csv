@@ -1,0 +1,26 @@
+﻿bi_id,direction,start_fx_id,end_fx_id,start_ts,end_ts,high,low,start_norm_idx,end_norm_idx,is_confirmed,status,note
+0,down,0,3,2026-01-12 15:00,2026-01-13 15:00,4.64,4.57,2,5,True,confirmed,auto_generated
+1,up,3,4,2026-01-13 15:00,2026-01-16 10:30,5.39,4.57,5,11,True,confirmed,auto_generated
+2,down,4,5,2026-01-16 10:30,2026-01-19 10:30,5.39,4.95,11,14,True,confirmed,auto_generated
+3,up,5,15,2026-01-19 10:30,2026-01-27 15:00,5.81,4.95,14,34,True,confirmed,auto_generated
+4,down,15,17,2026-01-27 15:00,2026-01-30 11:30,5.81,5.21,34,41,True,confirmed,auto_generated
+5,up,17,21,2026-01-30 11:30,2026-02-09 10:30,5.92,5.21,41,57,True,confirmed,auto_generated
+6,down,21,26,2026-02-09 10:30,2026-02-13 15:00,5.92,5.43,57,71,True,confirmed,auto_generated
+7,up,26,29,2026-02-13 15:00,2026-02-25 14:00,5.72,5.43,71,77,True,confirmed,auto_generated
+8,down,29,32,2026-02-25 14:00,2026-02-27 10:30,5.72,5.6,77,81,True,confirmed,auto_generated
+9,up,32,33,2026-02-27 10:30,2026-02-27 14:00,5.84,5.6,81,83,True,confirmed,auto_generated
+10,down,33,35,2026-02-27 14:00,2026-03-04 10:30,5.84,5.6,83,87,True,confirmed,auto_generated
+11,up,35,36,2026-03-04 10:30,2026-03-05 10:30,6.34,5.6,87,89,True,confirmed,auto_generated
+12,down,36,37,2026-03-05 10:30,2026-03-05 15:00,6.34,6.05,89,91,True,confirmed,auto_generated
+13,up,37,41,2026-03-05 15:00,2026-03-11 11:30,6.8,6.05,91,97,True,confirmed,auto_generated
+14,down,41,42,2026-03-11 11:30,2026-03-12 11:30,6.8,6.46,97,99,True,confirmed,auto_generated
+15,up,42,43,2026-03-12 11:30,2026-03-12 15:00,6.69,6.46,99,101,True,confirmed,auto_generated
+16,down,43,46,2026-03-12 15:00,2026-03-18 14:00,6.69,5.95,101,109,True,confirmed,auto_generated
+17,up,46,47,2026-03-18 14:00,2026-03-19 11:30,6.18,5.95,109,111,True,confirmed,auto_generated
+18,down,47,50,2026-03-19 11:30,2026-03-24 10:30,6.18,5.68,111,117,True,confirmed,auto_generated
+19,up,50,51,2026-03-24 10:30,2026-03-25 11:30,6.57,5.68,117,122,True,confirmed,auto_generated
+20,down,51,55,2026-03-25 11:30,2026-04-07 14:00,6.57,5.2,122,143,True,confirmed,auto_generated
+21,up,55,56,2026-04-07 14:00,2026-04-08 11:30,5.41,5.2,143,146,True,confirmed,auto_generated
+22,down,56,61,2026-04-08 11:30,2026-04-13 10:30,5.41,5.16,146,155,True,confirmed,auto_generated
+23,up,61,62,2026-04-13 10:30,2026-04-14 10:30,5.41,5.16,155,159,True,confirmed,auto_generated
+24,down,62,65,2026-04-14 10:30,2026-04-16 10:30,5.41,5.25,159,165,False,preprocessing,auto_generated

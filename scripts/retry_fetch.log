@@ -1,0 +1,9 @@
+[19:19:51] 第 1 次抓取...
+失败: AKShare 抓取失败（已重试5次）: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+[19:20:24] 等 60s 后第 2 次尝试
+[19:21:24] 第 2 次抓取...
+失败: AKShare 抓取失败（已重试5次）: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+[19:21:55] 等 120s 后第 3 次尝试
+[19:23:55] 第 3 次抓取...
+失败: AKShare 抓取失败（已重试5次）: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+[19:24:26] 等 240s 后第 4 次尝试

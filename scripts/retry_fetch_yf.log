@@ -1,0 +1,36 @@
+[19:35:51] try #1
+
+1 Failed download:
+['3690.HK']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+empty
+[19:35:53] sleep 60s
+[19:36:53] try #2
+
+1 Failed download:
+['3690.HK']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+empty
+[19:36:54] sleep 120s
+[19:38:54] try #3
+
+1 Failed download:
+['3690.HK']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+empty
+[19:38:56] sleep 240s
+[19:42:56] try #4
+
+1 Failed download:
+['3690.HK']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+empty
+[19:42:58] sleep 480s
+[19:50:58] try #5
+
+1 Failed download:
+['3690.HK']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+empty
+[19:50:59] sleep 960s
+[20:06:59] try #6
+
+1 Failed download:
+['3690.HK']: YFRateLimitError('Too Many Requests. Rate limited. Try after a while.')
+empty
+ALL FAILED

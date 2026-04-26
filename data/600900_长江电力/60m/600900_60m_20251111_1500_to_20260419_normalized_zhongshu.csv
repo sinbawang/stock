@@ -1,0 +1,3 @@
+﻿zs_id,start_bi_id,end_bi_id,zs_low,zs_high,peak_low,peak_high,start_ts,end_ts,bi_ids,is_terminated
+0,1,4,27.18,27.44,26.45,27.54,2025-12-31 14:00,2026-01-16 15:00,"1,2,3,4",False
+1,6,11,25.91,26.57,25.38,27.63,2026-01-20 15:00,2026-03-13 14:00,"6,7,8,9,10,11",False
