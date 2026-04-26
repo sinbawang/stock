@@ -27,8 +27,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import requests
+
 _ALLOWED_PERIODS = {"1", "5", "15", "30", "60"}
 _ALLOWED_ADJUSTS = {"", "qfq", "hfq"}
+_ALLOWED_SOURCES = {"xueqiu", "akshare"}
 
 
 def _normalize_symbol(symbol: str) -> str:
@@ -63,33 +66,131 @@ def _parse_dt(value: Optional[str], default: str) -> str:
     raise ValueError(f"无法解析时间: {value}")
 
 
-def fetch_hk_minute(
+def _parse_cookie_string(cookie_text: str) -> dict[str, str]:
+    cookies: dict[str, str] = {}
+    for chunk in cookie_text.split(";"):
+        part = chunk.strip()
+        if not part or "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        cookies[key.strip()] = value.strip()
+    return cookies
+
+
+def _build_xueqiu_session(symbol: str) -> requests.Session:
+    import os
+
+    for var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
+        os.environ.pop(var, None)
+    os.environ["NO_PROXY"] = "*"
+
+    session = requests.Session()
+    session.trust_env = False
+    user_agent = os.getenv(
+        "XUEQIU_USER_AGENT",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    )
+    session.headers.update(
+        {
+            "User-Agent": user_agent,
+            "Referer": f"https://xueqiu.com/S/HK{symbol}",
+            "Accept": "application/json, text/plain, */*",
+        }
+    )
+
+    cookie_text = os.getenv("XUEQIU_COOKIE", "").strip()
+    if cookie_text:
+        session.cookies.update(_parse_cookie_string(cookie_text))
+
+    session.get(f"https://xueqiu.com/S/HK{symbol}", timeout=15)
+    return session
+
+
+def _map_xueqiu_period(period: str) -> str:
+    return f"{period}m"
+
+
+def _fetch_hk_minute_xueqiu(
     symbol: str,
-    period: str = "60",
-    start: Optional[str] = None,
-    end: Optional[str] = None,
-    adjust: str = "qfq",
+    period: str,
+    start: Optional[str],
+    end: Optional[str],
+    adjust: str,
 ) -> list[dict]:
-    """
-    抓取港股分钟 K 线。
+    if adjust not in {"", "qfq"}:
+        raise ValueError("雪球分钟线当前仅支持不复权或前复权(qfq)")
 
-    Args:
-        symbol: 港股代码，如 "03690" / "hk03690" / "0700.HK"
-        period: 分钟周期，"1"/"5"/"15"/"30"/"60"
-        start:  起始时间，"YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM"
-        end:    结束时间，同上；为空则到当前
-        adjust: ""/"qfq"/"hfq"
+    code = _normalize_symbol(symbol)
+    start_dt = datetime.strptime(_parse_dt(start, "1990-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
+    end_dt = datetime.strptime(
+        _parse_dt(end, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        "%Y-%m-%d %H:%M:%S",
+    )
 
-    Returns:
-        list[dict]，字段: ts, open, high, low, close, volume
-    """
-    if period not in _ALLOWED_PERIODS:
-        raise ValueError(f"period 必须是 {_ALLOWED_PERIODS} 之一，收到: {period}")
-    if adjust not in _ALLOWED_ADJUSTS:
-        raise ValueError(f"adjust 必须是 {_ALLOWED_ADJUSTS} 之一，收到: {adjust}")
+    session = _build_xueqiu_session(code)
+    response = session.get(
+        "https://stock.xueqiu.com/v5/stock/chart/kline.json",
+        params={
+            "symbol": code,
+            "begin": str(int(end_dt.timestamp() * 1000)),
+            "period": _map_xueqiu_period(period),
+            "type": "before",
+            "count": "-5000",
+            "indicator": "kline",
+        },
+        timeout=20,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(f"雪球接口返回 HTTP {response.status_code}: {response.text[:300]}")
+
+    payload = response.json()
+    if payload.get("error_code") not in (None, 0):
+        raise RuntimeError(f"雪球抓取失败: {payload}")
+
+    data = payload.get("data") or {}
+    columns = data.get("column") or []
+    items = data.get("item") or []
+    if not columns or not items:
+        return []
+
+    column_map = {name: idx for idx, name in enumerate(columns)}
+    required = ["timestamp", "open", "high", "low", "close", "volume"]
+    missing = [name for name in required if name not in column_map]
+    if missing:
+        raise RuntimeError(f"雪球返回缺少字段: {missing}; 实际列: {columns}")
+
+    rows: list[dict] = []
+    for item in items:
+        ts = datetime.fromtimestamp(item[column_map["timestamp"]] / 1000)
+        if ts < start_dt or ts > end_dt:
+            continue
+        rows.append(
+            {
+                "ts": ts.strftime("%Y-%m-%d %H:%M"),
+                "open": float(item[column_map["open"]]),
+                "high": float(item[column_map["high"]]),
+                "low": float(item[column_map["low"]]),
+                "close": float(item[column_map["close"]]),
+                "volume": int(float(item[column_map["volume"]]) if item[column_map["volume"]] is not None else 0),
+            }
+        )
+
+    rows.sort(key=lambda x: x["ts"])
+    return rows
+
+
+def _fetch_hk_minute_akshare(
+    symbol: str,
+    period: str,
+    start: Optional[str],
+    end: Optional[str],
+    adjust: str,
+) -> list[dict]:
+    import os
+    import time
 
     # 延迟导入，避免无 akshare 时模块整体不可用
-    import os
     # 绕过本地拦截代理（与项目其它 fetcher 行为一致）
     for var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
         os.environ.pop(var, None)
@@ -101,8 +202,6 @@ def fetch_hk_minute(
     start_str = _parse_dt(start, "1990-01-01 00:00:00")
     end_str = _parse_dt(end, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-    # eastmoney 偶尔 RemoteDisconnected，加个简单重试
-    import time
     last_err: Optional[Exception] = None
     df = None
     for attempt in range(5):
@@ -124,7 +223,6 @@ def fetch_hk_minute(
     if df is None or df.empty:
         return []
 
-    # 东财返回中英混合列名，兼容处理
     col_map = {
         "时间": "ts", "datetime": "ts", "date": "ts",
         "开盘": "open", "open": "open",
@@ -147,7 +245,6 @@ def fetch_hk_minute(
         if isinstance(ts_val, datetime):
             ts_str = ts_val.strftime("%Y-%m-%d %H:%M")
         else:
-            # 字符串可能是 'YYYY-MM-DD HH:MM:SS'
             ts_str = str(ts_val)[:16]
         rows.append({
             "ts": ts_str,
@@ -160,6 +257,46 @@ def fetch_hk_minute(
 
     rows.sort(key=lambda x: x["ts"])
     return rows
+
+
+def fetch_hk_minute(
+    symbol: str,
+    period: str = "60",
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    adjust: str = "qfq",
+    source: str = "xueqiu",
+) -> list[dict]:
+    """
+    抓取港股分钟 K 线。
+
+    Args:
+        symbol: 港股代码，如 "03690" / "hk03690" / "0700.HK"
+        period: 分钟周期，"1"/"5"/"15"/"30"/"60"
+        start:  起始时间，"YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM"
+        end:    结束时间，同上；为空则到当前
+        adjust: ""/"qfq"/"hfq"
+
+    Returns:
+        list[dict]，字段: ts, open, high, low, close, volume
+    """
+    if period not in _ALLOWED_PERIODS:
+        raise ValueError(f"period 必须是 {_ALLOWED_PERIODS} 之一，收到: {period}")
+    if adjust not in _ALLOWED_ADJUSTS:
+        raise ValueError(f"adjust 必须是 {_ALLOWED_ADJUSTS} 之一，收到: {adjust}")
+    if source not in _ALLOWED_SOURCES:
+        raise ValueError(f"source 必须是 {_ALLOWED_SOURCES} 之一，收到: {source}")
+
+    if source == "xueqiu":
+        try:
+            return _fetch_hk_minute_xueqiu(symbol, period, start, end, adjust)
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(
+                "雪球抓取失败。请确认已在环境变量 XUEQIU_COOKIE 中提供可用登录 cookie，"
+                f"或改用 source='akshare'。原始错误: {exc}"
+            ) from exc
+
+    return _fetch_hk_minute_akshare(symbol, period, start, end, adjust)
 
 
 def save_to_csv(rows: list[dict], filepath: str) -> None:
@@ -184,12 +321,14 @@ def main():
     parser.add_argument("--end", default=None, help="结束时间 YYYY-MM-DD [HH:MM]")
     parser.add_argument("--adjust", default="qfq", choices=sorted(_ALLOWED_ADJUSTS),
                         help="复权: 留空 / qfq / hfq")
+    parser.add_argument("--source", default="xueqiu", choices=sorted(_ALLOWED_SOURCES),
+                        help="数据源: xueqiu / akshare")
     parser.add_argument("--output", default=None, help="输出 CSV 路径，默认按目录约定生成")
     args = parser.parse_args()
 
     print(f"正在抓取 港股 {args.symbol} {args.period}m K 线 "
           f"({args.start or '最早'} ~ {args.end or '至今'}) ...")
-    rows = fetch_hk_minute(args.symbol, args.period, args.start, args.end, args.adjust)
+    rows = fetch_hk_minute(args.symbol, args.period, args.start, args.end, args.adjust, source=args.source)
     print(f"获取 {len(rows)} 根 K 线")
 
     if rows:

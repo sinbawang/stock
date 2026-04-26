@@ -69,6 +69,13 @@ def hotkey(*vk_codes: int) -> None:
         win32api.keybd_event(code, 0, win32con.KEYEVENTF_KEYUP, 0)
 
 
+def send_shortcut() -> None:
+    # WeChat commonly allows Alt+S regardless of whether Enter is configured
+    # for newline or send.
+    hotkey(win32con.VK_MENU, ord("S"))
+    time.sleep(0.5)
+
+
 def type_by_clipboard(text: str) -> None:
     pyperclip.copy(text)
     time.sleep(0.1)
@@ -108,17 +115,62 @@ def send_files(filepaths: list[str]) -> None:
         copy_image_to_clipboard(filepaths[0])
         time.sleep(0.15)
         hotkey(win32con.VK_CONTROL, ord("V"))
-        time.sleep(1.8)
-        hotkey(win32con.VK_MENU, ord("S"))
-        time.sleep(2.0)
+        time.sleep(1.2)
+        send_shortcut()
         return
 
     copy_files_to_clipboard(filepaths)
     time.sleep(0.15)
     hotkey(win32con.VK_CONTROL, ord("V"))
-    time.sleep(0.8)
-    tap(win32con.VK_RETURN)
-    time.sleep(0.5)
+    time.sleep(1.2)
+    send_shortcut()
+
+
+def switch_chat(
+    rect: tuple[int, int, int, int],
+    contact: str | None = None,
+    result_index: int = 1,
+    visible_row_index: int | None = None,
+    current_chat_only: bool = False,
+    allow_search_switch: bool = False,
+) -> None:
+    if current_chat_only:
+        return
+
+    if visible_row_index is not None:
+        visible_row_y = 0.155 + max(visible_row_index - 1, 0) * 0.097
+        click_ratio(rect, 0.17, visible_row_y)
+        time.sleep(2.0)
+        return
+
+    if allow_search_switch and contact:
+        click_ratio(rect, 0.17, 0.085)
+        hotkey(win32con.VK_CONTROL, ord("A"))
+        tap(win32con.VK_BACK)
+        type_by_clipboard(contact)
+        time.sleep(0.8)
+
+        # Use keyboard navigation rather than a fixed click position because
+        # WeChat search result layouts vary between versions and window sizes.
+        for _ in range(max(result_index, 1)):
+            tap(win32con.VK_DOWN)
+            time.sleep(0.15)
+        tap(win32con.VK_RETURN)
+        time.sleep(1.2)
+        return
+
+    raise RuntimeError("默认已禁用自动搜索切会话。请使用 --current-chat-only，或明确提供 --visible-row-index。")
+
+
+def send_to_current_chat(message: str | None = None, filepaths: list[str] | None = None) -> None:
+    if message:
+        hotkey(win32con.VK_CONTROL, ord("A"))
+        tap(win32con.VK_BACK)
+        type_by_clipboard(message)
+        send_shortcut()
+
+    if filepaths:
+        send_files(filepaths)
 
 
 def send_message(
@@ -132,40 +184,18 @@ def send_message(
 ) -> None:
     hwnd = find_wechat_window()
     rect = activate_window(hwnd)
-
-    if current_chat_only:
-        pass
-    elif visible_row_index is not None:
-        visible_row_y = 0.155 + max(visible_row_index - 1, 0) * 0.097
-        click_ratio(rect, 0.17, visible_row_y)
-        time.sleep(2.0)
-    elif allow_search_switch and contact:
-        # Search box in the left session pane.
-        click_ratio(rect, 0.17, 0.085)
-        hotkey(win32con.VK_CONTROL, ord("A"))
-        tap(win32con.VK_BACK)
-        type_by_clipboard(contact)
-        time.sleep(0.8)
-
-        # Search results start below the search box; each row is roughly uniform.
-        result_y = 0.18 + max(result_index - 1, 0) * 0.11
-        click_ratio(rect, 0.17, result_y)
-        time.sleep(1.0)
-    else:
-        raise RuntimeError("默认已禁用自动搜索切会话。请使用 --current-chat-only，或明确提供 --visible-row-index。")
+    switch_chat(
+        rect,
+        contact=contact,
+        result_index=result_index,
+        visible_row_index=visible_row_index,
+        current_chat_only=current_chat_only,
+        allow_search_switch=allow_search_switch,
+    )
 
     # Message input box in the right chat pane.
     click_ratio(rect, 0.67, 0.90)
-    if filepaths:
-        send_files(filepaths)
-
-    if message:
-        hotkey(win32con.VK_CONTROL, ord("A"))
-        tap(win32con.VK_BACK)
-        type_by_clipboard(message)
-
-        tap(win32con.VK_RETURN)
-        time.sleep(0.2)
+    send_to_current_chat(message=message, filepaths=filepaths)
 
 
 def main() -> None:

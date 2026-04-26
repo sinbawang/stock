@@ -39,9 +39,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", required=True, help="标的名称，如 中国人保")
     parser.add_argument("--start", default="2026-01-01 09:30", help="起始时间")
     parser.add_argument("--end", default=None, help="结束时间，默认到当前")
+    parser.add_argument("--source", default="xueqiu", choices=["xueqiu", "akshare"], help="港股分钟数据源")
     parser.add_argument("--contact", default=None, help="微信联系人")
     parser.add_argument("--visible-row-index", type=int, default=None, help="微信当前可见会话第几行")
     parser.add_argument("--current-chat-only", action="store_true", help="只向当前已打开会话发送，不自动切换联系人")
+    parser.add_argument("--allow-search-switch", action="store_true", help="允许按联系人/群名搜索并切换会话")
     parser.add_argument("--result-index", type=int, default=1, help="微信搜索结果第几项")
     parser.add_argument("--render-only", action="store_true", help="仅抓取、分析、出图，不发微信")
     return parser.parse_args()
@@ -230,7 +232,7 @@ def analyze_current_state(
 
 def main() -> None:
     args = parse_args()
-    rows = fetch_hk_minute(args.symbol, period="60", start=args.start, end=args.end, adjust="qfq")
+    rows = fetch_hk_minute(args.symbol, period="60", start=args.start, end=args.end, adjust="qfq", source=args.source)
     if not rows:
         raise RuntimeError("未抓到任何60M数据")
 
@@ -300,7 +302,7 @@ def main() -> None:
         return
     if not args.contact:
         raise ValueError("非 render-only 模式必须提供 --contact")
-    if not args.current_chat_only and args.visible_row_index is None:
+    if not args.current_chat_only and args.visible_row_index is None and not args.allow_search_switch:
         raise ValueError("默认禁止自动切会话。请先手动打开目标聊天并使用 --current-chat-only，或明确提供 --visible-row-index。")
 
     send_message(
@@ -308,16 +310,9 @@ def main() -> None:
         message=analysis_text,
         result_index=args.result_index,
         visible_row_index=args.visible_row_index,
-        filepaths=None,
-        current_chat_only=args.current_chat_only,
-    )
-    send_message(
-        args.contact,
-        message=None,
-        result_index=args.result_index,
-        visible_row_index=args.visible_row_index,
         filepaths=[str(paths["jpg"])],
         current_chat_only=args.current_chat_only,
+        allow_search_switch=args.allow_search_switch,
     )
 
 
