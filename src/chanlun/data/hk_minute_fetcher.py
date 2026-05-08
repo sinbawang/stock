@@ -23,6 +23,7 @@ CLI:
 from __future__ import annotations
 
 import csv
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -32,6 +33,12 @@ import requests
 _ALLOWED_PERIODS = {"1", "5", "15", "30", "60"}
 _ALLOWED_ADJUSTS = {"", "qfq", "hfq"}
 _ALLOWED_SOURCES = {"xueqiu", "akshare"}
+
+
+class XueqiuCookieError(RuntimeError):
+    def __init__(self, message: str, cookie_source: str):
+        super().__init__(message)
+        self.cookie_source = cookie_source
 
 
 def _normalize_symbol(symbol: str) -> str:
@@ -77,9 +84,65 @@ def _parse_cookie_string(cookie_text: str) -> dict[str, str]:
     return cookies
 
 
-def _build_xueqiu_session(symbol: str) -> requests.Session:
-    import os
+def _extract_xueqiu_cookie_from_browser(browser: Optional[str] = None) -> dict[str, str]:
+    """从本机浏览器读取 xueqiu.com cookie，避免手工复制。"""
+    try:
+        import browser_cookie3  # type: ignore
+    except ImportError as exc:  # pragma: no cover - exercised via tests with monkeypatch
+        raise RuntimeError(
+            "未安装 browser-cookie3，无法自动读取浏览器雪球 cookie。"
+        ) from exc
 
+    domain = ".xueqiu.com"
+    browser_name = (browser or os.getenv("XUEQIU_COOKIE_BROWSER", "auto")).strip().lower()
+    candidates = ["edge", "chrome", "brave", "chromium", "firefox"] if browser_name in {"", "auto"} else [browser_name]
+    errors: list[str] = []
+
+    for candidate in candidates:
+        loader = getattr(browser_cookie3, candidate, None)
+        if loader is None:
+            errors.append(f"{candidate}: not-supported")
+            continue
+
+        try:
+            jar = loader(domain_name=domain)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{candidate}: {exc}")
+            continue
+
+        cookies = {
+            cookie.name: cookie.value
+            for cookie in jar
+            if cookie.domain.endswith("xueqiu.com") and cookie.value
+        }
+        if cookies:
+            return cookies
+
+        errors.append(f"{candidate}: no-xueqiu-cookie")
+
+    if browser_name not in {"", "auto"}:
+        raise RuntimeError(
+            f"未在浏览器 {browser_name} 中找到可用的雪球 cookie。请先登录 xueqiu.com。"
+        )
+
+    raise RuntimeError(
+        "未能从本机浏览器自动读取雪球 cookie。"
+        " 请先在 Edge/Chrome/Firefox 中登录 xueqiu.com，"
+        "必要时关闭浏览器重试，或以管理员权限运行；"
+        f"探测详情: {' | '.join(errors)}"
+    )
+
+
+def _resolve_xueqiu_cookies() -> tuple[dict[str, str], str]:
+    cookie_text = os.getenv("XUEQIU_COOKIE", "").strip()
+    if cookie_text:
+        return _parse_cookie_string(cookie_text), "env"
+
+    cookies = _extract_xueqiu_cookie_from_browser()
+    return cookies, "browser"
+
+
+def _build_xueqiu_session(symbol: str) -> tuple[requests.Session, str]:
     for var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
         os.environ.pop(var, None)
     os.environ["NO_PROXY"] = "*"
@@ -99,12 +162,24 @@ def _build_xueqiu_session(symbol: str) -> requests.Session:
         }
     )
 
-    cookie_text = os.getenv("XUEQIU_COOKIE", "").strip()
-    if cookie_text:
-        session.cookies.update(_parse_cookie_string(cookie_text))
+    cookies, cookie_source = _resolve_xueqiu_cookies()
+    session.cookies.update(cookies)
 
     session.get(f"https://xueqiu.com/S/HK{symbol}", timeout=15)
-    return session
+    return session, cookie_source
+
+
+def _raise_xueqiu_cookie_error(cookie_source: str, detail: str) -> None:
+    if cookie_source == "env":
+        raise XueqiuCookieError(
+            f"检测到环境变量 XUEQIU_COOKIE，但它可能已过期或失效。{detail}",
+            cookie_source,
+        )
+
+    raise XueqiuCookieError(
+        f"未从浏览器取得有效的雪球登录态，或浏览器里的登录态已经失效。{detail}",
+        cookie_source,
+    )
 
 
 def _map_xueqiu_period(period: str) -> str:
@@ -128,7 +203,7 @@ def _fetch_hk_minute_xueqiu(
         "%Y-%m-%d %H:%M:%S",
     )
 
-    session = _build_xueqiu_session(code)
+    session, cookie_source = _build_xueqiu_session(code)
     response = session.get(
         "https://stock.xueqiu.com/v5/stock/chart/kline.json",
         params={
@@ -142,10 +217,15 @@ def _fetch_hk_minute_xueqiu(
         timeout=20,
     )
     if response.status_code >= 400:
+        if response.status_code in {401, 403}:
+            _raise_xueqiu_cookie_error(cookie_source, f"HTTP {response.status_code}")
         raise RuntimeError(f"雪球接口返回 HTTP {response.status_code}: {response.text[:300]}")
 
     payload = response.json()
     if payload.get("error_code") not in (None, 0):
+        error_code = payload.get("error_code")
+        if error_code in {400016, 401, 403}:
+            _raise_xueqiu_cookie_error(cookie_source, f"error_code={error_code}")
         raise RuntimeError(f"雪球抓取失败: {payload}")
 
     data = payload.get("data") or {}
@@ -290,10 +370,13 @@ def fetch_hk_minute(
     if source == "xueqiu":
         try:
             return _fetch_hk_minute_xueqiu(symbol, period, start, end, adjust)
+        except XueqiuCookieError as exc:
+            raise RuntimeError(str(exc)) from exc
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(
-                "雪球抓取失败。请确认已在环境变量 XUEQIU_COOKIE 中提供可用登录 cookie，"
-                f"或改用 source='akshare'。原始错误: {exc}"
+                "雪球抓取失败。可选方案：1) 显式设置环境变量 XUEQIU_COOKIE；"
+                "2) 先在本机浏览器登录 xueqiu.com，让程序自动读取 cookie；"
+                f"3) 改用 source='akshare'。原始错误: {exc}"
             ) from exc
 
     return _fetch_hk_minute_akshare(symbol, period, start, end, adjust)

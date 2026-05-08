@@ -94,6 +94,50 @@ class TestIdentifyBis:
         assert result[0].is_confirmed is True
         assert result[1].is_confirmed is False
 
+    def test_stop_after_first_unconfirmed_tail_bi(self):
+        """尾部首笔未确认时，不应再从后续分型起出断链新笔。"""
+        normalized = [
+            NormalizedBar(0, 101.0, 98.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[0]),
+            NormalizedBar(1, 102.0, 97.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[1]),
+            NormalizedBar(2, 100.0, 96.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[2]),
+            NormalizedBar(3, 97.0, 94.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[3]),
+            NormalizedBar(4, 94.0, 91.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[4]),
+            NormalizedBar(5, 93.0, 90.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[5]),
+            NormalizedBar(6, 92.0, 89.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[6]),
+            NormalizedBar(7, 93.0, 90.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[7]),
+            NormalizedBar(8, 94.0, 91.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[8]),
+            NormalizedBar(9, 95.0, 92.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[9]),
+            NormalizedBar(10, 94.0, 91.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[10]),
+            NormalizedBar(11, 93.5, 91.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[11]),
+            NormalizedBar(12, 94.0, 91.5, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[12]),
+            NormalizedBar(13, 95.0, 92.5, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[13]),
+            NormalizedBar(14, 96.0, 93.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[14]),
+            NormalizedBar(15, 97.0, 94.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[15]),
+            NormalizedBar(16, 96.0, 93.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[16]),
+            NormalizedBar(17, 95.0, 92.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[17]),
+            NormalizedBar(18, 94.0, 91.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[18]),
+            NormalizedBar(19, 95.0, 92.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[19]),
+            NormalizedBar(20, 97.0, 94.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[20]),
+            NormalizedBar(21, 98.0, 95.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[21]),
+            NormalizedBar(22, 97.0, 94.0, datetime(2024, 1, 1), datetime(2024, 1, 1), src_indices=[22]),
+        ]
+        fractals = [
+            Fractal(0, FractalType.TOP, datetime(2024, 1, 1), 102.0, 1, 102.0, 97.0),
+            Fractal(1, FractalType.BOTTOM, datetime(2024, 1, 2), 90.0, 5, 93.0, 90.0),
+            Fractal(2, FractalType.TOP, datetime(2024, 1, 3), 95.0, 9, 95.0, 92.0),
+            Fractal(3, FractalType.BOTTOM, datetime(2024, 1, 4), 91.0, 11, 93.5, 91.0),
+            Fractal(4, FractalType.TOP, datetime(2024, 1, 5), 97.0, 15, 97.0, 94.0),
+            Fractal(5, FractalType.BOTTOM, datetime(2024, 1, 6), 92.0, 17, 95.0, 92.0),
+            Fractal(6, FractalType.TOP, datetime(2024, 1, 7), 98.0, 21, 98.0, 95.0),
+        ]
+
+        result = identify_bis(fractals, normalized_bars=normalized)
+
+        assert [bi.direction for bi in result] == [BiDirection.DOWN, BiDirection.UP]
+        assert [bi.start_fx_id for bi in result] == [0, 1]
+        assert [bi.end_fx_id for bi in result] == [1, 6]
+        assert [bi.is_confirmed for bi in result] == [True, False]
+
     def test_weaker_later_reverse_cannot_rescue_invalid_first_reverse(self):
         """首个无效反向分型后，后续更弱同类分型不能补成确认。"""
         fractals = [

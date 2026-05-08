@@ -221,16 +221,13 @@ def identify_bis(
             norm_bar_range=(start_fx.center_bar_idx, end_fx.center_bar_idx),
             is_confirmed=is_confirmed,
         )
+
         bis.append(bi)
         bi_id += 1
 
-        # 未确认笔处理：
-        # - 有 normalized 映射时，继续后移扫描，避免提前截断后续笔
-        # - 无映射时，保持历史行为（预处理后终止）以兼容既有规则与测试
+        # 一旦尾部候选笔尚未被有效反向结构确认，就不能再从更后的分型重新起笔；
+        # 否则会生成与前一笔不共端点的断链结果。
         if not is_confirmed:
-            if normalized_bars:
-                i += 1
-                continue
             break
 
         # 进入下一笔
