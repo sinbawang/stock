@@ -8,6 +8,15 @@
 
 这份文档不是替代 [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md)，而是把其中“建议字段”进一步压缩成“第一版可开工字段边界”。
 
+如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+
+建议把这份文档看成“模块总规格”和“数据源/模型落地”之间的桥：
+
+- 上游总规格: [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md)
+- 下游数据源映射: [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
+- 下游 Python 模型: [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md)
+- 下游配置草案: [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md)
+
 ## 1. 使用原则
 
 第一版字段集遵循三个原则：

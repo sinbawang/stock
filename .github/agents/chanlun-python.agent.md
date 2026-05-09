@@ -72,7 +72,7 @@ user-invocable: true
 - `src/strategy/`: 信号规则、过滤条件、风险控制
 - `src/backtest/`: 回测引擎、评价指标、结果输出
 - `src/visualization/`: K 线叠加结构标注、结果展示
-- `src/fundamental/` 或 `src/chanlun/fundamental/`: 基本面模型、规则、评分与报告
+- `src/fundamental/`: 基本面模型、规则、评分与报告
 - `tests/`: 单元测试、样例回归测试
 
 5. 默认用 Python 生态里稳妥的方案

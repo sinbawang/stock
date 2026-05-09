@@ -2,6 +2,21 @@
 
 这份文档用于把 [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md) 里的领域模型定义，进一步收敛成“后续 Python 代码里建议使用什么数据结构”。
 
+如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+
+这份文档更适合在“总规格、字段边界和数据源口径已经确定”之后再读。建议前置阅读：
+
+- [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md)
+- [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)
+- [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
+
+读完这份文档后，通常下一步是：
+
+- [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md)
+- [docs/fundamental-code-layout-draft.md](docs/fundamental-code-layout-draft.md)
+
+对应的 `src/fundamental/` 目录设计草案见 [docs/fundamental-code-layout-draft.md](docs/fundamental-code-layout-draft.md)。
+
 它和 [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md) 的关系是：
 
 - 本文定义“数据对象长什么样”
@@ -30,13 +45,14 @@
 
 ## 2. 建议的代码分层
 
-后续实现时，数据模型层建议如下：
+按当前仓库实现，数据模型层已经基本采用如下分层：
 
-- `models/fundamental_snapshot.py`: 输入快照模型
-- `models/fundamental_scorecard.py`: 评分输出模型
-- `models/fundamental_common.py`: 公共枚举或基础类型
+- `models/snapshot.py`: 输入快照模型
+- `models/scorecard.py`: 评分输出模型
+- `models/common.py`: 公共枚举或基础类型
 
-如果后面不想拆太细，第一版也可以先放在一个文件里，但对象边界最好先固定。
+也就是说，当前实现已经没有沿用早期草案里的 `fundamental_snapshot.py` / `fundamental_scorecard.py`
+命名，而是收敛成了更短的 `snapshot.py` / `scorecard.py` / `common.py`。
 
 ## 3. `FundamentalSnapshot` 设计草案
 
@@ -302,4 +318,4 @@ class SnapshotValidationResult(BaseModel):
 - `FundamentalSnapshot` 应该宽口径，不要把第一版必填硬编码进类定义
 - 第一版必填字段应由 `FieldPolicy` 按子模型二次校验
 - `FundamentalScoreCard` 应提前带上 `submodel_id`、`industry_bucket`、`red_flag`
-- 后续实现最稳的顺序是“快照模型 -> 输出模型 -> 配置模型 -> 校验函数 -> 评分引擎"
+- 当前实现验证下来，较稳的顺序仍然是“快照模型 -> 输出模型 -> 配置模型 -> 校验函数 -> 评分引擎"

@@ -9,51 +9,124 @@
 当前项目分两条主线推进：
 
 - 技术面：缠论结构识别、结构图导出、规则回归验证
-- 基本面：财务快照模型、评分规则、风险标记、与技术面联动的接口设计
+- 基本面：财务快照模型、评分规则、风险标记、港股 / A 股公共抓取入口，以及与技术面联动的接口设计
 
-在开始写基本面代码前，先冻结文档口径，避免实现过程中频繁返工。
+当前已形成“文档定义口径 + 公共入口落地 + 测试回归”的基本闭环，后续新增能力继续优先遵循既有文档与公共入口。
 
 ## 文档索引
 
+建议按“总边界 -> 字段边界 -> 数据源与实现 -> 联动扩展”的顺序阅读基本面文档。
+
 - [docs/chanlun-rule-spec.md](docs/chanlun-rule-spec.md): 缠论规则规格
-- [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md): 基本面模块设计规格
+- [docs/hk-minute-data-source.md](docs/hk-minute-data-source.md): 港股分钟线数据源策略与调用约定
+
+基本面建议阅读顺序：
+
+- [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md): 基本面文档总导航，先看这份会更快进入主线
+- [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md): 先看模块目标、边界、输入输出和总骨架
+- [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md): 再看第一版必须支持哪些字段，哪些字段先放宽
+- [docs/fundamental-industry-layering.md](docs/fundamental-industry-layering.md): 再看行业怎么分层，哪些行业共用主模型
+- [docs/fundamental-tech-submodels.md](docs/fundamental-tech-submodels.md): 再看科技行业子模型的业务规则差异
+- [docs/fundamental-data-source.md](docs/fundamental-data-source.md): 然后看标准快照如何从港股 / A 股公开数据源进入公共层
+- [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md): 然后看领域模型如何落到 Python 对象
+- [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md): 再看子模型配置对象如何表达评分与解释规则
+- [docs/fundamental-code-layout-draft.md](docs/fundamental-code-layout-draft.md): 最后看代码目录怎么落地到 `src/fundamental/`
+
+补充文档：
+
 - [docs/fundamental-roadmap.md](docs/fundamental-roadmap.md): 基本面模块落地路线图
 - [docs/fundamental-snapshot-example.md](docs/fundamental-snapshot-example.md): 基本面标准输入样例
-- [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md): 基本面第一版最小字段集
-- [docs/fundamental-industry-layering.md](docs/fundamental-industry-layering.md): 基本面行业分层规则
-- [docs/fundamental-tech-submodels.md](docs/fundamental-tech-submodels.md): 科技行业子模型
-- [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md): 科技子模型代码配置草案
-- [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md): 基本面 Python 数据模型草案
 - [.github/agents/chanlun-python.agent.md](.github/agents/chanlun-python.agent.md): 项目专用 agent 定义
+
+## 当前公共入口
+
+当前建议直接复用这些公共入口，不要在脚本里重复拼源站请求：
+
+- 港股分钟线: `chanlun.data.hk_minute_fetcher.fetch_hk_minute_with_policy(...)`
+- 港股基本面快照: `fundamental.data.fetch_hk_fundamental_snapshot(...)`
+- A 股基本面快照: `fundamental.data.fetch_cn_fundamental_snapshot(...)`
+- 港股抓取并分析: `fundamental.services.fetch_and_analyze_hk_snapshot(...)`
+- A 股抓取并分析: `fundamental.services.fetch_and_analyze_cn_snapshot(...)`
+
+对应的数据源约定见：
+
+- [docs/hk-minute-data-source.md](docs/hk-minute-data-source.md)
+- [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
 
 ## 项目结构
 
 ```
 chanlun-stock/
 ├── src/
-│   └── chanlun/
-│       ├── models.py           # 数据结构定义
-│       ├── normalize.py        # 包含关系处理
-│       ├── fractal.py          # 分型识别
-│       ├── bi.py               # 笔识别
-│       ├── zhongshu.py         # 中枢识别
-│       ├── data/
-│       │   ├── reader.py       # K线读取
-│       │   └── cleaner.py      # 数据清洗
-│       ├── strategy/
-│       │   └── signals.py      # 信号定义
-│       ├── backtest/
-│       │   └── engine.py       # 回测引擎
-│       ├── visualization/
-│       │   └── plotter.py      # 可视化
-│       └── cli.py              # CLI入口
+│   ├── chanlun/
+│   │   ├── __init__.py         # 技术面包导出入口
+│   │   ├── models.py           # 数据结构定义
+│   │   ├── normalize.py        # 包含关系处理
+│   │   ├── fractal.py          # 分型识别
+│   │   ├── bi.py               # 笔识别
+│   │   ├── zhongshu.py         # 中枢识别
+│   │   ├── wechat.py           # 微信发送相关封装
+│   │   ├── data/
+│   │   │   ├── __init__.py
+│   │   │   ├── cleaner.py      # 数据清洗
+│   │   │   ├── hk_fetcher.py   # 港股K线抓取
+│   │   │   ├── hk_minute_fetcher.py # 港股分钟线策略抓取
+│   │   │   └── kline_fetcher.py # 通用K线抓取入口
+│   │   ├── strategy/
+│   │   │   └── __init__.py
+│   │   ├── backtest/
+│   │   │   └── __init__.py
+│   │   ├── visualization/
+│   │   │   └── __init__.py
+│   │   └── cli.py              # CLI入口
+│   └── fundamental/
+│       ├── __init__.py         # 基本面包导出入口
+│       ├── data/               # 基本面外部数据源抓取与快照映射
+│       │   ├── __init__.py
+│       │   ├── hk_snapshot_fetcher.py # 港股快照抓取与标准化
+│       │   └── cn_snapshot_fetcher.py # A股快照抓取与标准化
+│       ├── models/             # 基本面输入输出模型
+│       │   ├── __init__.py
+│       │   ├── common.py
+│       │   ├── snapshot.py
+│       │   └── scorecard.py
+│       ├── config/             # 子模型配置与注册表
+│       │   ├── __init__.py
+│       │   ├── models.py
+│       │   ├── registry.py
+│       │   └── tech_submodels.py
+│       ├── validation/         # 字段校验
+│       │   ├── __init__.py
+│       │   └── snapshot_validator.py
+│       ├── scoring/            # 评分规则与风险规则
+│       │   ├── __init__.py
+│       │   ├── base_engine.py
+│       │   ├── common_rules.py
+│       │   └── risk_rules.py
+│       ├── reporting/          # 文本报告渲染
+│       │   ├── __init__.py
+│       │   └── text_report.py
+│       └── services/           # 基本面分析入口
+│           ├── __init__.py
+│           ├── analyze_snapshot.py
+│           ├── fetch_and_analyze_hk_snapshot.py
+│           └── fetch_and_analyze_cn_snapshot.py
 ├── tests/
+│   ├── conftest.py
 │   ├── test_normalize.py
 │   ├── test_fractal.py
 │   ├── test_bi.py
-│   └── test_zhongshu.py
+│   ├── test_zhongshu.py
+│   ├── test_hk_minute_fetcher.py
+│   ├── test_fundamental.py
+│   ├── test_fundamental_data_source.py
+│   ├── test_integration.py
+│   └── test_wechat.py
 ├── docs/
 │   ├── chanlun-rule-spec.md         # 缠论规则规格
+│   ├── hk-minute-data-source.md     # 港股分钟线数据源策略
+│   ├── fundamental-doc-map.md       # 基本面文档总导航
+│   ├── fundamental-data-source.md   # 基本面数据源策略
 │   ├── fundamental-module-spec.md   # 基本面模块规格
 │   ├── fundamental-roadmap.md       # 基本面模块路线图
 │   ├── fundamental-snapshot-example.md  # 基本面标准输入样例
@@ -61,7 +134,8 @@ chanlun-stock/
 │   ├── fundamental-industry-layering.md # 基本面行业分层规则
 │   ├── fundamental-tech-submodels.md    # 科技行业子模型
 │   ├── fundamental-tech-config-draft.md # 科技子模型代码配置草案
-│   └── fundamental-python-model-draft.md # 基本面 Python 数据模型草案
+│   ├── fundamental-python-model-draft.md # 基本面 Python 数据模型草案
+│   └── fundamental-code-layout-draft.md # 基本面代码目录草案
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
@@ -124,12 +198,12 @@ python scripts/export_structures_with_boxes.py \
 - [x] 基本面行业分层规则
 - [ ] 技术面与基本面联合输出规格
 
-## 后续实现顺序
+## 当前实现状态
 
-1. 先实现基本面标准快照模型
-2. 再实现评分与风险标记引擎
-3. 然后补 CLI 和测试
-4. 最后接入数据源与联合分析
+1. 基本面标准快照模型、评分与风险标记引擎已经落地
+2. 港股 / A 股公共数据源入口已经接入，并有对应服务层封装
+3. 数据源与评分链路已有针对性测试覆盖
+4. 当前主要增量方向是文档收敛、联合分析输出和后续扩展字段
 
 ## 许可
 

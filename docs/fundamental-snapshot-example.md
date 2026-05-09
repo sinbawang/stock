@@ -1,6 +1,8 @@
 # 基本面快照输入样例 v0.1
 
-这份文档定义后续实现阶段建议采用的标准输入样例，目标是先冻结字段名、单位和缺失值写法。
+这份文档定义当前项目统一采用的标准输入样例口径，目标是冻结字段名、单位和缺失值写法。
+
+如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
 
 如果要看“第一版代码最少要支持哪些字段”，请优先看 [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)。本文件展示的是标准快照样例，不等于第一版必须一次支持全部字段。
 
@@ -131,7 +133,7 @@
 - 百分比字段直接写数值，不带 `%`
 - 不同来源如果币种不同，必须显式写 `currency`
 - 若 `report_period` 与 `updated_at` 不一致，不视为错误，前者是财报期，后者是快照生成时间
-- 若字段来自 TTM 而不是年报，后续实现时建议增加 `period_type` 扩展字段
+- 若字段来自 TTM 而不是年报，使用已有 `period_type` 扩展字段标注口径
 - 多期字段若长度不足 2，不应参与“连续两期红线”判断
 - `dupont_driver` 和 `guidance_attainment` 第一阶段可允许人工填写
 
@@ -143,6 +145,8 @@
 - `industry`: 行业分类
 - `notes`: 人工备注
 - `raw_payload_ref`: 原始数据引用或缓存路径
+
+其中 `period_type`、`industry`、`notes`、`raw_payload_ref` 在当前 `FundamentalSnapshot` 模型里已经预留。
 
 ## 6. 第一阶段输入约束
 

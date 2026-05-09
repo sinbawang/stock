@@ -1,19 +1,18 @@
 """
-港股分钟级 K 线抓取（基于 AKShare 东方财富接口）。
+港股分钟级 K 线抓取。
+
+当前默认策略：
+    - 主数据源优先使用雪球（稳定性更好、历史更完整）
+    - 仅在调用方显式允许时，才回退到 AKShare / 东方财富
 
 适用于无港股券商账号、仅需研发/回测分钟数据的场景。
 
-特点:
-    - 不需要开户、不需要 token
-    - 支持 1m / 5m / 15m / 30m / 60m
-    - 历史长度受东方财富限制（1m 约最近数日，5m+ 较长）
-    - 准实时（分钟级延迟，非 Tick 推送）
-
 用法:
-    from chanlun.data.hk_minute_fetcher import fetch_hk_minute, save_to_csv
-    rows = fetch_hk_minute("03690", period="60", start="2026-03-01 09:30",
-                           end="2026-04-25 16:00", adjust="qfq")
-    save_to_csv(rows, "data/03690_美团/60m/03690_60m.csv")
+    from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, save_to_csv
+    rows, used_source = fetch_hk_minute_with_policy(
+        "03690", period="60", start="2026-03-01 09:30", end="2026-04-25 16:00"
+    )
+    save_to_csv(rows, f"data/03690_美团/60m/03690_60m_{used_source}.csv")
 
 CLI:
     python -m chanlun.data.hk_minute_fetcher --symbol 03690 --period 60 \
@@ -26,13 +25,14 @@ import csv
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import requests
 
 _ALLOWED_PERIODS = {"1", "5", "15", "30", "60"}
 _ALLOWED_ADJUSTS = {"", "qfq", "hfq"}
 _ALLOWED_SOURCES = {"xueqiu", "akshare"}
+_DEFAULT_PRIMARY_SOURCE = "xueqiu"
 
 
 class XueqiuCookieError(RuntimeError):
@@ -82,6 +82,23 @@ def _parse_cookie_string(cookie_text: str) -> dict[str, str]:
         key, value = part.split("=", 1)
         cookies[key.strip()] = value.strip()
     return cookies
+
+
+def _normalize_source_sequence(
+    primary_source: str,
+    fallback_sources: Optional[Sequence[str]] = None,
+) -> tuple[str, ...]:
+    sources = [primary_source]
+    if fallback_sources:
+        sources.extend(fallback_sources)
+
+    normalized: list[str] = []
+    for source in sources:
+        if source not in _ALLOWED_SOURCES:
+            raise ValueError(f"source 必须是 {_ALLOWED_SOURCES} 之一，收到: {source}")
+        if source not in normalized:
+            normalized.append(source)
+    return tuple(normalized)
 
 
 def _extract_xueqiu_cookie_from_browser(browser: Optional[str] = None) -> dict[str, str]:
@@ -382,6 +399,53 @@ def fetch_hk_minute(
     return _fetch_hk_minute_akshare(symbol, period, start, end, adjust)
 
 
+def fetch_hk_minute_with_policy(
+    symbol: str,
+    period: str = "60",
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    adjust: str = "qfq",
+    primary_source: str = _DEFAULT_PRIMARY_SOURCE,
+    fallback_sources: Optional[Sequence[str]] = None,
+) -> tuple[list[dict], str]:
+    """
+    按统一策略抓取港股分钟线。
+
+    默认只使用雪球；只有显式传入 fallback_sources 时才会回退到其它源。
+
+    Returns:
+        (rows, used_source)
+    """
+    source_order = _normalize_source_sequence(primary_source, fallback_sources)
+    failures: list[str] = []
+
+    for index, source in enumerate(source_order):
+        try:
+            rows = fetch_hk_minute(
+                symbol=symbol,
+                period=period,
+                start=start,
+                end=end,
+                adjust=adjust,
+                source=source,
+            )
+        except Exception as exc:  # noqa: BLE001
+            failures.append(f"{source}: {exc}")
+            continue
+
+        if rows or index == len(source_order) - 1:
+            return rows, source
+
+        failures.append(f"{source}: empty")
+
+    attempted = " -> ".join(source_order)
+    raise RuntimeError(
+        "港股分钟线抓取失败。"
+        f"尝试顺序: {attempted}。"
+        f"失败详情: {' | '.join(failures)}"
+    )
+
+
 def save_to_csv(rows: list[dict], filepath: str) -> None:
     if not rows:
         raise ValueError("无可保存数据")
@@ -396,7 +460,7 @@ def save_to_csv(rows: list[dict], filepath: str) -> None:
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="港股分钟级 K 线抓取（AKShare）")
+    parser = argparse.ArgumentParser(description="港股分钟级 K 线抓取（雪球优先）")
     parser.add_argument("--symbol", required=True, help="港股代码，如 03690")
     parser.add_argument("--period", default="60", choices=sorted(_ALLOWED_PERIODS),
                         help="分钟周期: 1/5/15/30/60")
@@ -406,13 +470,23 @@ def main():
                         help="复权: 留空 / qfq / hfq")
     parser.add_argument("--source", default="xueqiu", choices=sorted(_ALLOWED_SOURCES),
                         help="数据源: xueqiu / akshare")
+    parser.add_argument("--fallback-source", action="append", choices=sorted(_ALLOWED_SOURCES), default=None,
+                        help="显式允许的回退数据源，可重复指定；默认不回退")
     parser.add_argument("--output", default=None, help="输出 CSV 路径，默认按目录约定生成")
     args = parser.parse_args()
 
     print(f"正在抓取 港股 {args.symbol} {args.period}m K 线 "
           f"({args.start or '最早'} ~ {args.end or '至今'}) ...")
-    rows = fetch_hk_minute(args.symbol, args.period, args.start, args.end, args.adjust, source=args.source)
-    print(f"获取 {len(rows)} 根 K 线")
+    rows, used_source = fetch_hk_minute_with_policy(
+        args.symbol,
+        period=args.period,
+        start=args.start,
+        end=args.end,
+        adjust=args.adjust,
+        primary_source=args.source,
+        fallback_sources=args.fallback_source,
+    )
+    print(f"获取 {len(rows)} 根 K 线，使用数据源: {used_source}")
 
     if rows:
         head = rows[0]

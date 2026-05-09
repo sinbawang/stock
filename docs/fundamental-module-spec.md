@@ -2,6 +2,15 @@
 
 这份文档用于先定义“基本面分析模块要做什么、输入输出是什么、边界在哪里”，作为后续实现代码的依据。
 
+如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+
+如果只想抓主线，建议从这份文档开始，再按下面顺序继续：
+
+- 字段边界: [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)
+- 数据源入口: [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
+- Python 模型: [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md)
+- 代码目录: [docs/fundamental-code-layout-draft.md](docs/fundamental-code-layout-draft.md)
+
 如果后续要开始把这些领域对象落成 Python 类，数据模型草案见 [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md)。
 
 目标不是直接做成全自动财报系统，而是先建立一个可解释、可测试、可扩展的基本面分析骨架，并能和现有缠论技术面分析组合使用。

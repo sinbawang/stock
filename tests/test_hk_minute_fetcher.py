@@ -76,3 +76,71 @@ def test_fetch_hk_minute_reports_missing_browser_login(monkeypatch):
 
     with pytest.raises(RuntimeError, match="浏览器.*登录态"):
         module.fetch_hk_minute("03690", source="xueqiu")
+
+
+def test_fetch_hk_minute_with_policy_uses_primary_without_fallback(monkeypatch):
+    monkeypatch.setattr(module, "fetch_hk_minute", lambda *args, **kwargs: [{"ts": "2026-01-01 10:00"}])
+
+    rows, used_source = module.fetch_hk_minute_with_policy("03690")
+
+    assert used_source == "xueqiu"
+    assert rows == [{"ts": "2026-01-01 10:00"}]
+
+
+def test_fetch_hk_minute_with_policy_falls_back_when_allowed(monkeypatch):
+    calls: list[str] = []
+
+    def fake_fetch(symbol, period="60", start=None, end=None, adjust="qfq", source="xueqiu"):
+        calls.append(source)
+        if source == "xueqiu":
+            raise RuntimeError("cookie expired")
+        return [{"ts": "2026-01-01 10:00"}]
+
+    monkeypatch.setattr(module, "fetch_hk_minute", fake_fetch)
+
+    rows, used_source = module.fetch_hk_minute_with_policy(
+        "03690",
+        primary_source="xueqiu",
+        fallback_sources=("akshare",),
+    )
+
+    assert calls == ["xueqiu", "akshare"]
+    assert used_source == "akshare"
+    assert rows == [{"ts": "2026-01-01 10:00"}]
+
+
+def test_fetch_hk_minute_with_policy_does_not_probe_other_sources_by_default(monkeypatch):
+    calls: list[str] = []
+
+    def fake_fetch(symbol, period="60", start=None, end=None, adjust="qfq", source="xueqiu"):
+        calls.append(source)
+        raise RuntimeError("cookie expired")
+
+    monkeypatch.setattr(module, "fetch_hk_minute", fake_fetch)
+
+    with pytest.raises(RuntimeError, match="尝试顺序: xueqiu"):
+        module.fetch_hk_minute_with_policy("03690")
+
+    assert calls == ["xueqiu"]
+
+
+def test_fetch_hk_minute_with_policy_tries_fallback_when_primary_returns_empty(monkeypatch):
+    calls: list[str] = []
+
+    def fake_fetch(symbol, period="60", start=None, end=None, adjust="qfq", source="xueqiu"):
+        calls.append(source)
+        if source == "xueqiu":
+            return []
+        return [{"ts": "2026-01-01 10:00"}]
+
+    monkeypatch.setattr(module, "fetch_hk_minute", fake_fetch)
+
+    rows, used_source = module.fetch_hk_minute_with_policy(
+        "03690",
+        primary_source="xueqiu",
+        fallback_sources=("akshare",),
+    )
+
+    assert calls == ["xueqiu", "akshare"]
+    assert used_source == "akshare"
+    assert rows == [{"ts": "2026-01-01 10:00"}]

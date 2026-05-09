@@ -1,0 +1,57 @@
+"""Standardized fundamental snapshot input model."""
+
+from datetime import date, datetime
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict
+
+from .common import DupontDriver, GuidanceAttainment, MarketCode
+
+
+class FundamentalSnapshot(BaseModel):
+    """A standardized fundamental snapshot for one symbol and one report period."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    symbol: str
+    name: str
+    market: MarketCode
+    report_period: date
+    currency: str
+    source: str
+    updated_at: datetime
+
+    market_cap: Optional[float] = None
+    pe_ttm: Optional[float] = None
+    pe_percentile_5y: Optional[float] = None
+    pb: Optional[float] = None
+    ps_ttm: Optional[float] = None
+    peg: Optional[float] = None
+    dividend_yield: Optional[float] = None
+
+    roe: Optional[float] = None
+    roe_3y_mean: Optional[float] = None
+    roe_3y_cv: Optional[float] = None
+    dupont_driver: Optional[DupontDriver] = None
+
+    gross_margin: Optional[float] = None
+    net_margin: Optional[float] = None
+    revenue_growth: Optional[float] = None
+    net_profit_growth: Optional[float] = None
+
+    debt_to_asset: Optional[float] = None
+    current_ratio: Optional[float] = None
+    operating_cashflow_to_profit: Optional[float] = None
+    operating_cashflow_to_profit_history: Optional[List[Optional[float]]] = None
+
+    accounts_receivable_growth: Optional[float] = None
+    inventory_growth: Optional[float] = None
+    interest_bearing_debt_growth: Optional[float] = None
+    operating_cashflow_growth: Optional[float] = None
+
+    guidance_attainment: Optional[GuidanceAttainment] = None
+
+    period_type: Optional[str] = None
+    industry: Optional[str] = None
+    notes: Optional[str] = None
+    raw_payload_ref: Optional[str] = None

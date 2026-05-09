@@ -14,7 +14,7 @@ if str(SRC) not in sys.path:
 from chanlun.bi import identify_bis
 from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
-from chanlun.data.hk_minute_fetcher import fetch_hk_minute, save_to_csv
+from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, save_to_csv
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.models import Bar, Bi, Fractal, NormalizedBar, Zhongshu
 from chanlun.normalize import normalize_bars
@@ -40,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start", default="2026-01-01 09:30", help="起始时间")
     parser.add_argument("--end", default=None, help="结束时间，默认到当前")
     parser.add_argument("--source", default="xueqiu", choices=["xueqiu", "akshare"], help="港股分钟数据源")
+    parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="显式允许的回退数据源，可重复指定；默认不回退")
     parser.add_argument("--contact", default=None, help="微信联系人")
     parser.add_argument("--visible-row-index", type=int, default=None, help="微信当前可见会话第几行")
     parser.add_argument("--current-chat-only", action="store_true", help="只向当前已打开会话发送，不自动切换联系人")
@@ -232,7 +233,15 @@ def analyze_current_state(
 
 def main() -> None:
     args = parse_args()
-    rows = fetch_hk_minute(args.symbol, period="60", start=args.start, end=args.end, adjust="qfq", source=args.source)
+    rows, used_source = fetch_hk_minute_with_policy(
+        args.symbol,
+        period="60",
+        start=args.start,
+        end=args.end,
+        adjust="qfq",
+        primary_source=args.source,
+        fallback_sources=args.fallback_source,
+    )
     if not rows:
         raise RuntimeError("未抓到任何60M数据")
 
@@ -292,6 +301,7 @@ def main() -> None:
     analysis_text = analyze_current_state(args.name, raw_bars, bis, zhongshus, macd_points)
 
     print(f"原始 CSV: {paths['raw_csv']}")
+    print(f"分钟数据源: {used_source}")
     print(f"标准化 CSV: {paths['normalized_csv']}")
     print(f"结构图 SVG: {paths['svg']}")
     print(f"完整 PNG: {paths['png']}")

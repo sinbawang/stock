@@ -51,7 +51,11 @@ chanlun = "chanlun.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["chanlun"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["chanlun*", "fundamental*"]
+
 
 [tool.black]
 line-length = 100

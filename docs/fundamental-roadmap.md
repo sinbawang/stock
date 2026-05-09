@@ -2,6 +2,14 @@
 
 这份文档描述基本面模块的落地顺序，避免一开始就把数据源、规则引擎、CLI、可视化、消息推送全部揉在一起。
 
+如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+
+这份文档更适合放在“规格已经看完，准备排实现顺序”时再读。建议前置阅读：
+
+- [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md)
+- [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)
+- [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
+
 ## 1. 总体原则
 
 - 先文档，后实现
@@ -40,6 +48,9 @@
 - 文本报告输出
 - 单元测试
 
+当前仓库状态：这一阶段已经基本落地，`src/fundamental/models/`、`scoring/`、`reporting/`、`validation/`
+以及对应测试已具备第一版闭环。
+
 完成标准：
 
 - 输入一份标准 JSON 快照
@@ -59,6 +70,10 @@
 
 - 至少一个数据源能稳定产出标准快照
 - 数据源层和评分层解耦
+
+当前仓库状态：这一阶段也已进入已落地状态，港股与 A 股公共快照入口已经分别沉到
+`src/fundamental/data/hk_snapshot_fetcher.py` 与 `src/fundamental/data/cn_snapshot_fetcher.py`，并通过
+`src/fundamental/services/` 提供抓取并分析入口。
 
 ### 阶段 4：与技术面联动
 
@@ -81,16 +96,19 @@
 - 汇总表输出
 - 与现有报告导出链路结合
 
-## 3. 模块分层建议
+## 3. 当前模块分层
 
-建议未来代码分为四层：
+按当前仓库实现，基本面代码已经大体分为七层：
 
-- `providers`: 财报或指标数据获取
-- `normalizers`: 不同来源字段映射到标准快照
+- `data`: 财报或指标数据获取，以及不同来源字段到标准快照的映射
+- `models`: 标准快照与评分输出模型
+- `config`: 子模型配置对象与注册表
+- `validation`: 字段完整性与准入校验
 - `scoring`: 基本面评分与风险标记
-- `reporting`: 文本报告、CSV 输出、后续可视化
+- `reporting`: 文本报告输出
+- `services`: “抓取 + 分析”总入口
 
-这样可以避免后续改一个数据源时，评分逻辑也跟着震荡。
+这比早期草案里的 `providers / normalizers / scoring / reporting` 更贴近当前实现，也更符合现在的导出接口。
 
 ## 4. 第一阶段必须避免的事情
 
@@ -102,7 +120,7 @@
 
 ## 5. 待确认问题
 
-这些问题在开始实现前应明确：
+这些问题在继续扩模型和联动前仍然值得明确：
 
 - 港股和 A 股是否使用完全相同的评分阈值
 - 金融股是否需要单独评分模型

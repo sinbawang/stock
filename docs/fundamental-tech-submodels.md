@@ -2,9 +2,11 @@
 
 这份文档是 [docs/fundamental-industry-layering.md](docs/fundamental-industry-layering.md) 中“科技行业规则”的进一步细化版本。
 
-如果后续要开始把这些子模型写成 Python 配置对象，结构草案见 [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md)。
+如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
 
-目的不是把所有科技细分行业一次讲完，而是先把你当前更可能用到的几类拆开，确保后续实现时：
+当前这些科技子模型已经落成 Python 配置对象；对象结构说明见 [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md)。
+
+目的不是把所有科技细分行业一次讲完，而是先把你当前更可能用到的几类拆开，确保实现层：
 
 - 同样叫“科技”，但不会把平台互联网、半导体、工业自动化、游戏内容混成一锅
 - 同一套字段可以复用，但权重和红线按子行业调整
@@ -99,7 +101,7 @@
 
 ### 3.7 第一版评分参数表
 
-这一节的目标不是补充概念说明，而是给后续代码实现一份可直接落地的参数表。
+这一节的目标不是补充概念说明，而是对照当前配置层给出一份可直接落地的参数表。
 
 #### 3.7.1 模型标识
 
