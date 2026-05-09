@@ -1,13 +1,30 @@
 # Chanlun Stock Analysis
 
-基于缠论（Chan theory / 缠论）的 Python 股票辅助分析工具。
+基于缠论的股票辅助分析工具，当前主线是先把技术面规则和基本面规则都定义清楚，再按文档分阶段实现。
 
-## 功能
+项目定位是“研究与辅助决策工具”，不是自动荐股器，也不是收益承诺系统。
 
-- K 线数据读取与清洗
-- 缠论结构识别：分型、笔、线段、中枢
-- 信号解释与可视化
-- 回测验证框架
+## 当前重点
+
+当前项目分两条主线推进：
+
+- 技术面：缠论结构识别、结构图导出、规则回归验证
+- 基本面：财务快照模型、评分规则、风险标记、与技术面联动的接口设计
+
+在开始写基本面代码前，先冻结文档口径，避免实现过程中频繁返工。
+
+## 文档索引
+
+- [docs/chanlun-rule-spec.md](docs/chanlun-rule-spec.md): 缠论规则规格
+- [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md): 基本面模块设计规格
+- [docs/fundamental-roadmap.md](docs/fundamental-roadmap.md): 基本面模块落地路线图
+- [docs/fundamental-snapshot-example.md](docs/fundamental-snapshot-example.md): 基本面标准输入样例
+- [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md): 基本面第一版最小字段集
+- [docs/fundamental-industry-layering.md](docs/fundamental-industry-layering.md): 基本面行业分层规则
+- [docs/fundamental-tech-submodels.md](docs/fundamental-tech-submodels.md): 科技行业子模型
+- [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md): 科技子模型代码配置草案
+- [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md): 基本面 Python 数据模型草案
+- [.github/agents/chanlun-python.agent.md](.github/agents/chanlun-python.agent.md): 项目专用 agent 定义
 
 ## 项目结构
 
@@ -36,24 +53,26 @@ chanlun-stock/
 │   ├── test_bi.py
 │   └── test_zhongshu.py
 ├── docs/
-│   └── chanlun-rule-spec.md    # 规则规格
+│   ├── chanlun-rule-spec.md         # 缠论规则规格
+│   ├── fundamental-module-spec.md   # 基本面模块规格
+│   ├── fundamental-roadmap.md       # 基本面模块路线图
+│   ├── fundamental-snapshot-example.md  # 基本面标准输入样例
+│   ├── fundamental-v1-minimum-fields.md # 基本面第一版最小字段集
+│   ├── fundamental-industry-layering.md # 基本面行业分层规则
+│   ├── fundamental-tech-submodels.md    # 科技行业子模型
+│   ├── fundamental-tech-config-draft.md # 科技子模型代码配置草案
+│   └── fundamental-python-model-draft.md # 基本面 Python 数据模型草案
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
 ```
 
-## 快速开始
+## 设计原则
 
-```bash
-# 安装依赖
-pip install -e .
-
-# 运行演示
-python src/chanlun/main.py path/to/data.csv
-
-# 运行测试
-pytest tests/
-```
+- 先统一规则口径，再开始编码
+- 先建立最小可运行闭环，再接外部数据源
+- 先输出可解释结果，再做自动化组合
+- 技术面与基本面并列，不相互替代
 
 ## 图表导出约定
 
@@ -88,20 +107,29 @@ python scripts/export_structures_with_boxes.py \
 
 ## 开发流程
 
-1. 准备样例 K 线 CSV 数据
-2. 运行 `reader.py` 验证数据载入
-3. 逐个验证规则模块（分型、笔、中枢）
+1. 先补或修改规则文档
+2. 准备样例数据和标准输入示例
+3. 按文档实现最小闭环
 4. 补全测试案例
-5. 迭代规则细化
+5. 再接数据源和输出链路
 
-## 第一阶段里程碑
+## 当前文档阶段目标
 
-- [ ] 数据结构与读取
-- [ ] 包含关系处理
-- [ ] 分型识别与去重
-- [ ] 笔识别与确认
-- [ ] 最小中枢识别
-- [ ] 样例可视化与验证
+- [x] 缠论规则规格
+- [x] 基本面模块目标与边界
+- [x] 基本面核心模型定义
+- [x] 基本面评分和评级规则
+- [x] 基本面实现路线图
+- [x] 基本面示例输入模板
+- [x] 基本面行业分层规则
+- [ ] 技术面与基本面联合输出规格
+
+## 后续实现顺序
+
+1. 先实现基本面标准快照模型
+2. 再实现评分与风险标记引擎
+3. 然后补 CLI 和测试
+4. 最后接入数据源与联合分析
 
 ## 许可
 

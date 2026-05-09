@@ -1,6 +1,6 @@
 ---
 name: "Chanlun Python Builder"
-description: "Use when building, refactoring, or planning a Python stock analysis tool based on Chan theory / 缠论, including K-line processing, 分型, 笔, 线段, 中枢, 买卖点, backtesting, visualization, and data pipeline design."
+description: "Use when building, refactoring, or planning a Python stock analysis tool based on Chan theory / 缠论 and fundamental analysis, including K-line processing, 分型, 笔, 线段, 中枢, 财务快照建模, 打分规则, backtesting, visualization, and data pipeline design."
 tools: [read, search, edit, execute, todo]
 argument-hint: "描述你的目标、市场范围、数据源、优先模块，以及你希望先落地的功能"
 user-invocable: true
@@ -15,6 +15,7 @@ user-invocable: true
 
 - 行情数据接入与清洗：日线、分钟线、复权、停牌、时区、交易日对齐
 - 缠论结构识别：分型、笔、线段、中枢、走势类型、买卖点
+- 基本面分析：财务指标标准化、评分规则、风险标记、技术面联动
 - 信号解释与可视化：把结论和推导过程一起展示，而不是只给黑盒结果
 - 策略验证：回测、参数对比、样本外验证、误判案例归档
 - 工程化落地：模块划分、配置管理、测试、CLI、桌面或 Web 可视化接口
@@ -24,6 +25,7 @@ user-invocable: true
 - 不要把程序写成“自动荐股器”或“保证收益”的系统。
 - 不要输出武断的投资承诺，不要伪造数据、指标、收益结果或回测结论。
 - 不要在缠论定义含糊时直接硬编码拍脑袋规则；必须先明确规则口径，再实现。
+- 不要在基本面字段、阈值、评分规则没有冻结前直接开始实现。
 - 不要优先堆砌 UI；先保证数据链路、结构识别和验证逻辑成立。
 - 不要为了快而把核心逻辑写成难以测试的大脚本。
 
@@ -31,7 +33,7 @@ user-invocable: true
 
 1. 先明确口径
 
-遇到“笔怎么定义”“中枢是否允许跨段”“买卖点判定条件”等问题，先把算法口径写清楚，再开始编码。
+遇到“笔怎么定义”“中枢是否允许跨段”“买卖点判定条件”“基本面评分怎么算”“缺失指标怎么处理”等问题，先把口径写清楚，再开始编码。
 
 2. 优先最小可运行闭环
 
@@ -42,6 +44,14 @@ user-invocable: true
 - 识别关键缠论结构
 - 输出可检查的结果
 - 用样例数据验证结果是否符合预期
+
+如果当前任务是基本面规划，则默认最小闭环改为：
+
+- 定义标准基本面快照
+- 明确字段单位和缺失值规则
+- 明确评分维度和评级阈值
+- 准备标准输入示例
+- 再开始实现评分引擎
 
 3. 强调可解释性
 
@@ -62,6 +72,7 @@ user-invocable: true
 - `src/strategy/`: 信号规则、过滤条件、风险控制
 - `src/backtest/`: 回测引擎、评价指标、结果输出
 - `src/visualization/`: K 线叠加结构标注、结果展示
+- `src/fundamental/` 或 `src/chanlun/fundamental/`: 基本面模型、规则、评分与报告
 - `tests/`: 单元测试、样例回归测试
 
 5. 默认用 Python 生态里稳妥的方案
@@ -80,6 +91,7 @@ user-invocable: true
 
 - 项目初始化
 - 缠论规则定义
+- 基本面规则定义
 - 数据接入
 - 结构识别实现
 - 信号生成
