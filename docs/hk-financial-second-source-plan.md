@@ -97,6 +97,12 @@
 - 对保险 / 券商逐项验证“字段是否存在”
 - 若字段存在，再把映射沉入 `hk_snapshot_fetcher.py`
 
+当前状态更新：
+
+- 这条线已经完成了“字段存在性判别”这一步
+- 结论是：Eastmoney 原始财报表、`RPT_HKF10_FN_MAININDICATOR` 等接口能补一部分金融专属经营字段，但仍不能稳定给出保险 / 券商一阶段模型最关键的监管字段
+- 因此第二层现在仍然保留，但不再是假设“继续猜表名就能补齐核心字段”
+
 ### 4.3 第三层：公司披露 / 手工快照补充层
 
 如果 public API 仍不给监管字段，就不要硬猜。
@@ -113,6 +119,14 @@
 - `内含价值增长`
 - `新业务价值增长`
 - 券商的 `净资本相关监管指标`
+
+当前状态更新：
+
+- 这层已经从“设计方案”进入“部分 live 落地”
+- `06886` 已接入华泰官方年报 PDF fallback，当前解析 `风险覆盖率` 并透明映射到 `net_capital_ratio`
+- `01339` 已接入人保官网“偿付能力”披露列表 fallback，当前自动发现最新偿付能力报告摘要 PDF，并解析 `综合偿付能力充足率`
+- 对仍缺的保险字段，`manual supplement` 仍然是当前主方案
+- 报告层已新增来源警告：会显式提示 `official.solvency_report`、`official.annual_report_proxy` 与 `manual.supplement` 的口径差异
 
 ## 5. 为什么不建议当前直接切到别的网站做主源
 
@@ -135,24 +149,27 @@
 当前状态：
 
 - mock / 单测链路已闭环
-- live 公共源仍缺核心监管字段
+- live 主源仍缺多项核心监管字段
+- 其中 `solvency_adequacy_ratio` 已可通过人保官网偿付能力披露 fallback 自动补齐
 
 短期建议：
 
-- 保持严格必填，不要偷偷放宽 `solvency_adequacy_ratio`、`embedded_value_growth`、`new_business_value_growth`
-- 真正缺字段时直接报缺失，这比伪造分析更安全
+- 保持严格必填，不要偷偷放宽 `embedded_value_growth`、`new_business_value_growth`
+- `solvency_adequacy_ratio` 当前可走官方披露 fallback，但报告里必须提示它可能不是年报口径
+- `combined_ratio`、`investment_return`、`embedded_value_growth`、`new_business_value_growth` 当前仍宜走 `manual supplement`
 
 ### 6.2 `broker_v1`
 
 当前状态：
 
 - mock / 单测链路已闭环
-- live 公共源仍缺 `net_capital_ratio`
+- live 主源仍缺 `net_capital_ratio`
+- 但当前已可通过华泰官方年报 fallback 自动补齐代理值
 
 短期建议：
 
 - 保持 `net_capital_ratio` 必填
-- 在第二源接进来前，不要把 live 券商分析伪装成已闭环能力
+- 当前 live 券商分析可以跑通，但报告里必须明确这还是 `风险覆盖率 -> net_capital_ratio` 的代理映射，而不是字段原文直取
 
 ## 7. 推荐实现顺序
 
@@ -164,12 +181,20 @@
 4. 若仍缺失，给 `insurance_v1` / `broker_v1` 设计 `manual supplement` 输入方案
 5. 再决定是否需要第三方站点或公告解析
 
+按 2026-05-11 的实际进展，这个顺序已演变为：
+
+1. 用 Eastmoney 原始接口确认公共源边界
+2. 先补港股分红 fallback
+3. 对核心监管字段切换到公司官方披露 fallback
+4. 对剩余无法稳定自动化的字段保留 `manual supplement`
+5. 在报告层补字段来源警告和维度得分计算说明
+
 ## 8. 当前最务实的下一步
 
 如果继续编码，最值得先做的是：
 
-- 在公共层新增港股分红二源 helper，并把代理隔离逻辑收口到仓库内
-- 同时为保险 / 券商保留 `manual supplement` 方案，而不是继续假设 public API 很快会给出监管字段
+- 继续把保险剩余手工字段里最关键的 `combined_ratio` / `investment_return` 做成更稳定的官方披露或半官方披露抓取
+- 把“官方披露 fallback”和“手工补充”之间的口径差异继续沉到报告层，而不是留给脚本侧手写说明
 
 这条路线的好处是：
 

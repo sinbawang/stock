@@ -45,10 +45,16 @@
 - 通过 Eastmoney 原始资产负债表回算 `accounts_receivable_growth`、`inventory_growth`
 - 通过 Eastmoney 估值对比接口补齐 `pe_ttm`、`pe_percentile_5y` 代理、`pb`、`ps_ttm`
 - 可选通过雪球 `quote` 做 secondary overlay，补 `market_cap`、`dividend_yield` 等缺失字段
+- 港股金融 live 链路已支持官方披露 fallback：
+  - `06886` 可从华泰官方年报 PDF 解析 `风险覆盖率`，并透明映射为 `net_capital_ratio` 代理值
+  - `01339` 可从人保官网偿付能力披露列表自动发现最新偿付能力报告摘要 PDF，并补 `solvency_adequacy_ratio`
 - 通过 THS 财务摘要 / 资产负债表 / 现金流量表 / 利润表 + Baidu 估值序列构建 A 股快照
 - 返回 `field_sources`，显式标注字段来自主源还是 overlay
 - 直接产出标准 `FundamentalSnapshot`
 - 可以继续直接喂给现有基本面评分引擎
+- 文本报告当前会额外输出两类可解释信息：
+  - 字段来源口径警告，例如 `official.solvency_report`、`official.annual_report_proxy`、`manual.supplement`
+  - 维度得分的简版计算说明，例如“字段值 -> 规则分 -> 平均后乘维度权重”
 
 ## 为什么要提取成公共层
 
@@ -123,6 +129,28 @@
 - `market_cap`
 - `dividend_yield`
 - 当主源缺失时，补 `pe_ttm`、`pb`、`ps_ttm`
+
+## 港股金融第二数据源当前状态
+
+截至 2026-05-11，港股金融 second source 已经从“方案设计”推进到“部分 live 落地”：
+
+- `06886`:
+  - 当前公共源仍不直接提供 `net_capital_ratio`
+  - 现已接入华泰官方年报 PDF fallback
+  - 当前实现口径是把年报中的 `风险覆盖率` 透明映射为 `net_capital_ratio` 代理值
+  - 报告文本会明确提示这不是公司直接披露的 `净资本比率` 字段
+- `01339`:
+  - 当前公共源仍不稳定提供 `solvency_adequacy_ratio`
+  - 现已接入人保官网偿付能力披露列表 fallback
+  - 当前实现会抓最新公开偿付能力报告摘要 PDF 并解析 `综合偿付能力充足率`
+  - 报告文本会明确提示这条官方披露可能滞后于 `report_period` 对应年报口径
+- `insurance_v1` 的 `combined_ratio`、`investment_return`、`embedded_value_growth`、`new_business_value_growth` 目前仍主要依赖 `manual supplement`
+
+这意味着当前 live 能力不是“港股金融字段已全部自动化”，而是：
+
+- 先把最关键、最影响模型准入的监管字段接入官方披露 fallback
+- 对仍无法稳定自动化的字段保留 `manual supplement`
+- 通过 `field_sources` 与报告 `警告` 段显式区分字段口径
 
 ## 双源估值对照
 
@@ -214,6 +242,17 @@ field_sources = result.field_sources
 }
 ```
 
+在港股金融 live 链路里，当前还可能出现这些来源：
+
+```python
+{
+  "solvency_adequacy_ratio": "official.solvency_report",
+  "net_capital_ratio": "official.annual_report_proxy",
+  "combined_ratio": "manual.supplement",
+  "investment_return": "manual.supplement",
+}
+```
+
 这层 source trace 的用途是：
 
 - 让 `ps_ttm` / `psr` 这类近似字段保留来源痕迹
@@ -230,6 +269,12 @@ snapshot = result.fetched.snapshot
 scorecard = result.scorecard
 assumptions = result.assumptions
 ```
+
+如果要消费用户可见报告，而不是只消费总分，当前还应注意：
+
+- `scorecard.warnings` 已经会反映字段来源口径
+- `reporting.render_scorecard_text(...)` 已经会把维度得分的简版计算依据一起渲染出来
+- 因此脚本侧不应再重复手写“这个分数怎么来的”或“这个字段来自哪里”这类说明，除非需要额外业务总结
 
 带雪球 overlay 抓取并直接分析：
 

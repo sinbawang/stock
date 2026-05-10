@@ -13,6 +13,15 @@
 
 当前已形成“文档定义口径 + 公共入口落地 + 测试回归”的基本闭环，后续新增能力继续优先遵循既有文档与公共入口。
 
+截至 2026-05-11，基本面侧还补上了两个今天最值得注意的变化：
+
+- 港股金融 second source 已进入部分 live 落地：
+	- 华泰证券 `06886` 可通过官方年报 PDF fallback 补 `net_capital_ratio` 代理值
+	- 中国人保 `01339` 可通过官网偿付能力披露 fallback 补 `solvency_adequacy_ratio`
+- 基本面文本报告现在会额外输出：
+	- 字段来源口径警告
+	- 维度得分的简版计算说明
+
 ## 文档索引
 
 建议按“总边界 -> 字段边界 -> 数据源与实现 -> 联动扩展”的顺序阅读基本面文档。
@@ -36,6 +45,8 @@
 
 - [docs/fundamental-roadmap.md](docs/fundamental-roadmap.md): 基本面模块落地路线图
 - [docs/fundamental-snapshot-example.md](docs/fundamental-snapshot-example.md): 基本面标准输入样例
+- [docs/combined-analysis-output-spec.md](docs/combined-analysis-output-spec.md): 当前 `plus_60m` 联合文本与微信发送产物规格
+- [docs/combined-analysis-service-interface.md](docs/combined-analysis-service-interface.md): 联合分析链路的公共服务接口说明
 - [.github/agents/chanlun-python.agent.md](.github/agents/chanlun-python.agent.md): 项目专用 agent 定义
 
 ## 当前公共入口
