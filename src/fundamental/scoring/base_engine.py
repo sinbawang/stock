@@ -11,17 +11,28 @@ from fundamental.models.scorecard import (
 )
 from fundamental.models.snapshot import FundamentalSnapshot
 from fundamental.scoring.common_rules import (
+    score_combined_ratio,
+    score_core_tier1_ratio,
+    score_dividend_yield,
     score_debt_to_asset,
     score_dupont_driver,
     score_guidance_attainment,
+    score_investment_return,
+    score_loan_deposit_growth_gap,
     score_net_profit_growth,
+    score_net_capital_ratio,
+    score_net_interest_margin,
+    score_npl_ratio,
     score_operating_cashflow_to_profit,
     score_pe_percentile,
     score_peg,
+    score_pb_financial,
+    score_provision_coverage_ratio,
     score_relative_pressure,
     score_revenue_growth,
     score_roe,
     score_roe_stability,
+    score_solvency_adequacy_ratio,
 )
 from fundamental.scoring.risk_rules import evaluate_automated_risk_rules
 
@@ -100,6 +111,46 @@ def _score_operating_and_inventory_cycle(snapshot: FundamentalSnapshot) -> Optio
     )
 
 
+def _score_capital_safety_and_asset_quality(snapshot: FundamentalSnapshot) -> Optional[float]:
+    return _average(
+        (
+            score_core_tier1_ratio(snapshot.core_tier1_ratio),
+            score_npl_ratio(snapshot.npl_ratio),
+            score_provision_coverage_ratio(snapshot.provision_coverage_ratio),
+            score_solvency_adequacy_ratio(snapshot.solvency_adequacy_ratio),
+            score_combined_ratio(snapshot.combined_ratio),
+            score_net_capital_ratio(snapshot.net_capital_ratio),
+        )
+    )
+
+
+def _score_profitability_and_stability(snapshot: FundamentalSnapshot) -> Optional[float]:
+    return _average(
+        (
+            score_roe(snapshot.roe),
+            score_roe_stability(snapshot.roe_3y_cv),
+            score_net_interest_margin(snapshot.net_interest_margin),
+            score_investment_return(snapshot.investment_return),
+        )
+    )
+
+
+def _score_business_growth_and_quality(snapshot: FundamentalSnapshot) -> Optional[float]:
+    return _average(
+        (
+            score_loan_deposit_growth_gap(snapshot.loan_deposit_growth_gap),
+            score_revenue_growth(snapshot.revenue_growth),
+            score_net_profit_growth(snapshot.net_profit_growth),
+            score_revenue_growth(snapshot.embedded_value_growth),
+            score_revenue_growth(snapshot.new_business_value_growth),
+        )
+    )
+
+
+def _score_shareholder_return_and_valuation(snapshot: FundamentalSnapshot) -> Optional[float]:
+    return _average((score_pb_financial(snapshot.pb), score_dividend_yield(snapshot.dividend_yield)))
+
+
 DIMENSION_SCORERS: dict[str, Callable[[FundamentalSnapshot], Optional[float]]] = {
     "profit_quality": _score_profit_quality,
     "growth_delivery": _score_growth_delivery,
@@ -107,6 +158,10 @@ DIMENSION_SCORERS: dict[str, Callable[[FundamentalSnapshot], Optional[float]]] =
     "valuation_fit": _score_valuation_fit,
     "growth_and_cycle": _score_growth_and_cycle,
     "operating_and_inventory_cycle": _score_operating_and_inventory_cycle,
+    "capital_safety_and_asset_quality": _score_capital_safety_and_asset_quality,
+    "profitability_and_stability": _score_profitability_and_stability,
+    "business_growth_and_quality": _score_business_growth_and_quality,
+    "shareholder_return_and_valuation": _score_shareholder_return_and_valuation,
 }
 
 
@@ -153,6 +208,10 @@ STRENGTH_MESSAGES = {
     "valuation_fit": "当前估值匹配度较好，估值压力相对可控。",
     "growth_and_cycle": "景气与成长匹配较好，增长质量处于可接受区间。",
     "operating_and_inventory_cycle": "营运与库存压力可控，经营质量相对稳定。",
+    "capital_safety_and_asset_quality": "资本安全与资产质量较稳，安全边际处于可跟踪区间。",
+    "profitability_and_stability": "盈利稳定性较好，利润韧性仍处于可跟踪区间。",
+    "business_growth_and_quality": "业务增长质量较好，扩张节奏与经营质量基本匹配。",
+    "shareholder_return_and_valuation": "股东回报与估值匹配度较好，安全边际相对充足。",
 }
 
 
@@ -163,6 +222,10 @@ RISK_MESSAGES = {
     "valuation_fit": "估值匹配偏弱，当前价格对基本面要求较高。",
     "growth_and_cycle": "成长与景气支撑偏弱，周期位置仍需确认。",
     "operating_and_inventory_cycle": "营运与库存压力偏大，应收或存货质量需要警惕。",
+    "capital_safety_and_asset_quality": "资本安全或资产质量偏弱，安全边际需要优先确认。",
+    "profitability_and_stability": "盈利稳定性偏弱，利润韧性仍需继续验证。",
+    "business_growth_and_quality": "业务增长质量偏弱，扩张与经营健康度不够匹配。",
+    "shareholder_return_and_valuation": "股东回报与估值保护偏弱，当前安全边际并不充分。",
 }
 
 
@@ -252,7 +315,7 @@ def _build_combined_comment(
         else f"当前最需要跟踪的是{explanation.fallback_risk.rstrip('。')}。"
     )
 
-    if output_style == "cycle_inventory_cashflow_first":
+    if output_style in ("cycle_inventory_cashflow_first", "risk_first"):
         ordered_parts = [summary, risk_part, highlight_part]
     else:
         ordered_parts = [summary, highlight_part, risk_part]

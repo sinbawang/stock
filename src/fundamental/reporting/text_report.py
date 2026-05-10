@@ -4,6 +4,10 @@ from fundamental.models.scorecard import FundamentalScoreCard
 
 
 DIMENSION_LABELS = {
+    "capital_safety_and_asset_quality": "资本安全与资产质量",
+    "profitability_and_stability": "盈利能力与稳定性",
+    "business_growth_and_quality": "增长与业务质量",
+    "shareholder_return_and_valuation": "估值与股东回报",
     "profit_quality": "盈利质量",
     "growth_delivery": "成长兑现",
     "cashflow_and_operating_efficiency": "现金流与运营效率",

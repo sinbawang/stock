@@ -31,6 +31,7 @@
 
 - [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md): 第一版字段边界，哪些必需、哪些可放宽、哪些推迟到 v2
 - [fundamental-data-source.md](fundamental-data-source.md): 港股 / A 股公开数据源如何映射成标准快照
+- [hk-financial-second-source-plan.md](hk-financial-second-source-plan.md): 港股保险 / 券商第二数据源方案，解释当前 public source 缺口和后续接入顺序
 - [hk-minute-data-source.md](hk-minute-data-source.md): 技术面侧港股分钟线抓取策略，供联合分析链路参考
 
 读完这一层后，应该已经能回答：

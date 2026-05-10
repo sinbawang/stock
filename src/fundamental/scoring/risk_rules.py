@@ -50,10 +50,82 @@ def _receivable_pressure_single_period(snapshot: FundamentalSnapshot) -> Optiona
     return None
 
 
+def _core_tier1_ratio_low(snapshot: FundamentalSnapshot) -> Optional[TriggeredRule]:
+    if snapshot.core_tier1_ratio is not None and snapshot.core_tier1_ratio < 8.5:
+        return TriggeredRule(
+            rule_id="core_tier1_ratio_low",
+            severity="red_flag",
+            message="核心一级资本充足率低于舒适区。",
+            automated=True,
+        )
+    return None
+
+
+def _npl_ratio_high(snapshot: FundamentalSnapshot) -> Optional[TriggeredRule]:
+    if snapshot.npl_ratio is not None and snapshot.npl_ratio > 2.0:
+        return TriggeredRule(
+            rule_id="npl_ratio_high",
+            severity="risk",
+            message="不良率已升至需要重点跟踪的区间。",
+            automated=True,
+        )
+    return None
+
+
+def _provision_coverage_low(snapshot: FundamentalSnapshot) -> Optional[TriggeredRule]:
+    if snapshot.provision_coverage_ratio is not None and snapshot.provision_coverage_ratio < 150.0:
+        return TriggeredRule(
+            rule_id="provision_coverage_low",
+            severity="risk",
+            message="拨备覆盖率偏低，资产质量缓冲转弱。",
+            automated=True,
+        )
+    return None
+
+
+def _solvency_adequacy_ratio_low(snapshot: FundamentalSnapshot) -> Optional[TriggeredRule]:
+    if snapshot.solvency_adequacy_ratio is not None and snapshot.solvency_adequacy_ratio < 150.0:
+        return TriggeredRule(
+            rule_id="solvency_adequacy_ratio_low",
+            severity="red_flag",
+            message="偿付能力充足率低于舒适区。",
+            automated=True,
+        )
+    return None
+
+
+def _combined_ratio_high(snapshot: FundamentalSnapshot) -> Optional[TriggeredRule]:
+    if snapshot.combined_ratio is not None and snapshot.combined_ratio > 103.0:
+        return TriggeredRule(
+            rule_id="combined_ratio_high",
+            severity="risk",
+            message="综合成本率偏高，承保纪律需要重点跟踪。",
+            automated=True,
+        )
+    return None
+
+
+def _net_capital_ratio_low(snapshot: FundamentalSnapshot) -> Optional[TriggeredRule]:
+    if snapshot.net_capital_ratio is not None and snapshot.net_capital_ratio < 150.0:
+        return TriggeredRule(
+            rule_id="net_capital_ratio_low",
+            severity="red_flag",
+            message="净资本比例低于舒适区。",
+            automated=True,
+        )
+    return None
+
+
 RULE_HANDLERS: Dict[str, Callable[[FundamentalSnapshot], Optional[TriggeredRule]]] = {
     "ocf_profit_history_low": _ocf_profit_history_low,
     "inventory_pressure_single_period": _inventory_pressure_single_period,
     "receivable_pressure_single_period": _receivable_pressure_single_period,
+    "core_tier1_ratio_low": _core_tier1_ratio_low,
+    "npl_ratio_high": _npl_ratio_high,
+    "provision_coverage_low": _provision_coverage_low,
+    "solvency_adequacy_ratio_low": _solvency_adequacy_ratio_low,
+    "combined_ratio_high": _combined_ratio_high,
+    "net_capital_ratio_low": _net_capital_ratio_low,
 }
 
 

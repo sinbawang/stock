@@ -24,6 +24,8 @@
 - “抓取 + 分析”应走 `src/fundamental/services/`
 - 第一版已落地的是：港股 + A 股公开数据源快照抓取
 
+如果当前关注的是港股保险 / 券商为什么还没有 live 闭环，以及第二数据源下一步该怎么接，直接看 [hk-financial-second-source-plan.md](hk-financial-second-source-plan.md)。
+
 ## 当前公共代码
 
 公共抓取入口：

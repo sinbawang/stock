@@ -92,6 +92,73 @@ def make_game_snapshot(**overrides) -> FundamentalSnapshot:
     return FundamentalSnapshot(**payload)
 
 
+def make_bank_snapshot(**overrides) -> FundamentalSnapshot:
+    payload = {
+        "symbol": "601328",
+        "name": "交通银行",
+        "market": "CN",
+        "report_period": "2025-12-31",
+        "currency": "CNY",
+        "source": "manual",
+        "updated_at": "2026-05-09T20:30:00",
+        "roe": 11.8,
+        "roe_3y_cv": 0.12,
+        "pb": 0.62,
+        "dividend_yield": 5.1,
+        "core_tier1_ratio": 10.6,
+        "npl_ratio": 1.28,
+        "provision_coverage_ratio": 242.0,
+        "loan_deposit_growth_gap": 1.4,
+        "net_interest_margin": 1.82,
+    }
+    payload.update(overrides)
+    return FundamentalSnapshot(**payload)
+
+
+def make_insurance_snapshot(**overrides) -> FundamentalSnapshot:
+    payload = {
+        "symbol": "01339",
+        "name": "中国人保",
+        "market": "HK",
+        "report_period": "2025-12-31",
+        "currency": "CNY",
+        "source": "manual",
+        "updated_at": "2026-05-09T20:30:00",
+        "roe": 13.6,
+        "roe_3y_cv": 0.14,
+        "pb": 0.68,
+        "dividend_yield": 4.8,
+        "solvency_adequacy_ratio": 228.0,
+        "combined_ratio": 97.6,
+        "investment_return": 4.7,
+        "embedded_value_growth": 10.5,
+        "new_business_value_growth": 12.3,
+    }
+    payload.update(overrides)
+    return FundamentalSnapshot(**payload)
+
+
+def make_broker_snapshot(**overrides) -> FundamentalSnapshot:
+    payload = {
+        "symbol": "06886",
+        "name": "华泰证券",
+        "market": "HK",
+        "report_period": "2025-12-31",
+        "currency": "CNY",
+        "source": "manual",
+        "updated_at": "2026-05-09T20:30:00",
+        "roe": 12.6,
+        "roe_3y_cv": 0.16,
+        "pb": 0.79,
+        "dividend_yield": 4.0,
+        "net_capital_ratio": 218.0,
+        "revenue_growth": 18.0,
+        "net_profit_growth": 23.0,
+    }
+    payload.update(overrides)
+    return FundamentalSnapshot(**payload)
+
+
 def test_validate_snapshot_against_policy_rejects_missing_required_fields():
     snapshot = make_platform_snapshot(peg=None)
     submodel = get_submodel("platform_internet_v1")
@@ -121,6 +188,27 @@ def test_registry_can_resolve_game_submodel_by_symbol():
 
     assert submodel is not None
     assert submodel.submodel_id == "game_content_v1"
+
+
+def test_registry_can_resolve_bank_submodel_by_symbol():
+    submodel = get_submodel_for_symbol("601328")
+
+    assert submodel is not None
+    assert submodel.submodel_id == "bank_v1"
+
+
+def test_registry_can_resolve_insurance_submodel_by_symbol():
+    submodel = get_submodel_for_symbol("01339")
+
+    assert submodel is not None
+    assert submodel.submodel_id == "insurance_v1"
+
+
+def test_registry_can_resolve_broker_submodel_by_symbol():
+    submodel = get_submodel_for_symbol("06886")
+
+    assert submodel is not None
+    assert submodel.submodel_id == "broker_v1"
 
 
 def test_analyze_snapshot_scores_platform_internet_end_to_end():
@@ -193,6 +281,64 @@ def test_analyze_snapshot_can_auto_resolve_submodel_from_symbol():
 
     assert result.submodel_id == "platform_internet_v1"
     assert result.rating == "A"
+
+
+def test_analyze_snapshot_scores_bank_end_to_end():
+    snapshot = make_bank_snapshot()
+
+    result = analyze_snapshot(snapshot, "bank_v1")
+
+    assert result.submodel_id == "bank_v1"
+    assert result.industry_bucket == "financial"
+    assert result.rating == "A"
+    assert result.red_flag is False
+    assert any("资本充足与资产质量较稳" in strength for strength in result.strengths)
+    assert result.combined_comment is not None
+    assert "银行基本面仍应以资本安全和估值边际为主线跟踪" in result.combined_comment
+    assert result.combined_comment.index("当前最需要跟踪的是") < result.combined_comment.index("主要亮点是")
+
+
+def test_analyze_snapshot_scores_insurance_end_to_end():
+    snapshot = make_insurance_snapshot()
+
+    result = analyze_snapshot(snapshot, "insurance_v1")
+
+    assert result.submodel_id == "insurance_v1"
+    assert result.industry_bucket == "financial"
+    assert result.rating == "A"
+    assert any("保险资本缓冲与承保纪律较稳" in strength for strength in result.strengths)
+    assert result.combined_comment is not None
+    assert "保险基本面仍应围绕资本缓冲、承保纪律与估值边际持续跟踪" in result.combined_comment
+    assert result.combined_comment.index("当前最需要跟踪的是") < result.combined_comment.index("主要亮点是")
+
+
+def test_analyze_snapshot_scores_broker_end_to_end():
+    snapshot = make_broker_snapshot()
+
+    result = analyze_snapshot(snapshot, "broker_v1")
+
+    assert result.submodel_id == "broker_v1"
+    assert result.industry_bucket == "financial"
+    assert result.rating == "A"
+    assert any("券商净资本缓冲较稳" in strength for strength in result.strengths)
+    assert result.combined_comment is not None
+    assert "券商基本面仍应围绕净资本、盈利韧性与估值边际持续跟踪" in result.combined_comment
+    assert result.combined_comment.index("当前最需要跟踪的是") < result.combined_comment.index("主要亮点是")
+
+
+def test_analyze_snapshot_flags_bank_capital_and_asset_quality_risks():
+    snapshot = make_bank_snapshot(core_tier1_ratio=7.9, npl_ratio=2.2, provision_coverage_ratio=142.0)
+
+    result = analyze_snapshot(snapshot, "bank_v1")
+
+    triggered_rule_ids = {rule.rule_id for rule in result.triggered_rules}
+
+    assert result.red_flag is True
+    assert result.rating == "D"
+    assert "core_tier1_ratio_low" in triggered_rule_ids
+    assert "npl_ratio_high" in triggered_rule_ids
+    assert "provision_coverage_low" in triggered_rule_ids
+    assert any("不良与拨备缓冲同步转弱" in risk for risk in result.risks)
 
 
 def test_render_scorecard_text_outputs_readable_summary():

@@ -49,6 +49,19 @@ class FundamentalSnapshot(BaseModel):
     interest_bearing_debt_growth: Optional[float] = None
     operating_cashflow_growth: Optional[float] = None
 
+    capital_adequacy_ratio: Optional[float] = None
+    core_tier1_ratio: Optional[float] = None
+    npl_ratio: Optional[float] = None
+    provision_coverage_ratio: Optional[float] = None
+    loan_deposit_growth_gap: Optional[float] = None
+    net_interest_margin: Optional[float] = None
+    solvency_adequacy_ratio: Optional[float] = None
+    combined_ratio: Optional[float] = None
+    investment_return: Optional[float] = None
+    embedded_value_growth: Optional[float] = None
+    new_business_value_growth: Optional[float] = None
+    net_capital_ratio: Optional[float] = None
+
     guidance_attainment: Optional[GuidanceAttainment] = None
 
     period_type: Optional[str] = None

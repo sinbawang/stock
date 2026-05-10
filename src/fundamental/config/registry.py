@@ -2,6 +2,7 @@
 
 from typing import Dict, Optional
 
+from .finance_submodels import BANK_V1, BROKER_V1, INSURANCE_V1
 from .models import SubmodelConfig
 from .tech_submodels import (
     GAME_CONTENT_V1,
@@ -11,6 +12,9 @@ from .tech_submodels import (
 )
 
 SUBMODEL_REGISTRY: Dict[str, SubmodelConfig] = {
+    BANK_V1.submodel_id: BANK_V1,
+    INSURANCE_V1.submodel_id: INSURANCE_V1,
+    BROKER_V1.submodel_id: BROKER_V1,
     PLATFORM_INTERNET_V1.submodel_id: PLATFORM_INTERNET_V1,
     SEMICONDUCTOR_HARDTECH_V1.submodel_id: SEMICONDUCTOR_HARDTECH_V1,
     INDUSTRIAL_AUTOMATION_V1.submodel_id: INDUSTRIAL_AUTOMATION_V1,
