@@ -60,12 +60,30 @@ def _format_metric_value(value: object) -> str:
 
 def _format_score_basis(parts: Sequence[tuple[str, Optional[float]]], normalized_score: Optional[float], weight: int) -> Optional[str]:
     present_parts = [(label, score) for label, score in parts if score is not None]
-    if not present_parts or normalized_score is None:
+    missing_parts = [label for label, score in parts if score is None]
+    if not present_parts and not missing_parts:
         return None
 
-    joined = ", ".join(f"{label}->{score:.1f}" for label, score in present_parts)
-    weighted_score = _weight_score(normalized_score, weight)
-    return f"平均[{joined}]={normalized_score:.1f}; ×{weight}/100={weighted_score:.2f}"
+    total_parts = len(parts)
+    segments: List[str] = []
+    if present_parts:
+        joined = ", ".join(f"{label}->{score:.1f}" for label, score in present_parts)
+        segments.append(f"已计分{len(present_parts)}/{total_parts}项[{joined}]")
+        if normalized_score is not None:
+            segments.append(f"平均={normalized_score:.1f}")
+    else:
+        segments.append(f"已计分0/{total_parts}项")
+
+    if missing_parts:
+        segments.append(f"缺失[{', '.join(missing_parts)}]")
+
+    if normalized_score is not None:
+        weighted_score = _weight_score(normalized_score, weight)
+        segments.append(f"×{weight}/100={weighted_score:.2f}")
+    else:
+        segments.append("维度分=0.00")
+
+    return "; ".join(segments)
 
 
 def _build_metric_lists(

@@ -907,7 +907,7 @@ def test_fetch_and_analyze_hk_snapshot_builds_broker_scorecard_with_financial_fi
     assert result.fetched.field_sources["net_capital_ratio"] == "eastmoney.financial_indicator"
     report_text = render_scorecard_text(result.scorecard)
     assert "净资本比率 182.00" in report_text
-    assert "平均[" in report_text
+    assert "已计分" in report_text
     assert "- notes" not in report_text
 
 

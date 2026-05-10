@@ -361,4 +361,6 @@ def test_render_scorecard_text_outputs_readable_summary():
     assert "缺失指标" in rendered
     assert "- dupont_driver" in rendered
     assert "- guidance_attainment" in rendered
+    assert "缺失[杜邦驱动 NA]" in rendered
+    assert "已计分3/4项" in rendered
     assert rendered.index("关注问题") < rendered.index("维度得分")
