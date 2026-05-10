@@ -31,7 +31,7 @@ def _normalize_items(values: list[str]) -> list[str]:
 
 
 def _sort_missing_metrics(values: list[str]) -> list[str]:
-    return sorted(_normalize_items(values))
+    return sorted(value for value in _normalize_items(values) if value != "notes")
 
 
 def _render_lines(title: str, values: list[str]) -> list[str]:
@@ -74,6 +74,8 @@ def render_scorecard_text(scorecard: FundamentalScoreCard) -> str:
             f"- {_format_dimension_name(dimension.dimension)}: "
             f"{dimension.score:.2f}/{dimension.weight:.2f}"
         )
+        if dimension.score_basis:
+            dimension_lines.append(f"  计算: {dimension.score_basis}")
 
     body.extend(["", *dimension_lines])
 

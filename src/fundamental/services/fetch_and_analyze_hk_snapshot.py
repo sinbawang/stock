@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import re
 from typing import Any, Mapping, Optional
 
 from fundamental.config.models import SubmodelConfig
@@ -21,6 +22,73 @@ class FetchedFundamentalAnalysis:
     fetched: FundamentalSnapshotFetchResult
     scorecard: FundamentalScoreCard
     assumptions: tuple[str, ...] = ()
+
+
+def _extract_latest_disclosure_date(assumptions: tuple[str, ...]) -> Optional[str]:
+    for item in assumptions:
+        match = re.search(r"Latest PICC solvency report disclosure date used for fallback: (\d{4}-\d{2}-\d{2})", item)
+        if match is not None:
+            return match.group(1)
+    return None
+
+
+def _format_field_labels(field_names: list[str]) -> str:
+    labels = {
+        "dividend_yield": "股息率",
+        "solvency_adequacy_ratio": "综合偿付能力充足率",
+        "combined_ratio": "综合成本率",
+        "investment_return": "投资收益率",
+        "embedded_value_growth": "内含价值增长率",
+        "new_business_value_growth": "新业务价值增长率",
+        "net_capital_ratio": "净资本比率",
+        "revenue_growth": "营收增速",
+        "net_profit_growth": "净利增速",
+    }
+    return "、".join(labels.get(field_name, field_name) for field_name in field_names)
+
+
+def _derive_hk_source_warnings(fetched: FundamentalSnapshotFetchResult) -> tuple[str, ...]:
+    field_sources = fetched.field_sources or {}
+    warnings: list[str] = []
+
+    manual_fields = sorted(
+        field_name
+        for field_name, source in field_sources.items()
+        if source == "manual.supplement" and field_name != "notes"
+    )
+    if manual_fields:
+        warnings.append(f"以下字段当前使用手工补充口径: {_format_field_labels(manual_fields)}。")
+        if "investment_return" in manual_fields:
+            warnings.append("投资收益率当前为手工补充/代理值时，应与公司原文直接披露口径区分阅读。")
+        insurance_cross_scope_fields = {
+            "solvency_adequacy_ratio",
+            "combined_ratio",
+            "embedded_value_growth",
+            "new_business_value_growth",
+        }
+        if insurance_cross_scope_fields.intersection(manual_fields):
+            warnings.append("保险手工补充字段可能存在跨主体口径: 偿付能力偏集团监管口径，综合成本率偏财险口径，EV/NBV 偏寿险口径。")
+
+    if field_sources.get("solvency_adequacy_ratio") == "official.solvency_report":
+        disclosure_date = _extract_latest_disclosure_date(fetched.assumptions)
+        if disclosure_date is not None:
+            warnings.append(
+                f"偿付能力充足率当前来自官网偿付能力报告摘要（披露日 {disclosure_date}），不是 {fetched.snapshot.report_period.isoformat()} 年报口径。"
+            )
+        else:
+            warnings.append(
+                f"偿付能力充足率当前来自官网偿付能力报告摘要，不是 {fetched.snapshot.report_period.isoformat()} 年报口径。"
+            )
+
+    if field_sources.get("net_capital_ratio") == "official.annual_report_proxy":
+        warnings.append("净资本比率当前由官方年报中的风险覆盖率代理映射，不是公司直接披露的净资本比率字段。")
+
+    normalized: list[str] = []
+    for item in warnings:
+        stripped = item.strip()
+        if stripped and stripped not in normalized:
+            normalized.append(stripped)
+    return tuple(normalized)
 
 
 def _relax_missing_peg(submodel: SubmodelConfig, missing_peg: bool) -> tuple[SubmodelConfig, tuple[str, ...]]:
@@ -109,6 +177,13 @@ def fetch_and_analyze_hk_snapshot(
         missing_peg=fetched.snapshot.peg is None,
     )
     scorecard = analyze_snapshot(fetched.snapshot, analyzed_submodel)
+    source_warnings = _derive_hk_source_warnings(fetched)
+    if source_warnings:
+        scorecard = scorecard.model_copy(
+            update={
+                "warnings": list(dict.fromkeys([*scorecard.warnings, *source_warnings])),
+            }
+        )
     return FetchedFundamentalAnalysis(
         fetched=fetched,
         scorecard=scorecard,

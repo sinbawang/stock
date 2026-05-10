@@ -7,6 +7,7 @@ import pandas as pd
 
 from fundamental.data import cn_snapshot_fetcher as cn_fetcher
 from fundamental.data import hk_snapshot_fetcher as fetcher
+from fundamental.reporting import render_scorecard_text
 from fundamental.services.fetch_and_analyze_cn_snapshot import fetch_and_analyze_cn_snapshot
 from fundamental.services.fetch_and_analyze_hk_snapshot import fetch_and_analyze_hk_snapshot
 
@@ -275,6 +276,126 @@ def test_fetch_hk_fundamental_snapshot_keeps_existing_dividend_yield_over_direct
     assert "eastmoney-hk-dividend-payout:01339" not in result.raw_payload_refs
 
 
+def test_fetch_hk_fundamental_snapshot_can_supplement_broker_net_capital_ratio_from_official_report(monkeypatch):
+    analysis_df = pd.DataFrame(
+        [
+            {
+                "REPORT_DATE": "2025-12-31 00:00:00",
+                "DATE_TYPE_CODE": "001",
+                "CURRENCY": "HKD",
+                "ROE_AVG": 8.2,
+                "OPERATE_INCOME_YOY": 1.9,
+                "HOLDER_PROFIT_YOY": 6.7,
+                "DEBT_ASSET_RATIO": 82.5,
+                "CURRENT_RATIO": 1.08,
+                "HOLDER_PROFIT": 100.0,
+            }
+        ]
+    )
+    valuation_df = pd.DataFrame([["06886", "华泰证券", 7.5, 40.0, 7.5, 40.0, 0.73, 31.0, 0.73, 31.0, 1.1, 28.0]])
+    cashflow_df = pd.DataFrame(
+        [
+            {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "003999", "AMOUNT": 120.0},
+        ]
+    )
+    balance_df = pd.DataFrame(
+        [
+            {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "004002003", "AMOUNT": 120.0},
+            {"REPORT_DATE": "2024-12-31 00:00:00", "STD_ITEM_CODE": "004002003", "AMOUNT": 100.0},
+            {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "004002001", "AMOUNT": 110.0},
+            {"REPORT_DATE": "2024-12-31 00:00:00", "STD_ITEM_CODE": "004002001", "AMOUNT": 100.0},
+        ]
+    )
+    financial_indicator_df = pd.DataFrame([{"REPORT_DATE": "2025-12-31", "股息率TTM(%)": 3.47}])
+
+    monkeypatch.setattr(fetcher, "_fetch_hk_analysis_indicator_df", lambda symbol: analysis_df)
+    monkeypatch.setattr(fetcher, "_fetch_hk_valuation_comparison_df", lambda symbol: valuation_df)
+    monkeypatch.setattr(fetcher, "_fetch_hk_cashflow_df", lambda symbol, report_dates: cashflow_df)
+    monkeypatch.setattr(fetcher, "_fetch_hk_balance_df", lambda symbol, report_dates: balance_df)
+    monkeypatch.setattr(fetcher, "_fetch_hk_financial_indicator_df", lambda symbol: financial_indicator_df)
+    monkeypatch.setattr(
+        fetcher,
+        "_fetch_hk_official_financial_fields",
+        lambda symbol: (
+            {"net_capital_ratio": 298.67},
+            (
+                "Huatai official annual report fallback mapped 风险覆盖率 to net_capital_ratio because current public HK APIs do not expose a direct broker net capital ratio field.",
+            ),
+            ("official-annual-report:06886:https://example.com/report.pdf",),
+            {"net_capital_ratio": "official.annual_report_proxy"},
+        ),
+    )
+
+    result = fetcher.fetch_hk_fundamental_snapshot("06886", name="华泰证券")
+
+    assert result.snapshot.net_capital_ratio == 298.67
+    assert result.field_sources is not None
+    assert result.field_sources["net_capital_ratio"] == "official.annual_report_proxy"
+    assert "official-annual-report:06886:https://example.com/report.pdf" in result.raw_payload_refs
+    assert any("Huatai official annual report fallback mapped 风险覆盖率" in item for item in result.assumptions)
+
+
+def test_fetch_hk_fundamental_snapshot_can_supplement_insurance_solvency_from_official_report(monkeypatch):
+    analysis_df = pd.DataFrame(
+        [
+            {
+                "REPORT_DATE": "2025-12-31 00:00:00",
+                "DATE_TYPE_CODE": "001",
+                "CURRENCY": "HKD",
+                "ROE_AVG": 11.8,
+                "OPERATE_INCOME_YOY": 8.5,
+                "HOLDER_PROFIT_YOY": 14.2,
+                "DEBT_ASSET_RATIO": 78.0,
+                "CURRENT_RATIO": 1.1,
+                "HOLDER_PROFIT": 22000000000.0,
+            }
+        ]
+    )
+    valuation_df = pd.DataFrame([["01339", "中国人保", 6.8, 32.0, 6.8, 32.0, 0.72, 41.0, 0.72, 41.0, 0.95, 44.0]])
+    cashflow_df = pd.DataFrame([
+        {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "003999", "AMOUNT": 26000000000.0},
+    ])
+    balance_df = pd.DataFrame(
+        [
+            {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "004002003", "AMOUNT": 110.0},
+            {"REPORT_DATE": "2024-12-31 00:00:00", "STD_ITEM_CODE": "004002003", "AMOUNT": 100.0},
+            {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "004002001", "AMOUNT": 105.0},
+            {"REPORT_DATE": "2024-12-31 00:00:00", "STD_ITEM_CODE": "004002001", "AMOUNT": 100.0},
+        ]
+    )
+    financial_indicator_df = pd.DataFrame([{"REPORT_DATE": "2025-12-31", "股息率TTM(%)": 6.1}])
+
+    monkeypatch.setattr(fetcher, "_fetch_hk_analysis_indicator_df", lambda symbol: analysis_df)
+    monkeypatch.setattr(fetcher, "_fetch_hk_valuation_comparison_df", lambda symbol: valuation_df)
+    monkeypatch.setattr(fetcher, "_fetch_hk_cashflow_df", lambda symbol, report_dates: cashflow_df)
+    monkeypatch.setattr(fetcher, "_fetch_hk_balance_df", lambda symbol, report_dates: balance_df)
+    monkeypatch.setattr(fetcher, "_fetch_hk_financial_indicator_df", lambda symbol: financial_indicator_df)
+    monkeypatch.setattr(
+        fetcher,
+        "_fetch_hk_official_financial_fields",
+        lambda symbol: (
+            {"solvency_adequacy_ratio": 275.7},
+            (
+                "PICC official solvency report fallback supplemented solvency_adequacy_ratio from the latest public solvency report disclosure; this official source can lag the annual report period.",
+                "Latest PICC solvency report disclosure date used for fallback: 2025-09-24.",
+            ),
+            (
+                "official-solvency-listing:01339:https://www.picc.com.cn/xwzx/gkxx/zxxx/jtcfnl/",
+                "official-solvency-report:01339:https://example.com/solvency.pdf",
+            ),
+            {"solvency_adequacy_ratio": "official.solvency_report"},
+        ),
+    )
+
+    result = fetcher.fetch_hk_fundamental_snapshot("01339", name="中国人保")
+
+    assert result.snapshot.solvency_adequacy_ratio == 275.7
+    assert result.field_sources is not None
+    assert result.field_sources["solvency_adequacy_ratio"] == "official.solvency_report"
+    assert "official-solvency-report:01339:https://example.com/solvency.pdf" in result.raw_payload_refs
+    assert any("PICC official solvency report fallback supplemented solvency_adequacy_ratio" in item for item in result.assumptions)
+
+
 def test_fetch_and_analyze_hk_snapshot_relaxes_platform_peg(monkeypatch):
     fake_fetch_result = fetcher.FundamentalSnapshotFetchResult(
         snapshot=fetcher.FundamentalSnapshot(
@@ -360,6 +481,12 @@ def test_fetch_and_analyze_hk_snapshot_accepts_manual_supplement_for_insurance_f
     assert result.fetched.field_sources["dividend_yield"] == "manual.supplement"
     assert "manual-supplement:01339" in result.fetched.raw_payload_refs
     assert any("Manual supplement applied before analysis" in item for item in result.assumptions)
+    assert any("以下字段当前使用手工补充口径" in item for item in result.scorecard.warnings)
+    assert any("投资收益率当前为手工补充/代理值" in item for item in result.scorecard.warnings)
+    assert any("保险手工补充字段可能存在跨主体口径" in item for item in result.scorecard.warnings)
+    report_text = render_scorecard_text(result.scorecard)
+    assert "警告" in report_text
+    assert "以下字段当前使用手工补充口径" in report_text
 
 
 def test_fetch_and_analyze_hk_snapshot_rejects_disallowed_manual_supplement_fields(monkeypatch):
@@ -630,6 +757,108 @@ def test_fetch_and_analyze_hk_snapshot_builds_insurance_scorecard_with_financial
     assert result.fetched.field_sources is not None
     assert result.fetched.field_sources["solvency_adequacy_ratio"] == "eastmoney.financial_indicator"
     assert any("Financial-sector fields are supplemented" in item for item in result.assumptions)
+    report_text = render_scorecard_text(result.scorecard)
+    assert "计算:" in report_text
+    assert "综合偿付能力充足率 218.00" in report_text
+    assert "×30/100=" in report_text
+
+
+def test_fetch_and_analyze_hk_snapshot_warns_when_insurance_uses_official_solvency_disclosure(monkeypatch):
+    fake_fetch_result = fetcher.FundamentalSnapshotFetchResult(
+        snapshot=fetcher.FundamentalSnapshot(
+            symbol="01339",
+            name="中国人保",
+            market="HK",
+            report_period=date(2025, 12, 31),
+            currency="HKD",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            roe=11.8,
+            roe_3y_cv=0.16,
+            pb=0.72,
+            dividend_yield=5.9,
+            solvency_adequacy_ratio=275.7,
+            combined_ratio=97.8,
+            investment_return=5.4,
+            embedded_value_growth=8.2,
+            new_business_value_growth=12.6,
+        ),
+        assumptions=(
+            "PICC official solvency report fallback supplemented solvency_adequacy_ratio from the latest public solvency report disclosure; this official source can lag the annual report period.",
+            "Latest PICC solvency report disclosure date used for fallback: 2025-09-24.",
+        ),
+        field_sources={
+            "roe": "unit-test",
+            "roe_3y_cv": "unit-test",
+            "pb": "unit-test",
+            "dividend_yield": "unit-test",
+            "solvency_adequacy_ratio": "official.solvency_report",
+            "combined_ratio": "unit-test",
+            "investment_return": "unit-test",
+            "embedded_value_growth": "unit-test",
+            "new_business_value_growth": "unit-test",
+        },
+        raw_payload_refs=("official-solvency-report:01339:https://example.com/solvency.pdf",),
+    )
+    monkeypatch.setattr(
+        fetch_service_module,
+        "fetch_hk_fundamental_snapshot",
+        lambda symbol, name=None, quote_overlay_source=None: fake_fetch_result,
+    )
+
+    result = fetch_and_analyze_hk_snapshot("01339", name="中国人保")
+    report_text = render_scorecard_text(result.scorecard)
+
+    assert any("官网偿付能力报告摘要" in item for item in result.scorecard.warnings)
+    assert any("2025-09-24" in item for item in result.scorecard.warnings)
+    assert "警告" in report_text
+    assert "官网偿付能力报告摘要" in report_text
+
+
+def test_fetch_and_analyze_hk_snapshot_warns_when_broker_uses_annual_report_proxy(monkeypatch):
+    fake_fetch_result = fetcher.FundamentalSnapshotFetchResult(
+        snapshot=fetcher.FundamentalSnapshot(
+            symbol="06886",
+            name="华泰证券",
+            market="HK",
+            report_period=date(2025, 12, 31),
+            currency="HKD",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            roe=10.2,
+            roe_3y_cv=0.14,
+            pb=0.88,
+            dividend_yield=4.2,
+            net_capital_ratio=298.67,
+            revenue_growth=11.3,
+            net_profit_growth=13.1,
+        ),
+        assumptions=(
+            "Huatai official annual report fallback mapped 风险覆盖率 to net_capital_ratio because current public HK APIs do not expose a direct broker net capital ratio field.",
+        ),
+        field_sources={
+            "roe": "unit-test",
+            "roe_3y_cv": "unit-test",
+            "pb": "unit-test",
+            "dividend_yield": "unit-test",
+            "net_capital_ratio": "official.annual_report_proxy",
+            "revenue_growth": "unit-test",
+            "net_profit_growth": "unit-test",
+        },
+        raw_payload_refs=("official-annual-report:06886:https://example.com/report.pdf",),
+    )
+    monkeypatch.setattr(
+        fetch_service_module,
+        "fetch_hk_fundamental_snapshot",
+        lambda symbol, name=None, quote_overlay_source=None: fake_fetch_result,
+    )
+
+    result = fetch_and_analyze_hk_snapshot("06886", name="华泰证券")
+    report_text = render_scorecard_text(result.scorecard)
+
+    assert any("风险覆盖率代理映射" in item for item in result.scorecard.warnings)
+    assert "警告" in report_text
+    assert "风险覆盖率代理映射" in report_text
 
 
 def test_fetch_and_analyze_hk_snapshot_builds_broker_scorecard_with_financial_fields(monkeypatch):
@@ -676,6 +905,10 @@ def test_fetch_and_analyze_hk_snapshot_builds_broker_scorecard_with_financial_fi
     assert result.fetched.snapshot.dividend_yield == 4.2
     assert result.fetched.field_sources is not None
     assert result.fetched.field_sources["net_capital_ratio"] == "eastmoney.financial_indicator"
+    report_text = render_scorecard_text(result.scorecard)
+    assert "净资本比率 182.00" in report_text
+    assert "平均[" in report_text
+    assert "- notes" not in report_text
 
 
 def test_fetch_and_analyze_cn_snapshot_supports_named_abstract_schema_and_runtime_relaxes_bank_dividend(monkeypatch):

@@ -20,6 +20,7 @@ class FundamentalDimensionScore(BaseModel):
     score: float
     weight: int
     max_score: float
+    score_basis: Optional[str] = None
     used_metrics: List[str] = Field(default_factory=list)
     missing_metrics: List[str] = Field(default_factory=list)
     passed_rules: List[TriggeredRule] = Field(default_factory=list)

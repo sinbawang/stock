@@ -50,6 +50,24 @@ def _weight_score(normalized_score: Optional[float], weight: int) -> float:
     return round((normalized_score / 100.0) * weight, 2)
 
 
+def _format_metric_value(value: object) -> str:
+    if value is None:
+        return "NA"
+    if isinstance(value, float):
+        return f"{value:.2f}"
+    return str(value)
+
+
+def _format_score_basis(parts: Sequence[tuple[str, Optional[float]]], normalized_score: Optional[float], weight: int) -> Optional[str]:
+    present_parts = [(label, score) for label, score in parts if score is not None]
+    if not present_parts or normalized_score is None:
+        return None
+
+    joined = ", ".join(f"{label}->{score:.1f}" for label, score in present_parts)
+    weighted_score = _weight_score(normalized_score, weight)
+    return f"平均[{joined}]={normalized_score:.1f}; ×{weight}/100={weighted_score:.2f}"
+
+
 def _build_metric_lists(
     snapshot: FundamentalSnapshot, dimension: DimensionConfig
 ) -> Tuple[List[str], List[str]]:
@@ -151,6 +169,153 @@ def _score_shareholder_return_and_valuation(snapshot: FundamentalSnapshot) -> Op
     return _average((score_pb_financial(snapshot.pb), score_dividend_yield(snapshot.dividend_yield)))
 
 
+def _build_dimension_score_basis(
+    snapshot: FundamentalSnapshot,
+    dimension: DimensionConfig,
+    normalized_score: Optional[float],
+) -> Optional[str]:
+    if dimension.name == "profit_quality":
+        return _format_score_basis(
+            (
+                (f"ROE {_format_metric_value(snapshot.roe)}", score_roe(snapshot.roe)),
+                (f"ROE波动CV {_format_metric_value(snapshot.roe_3y_cv)}", score_roe_stability(snapshot.roe_3y_cv)),
+                (
+                    f"经营现金流/利润 {_format_metric_value(snapshot.operating_cashflow_to_profit)}",
+                    score_operating_cashflow_to_profit(snapshot.operating_cashflow_to_profit),
+                ),
+                (f"杜邦驱动 {_format_metric_value(snapshot.dupont_driver)}", score_dupont_driver(snapshot.dupont_driver)),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    if dimension.name == "growth_delivery":
+        return _format_score_basis(
+            (
+                (f"营收增速 {_format_metric_value(snapshot.revenue_growth)}", score_revenue_growth(snapshot.revenue_growth)),
+                (f"净利增速 {_format_metric_value(snapshot.net_profit_growth)}", score_net_profit_growth(snapshot.net_profit_growth)),
+                (f"指引兑现 {_format_metric_value(snapshot.guidance_attainment)}", score_guidance_attainment(snapshot.guidance_attainment)),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    if dimension.name == "cashflow_and_operating_efficiency":
+        return _format_score_basis(
+            (
+                (
+                    f"经营现金流/利润 {_format_metric_value(snapshot.operating_cashflow_to_profit)}",
+                    score_operating_cashflow_to_profit(snapshot.operating_cashflow_to_profit),
+                ),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    if dimension.name == "valuation_fit":
+        return _format_score_basis(
+            (
+                (f"PE分位 {_format_metric_value(snapshot.pe_percentile_5y)}", score_pe_percentile(snapshot.pe_percentile_5y)),
+                (f"PEG {_format_metric_value(snapshot.peg)}", score_peg(snapshot.peg)),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    if dimension.name == "growth_and_cycle":
+        return _format_score_basis(
+            (
+                (f"营收增速 {_format_metric_value(snapshot.revenue_growth)}", score_revenue_growth(snapshot.revenue_growth)),
+                (f"净利增速 {_format_metric_value(snapshot.net_profit_growth)}", score_net_profit_growth(snapshot.net_profit_growth)),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    if dimension.name == "operating_and_inventory_cycle":
+        receivable_delta = None
+        if snapshot.accounts_receivable_growth is not None and snapshot.revenue_growth is not None:
+            receivable_delta = snapshot.accounts_receivable_growth - snapshot.revenue_growth
+        inventory_delta = None
+        if snapshot.inventory_growth is not None and snapshot.revenue_growth is not None:
+            inventory_delta = snapshot.inventory_growth - snapshot.revenue_growth
+        return _format_score_basis(
+            (
+                (
+                    f"应收压力差 {_format_metric_value(receivable_delta)}",
+                    score_relative_pressure(snapshot.accounts_receivable_growth, snapshot.revenue_growth),
+                ),
+                (
+                    f"库存压力差 {_format_metric_value(inventory_delta)}",
+                    score_relative_pressure(snapshot.inventory_growth, snapshot.revenue_growth),
+                ),
+                (f"资产负债率 {_format_metric_value(snapshot.debt_to_asset)}", score_debt_to_asset(snapshot.debt_to_asset)),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    if dimension.name == "capital_safety_and_asset_quality":
+        return _format_score_basis(
+            (
+                (f"核心一级资本充足率 {_format_metric_value(snapshot.core_tier1_ratio)}", score_core_tier1_ratio(snapshot.core_tier1_ratio)),
+                (f"不良率 {_format_metric_value(snapshot.npl_ratio)}", score_npl_ratio(snapshot.npl_ratio)),
+                (
+                    f"拨备覆盖率 {_format_metric_value(snapshot.provision_coverage_ratio)}",
+                    score_provision_coverage_ratio(snapshot.provision_coverage_ratio),
+                ),
+                (
+                    f"综合偿付能力充足率 {_format_metric_value(snapshot.solvency_adequacy_ratio)}",
+                    score_solvency_adequacy_ratio(snapshot.solvency_adequacy_ratio),
+                ),
+                (f"综合成本率 {_format_metric_value(snapshot.combined_ratio)}", score_combined_ratio(snapshot.combined_ratio)),
+                (f"净资本比率 {_format_metric_value(snapshot.net_capital_ratio)}", score_net_capital_ratio(snapshot.net_capital_ratio)),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    if dimension.name == "profitability_and_stability":
+        return _format_score_basis(
+            (
+                (f"ROE {_format_metric_value(snapshot.roe)}", score_roe(snapshot.roe)),
+                (f"ROE波动CV {_format_metric_value(snapshot.roe_3y_cv)}", score_roe_stability(snapshot.roe_3y_cv)),
+                (f"净息差 {_format_metric_value(snapshot.net_interest_margin)}", score_net_interest_margin(snapshot.net_interest_margin)),
+                (f"投资收益率 {_format_metric_value(snapshot.investment_return)}", score_investment_return(snapshot.investment_return)),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    if dimension.name == "business_growth_and_quality":
+        return _format_score_basis(
+            (
+                (
+                    f"存贷增速缺口 {_format_metric_value(snapshot.loan_deposit_growth_gap)}",
+                    score_loan_deposit_growth_gap(snapshot.loan_deposit_growth_gap),
+                ),
+                (f"营收增速 {_format_metric_value(snapshot.revenue_growth)}", score_revenue_growth(snapshot.revenue_growth)),
+                (f"净利增速 {_format_metric_value(snapshot.net_profit_growth)}", score_net_profit_growth(snapshot.net_profit_growth)),
+                (f"内含价值增速 {_format_metric_value(snapshot.embedded_value_growth)}", score_revenue_growth(snapshot.embedded_value_growth)),
+                (f"新业务价值增速 {_format_metric_value(snapshot.new_business_value_growth)}", score_revenue_growth(snapshot.new_business_value_growth)),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    if dimension.name == "shareholder_return_and_valuation":
+        return _format_score_basis(
+            (
+                (f"PB {_format_metric_value(snapshot.pb)}", score_pb_financial(snapshot.pb)),
+                (f"股息率 {_format_metric_value(snapshot.dividend_yield)}", score_dividend_yield(snapshot.dividend_yield)),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    return None
+
+
 DIMENSION_SCORERS: dict[str, Callable[[FundamentalSnapshot], Optional[float]]] = {
     "profit_quality": _score_profit_quality,
     "growth_delivery": _score_growth_delivery,
@@ -172,6 +337,7 @@ def _build_dimension_score(
     scorer = DIMENSION_SCORERS.get(dimension.name)
     normalized = scorer(snapshot) if scorer is not None else None
     score = _weight_score(normalized, dimension.weight)
+    score_basis = _build_dimension_score_basis(snapshot, dimension, normalized)
     notes: List[str] = []
     if dimension.notes:
         notes.append(dimension.notes)
@@ -183,6 +349,7 @@ def _build_dimension_score(
         score=score,
         weight=dimension.weight,
         max_score=float(dimension.weight),
+        score_basis=score_basis,
         used_metrics=used_metrics,
         missing_metrics=missing_metrics,
         notes=notes,
