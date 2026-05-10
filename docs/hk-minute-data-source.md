@@ -2,7 +2,7 @@
 
 这份文档只回答一件事：港股分钟级 K 线默认该用哪个数据源，以及什么时候才允许回退到其它源。
 
-如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+如果阅读过程中需要回到总导航，见 [fundamental-doc-map.md](fundamental-doc-map.md)。
 
 ## 结论
 

@@ -186,6 +186,15 @@ def test_analyze_snapshot_scores_game_content_end_to_end():
     assert result.combined_comment.index("主要亮点是") < result.combined_comment.index("当前最需要跟踪的是")
 
 
+def test_analyze_snapshot_can_auto_resolve_submodel_from_symbol():
+    snapshot = make_platform_snapshot()
+
+    result = analyze_snapshot(snapshot)
+
+    assert result.submodel_id == "platform_internet_v1"
+    assert result.rating == "A"
+
+
 def test_render_scorecard_text_outputs_readable_summary():
     snapshot = make_platform_snapshot(guidance_attainment=None, dupont_driver=None)
     result = analyze_snapshot(snapshot, "platform_internet_v1")

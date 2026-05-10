@@ -2,7 +2,7 @@
 
 这份文档用于回答一个核心问题：同一套基本面评分规则，不能直接跨所有行业硬套。
 
-如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+如果阅读过程中需要回到总导航，见 [fundamental-doc-map.md](fundamental-doc-map.md)。
 
 原因很简单：
 
@@ -97,7 +97,7 @@
 - 平台型公司 `current_ratio` 参考意义有限
 - 半导体和硬件类仍需要关注库存周期
 
-科技细分子模型见 [docs/fundamental-tech-submodels.md](docs/fundamental-tech-submodels.md)。
+科技细分子模型见 [fundamental-tech-submodels.md](fundamental-tech-submodels.md)。
 
 ### 3.3 能源资源
 
@@ -271,7 +271,7 @@
 - 和你当前关注的港股科技、平台、半导体标的兼容度高
 - 后续与缠论信号联动最自然
 
-进一步落地时，优先按 [docs/fundamental-tech-submodels.md](docs/fundamental-tech-submodels.md) 中的平台互联网、半导体硬科技、工业自动化、游戏内容四个子模型拆分。
+进一步落地时，优先按 [fundamental-tech-submodels.md](fundamental-tech-submodels.md) 中的平台互联网、半导体硬科技、工业自动化、游戏内容四个子模型拆分。
 
 ## 7. 能源资源行业规则
 

@@ -1,10 +1,10 @@
 # 科技行业子模型 v0.1
 
-这份文档是 [docs/fundamental-industry-layering.md](docs/fundamental-industry-layering.md) 中“科技行业规则”的进一步细化版本。
+这份文档是 [fundamental-industry-layering.md](fundamental-industry-layering.md) 中“科技行业规则”的进一步细化版本。
 
-如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+如果阅读过程中需要回到总导航，见 [fundamental-doc-map.md](fundamental-doc-map.md)。
 
-当前这些科技子模型已经落成 Python 配置对象；对象结构说明见 [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md)。
+当前这些科技子模型已经落成 Python 配置对象；对象结构说明见 [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md)。
 
 目的不是把所有科技细分行业一次讲完，而是先把你当前更可能用到的几类拆开，确保实现层：
 

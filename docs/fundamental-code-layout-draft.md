@@ -8,20 +8,20 @@
 
 这份文档仍然是设计文档，不要求现在就创建目录或文件。
 
-如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+如果阅读过程中需要回到总导航，见 [fundamental-doc-map.md](fundamental-doc-map.md)。
 
 这份文档适合放在“对象、字段、配置和数据源边界都已经冻结”之后阅读。建议前置阅读：
 
-- [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md)
-- [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)
-- [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
-- [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md)
-- [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md)
+- [fundamental-module-spec.md](fundamental-module-spec.md)
+- [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md)
+- [fundamental-data-source.md](fundamental-data-source.md)
+- [fundamental-python-model-draft.md](fundamental-python-model-draft.md)
+- [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md)
 
 如果从这份文档继续往后走，下一步通常是：
 
 - 对照当前实现检查目录是否一致
-- 回到 [docs/fundamental-roadmap.md](docs/fundamental-roadmap.md) 排实现顺序
+- 回到 [fundamental-roadmap.md](fundamental-roadmap.md) 排实现顺序
 
 ## 1. 当前判断
 
@@ -308,11 +308,11 @@ models <- reporting <- services
 
 为了后面真正实现时不迷路，建议把文档到代码的映射固定为：
 
-- [docs/fundamental-v1-minimum-fields.md](c:/sinba/stock/docs/fundamental-v1-minimum-fields.md) -> `src/fundamental/validation/` 和 `src/fundamental/config/`
-- [docs/fundamental-python-model-draft.md](c:/sinba/stock/docs/fundamental-python-model-draft.md) -> `src/fundamental/models/`
-- [docs/fundamental-tech-config-draft.md](c:/sinba/stock/docs/fundamental-tech-config-draft.md) -> `src/fundamental/config/`
-- [docs/fundamental-tech-submodels.md](c:/sinba/stock/docs/fundamental-tech-submodels.md) -> `src/fundamental/config/tech_submodels.py`
-- [docs/fundamental-module-spec.md](c:/sinba/stock/docs/fundamental-module-spec.md) -> `src/fundamental/scoring/`、`src/fundamental/models/`、`src/fundamental/services/` 的总边界
+- [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md) -> `src/fundamental/validation/` 和 `src/fundamental/config/`
+- [fundamental-python-model-draft.md](fundamental-python-model-draft.md) -> `src/fundamental/models/`
+- [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md) -> `src/fundamental/config/`
+- [fundamental-tech-submodels.md](fundamental-tech-submodels.md) -> `src/fundamental/config/tech_submodels.py`
+- [fundamental-module-spec.md](fundamental-module-spec.md) -> `src/fundamental/scoring/`、`src/fundamental/models/`、`src/fundamental/services/` 的总边界
 
 ## 8. 第一版建议实现顺序
 

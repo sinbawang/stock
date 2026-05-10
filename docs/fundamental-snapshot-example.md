@@ -2,9 +2,9 @@
 
 这份文档定义当前项目统一采用的标准输入样例口径，目标是冻结字段名、单位和缺失值写法。
 
-如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+如果阅读过程中需要回到总导航，见 [fundamental-doc-map.md](fundamental-doc-map.md)。
 
-如果要看“第一版代码最少要支持哪些字段”，请优先看 [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)。本文件展示的是标准快照样例，不等于第一版必须一次支持全部字段。
+如果要看“第一版代码最少要支持哪些字段”，请优先看 [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md)。本文件展示的是标准快照样例，不等于第一版必须一次支持全部字段。
 
 ## 1. 标准 JSON 示例
 
@@ -170,4 +170,4 @@
 - 一个自动化历史字段：`operating_cashflow_to_profit_history`
 - 两个可选增强字段：`dupont_driver`、`guidance_attainment`
 
-完整字段分层定义见 [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)。
+完整字段分层定义见 [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md)。

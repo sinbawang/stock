@@ -1,24 +1,24 @@
 # 科技子模型代码配置草案 v0.1
 
-这份文档用于把 [docs/fundamental-tech-submodels.md](docs/fundamental-tech-submodels.md) 里的自然语言参数表，进一步映射成当前 Python 配置层采用的对象结构。
+这份文档用于把 [fundamental-tech-submodels.md](fundamental-tech-submodels.md) 里的自然语言参数表，进一步映射成当前 Python 配置层采用的对象结构。
 
-如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+如果阅读过程中需要回到总导航，见 [fundamental-doc-map.md](fundamental-doc-map.md)。
 
 这份文档适合放在“模型对象已经明确，准备理解规则如何配置化”这一层来读。建议前置阅读：
 
-- [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md)
-- [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)
-- [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md)
-- [docs/fundamental-tech-submodels.md](docs/fundamental-tech-submodels.md)
+- [fundamental-module-spec.md](fundamental-module-spec.md)
+- [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md)
+- [fundamental-python-model-draft.md](fundamental-python-model-draft.md)
+- [fundamental-tech-submodels.md](fundamental-tech-submodels.md)
 
 读完这份文档后，通常下一步是：
 
-- [docs/fundamental-code-layout-draft.md](docs/fundamental-code-layout-draft.md)
-- [docs/fundamental-roadmap.md](docs/fundamental-roadmap.md)
+- [fundamental-code-layout-draft.md](fundamental-code-layout-draft.md)
+- [fundamental-roadmap.md](fundamental-roadmap.md)
 
-与输入输出对象对应的 Python 数据模型草案见 [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md)。
+与输入输出对象对应的 Python 数据模型草案见 [fundamental-python-model-draft.md](fundamental-python-model-draft.md)。
 
-对应的代码目录草案见 [docs/fundamental-code-layout-draft.md](docs/fundamental-code-layout-draft.md)。
+对应的代码目录草案见 [fundamental-code-layout-draft.md](fundamental-code-layout-draft.md)。
 
 目标不是重复展开实现细节，而是冻结三件事：
 

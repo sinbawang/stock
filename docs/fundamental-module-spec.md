@@ -2,22 +2,22 @@
 
 这份文档用于先定义“基本面分析模块要做什么、输入输出是什么、边界在哪里”，作为后续实现代码的依据。
 
-如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+如果阅读过程中需要回到总导航，见 [fundamental-doc-map.md](fundamental-doc-map.md)。
 
 如果只想抓主线，建议从这份文档开始，再按下面顺序继续：
 
-- 字段边界: [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)
-- 数据源入口: [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
-- Python 模型: [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md)
-- 代码目录: [docs/fundamental-code-layout-draft.md](docs/fundamental-code-layout-draft.md)
+- 字段边界: [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md)
+- 数据源入口: [fundamental-data-source.md](fundamental-data-source.md)
+- Python 模型: [fundamental-python-model-draft.md](fundamental-python-model-draft.md)
+- 代码目录: [fundamental-code-layout-draft.md](fundamental-code-layout-draft.md)
 
-如果后续要开始把这些领域对象落成 Python 类，数据模型草案见 [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md)。
+如果后续要开始把这些领域对象落成 Python 类，数据模型草案见 [fundamental-python-model-draft.md](fundamental-python-model-draft.md)。
 
 目标不是直接做成全自动财报系统，而是先建立一个可解释、可测试、可扩展的基本面分析骨架，并能和现有缠论技术面分析组合使用。
 
 ## 1. 模块目标
 
-配套行业文档见 [docs/fundamental-industry-layering.md](docs/fundamental-industry-layering.md)。通用评分骨架在本文件定义，行业特化规则在行业文档定义。
+配套行业文档见 [fundamental-industry-layering.md](fundamental-industry-layering.md)。通用评分骨架在本文件定义，行业特化规则在行业文档定义。
 
 基本面模块第一阶段聚焦以下问题：
 
@@ -83,7 +83,7 @@
 
 单个标的在某个报告期的基本面标准快照，是评分引擎的直接输入。
 
-第一版最小实现边界见 [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)。本节保留的是“建议字段全集”，不是第一版必须一步到位全部实现。
+第一版最小实现边界见 [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md)。本节保留的是“建议字段全集”，不是第一版必须一步到位全部实现。
 
 建议字段：
 
@@ -192,7 +192,7 @@
 
 为避免后续实现范围持续膨胀，第一版应遵循单独的最小字段集，而不是默认本文件出现过的字段都必须一次实现。
 
-边界文件见 [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)。
+边界文件见 [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md)。
 
 执行口径建议固定为：
 
@@ -486,7 +486,7 @@
 - 通用红线容器
 - 通用评分框架
 
-行业文档 [docs/fundamental-industry-layering.md](docs/fundamental-industry-layering.md) 负责定义：
+行业文档 [fundamental-industry-layering.md](fundamental-industry-layering.md) 负责定义：
 
 - 金融、科技、能源资源等行业的权重调整
 - 指标启用与停用

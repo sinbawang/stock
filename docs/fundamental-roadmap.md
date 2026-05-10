@@ -2,13 +2,13 @@
 
 这份文档描述基本面模块的落地顺序，避免一开始就把数据源、规则引擎、CLI、可视化、消息推送全部揉在一起。
 
-如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+如果阅读过程中需要回到总导航，见 [fundamental-doc-map.md](fundamental-doc-map.md)。
 
 这份文档更适合放在“规格已经看完，准备排实现顺序”时再读。建议前置阅读：
 
-- [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md)
-- [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)
-- [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
+- [fundamental-module-spec.md](fundamental-module-spec.md)
+- [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md)
+- [fundamental-data-source.md](fundamental-data-source.md)
 
 ## 1. 总体原则
 

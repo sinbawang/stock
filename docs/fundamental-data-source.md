@@ -5,17 +5,17 @@
 - 基本面快照应该怎么从数据源进入仓库里的标准模型
 - 哪些抓取逻辑应该沉到公共代码，而不是散落在临时脚本或聊天片段里
 
-如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+如果阅读过程中需要回到总导航，见 [fundamental-doc-map.md](fundamental-doc-map.md)。
 
 建议在阅读这份文档前，先确认两件事：
 
-- 模块总边界: [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md)
-- 第一版字段边界: [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)
+- 模块总边界: [fundamental-module-spec.md](fundamental-module-spec.md)
+- 第一版字段边界: [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md)
 
 看完这份文档后，下一步通常是：
 
-- Python 模型草案: [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md)
-- 代码目录草案: [docs/fundamental-code-layout-draft.md](docs/fundamental-code-layout-draft.md)
+- Python 模型草案: [fundamental-python-model-draft.md](fundamental-python-model-draft.md)
+- 代码目录草案: [fundamental-code-layout-draft.md](fundamental-code-layout-draft.md)
 
 ## 当前结论
 
@@ -139,8 +139,8 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/compare_hk_valuation_sources.py 0
 
 当前实测样本：
 
-- [data/_meta/hk_valuation_compare_03690_20260510.md](c:/sinba/stock/data/_meta/hk_valuation_compare_03690_20260510.md)
-- [data/_meta/hk_valuation_compare_batch_20260510.md](c:/sinba/stock/data/_meta/hk_valuation_compare_batch_20260510.md)
+- [data/_meta/hk_valuation_compare_03690_20260510.md](../data/_meta/hk_valuation_compare_03690_20260510.md)
+- [data/_meta/hk_valuation_compare_batch_20260510.md](../data/_meta/hk_valuation_compare_batch_20260510.md)
 
 批量示例：
 

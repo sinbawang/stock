@@ -1,23 +1,23 @@
 # 基本面 Python 数据模型草案 v0.1
 
-这份文档用于把 [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md) 里的领域模型定义，进一步收敛成“后续 Python 代码里建议使用什么数据结构”。
+这份文档用于把 [fundamental-module-spec.md](fundamental-module-spec.md) 里的领域模型定义，进一步收敛成“后续 Python 代码里建议使用什么数据结构”。
 
-如果阅读过程中需要回到总导航，见 [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md)。
+如果阅读过程中需要回到总导航，见 [fundamental-doc-map.md](fundamental-doc-map.md)。
 
 这份文档更适合在“总规格、字段边界和数据源口径已经确定”之后再读。建议前置阅读：
 
-- [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md)
-- [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md)
-- [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
+- [fundamental-module-spec.md](fundamental-module-spec.md)
+- [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md)
+- [fundamental-data-source.md](fundamental-data-source.md)
 
 读完这份文档后，通常下一步是：
 
-- [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md)
-- [docs/fundamental-code-layout-draft.md](docs/fundamental-code-layout-draft.md)
+- [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md)
+- [fundamental-code-layout-draft.md](fundamental-code-layout-draft.md)
 
-对应的 `src/fundamental/` 目录设计草案见 [docs/fundamental-code-layout-draft.md](docs/fundamental-code-layout-draft.md)。
+对应的 `src/fundamental/` 目录设计草案见 [fundamental-code-layout-draft.md](fundamental-code-layout-draft.md)。
 
-它和 [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md) 的关系是：
+它和 [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md) 的关系是：
 
 - 本文定义“数据对象长什么样”
 - 配置草案定义“子模型参数长什么样”
@@ -306,9 +306,9 @@ class SnapshotValidationResult(BaseModel):
 
 这份文档和现有文档的分工建议固定为：
 
-- [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md): 领域模型和规则边界
-- [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md): 第一版字段最小集
-- [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md): 子模型配置结构
+- [fundamental-module-spec.md](fundamental-module-spec.md): 领域模型和规则边界
+- [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md): 第一版字段最小集
+- [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md): 子模型配置结构
 - 本文：Python 输入输出对象草案
 
 ## 9. 当前建议结论
