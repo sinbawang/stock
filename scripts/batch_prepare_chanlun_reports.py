@@ -33,7 +33,7 @@ from export_structures_with_boxes import (
     export_zhongshus,
     write_svg_with_inclusion_boxes,
 )
-from prepare_and_send_wechat_chart import make_sendable_jpg, render_svg
+from prepare_and_send_wechat_chart import derive_output_paths, derive_wechat_output_dir, make_sendable_jpg, render_svg
 from run_hk_60m_chanlun_to_wechat import analyze_current_state, compute_bi_strengths, write_normalized_csv
 from send_wechat_native import send_message
 
@@ -227,8 +227,7 @@ def export_case(security: Security, timeframe: str, rows: list[dict], base_dir: 
     raw_csv = base_dir / f"{stem}.csv"
     normalized_csv = base_dir / f"{prefix}.csv"
     svg = base_dir / f"{prefix}_with_boxes.svg"
-    png = base_dir / f"{prefix}_full.png"
-    jpg = base_dir / f"{prefix}_wechat.jpg"
+    png, jpg = derive_output_paths(svg)
     analysis_path = base_dir / f"{prefix}_analysis.txt"
     advice_path = base_dir / f"{prefix}_advice.txt"
     report_path = base_dir / f"{prefix}_report.txt"
@@ -327,12 +326,13 @@ def latest_file(directory: Path, pattern: str) -> Path:
 
 def load_existing_case(security: Security, timeframe: str) -> dict[str, Path]:
     base_dir = ROOT / "data" / f"{security.symbol}_{security.name}" / timeframe
+    wechat_dir = derive_wechat_output_dir(base_dir / "placeholder.svg")
     return {
         "report": latest_file(base_dir, "*_normalized_report.txt"),
         "analysis": latest_file(base_dir, "*_normalized_analysis.txt"),
         "advice": latest_file(base_dir, "*_normalized_advice.txt"),
-        "jpg": latest_file(base_dir, "*_normalized_wechat.jpg"),
-        "png": latest_file(base_dir, "*_normalized_full.png"),
+        "jpg": latest_file(wechat_dir, "*_normalized_wechat.jpg"),
+        "png": latest_file(wechat_dir, "*_normalized_full.png"),
         "svg": latest_file(base_dir, "*_normalized_with_boxes.svg"),
     }
 

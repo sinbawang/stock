@@ -19,13 +19,15 @@ from chanlun.normalize import normalize_bars
 from chanlun.zhongshu import identify_zhongshu
 
 from export_structures_with_boxes import calculate_macd
+from prepare_and_send_wechat_chart import derive_output_paths
 from run_hk_60m_chanlun_to_wechat import analyze_current_state
 from send_wechat_native import send_message
 
 
 def main() -> None:
     csv_path = ROOT / "data" / "01339_中国人保" / "60m" / "01339_60m_20260101_to_20260425.csv"
-    image_path = ROOT / "data" / "01339_中国人保" / "60m" / "01339_60m_20260101_to_20260425_normalized_with_boxes_wechat.jpg"
+    svg_path = ROOT / "data" / "01339_中国人保" / "60m" / "01339_60m_20260101_to_20260425_normalized_with_boxes.svg"
+    _, image_path = derive_output_paths(svg_path)
 
     raw_bars = clean_bars(read_bars_from_csv(str(csv_path)))
     normalized_bars = normalize_bars(raw_bars)

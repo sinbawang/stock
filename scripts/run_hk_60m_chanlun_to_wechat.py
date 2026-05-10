@@ -29,7 +29,7 @@ from export_structures_with_boxes import (
     export_zhongshus,
     write_svg_with_inclusion_boxes,
 )
-from prepare_and_send_wechat_chart import make_sendable_jpg, render_svg
+from prepare_and_send_wechat_chart import derive_output_paths, make_sendable_jpg, render_svg
 from send_wechat_native import send_message
 
 
@@ -91,13 +91,15 @@ def build_paths(symbol: str, name: str, bars: list[dict]) -> dict[str, Path]:
     base_dir.mkdir(parents=True, exist_ok=True)
     stem = f"{symbol}_60m_{first_day}_to_{last_day}"
     prefix = f"{stem}_normalized"
+    svg_path = base_dir / f"{prefix}_with_boxes.svg"
+    png_path, jpg_path = derive_output_paths(svg_path)
     return {
         "base_dir": base_dir,
         "raw_csv": base_dir / f"{stem}.csv",
         "normalized_csv": base_dir / f"{stem}_normalized.csv",
-        "svg": base_dir / f"{prefix}_with_boxes.svg",
-        "png": base_dir / f"{prefix}_full.png",
-        "jpg": base_dir / f"{prefix}_wechat.jpg",
+        "svg": svg_path,
+        "png": png_path,
+        "jpg": jpg_path,
         "prefix": base_dir / prefix,
     }
 

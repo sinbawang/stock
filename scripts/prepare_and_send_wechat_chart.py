@@ -10,6 +10,10 @@ from svglib.svglib import svg2rlg
 from send_wechat_native import send_message
 
 
+ROOT = Path(__file__).resolve().parents[1]
+WECHAT_BUILD_DIR = ROOT / "build" / "wechat"
+
+
 def render_svg(svg_path: Path, output_png: Path) -> Path:
     drawing = svg2rlg(str(svg_path))
     if drawing is None:
@@ -33,10 +37,19 @@ def make_sendable_jpg(
     return output_jpg
 
 
+def derive_wechat_output_dir(source_path: Path) -> Path:
+    source_path = source_path.resolve()
+    try:
+        relative_parent = source_path.parent.relative_to(ROOT)
+    except ValueError:
+        relative_parent = Path("external")
+    return WECHAT_BUILD_DIR / relative_parent
+
+
 def derive_output_paths(svg_path: Path) -> tuple[Path, Path]:
     stem = svg_path.stem
-    parent = svg_path.parent
-    return parent / f"{stem}_full.png", parent / f"{stem}_wechat.jpg"
+    output_dir = derive_wechat_output_dir(svg_path)
+    return output_dir / f"{stem}_full.png", output_dir / f"{stem}_wechat.jpg"
 
 
 def parse_args() -> argparse.Namespace:
