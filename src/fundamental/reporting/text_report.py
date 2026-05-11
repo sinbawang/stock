@@ -12,8 +12,11 @@ DIMENSION_LABELS = {
     "growth_delivery": "成长兑现",
     "cashflow_and_operating_efficiency": "现金流与运营效率",
     "valuation_fit": "估值匹配",
+    "yield_and_valuation": "股息与估值",
     "growth_and_cycle": "成长与景气度",
     "operating_and_inventory_cycle": "营运与库存周期",
+    "inventory_channel_and_turnover": "渠道与周转效率",
+    "resource_cycle_resilience": "资源周期韧性",
 }
 
 

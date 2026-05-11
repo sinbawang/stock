@@ -126,6 +126,56 @@ def score_dividend_yield(value: Optional[float]) -> Optional[float]:
     return 100.0
 
 
+def score_capex_to_operating_cashflow(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    if value >= 1.0:
+        return 0.0
+    if value > 0.8:
+        return _linear_score(value, 1.0, 0.8, 0.0, 30.0)
+    if value > 0.5:
+        return _linear_score(value, 0.8, 0.5, 30.0, 75.0)
+    if value <= 0.25:
+        return 100.0
+    return _linear_score(value, 0.5, 0.25, 75.0, 100.0)
+
+
+def score_unit_cost_position(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    if value <= 20.0:
+        return 20.0
+    if value < 50.0:
+        return _linear_score(value, 20.0, 50.0, 20.0, 70.0)
+    if value < 80.0:
+        return _linear_score(value, 50.0, 80.0, 70.0, 100.0)
+    return 100.0
+
+
+def score_reserve_life_index(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    if value <= 5.0:
+        return 0.0
+    if value < 10.0:
+        return _linear_score(value, 5.0, 10.0, 0.0, 60.0)
+    if value < 15.0:
+        return _linear_score(value, 10.0, 15.0, 60.0, 100.0)
+    return 100.0
+
+
+def score_commodity_price_sensitivity(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    if value >= 1.8:
+        return 0.0
+    if value > 1.2:
+        return _linear_score(value, 1.8, 1.2, 0.0, 50.0)
+    if value > 0.8:
+        return _linear_score(value, 1.2, 0.8, 50.0, 100.0)
+    return 100.0
+
+
 def score_core_tier1_ratio(value: Optional[float]) -> Optional[float]:
     if value is None:
         return None
@@ -244,6 +294,56 @@ def score_relative_pressure(metric_growth: Optional[float], revenue_growth: Opti
     if delta >= 15:
         return 0.0
     return _linear_score(delta, 0.0, 15.0, 100.0, 0.0)
+
+
+def score_asset_turnover(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    if value <= 0.4:
+        return 0.0
+    if value < 0.8:
+        return _linear_score(value, 0.4, 0.8, 0.0, 70.0)
+    if value < 1.2:
+        return _linear_score(value, 0.8, 1.2, 70.0, 100.0)
+    return 100.0
+
+
+def score_gross_margin_trend(value: Optional[str]) -> Optional[float]:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"improving", "up", "stronger", "改善", "提升", "向上"}:
+        return 100.0
+    if normalized in {"stable", "flat", "steady", "稳定", "持平", "平稳"}:
+        return 60.0
+    if normalized in {"weakening", "down", "compressed", "承压", "下滑", "走弱"}:
+        return 0.0
+    return None
+
+
+def score_price_war_pressure(value: Optional[str]) -> Optional[float]:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"low", "mild", "可控", "低", "较低"}:
+        return 100.0
+    if normalized in {"medium", "moderate", "中", "中等"}:
+        return 60.0
+    if normalized in {"high", "severe", "激烈", "高", "较高"}:
+        return 0.0
+    return None
+
+
+def score_overseas_revenue_share(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    if value <= 5.0:
+        return 20.0
+    if value < 20.0:
+        return _linear_score(value, 5.0, 20.0, 20.0, 70.0)
+    if value < 35.0:
+        return _linear_score(value, 20.0, 35.0, 70.0, 100.0)
+    return 100.0
 
 
 def score_pe_percentile(value: Optional[float]) -> Optional[float]:

@@ -4,6 +4,7 @@ from typing import Dict, Optional
 
 from .finance_submodels import BANK_V1, BROKER_V1, INSURANCE_V1
 from .models import SubmodelConfig
+from .nonfinancial_submodels import AUTO_MANUFACTURING_V1, DIGITAL_INFRA_V1, ENERGY_RESOURCE_V1, HOME_APPLIANCE_V1, UTILITY_OPERATOR_V1
 from .tech_submodels import (
     GAME_CONTENT_V1,
     INDUSTRIAL_AUTOMATION_V1,
@@ -19,6 +20,11 @@ SUBMODEL_REGISTRY: Dict[str, SubmodelConfig] = {
     SEMICONDUCTOR_HARDTECH_V1.submodel_id: SEMICONDUCTOR_HARDTECH_V1,
     INDUSTRIAL_AUTOMATION_V1.submodel_id: INDUSTRIAL_AUTOMATION_V1,
     GAME_CONTENT_V1.submodel_id: GAME_CONTENT_V1,
+    UTILITY_OPERATOR_V1.submodel_id: UTILITY_OPERATOR_V1,
+    DIGITAL_INFRA_V1.submodel_id: DIGITAL_INFRA_V1,
+    HOME_APPLIANCE_V1.submodel_id: HOME_APPLIANCE_V1,
+    AUTO_MANUFACTURING_V1.submodel_id: AUTO_MANUFACTURING_V1,
+    ENERGY_RESOURCE_V1.submodel_id: ENERGY_RESOURCE_V1,
 }
 
 SYMBOL_TO_SUBMODEL: Dict[str, str] = {}

@@ -116,6 +116,55 @@ def _net_capital_ratio_low(snapshot: FundamentalSnapshot) -> Optional[TriggeredR
     return None
 
 
+def _capex_pressure_high(snapshot: FundamentalSnapshot) -> Optional[TriggeredRule]:
+    if (
+        snapshot.capex_to_operating_cashflow is not None
+        and snapshot.capex_to_operating_cashflow > 0.85
+        and snapshot.dividend_yield is not None
+        and snapshot.dividend_yield >= 5.0
+    ):
+        return TriggeredRule(
+            rule_id="capex_pressure_high",
+            severity="risk",
+            message="资本开支占经营现金流比重偏高且分红维持高位。",
+            automated=True,
+        )
+    return None
+
+
+def _unit_cost_position_weak(snapshot: FundamentalSnapshot) -> Optional[TriggeredRule]:
+    if snapshot.unit_cost_position is not None and snapshot.unit_cost_position < 35.0:
+        return TriggeredRule(
+            rule_id="unit_cost_position_weak",
+            severity="risk",
+            message="单位成本位置偏弱，周期下行时成本优势不足。",
+            automated=True,
+        )
+    return None
+
+
+def _reserve_life_short(snapshot: FundamentalSnapshot) -> Optional[TriggeredRule]:
+    if snapshot.reserve_life_index is not None and snapshot.reserve_life_index < 8.0:
+        return TriggeredRule(
+            rule_id="reserve_life_short",
+            severity="risk",
+            message="储量寿命指数偏短，后续资源接续能力需要重点跟踪。",
+            automated=True,
+        )
+    return None
+
+
+def _commodity_sensitivity_high(snapshot: FundamentalSnapshot) -> Optional[TriggeredRule]:
+    if snapshot.commodity_price_sensitivity is not None and snapshot.commodity_price_sensitivity > 1.35:
+        return TriggeredRule(
+            rule_id="commodity_sensitivity_high",
+            severity="risk",
+            message="商品价格敏感度偏高，利润与现金流对周期波动更脆弱。",
+            automated=True,
+        )
+    return None
+
+
 RULE_HANDLERS: Dict[str, Callable[[FundamentalSnapshot], Optional[TriggeredRule]]] = {
     "ocf_profit_history_low": _ocf_profit_history_low,
     "inventory_pressure_single_period": _inventory_pressure_single_period,
@@ -126,6 +175,10 @@ RULE_HANDLERS: Dict[str, Callable[[FundamentalSnapshot], Optional[TriggeredRule]
     "solvency_adequacy_ratio_low": _solvency_adequacy_ratio_low,
     "combined_ratio_high": _combined_ratio_high,
     "net_capital_ratio_low": _net_capital_ratio_low,
+    "capex_pressure_high": _capex_pressure_high,
+    "unit_cost_position_weak": _unit_cost_position_weak,
+    "reserve_life_short": _reserve_life_short,
+    "commodity_sensitivity_high": _commodity_sensitivity_high,
 }
 
 

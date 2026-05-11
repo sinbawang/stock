@@ -621,6 +621,9 @@ SUBMODEL_REGISTRY: dict[str, SubmodelConfig] = {
     "semiconductor_hardtech_v1": SEMICONDUCTOR_HARDTECH_V1,
     "industrial_automation_v1": INDUSTRIAL_AUTOMATION_V1,
     "game_content_v1": GAME_CONTENT_V1,
+    "utility_operator_v1": UTILITY_OPERATOR_V1,
+    "digital_infra_v1": DIGITAL_INFRA_V1,
+    "home_appliance_v1": HOME_APPLIANCE_V1,
 }
 ```
 
@@ -635,7 +638,12 @@ SYMBOL_TO_SUBMODEL: dict[str, str] = {
     "00981": "semiconductor_hardtech_v1",
     "603986": "semiconductor_hardtech_v1",
     "300124": "industrial_automation_v1",
+    "02357": "industrial_automation_v1",
     "002555": "game_content_v1",
+    "600900": "utility_operator_v1",
+    "000591": "utility_operator_v1",
+    "00728": "digital_infra_v1",
+    "000651": "home_appliance_v1",
 }
 ```
 
@@ -644,6 +652,11 @@ SYMBOL_TO_SUBMODEL: dict[str, str] = {
 - 模型定义和标的映射解耦
 - 同一模型可复用到更多股票
 - 行业归类调整时，不会动到评分结构本身
+
+补充说明：
+
+- 注册表机制已经不再只服务于科技子模型，而是开始承载跨行业的统一映射层
+- 新增的 `utility_operator_v1`、`digital_infra_v1`、`home_appliance_v1` 说明这套配置结构已经能扩到科技之外
 
 ## 10. 第一版落地建议
 
@@ -654,12 +667,14 @@ SYMBOL_TO_SUBMODEL: dict[str, str] = {
 3. 再让通用评分引擎读取 `field_policy`、`dimensions` 和 `risk_rules`
 4. 先接入 `platform_internet_v1` 与 `semiconductor_hardtech_v1`
 5. 再扩到 `industrial_automation_v1` 与 `game_content_v1`
+6. 再把同一套配置机制扩展到科技之外的行业桶
 
 这样最稳，因为：
 
 - 平台互联网复用通用骨架最多
 - 半导体能验证“子模型确实覆盖了营运质量差异”
 - 两个模型足以证明配置化方案成立
+- 后续新增的公用事业、数字基础设施、家电消费制造，进一步证明这套配置结构并不局限于科技行业
 
 ## 11. 当前建议结论
 
@@ -668,4 +683,5 @@ SYMBOL_TO_SUBMODEL: dict[str, str] = {
 - 当前实现已经走通“通用引擎 + 子模型配置注册表”这条路线
 - 不建议一开始为每个科技子模型单独写一个评分类
 - 平台互联网、半导体、工业自动化、游戏内容都已经可以被表达成独立配置对象
+- 同一套配置结构也已经扩展到公用事业、数字基础设施和家电消费制造
 - 这份文档现在更适合作为当前配置层的设计说明草案

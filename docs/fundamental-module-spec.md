@@ -26,6 +26,10 @@
 - 输出可读的优势、风险、缺失项摘要
 - 为后续“技术面 + 基本面”联动过滤提供标准接口
 
+截至 2026-05-11，这个“第一阶段”已经不再只是概念层规划，而是已有可运行实现。
+
+当前到底已经覆盖哪些行业桶和子模型，统一以 [fundamental-doc-map.md](fundamental-doc-map.md) 的“当前实现快照”章节为准；本文件只保留模块目标、边界和输入输出骨架。
+
 第一阶段不追求：
 
 - 自动抓取所有财报字段
@@ -120,6 +124,17 @@
 - `inventory_growth`: 存货同比增速
 - `interest_bearing_debt_growth`: 有息负债同比增速
 - `operating_cashflow_growth`: 经营现金流同比增速
+ - `core_tier1_ratio`: 核心一级资本充足率
+ - `npl_ratio`: 不良率
+ - `provision_coverage_ratio`: 拨备覆盖率
+ - `loan_deposit_growth_gap`: 存贷增速缺口
+ - `net_interest_margin`: 净息差
+ - `solvency_adequacy_ratio`: 综合偿付能力充足率
+ - `combined_ratio`: 综合成本率
+ - `investment_return`: 投资收益率
+ - `embedded_value_growth`: 内含价值增速
+ - `new_business_value_growth`: 新业务价值增速
+ - `net_capital_ratio`: 净资本比率或透明代理字段
 - `guidance_attainment`: 指引兑现度，例如 `beat`、`meet`、`miss`
 
 如果后续要把“连续两期”红线全面自动化，建议第二阶段再补充以下多期字段：
@@ -137,14 +152,23 @@
 建议字段：
 
 - `symbol`
+- `name`
+- `market`
 - `report_period`
+- `industry_bucket`
+- `submodel_id`
+- `submodel_version`
 - `total_score`: 总分，范围建议为 `0-100`
 - `rating`: 评级，例如 `A/B/C/D`
+- `red_flag`: 是否命中红线
 - `dimension_scores`: 各维度分数
 - `strengths`: 优势列表
 - `risks`: 风险列表
 - `warnings`: 规则冲突或口径提示
+- `focus_questions`: 该子模型优先跟踪的问题
 - `missing_metrics`: 缺失指标列表
+- `triggered_rules`: 自动或半自动命中的规则明细
+- `combined_comment`: 面向报告层的综合说明
 
 ### 4.3 `FundamentalDimensionScore`
 
@@ -205,6 +229,12 @@
 第一阶段采用“维度分 + 权重汇总”的可解释评分，而不是黑盒模型。
 
 建议总分为 `100` 分。若没有命中红线规则，再进入常规打分。
+
+按当前实现，维度名已经不再只是一套通用四维，而是允许按子模型切换，例如：
+
+- 科技主模型常见：`profit_quality`、`growth_delivery`、`cashflow_and_operating_efficiency`、`valuation_fit`
+- 金融主模型常见：`capital_safety_and_asset_quality`、`profitability_and_stability`、`business_growth_and_quality`、`shareholder_return_and_valuation`
+- 公用事业等扩展行业也会复用或调整这些维度槽位
 
 ### 6.1 红线规则
 

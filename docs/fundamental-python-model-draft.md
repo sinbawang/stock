@@ -22,6 +22,8 @@
 - 本文定义“数据对象长什么样”
 - 配置草案定义“子模型参数长什么样”
 
+补充说明：虽然配置草案文件名仍保留“tech”，但当前实际注册表已经扩展到金融和非金融行业桶，因此本文里的模型设计也应按跨行业宽口径来理解。
+
 两者组合后，后续实现路径应是：
 
 1. 先把原始输入解析成 `FundamentalSnapshot`
@@ -125,6 +127,19 @@ class FundamentalSnapshot(BaseModel):
     interest_bearing_debt_growth: float | None = None
     operating_cashflow_growth: float | None = None
 
+    capital_adequacy_ratio: float | None = None
+    core_tier1_ratio: float | None = None
+    npl_ratio: float | None = None
+    provision_coverage_ratio: float | None = None
+    loan_deposit_growth_gap: float | None = None
+    net_interest_margin: float | None = None
+    solvency_adequacy_ratio: float | None = None
+    combined_ratio: float | None = None
+    investment_return: float | None = None
+    embedded_value_growth: float | None = None
+    new_business_value_growth: float | None = None
+    net_capital_ratio: float | None = None
+
     guidance_attainment: GuidanceAttainment | None = None
 
     period_type: Literal["annual", "ttm", "quarterly_annualized"] | None = None
@@ -144,6 +159,8 @@ class FundamentalSnapshot(BaseModel):
 
 - 对平台互联网，`inventory_growth` 可以缺失
 - 对半导体，`inventory_growth` 应该是必需项
+- 对银行，`core_tier1_ratio`、`npl_ratio`、`provision_coverage_ratio` 应该是必需项
+- 对数字基础设施或公用事业，`dividend_yield`、`pb` 或 `pe_percentile_5y` 会重新变得重要
 
 所以更合理的做法是：
 
@@ -186,6 +203,12 @@ PLATFORM_INTERNET_REQUIRED_FIELDS = (
 
 - 子模型差异体现在配置层，不体现在类层继承
 - 以后新增模型时，不需要继续膨胀出 `SnapshotV2A`、`SnapshotV2B`
+
+截至当前实现，这种“宽口径快照 + 配置层二次校验”的设计已经验证过可以同时承载：
+
+- 科技子模型
+- 金融子模型
+- 公用事业、数字基础设施、家电消费制造等扩展行业桶
 
 ## 5. 输出模型设计草案
 

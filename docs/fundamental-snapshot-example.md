@@ -44,6 +44,8 @@
 }
 ```
 
+这份样例仍以平台互联网为主，因为它最适合展示宽口径字段全集。当前代码里，金融、公用事业、数字基础设施等子模型会在这份宽口径快照之上，只使用各自需要的字段子集。
+
 ## 2. 字段说明
 
 - `symbol`: 证券代码，不带市场前缀时也允许，但同一批处理中应统一
@@ -147,6 +149,14 @@
 - `raw_payload_ref`: 原始数据引用或缓存路径
 
 其中 `period_type`、`industry`、`notes`、`raw_payload_ref` 在当前 `FundamentalSnapshot` 模型里已经预留。
+
+另外，当前模型也已经预留或实际使用了更多行业专属字段，例如：
+
+- 银行：`core_tier1_ratio`、`npl_ratio`、`provision_coverage_ratio`、`loan_deposit_growth_gap`、`net_interest_margin`
+- 保险：`solvency_adequacy_ratio`、`combined_ratio`、`investment_return`、`embedded_value_growth`、`new_business_value_growth`
+- 券商：`net_capital_ratio`
+
+这些字段不必出现在所有样例里，但它们已经属于统一快照模型的一部分。
 
 ## 6. 第一阶段输入约束
 

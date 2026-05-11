@@ -33,11 +33,15 @@ class FundamentalSnapshot(BaseModel):
     roe_3y_mean: Optional[float] = None
     roe_3y_cv: Optional[float] = None
     dupont_driver: Optional[DupontDriver] = None
+    asset_turnover: Optional[float] = None
+    equity_multiplier: Optional[float] = None
 
     gross_margin: Optional[float] = None
+    gross_margin_trend: Optional[str] = None
     net_margin: Optional[float] = None
     revenue_growth: Optional[float] = None
     net_profit_growth: Optional[float] = None
+    overseas_revenue_share: Optional[float] = None
 
     debt_to_asset: Optional[float] = None
     current_ratio: Optional[float] = None
@@ -46,8 +50,14 @@ class FundamentalSnapshot(BaseModel):
 
     accounts_receivable_growth: Optional[float] = None
     inventory_growth: Optional[float] = None
+    price_war_pressure: Optional[str] = None
     interest_bearing_debt_growth: Optional[float] = None
     operating_cashflow_growth: Optional[float] = None
+    free_cashflow_yield: Optional[float] = None
+    capex_to_operating_cashflow: Optional[float] = None
+    unit_cost_position: Optional[float] = None
+    reserve_life_index: Optional[float] = None
+    commodity_price_sensitivity: Optional[float] = None
 
     capital_adequacy_ratio: Optional[float] = None
     core_tier1_ratio: Optional[float] = None

@@ -12,7 +12,7 @@ from .models.scorecard import (
     TriggeredRule,
 )
 from .data import FundamentalSnapshotFetchResult, fetch_cn_fundamental_snapshot, fetch_hk_fundamental_snapshot
-from .reporting import render_scorecard_text
+from .reporting import render_fundamental_brief, render_scorecard_text, save_fundamental_brief
 from .services import (
     FetchedCnFundamentalAnalysis,
     FetchedFundamentalAnalysis,
@@ -33,6 +33,8 @@ __all__ = [
     "fetch_hk_fundamental_snapshot",
     "fetch_and_analyze_cn_snapshot",
     "fetch_and_analyze_hk_snapshot",
+    "render_fundamental_brief",
     "render_scorecard_text",
+    "save_fundamental_brief",
     "analyze_snapshot",
 ]

@@ -12,9 +12,15 @@ from fundamental.data.hk_snapshot_fetcher import (
     fetch_hk_fundamental_snapshot,
 )
 from fundamental.models.scorecard import FundamentalScoreCard
-from fundamental.models.snapshot import FundamentalSnapshot
 
 from .analyze_snapshot import analyze_snapshot, resolve_submodel_for_symbol
+from .manual_supplement_helpers import apply_manual_supplement, resolve_manual_supplement
+from .source_warning_helpers import (
+    build_manual_supplement_warning,
+    build_reporting_period_warning,
+    get_manual_supplement_fields,
+    normalize_warnings,
+)
 
 
 @dataclass(frozen=True)
@@ -32,32 +38,22 @@ def _extract_latest_disclosure_date(assumptions: tuple[str, ...]) -> Optional[st
     return None
 
 
-def _format_field_labels(field_names: list[str]) -> str:
-    labels = {
-        "dividend_yield": "股息率",
-        "solvency_adequacy_ratio": "综合偿付能力充足率",
-        "combined_ratio": "综合成本率",
-        "investment_return": "投资收益率",
-        "embedded_value_growth": "内含价值增长率",
-        "new_business_value_growth": "新业务价值增长率",
-        "net_capital_ratio": "净资本比率",
-        "revenue_growth": "营收增速",
-        "net_profit_growth": "净利增速",
-    }
-    return "、".join(labels.get(field_name, field_name) for field_name in field_names)
-
-
 def _derive_hk_source_warnings(fetched: FundamentalSnapshotFetchResult) -> tuple[str, ...]:
     field_sources = fetched.field_sources or {}
     warnings: list[str] = []
 
-    manual_fields = sorted(
-        field_name
-        for field_name, source in field_sources.items()
-        if source == "manual.supplement" and field_name != "notes"
+    reporting_period_warning = build_reporting_period_warning(
+        fetched.snapshot.report_period,
+        fetched.snapshot.period_type,
     )
+    if reporting_period_warning:
+        warnings.append(reporting_period_warning)
+
+    manual_fields = get_manual_supplement_fields(field_sources)
     if manual_fields:
-        warnings.append(f"以下字段当前使用手工补充口径: {_format_field_labels(manual_fields)}。")
+        manual_warning = build_manual_supplement_warning(field_sources)
+        if manual_warning:
+            warnings.append(manual_warning)
         if "investment_return" in manual_fields:
             warnings.append("投资收益率当前为手工补充/代理值时，应与公司原文直接披露口径区分阅读。")
         insurance_cross_scope_fields = {
@@ -83,12 +79,7 @@ def _derive_hk_source_warnings(fetched: FundamentalSnapshotFetchResult) -> tuple
     if field_sources.get("net_capital_ratio") == "official.annual_report_proxy":
         warnings.append("净资本比率当前由官方年报中的风险覆盖率代理映射，不是公司直接披露的净资本比率字段。")
 
-    normalized: list[str] = []
-    for item in warnings:
-        stripped = item.strip()
-        if stripped and stripped not in normalized:
-            normalized.append(stripped)
-    return tuple(normalized)
+    return normalize_warnings(warnings)
 
 
 def _relax_missing_peg(submodel: SubmodelConfig, missing_peg: bool) -> tuple[SubmodelConfig, tuple[str, ...]]:
@@ -106,60 +97,13 @@ def _relax_missing_peg(submodel: SubmodelConfig, missing_peg: bool) -> tuple[Sub
     )
 
 
-def _apply_manual_supplement(
-    fetched: FundamentalSnapshotFetchResult,
-    submodel: SubmodelConfig,
-    manual_supplement: Optional[Mapping[str, Any]],
-) -> tuple[FundamentalSnapshotFetchResult, tuple[str, ...]]:
-    if not manual_supplement:
-        return fetched, ()
-
-    updates = {field_name: value for field_name, value in manual_supplement.items() if value is not None}
-    if not updates:
-        return fetched, ()
-
-    allowed_fields = set(submodel.field_policy.required_core)
-    allowed_fields.update(submodel.field_policy.optional_manual)
-    allowed_fields.update(submodel.field_policy.deferred_v2)
-    allowed_fields.add("notes")
-
-    unknown_fields = sorted(field_name for field_name in updates if field_name not in FundamentalSnapshot.model_fields)
-    if unknown_fields:
-        raise ValueError(f"Manual supplement contains unknown snapshot fields: {', '.join(unknown_fields)}")
-
-    disallowed_fields = sorted(field_name for field_name in updates if field_name not in allowed_fields)
-    if disallowed_fields:
-        raise ValueError(
-            "Manual supplement fields are not allowed for {}: {}".format(
-                submodel.submodel_id,
-                ", ".join(disallowed_fields),
-            )
-        )
-
-    updated_snapshot = fetched.snapshot.model_copy(update=updates)
-    field_sources = dict(fetched.field_sources or {})
-    field_sources.update({field_name: "manual.supplement" for field_name in updates})
-    updated_fetched = replace(
-        fetched,
-        snapshot=updated_snapshot,
-        assumptions=fetched.assumptions
-        + (
-            "Manual supplement applied before analysis for fields: {}.".format(
-                ", ".join(sorted(updates))
-            ),
-        ),
-        raw_payload_refs=fetched.raw_payload_refs + (f"manual-supplement:{fetched.snapshot.symbol}",),
-        field_sources=field_sources,
-    )
-    return updated_fetched, ()
-
-
 def fetch_and_analyze_hk_snapshot(
     symbol: str,
     name: Optional[str] = None,
     submodel: Optional[str] = None,
     quote_overlay_source: Optional[str] = None,
     manual_supplement: Optional[Mapping[str, Any]] = None,
+    manual_supplement_path: Optional[str] = None,
 ) -> FetchedFundamentalAnalysis:
     fetched = fetch_hk_fundamental_snapshot(
         symbol=symbol,
@@ -167,10 +111,10 @@ def fetch_and_analyze_hk_snapshot(
         quote_overlay_source=quote_overlay_source,
     )
     submodel_config = resolve_submodel_for_symbol(fetched.snapshot.symbol, submodel)
-    fetched, supplement_assumptions = _apply_manual_supplement(
+    fetched = apply_manual_supplement(
         fetched,
         submodel_config,
-        manual_supplement,
+        resolve_manual_supplement(manual_supplement, manual_supplement_path),
     )
     analyzed_submodel, runtime_assumptions = _relax_missing_peg(
         submodel_config,

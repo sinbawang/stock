@@ -25,6 +25,11 @@
 - 为什么基本面和缠论技术面是平级模块
 - 为什么不同科技子行业不能完全共用同一套字段要求和解释话术
 
+结合当前实现状态，这一层还应帮助你快速确认：
+
+- 金融、科技之外，公用事业与新能源运营、数字基础设施、家电消费制造也已经形成独立行业桶
+- 中国电信 H 股、长江电力、太阳能、格力电器、中航科工当前分别落在哪个子模型或扩展观察组
+
 ## 2. 字段与数据源
 
 再看这组文档，目的是明确“第一版到底支持哪些字段，以及这些字段从哪里来”。
@@ -56,6 +61,8 @@
 - 数据、校验、评分、报告、服务为什么要分层
 - 为什么报告层现在能直接输出“字段来源警告”和“维度得分计算说明”
 
+补充说明：虽然 [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md) 的名字仍保留“tech”，但当前它实际上已经能帮助理解跨行业注册表和配置对象结构。
+
 ## 4. 路线图与样例
 
 最后看这组文档，目的是确认落地顺序和具体输入样子。
@@ -86,6 +93,25 @@
 8. [combined-analysis-output-spec.md](combined-analysis-output-spec.md)
 9. [combined-analysis-service-interface.md](combined-analysis-service-interface.md)
 
+## 当前实现快照
+
+如果只想先知道“现在已经做到哪里”，先看这几条：
+
+- 行业桶已经覆盖：金融、科技、公用事业与新能源运营、数字基础设施、家电消费制造
+- 行业桶已经覆盖：金融、科技、公用事业与新能源运营、数字基础设施、家电消费制造、能源资源
+- 科技子模型已经覆盖：平台互联网、半导体与电子硬科技、工业自动化与智能装备、游戏与数字内容
+- 金融子模型已经覆盖：银行、保险、券商
+- 当前持仓相关映射里：长江电力与太阳能归入 `utility_operator_v1`，中国电信 H 股归入 `digital_infra_v1`，格力电器归入 `home_appliance_v1`，中航科工暂复用 `industrial_automation_v1`
+- 当前代表标的映射里：长江电力与太阳能归入 `utility_operator_v1`，中国电信 H 股归入 `digital_infra_v1`，格力电器归入 `home_appliance_v1`，中航科工暂复用 `industrial_automation_v1`，中国神华挂接到 `energy_resource_v1`
+- 港股与 A 股都已有公共快照抓取入口，并能进入统一评分与报告链路
+- 港股金融 live 已有第一版 fallback 闭环，但仍保留部分 `manual supplement`
+
+如果想看更细的展开：
+
+- 行业与标的归类看 [fundamental-industry-layering.md](fundamental-industry-layering.md)
+- 当前进度与下一步优先级看 [fundamental-roadmap.md](fundamental-roadmap.md)
+- 港股金融 live 细节看 [hk-financial-second-source-plan.md](hk-financial-second-source-plan.md)
+
 ## 对照当前代码
 
 如果阅读文档后要回到现有实现，可以优先对照这些目录：
@@ -101,3 +127,5 @@
 
 - 如果想理解港股金融 live 是如何“部分闭环”的，优先看 [hk-financial-second-source-plan.md](hk-financial-second-source-plan.md)
 - 如果想理解为什么报告里会出现字段来源警告和维度得分计算说明，优先对照 `services/fetch_and_analyze_hk_snapshot.py`、`scoring/base_engine.py` 与 `reporting/text_report.py`
+
+当前如果只想快速确认最新行业桶落地状态，优先看上面的“当前实现快照”，再按需要跳转到对应专题文档。

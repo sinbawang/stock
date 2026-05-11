@@ -11,7 +11,10 @@ from fundamental.models.scorecard import (
 )
 from fundamental.models.snapshot import FundamentalSnapshot
 from fundamental.scoring.common_rules import (
+    score_asset_turnover,
     score_combined_ratio,
+    score_capex_to_operating_cashflow,
+    score_commodity_price_sensitivity,
     score_core_tier1_ratio,
     score_dividend_yield,
     score_debt_to_asset,
@@ -19,20 +22,25 @@ from fundamental.scoring.common_rules import (
     score_guidance_attainment,
     score_investment_return,
     score_loan_deposit_growth_gap,
+    score_gross_margin_trend,
     score_net_profit_growth,
     score_net_capital_ratio,
     score_net_interest_margin,
     score_npl_ratio,
     score_operating_cashflow_to_profit,
+    score_overseas_revenue_share,
     score_pe_percentile,
     score_peg,
     score_pb_financial,
+    score_price_war_pressure,
     score_provision_coverage_ratio,
     score_relative_pressure,
+    score_reserve_life_index,
     score_revenue_growth,
     score_roe,
     score_roe_stability,
     score_solvency_adequacy_ratio,
+    score_unit_cost_position,
 )
 from fundamental.scoring.risk_rules import evaluate_automated_risk_rules
 
@@ -106,6 +114,7 @@ def _score_profit_quality(snapshot: FundamentalSnapshot) -> Optional[float]:
             score_roe_stability(snapshot.roe_3y_cv),
             score_operating_cashflow_to_profit(snapshot.operating_cashflow_to_profit),
             score_dupont_driver(snapshot.dupont_driver),
+            score_gross_margin_trend(snapshot.gross_margin_trend),
         )
     )
 
@@ -116,6 +125,7 @@ def _score_growth_delivery(snapshot: FundamentalSnapshot) -> Optional[float]:
             score_revenue_growth(snapshot.revenue_growth),
             score_net_profit_growth(snapshot.net_profit_growth),
             score_guidance_attainment(snapshot.guidance_attainment),
+            score_overseas_revenue_share(snapshot.overseas_revenue_share),
         )
     )
 
@@ -126,6 +136,22 @@ def _score_cashflow_efficiency(snapshot: FundamentalSnapshot) -> Optional[float]
 
 def _score_valuation_fit(snapshot: FundamentalSnapshot) -> Optional[float]:
     return _average((score_pe_percentile(snapshot.pe_percentile_5y), score_peg(snapshot.peg)))
+
+
+def _score_yield_and_valuation(snapshot: FundamentalSnapshot) -> Optional[float]:
+    return _average((score_dividend_yield(snapshot.dividend_yield), score_pe_percentile(snapshot.pe_percentile_5y)))
+
+
+def _score_resource_cycle_resilience(snapshot: FundamentalSnapshot) -> Optional[float]:
+    return _average(
+        (
+            score_debt_to_asset(snapshot.debt_to_asset),
+            score_capex_to_operating_cashflow(snapshot.capex_to_operating_cashflow),
+            score_unit_cost_position(snapshot.unit_cost_position),
+            score_reserve_life_index(snapshot.reserve_life_index),
+            score_commodity_price_sensitivity(snapshot.commodity_price_sensitivity),
+        )
+    )
 
 
 def _score_growth_and_cycle(snapshot: FundamentalSnapshot) -> Optional[float]:
@@ -143,6 +169,17 @@ def _score_operating_and_inventory_cycle(snapshot: FundamentalSnapshot) -> Optio
             score_relative_pressure(snapshot.accounts_receivable_growth, snapshot.revenue_growth),
             score_relative_pressure(snapshot.inventory_growth, snapshot.revenue_growth),
             score_debt_to_asset(snapshot.debt_to_asset),
+        )
+    )
+
+
+def _score_inventory_channel_and_turnover(snapshot: FundamentalSnapshot) -> Optional[float]:
+    return _average(
+        (
+            score_relative_pressure(snapshot.accounts_receivable_growth, snapshot.revenue_growth),
+            score_relative_pressure(snapshot.inventory_growth, snapshot.revenue_growth),
+            score_asset_turnover(snapshot.asset_turnover),
+            score_price_war_pressure(snapshot.price_war_pressure),
         )
     )
 
@@ -202,6 +239,7 @@ def _build_dimension_score_basis(
                     score_operating_cashflow_to_profit(snapshot.operating_cashflow_to_profit),
                 ),
                 (f"杜邦驱动 {_format_metric_value(snapshot.dupont_driver)}", score_dupont_driver(snapshot.dupont_driver)),
+                (f"毛利率趋势 {_format_metric_value(snapshot.gross_margin_trend)}", score_gross_margin_trend(snapshot.gross_margin_trend)),
             ),
             normalized_score,
             dimension.weight,
@@ -213,6 +251,10 @@ def _build_dimension_score_basis(
                 (f"营收增速 {_format_metric_value(snapshot.revenue_growth)}", score_revenue_growth(snapshot.revenue_growth)),
                 (f"净利增速 {_format_metric_value(snapshot.net_profit_growth)}", score_net_profit_growth(snapshot.net_profit_growth)),
                 (f"指引兑现 {_format_metric_value(snapshot.guidance_attainment)}", score_guidance_attainment(snapshot.guidance_attainment)),
+                (
+                    f"海外收入占比 {_format_metric_value(snapshot.overseas_revenue_share)}",
+                    score_overseas_revenue_share(snapshot.overseas_revenue_share),
+                ),
             ),
             normalized_score,
             dimension.weight,
@@ -235,6 +277,44 @@ def _build_dimension_score_basis(
             (
                 (f"PE分位 {_format_metric_value(snapshot.pe_percentile_5y)}", score_pe_percentile(snapshot.pe_percentile_5y)),
                 (f"PEG {_format_metric_value(snapshot.peg)}", score_peg(snapshot.peg)),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    if dimension.name == "yield_and_valuation":
+        return _format_score_basis(
+            (
+                (f"股息率 {_format_metric_value(snapshot.dividend_yield)}", score_dividend_yield(snapshot.dividend_yield)),
+                (f"PE分位 {_format_metric_value(snapshot.pe_percentile_5y)}", score_pe_percentile(snapshot.pe_percentile_5y)),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    if dimension.name == "resource_cycle_resilience":
+        return _format_score_basis(
+            (
+                (
+                    f"资产负债率 {_format_metric_value(snapshot.debt_to_asset)}",
+                    score_debt_to_asset(snapshot.debt_to_asset),
+                ),
+                (
+                    f"资本开支/经营现金流 {_format_metric_value(snapshot.capex_to_operating_cashflow)}",
+                    score_capex_to_operating_cashflow(snapshot.capex_to_operating_cashflow),
+                ),
+                (
+                    f"单位成本位置 {_format_metric_value(snapshot.unit_cost_position)}",
+                    score_unit_cost_position(snapshot.unit_cost_position),
+                ),
+                (
+                    f"储量寿命指数 {_format_metric_value(snapshot.reserve_life_index)}",
+                    score_reserve_life_index(snapshot.reserve_life_index),
+                ),
+                (
+                    f"商品价格敏感度 {_format_metric_value(snapshot.commodity_price_sensitivity)}",
+                    score_commodity_price_sensitivity(snapshot.commodity_price_sensitivity),
+                ),
             ),
             normalized_score,
             dimension.weight,
@@ -268,6 +348,36 @@ def _build_dimension_score_basis(
                     score_relative_pressure(snapshot.inventory_growth, snapshot.revenue_growth),
                 ),
                 (f"资产负债率 {_format_metric_value(snapshot.debt_to_asset)}", score_debt_to_asset(snapshot.debt_to_asset)),
+            ),
+            normalized_score,
+            dimension.weight,
+        )
+
+    if dimension.name == "inventory_channel_and_turnover":
+        receivable_delta = None
+        if snapshot.accounts_receivable_growth is not None and snapshot.revenue_growth is not None:
+            receivable_delta = snapshot.accounts_receivable_growth - snapshot.revenue_growth
+        inventory_delta = None
+        if snapshot.inventory_growth is not None and snapshot.revenue_growth is not None:
+            inventory_delta = snapshot.inventory_growth - snapshot.revenue_growth
+        return _format_score_basis(
+            (
+                (
+                    f"应收压力差 {_format_metric_value(receivable_delta)}",
+                    score_relative_pressure(snapshot.accounts_receivable_growth, snapshot.revenue_growth),
+                ),
+                (
+                    f"库存压力差 {_format_metric_value(inventory_delta)}",
+                    score_relative_pressure(snapshot.inventory_growth, snapshot.revenue_growth),
+                ),
+                (
+                    f"总资产周转率 {_format_metric_value(snapshot.asset_turnover)}",
+                    score_asset_turnover(snapshot.asset_turnover),
+                ),
+                (
+                    f"价格战压力 {_format_metric_value(snapshot.price_war_pressure)}",
+                    score_price_war_pressure(snapshot.price_war_pressure),
+                ),
             ),
             normalized_score,
             dimension.weight,
@@ -339,8 +449,11 @@ DIMENSION_SCORERS: dict[str, Callable[[FundamentalSnapshot], Optional[float]]] =
     "growth_delivery": _score_growth_delivery,
     "cashflow_and_operating_efficiency": _score_cashflow_efficiency,
     "valuation_fit": _score_valuation_fit,
+    "yield_and_valuation": _score_yield_and_valuation,
+    "resource_cycle_resilience": _score_resource_cycle_resilience,
     "growth_and_cycle": _score_growth_and_cycle,
     "operating_and_inventory_cycle": _score_operating_and_inventory_cycle,
+    "inventory_channel_and_turnover": _score_inventory_channel_and_turnover,
     "capital_safety_and_asset_quality": _score_capital_safety_and_asset_quality,
     "profitability_and_stability": _score_profitability_and_stability,
     "business_growth_and_quality": _score_business_growth_and_quality,
@@ -391,6 +504,8 @@ STRENGTH_MESSAGES = {
     "growth_delivery": "成长兑现较好，营收与利润增长质量较强。",
     "cashflow_and_operating_efficiency": "现金流兑现较好，经营效率表现稳定。",
     "valuation_fit": "当前估值匹配度较好，估值压力相对可控。",
+    "yield_and_valuation": "股东回报与估值匹配度较好，收益型安全边际相对充足。",
+    "resource_cycle_resilience": "成本曲线、资本开支与储量韧性较好，周期承压能力相对稳健。",
     "growth_and_cycle": "景气与成长匹配较好，增长质量处于可接受区间。",
     "operating_and_inventory_cycle": "营运与库存压力可控，经营质量相对稳定。",
     "capital_safety_and_asset_quality": "资本安全与资产质量较稳，安全边际处于可跟踪区间。",
@@ -405,6 +520,8 @@ RISK_MESSAGES = {
     "growth_delivery": "成长兑现偏弱，营收或利润增长支撑不足。",
     "cashflow_and_operating_efficiency": "现金流兑现偏弱，经营效率有待确认。",
     "valuation_fit": "估值匹配偏弱，当前价格对基本面要求较高。",
+    "yield_and_valuation": "股东回报与估值保护偏弱，收益型安全边际仍需确认。",
+    "resource_cycle_resilience": "成本曲线、资本开支或储量韧性偏弱，周期承压能力需要警惕。",
     "growth_and_cycle": "成长与景气支撑偏弱，周期位置仍需确认。",
     "operating_and_inventory_cycle": "营运与库存压力偏大，应收或存货质量需要警惕。",
     "capital_safety_and_asset_quality": "资本安全或资产质量偏弱，安全边际需要优先确认。",

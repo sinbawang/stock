@@ -24,6 +24,8 @@
 - “抓取 + 分析”应走 `src/fundamental/services/`
 - 第一版已落地的是：港股 + A 股公开数据源快照抓取
 
+当前整体落地状态和已覆盖行业桶，统一以 [fundamental-doc-map.md](fundamental-doc-map.md) 的“当前实现快照”章节为准；本文件重点只保留数据源入口、字段口径和 fallback 策略。
+
 如果当前关注的是港股保险 / 券商为什么还没有 live 闭环，以及第二数据源下一步该怎么接，直接看 [hk-financial-second-source-plan.md](hk-financial-second-source-plan.md)。
 
 ## 当前公共代码
@@ -40,7 +42,7 @@
 
 当前能力：
 
-- 通过 Eastmoney / AkShare 抓取港股年报核心指标
+- 通过 Eastmoney / AkShare 抓取港股核心指标，默认优先年报；无年报时显式回退到最新可用报告期
 - 通过 Eastmoney 原始现金流表计算 `operating_cashflow_to_profit_history`
 - 通过 Eastmoney 原始资产负债表回算 `accounts_receivable_growth`、`inventory_growth`
 - 通过 Eastmoney 估值对比接口补齐 `pe_ttm`、`pe_percentile_5y` 代理、`pb`、`ps_ttm`
@@ -49,11 +51,13 @@
   - `06886` 可从华泰官方年报 PDF 解析 `风险覆盖率`，并透明映射为 `net_capital_ratio` 代理值
   - `01339` 可从人保官网偿付能力披露列表自动发现最新偿付能力报告摘要 PDF，并补 `solvency_adequacy_ratio`
 - 通过 THS 财务摘要 / 资产负债表 / 现金流量表 / 利润表 + Baidu 估值序列构建 A 股快照
+- A 股快照当前会优先最近一个 `12-31` 年报期，避免把季度 `ROE`、增速、现金流转化与年报同行直接混比
 - 返回 `field_sources`，显式标注字段来自主源还是 overlay
 - 直接产出标准 `FundamentalSnapshot`
 - 可以继续直接喂给现有基本面评分引擎
 - 文本报告当前会额外输出两类可解释信息：
   - 字段来源口径警告，例如 `official.solvency_report`、`official.annual_report_proxy`、`manual.supplement`
+  - 报告期口径警告，例如当前结果来自一季报 / 中报 / 三季报，不能直接与年报口径横比
   - 维度得分的简版计算说明，例如“字段值 -> 规则分 -> 平均后乘维度权重”
 
 ## 为什么要提取成公共层
@@ -85,6 +89,20 @@
 - `pe_percentile_5y`
   当前用 Eastmoney 估值对比接口里的 TTM PE 分位做代理
 
+报告期选择补充约定：
+
+- `hk_snapshot_fetcher` 当前优先选择 `DATE_TYPE_CODE == "001"` 的年报行
+- 若公共源暂时没有年报行，则回退到最新可用报告期，并把 `period_type` 写为 `report`
+- 这类回退不会静默发生：
+  - fetch 结果里会留下 assumption
+  - 服务层与最终简报会输出“非年报口径”警告
+
+金融补充字段对齐补充约定：
+
+- `financial_indicator_df` 当前会优先匹配主快照对应的 `report_period`
+- 如果同报告期指标行不存在，才回退到最新可用指标期
+- 这类 indicator fallback 当前也会在 assumptions 中显式记录，不再默认拿“最新一行”静默补字段
+
 这意味着第一版不是“完美多源校验后的财务数据库”，而是：
 
 - 先把一个稳定、可复用、可解释的抓取闭环落下来
@@ -107,8 +125,27 @@
 - Baidu `stock_zh_valuation_baidu`
   提供 `pe_ttm`、`pb`、`market_cap` 以及 `pe_percentile_5y` 所需的时间序列
 
-当前 A 股抓取目标不是覆盖所有行业增强字段，而是先提供一套能直接进入
-`industrial_automation_v1`、`game_content_v1` 等子模型的最小公共快照。
+报告期选择补充约定：
+
+- `cn_snapshot_fetcher` 当前优先抽取最近一个 `12-31` 年报期对应的摘要、资产负债表、现金流量表和利润表行
+- 若主源暂时没有年报期，才回退到最新报告期
+- 当前简报会对这类回退输出“非年报口径”警告，提醒不要直接和年报口径横比
+
+当前 A 股抓取目标不是一步覆盖所有行业增强字段，而是先提供一套能直接进入当前已落地 A 股相关子模型的最小公共快照，例如：
+
+- `industrial_automation_v1`
+- `game_content_v1`
+- `utility_operator_v1`
+- `home_appliance_v1`
+- `energy_resource_v1`
+
+也就是说，当前公共 A 股快照已经不再只服务于“科技扩展模型”，也开始支撑公用事业与成熟消费制造行业桶。
+
+补充说明：
+
+- 当前 A 股公共抓取仍不稳定提供点位型 `dividend_yield`
+- 因此对 `bank_v1`、`utility_operator_v1`、`home_appliance_v1`、`energy_resource_v1` 这类把 `dividend_yield` 作为准入字段的 CN 子模型，live 分析链路当前统一按运行时放宽处理
+- 当前 A 股与港股快照都已经内建一批派生字段计算，至少包括 `peg`、`net_margin`、`asset_turnover`、`equity_multiplier`、`dupont_driver`
 
 ## 雪球 overlay 策略
 
@@ -312,6 +349,88 @@ snapshot = result.fetched.snapshot
 scorecard = result.scorecard
 assumptions = result.assumptions
 ```
+
+A 股抓取并直接分析，同时补充暂时无法稳定自动化的行业字段：
+
+```python
+from fundamental.services import fetch_and_analyze_cn_snapshot
+
+result = fetch_and_analyze_cn_snapshot(
+  "601088",
+  name="中国神华",
+  manual_supplement={
+    "dividend_yield": 6.3,
+    "capex_to_operating_cashflow": 0.42,
+    "unit_cost_position": 0.82,
+    "reserve_life_index": 14.5,
+    "commodity_price_sensitivity": 0.46,
+    "notes": "manual supplement from annual report",
+  },
+)
+snapshot = result.fetched.snapshot
+scorecard = result.scorecard
+assumptions = result.assumptions
+field_sources = result.fetched.field_sources
+```
+
+这层 `manual_supplement` 当前适合承接：
+
+- A 股能源资源子模型暂时缺失的 `dividend_yield`
+- 年报或公告里可手工摘取的 `capex_to_operating_cashflow`
+- 研究口径维护的 `unit_cost_position`、`reserve_life_index`、`commodity_price_sensitivity`
+
+约束仍然和港股一致：
+
+- 只能写入当前子模型 `required_core`、`optional_manual`、`deferred_v2` 和 `notes`
+- 写入后会进入 `field_sources`，来源标记为 `manual.supplement`
+- 越权字段会直接抛错，而不是静默忽略
+
+如果补录信息已经写在 brief 文本里，也可以直接传文件路径。当前服务层支持：
+
+- `json` 模板文件，例如 `data/_meta/manual_supplements/01339_中国人保_insurance_v1_latest.json`
+- `txt` / `md` brief 文件中的 `- field=value` 行
+
+例如：
+
+```python
+from fundamental.services import fetch_and_analyze_cn_snapshot
+
+result = fetch_and_analyze_cn_snapshot(
+  "601088",
+  name="中国神华",
+  manual_supplement_path="data/_meta/601088_中国神华_fundamental_brief_latest.txt",
+)
+```
+
+brief 文本里推荐额外维护一个明确区块，例如：
+
+```text
+手工补充字段:
+- dividend_yield=6.3
+- capex_to_operating_cashflow=0.42
+- unit_cost_position=0.82
+- reserve_life_index=14.5
+- commodity_price_sensitivity=0.46
+- notes="2025 年报 p.34, 经营数据公告 2026-03-28"
+```
+
+这里的解析规则刻意保持很窄：
+
+- 只读取 bullet 形式的 `field=value`
+- 单行多个字段也可以，例如 `- pe_ttm=12.4, pb=1.8`
+- `notes` 如果包含逗号，建议整段加引号
+
+如果希望重新生成一份带机器可读补充区块的 brief，当前也可以直接用脚本：
+
+```powershell
+.\venv\Scripts\python.exe scripts\generate_fundamental_brief.py 601088 --name 中国神华 --manual-supplement-path data/_meta/manual_supplements/601088_中国神华_energy_resource_v1_latest.txt
+```
+
+这个脚本会：
+
+- 调用现有 HK/CN fetch-and-analyze 服务
+- 自动把 `manual.supplement` 字段写回 brief 尾部的 `手工补充字段:` 区块
+- 输出到 `data/_meta/*_fundamental_brief_时间戳.txt`
 
 ## 下一步扩展方向
 

@@ -73,7 +73,9 @@ src/
     │   ├── __init__.py
     │   ├── models.py
     │   ├── registry.py
-    │   └── tech_submodels.py
+    │   ├── tech_submodels.py
+    │   ├── finance_submodels.py
+    │   └── nonfinancial_submodels.py
     ├── validation/
     │   ├── __init__.py
     │   └── snapshot_validator.py
@@ -126,14 +128,16 @@ src/
 建议职责：
 
 - 定义 `DimensionConfig`、`FieldPolicy`、`RiskRuleConfig`、`SubmodelConfig`
-- 注册科技第一版子模型
+- 注册各行业第一版子模型
 - 维护 `SUBMODEL_REGISTRY`
 
 建议文件：
 
 - `models.py`: 配置对象定义
 - `registry.py`: 注册表和查询入口
-- `tech_submodels.py`: 平台互联网、半导体两套第一版配置
+- `tech_submodels.py`: 平台互联网、半导体、工业自动化、游戏内容等科技子模型
+- `finance_submodels.py`: 银行、保险、券商子模型
+- `nonfinancial_submodels.py`: 公用事业、数字基础设施、家电消费制造等扩展行业桶
 
 这一层不应负责：
 
