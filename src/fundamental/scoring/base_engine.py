@@ -547,8 +547,15 @@ def _build_strengths(
     dimension_scores: Sequence[FundamentalDimensionScore],
     submodel: SubmodelConfig,
 ) -> List[str]:
+    primary_metrics_by_dimension = {
+        dimension.name: set(dimension.primary_metrics)
+        for dimension in submodel.dimensions
+    }
     strengths: List[str] = []
     for dimension in dimension_scores:
+        primary_metrics = primary_metrics_by_dimension.get(dimension.dimension, set())
+        if primary_metrics and any(metric in primary_metrics for metric in dimension.missing_metrics):
+            continue
         if dimension.weight and dimension.score >= dimension.weight * 0.75:
             strengths.append(
                 _message_for_dimension(

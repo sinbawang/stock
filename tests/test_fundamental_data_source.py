@@ -1282,6 +1282,204 @@ def test_fetch_cn_fundamental_snapshot_supplements_dividend_yield_for_nonfinanci
     assert any("dividend_yield" in item for item in result.assumptions)
 
 
+def test_fetch_cn_fundamental_snapshot_falls_back_to_cninfo_dividend_yield_when_indicator_missing(monkeypatch):
+    abstract_df = pd.DataFrame(
+        [
+            ["2024-12-31", "8.00亿", "20.0%", "7.50亿", "18.0%", "100.00亿", "10.0%", "1.00", "5.00", "1.20", "2.30", "0.50", "20.0%", "45.0%", "8.0%", "7.5%", "120.0", "4.0", "90.0", "45.0", "1.50", "1.10", "1.00", "1.80", "40.0%"],
+            ["2025-12-31", "9.60亿", "15.0%", "9.00亿", "20.0%", "112.00亿", "12.0%", "1.20", "6.00", "1.40", "3.00", "0.60", "22.0%", "47.0%", "8.5%", "8.0%", "118.0", "4.2", "87.0", "42.0", "1.60", "1.20", "1.10", "1.90", "38.0%"],
+        ]
+    )
+    debt_df = pd.DataFrame(
+        [
+            {"report_date": "2024-12-31", "metric_name": "accounts_receivable", "value": 10_000_000_000.0, "yoy": 0.10},
+            {"report_date": "2025-12-31", "metric_name": "accounts_receivable", "value": 11_200_000_000.0, "yoy": 0.12},
+            {"report_date": "2024-12-31", "metric_name": "inventory", "value": 8_000_000_000.0, "yoy": 0.08},
+            {"report_date": "2025-12-31", "metric_name": "inventory", "value": 8_800_000_000.0, "yoy": 0.10},
+        ]
+    )
+    cash_df = pd.DataFrame(
+        [
+            {"report_date": "2024-12-31", "metric_name": "act_cash_flow_net", "value": 9_000_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "act_cash_flow_net", "value": 10_800_000_000.0},
+        ]
+    )
+    benefit_df = pd.DataFrame(
+        [
+            {"report_date": "2024-12-31", "metric_name": "parent_holder_net_profit", "value": 8_000_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "parent_holder_net_profit", "value": 9_600_000_000.0},
+        ]
+    )
+    pe_series = pd.DataFrame([{"date": "2026-05-09", "value": 15.0}])
+    pb_series = pd.DataFrame([{"date": "2026-05-09", "value": 3.2}])
+    market_cap_series = pd.DataFrame([{"date": "2026-05-09", "value": 520.0}])
+    financial_indicator_df = pd.DataFrame([{"REPORT_DATE": "2025-12-31"}])
+    dividend_history_df = pd.DataFrame(
+        [
+            {"报告时间": "2025年报", "派息比例": 12.0, "除权日": "2026-05-10"},
+            {"报告时间": "2024年报", "派息比例": 8.0, "除权日": "2025-08-01"},
+            {"报告时间": "2023年报", "派息比例": 6.0, "除权日": "2024-07-01"},
+        ]
+    )
+    daily_price_df = pd.DataFrame([{"日期": "2026-05-15", "收盘": 40.0}])
+
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_abstract_df", lambda symbol: abstract_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_debt_df", lambda symbol: debt_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_cash_df", lambda symbol: cash_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_benefit_df", lambda symbol: benefit_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_analysis_indicator_df", lambda symbol: financial_indicator_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_dividend_history_df", lambda symbol: dividend_history_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_daily_price_df", lambda symbol: daily_price_df)
+    monkeypatch.setattr(
+        cn_fetcher,
+        "_fetch_cn_valuation_series",
+        lambda symbol, indicator, period="近五年": {
+            "市盈率(TTM)": pe_series,
+            "市净率": pb_series,
+            "总市值": market_cap_series,
+        }[indicator],
+    )
+
+    result = cn_fetcher.fetch_cn_fundamental_snapshot("600900", name="长江电力")
+
+    assert result.snapshot.dividend_yield == 5.0
+    assert result.field_sources is not None
+    assert result.field_sources["dividend_yield"] == "cninfo.dividend_history+eastmoney.daily_price"
+    assert any("CNInfo cash dividend records" in item for item in result.assumptions)
+
+
+def test_fetch_cn_fundamental_snapshot_falls_back_to_cninfo_dividend_yield_for_financial_symbol(monkeypatch):
+    abstract_df = pd.DataFrame(
+        [
+            ["2025-12-31", "80.00亿", "2.18%", "78.50亿", "2.02%", "980.00亿", "2.02%", "1.10", "10.20", "1.20", "2.80", "0.60", "8.38%", "36.41%", "8.0%", "7.5%", "118.0", "4.2", "87.0", "42.0", "1.60", "1.20", "1.10", "1.90", "90.0%"],
+        ]
+    )
+    debt_df = pd.DataFrame(
+        [
+            {"report_date": "2024-12-31", "metric_name": "accounts_receivable", "value": 1.0, "yoy": 0.0},
+            {"report_date": "2025-12-31", "metric_name": "accounts_receivable", "value": 1.0, "yoy": 0.0},
+            {"report_date": "2024-12-31", "metric_name": "inventory", "value": 1.0, "yoy": 0.0},
+            {"report_date": "2025-12-31", "metric_name": "inventory", "value": 1.0, "yoy": 0.0},
+        ]
+    )
+    cash_df = pd.DataFrame(
+        [
+            {"report_date": "2024-12-31", "metric_name": "act_cash_flow_net", "value": 9_000_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "act_cash_flow_net", "value": 10_800_000_000.0},
+        ]
+    )
+    benefit_df = pd.DataFrame(
+        [
+            {"report_date": "2024-12-31", "metric_name": "parent_holder_net_profit", "value": 8_000_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "parent_holder_net_profit", "value": 9_600_000_000.0},
+        ]
+    )
+    pe_series = pd.DataFrame([{"date": "2026-05-09", "value": 6.2}])
+    pb_series = pd.DataFrame([{"date": "2026-05-09", "value": 0.51}])
+    market_cap_series = pd.DataFrame([{"date": "2026-05-09", "value": 1800.0}])
+    financial_indicator_df = pd.DataFrame(
+        [
+            {
+                "REPORT_DATE": "2025-12-31",
+                "核心一级资本充足率": 11.43,
+                "不良贷款率": 1.28,
+                "拨备覆盖率": 208.38,
+                "净息差": 1.20,
+            }
+        ]
+    )
+    dividend_history_df = pd.DataFrame(
+        [
+            {"报告时间": "2025年报", "派息比例": 3.8, "除权日": "2026-03-30"},
+            {"报告时间": "2024年报", "派息比例": 3.2, "除权日": "2025-07-15"},
+        ]
+    )
+    daily_price_df = pd.DataFrame([{"日期": "2026-05-15", "收盘": 8.75}])
+
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_abstract_df", lambda symbol: abstract_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_debt_df", lambda symbol: debt_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_cash_df", lambda symbol: cash_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_benefit_df", lambda symbol: benefit_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_analysis_indicator_df", lambda symbol: financial_indicator_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_dividend_history_df", lambda symbol: dividend_history_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_daily_price_df", lambda symbol: daily_price_df)
+    monkeypatch.setattr(
+        cn_fetcher,
+        "_fetch_cn_valuation_series",
+        lambda symbol, indicator, period="近五年": {
+            "市盈率(TTM)": pe_series,
+            "市净率": pb_series,
+            "总市值": market_cap_series,
+        }[indicator],
+    )
+
+    result = cn_fetcher.fetch_cn_fundamental_snapshot("601328", name="交通银行")
+
+    assert result.snapshot.dividend_yield == 8.0
+    assert result.field_sources is not None
+    assert result.field_sources["dividend_yield"] == "cninfo.dividend_history+eastmoney.daily_price"
+    assert result.snapshot.core_tier1_ratio == 11.43
+
+
+def test_fetch_cn_fundamental_snapshot_falls_back_to_pb_implied_price_when_daily_price_unavailable(monkeypatch):
+    abstract_df = pd.DataFrame(
+        [
+            ["2025-12-31", "9.60亿", "15.0%", "9.00亿", "20.0%", "112.00亿", "12.0%", "1.20", "6.00", "1.40", "3.00", "0.60", "22.0%", "47.0%", "8.5%", "8.0%", "118.0", "4.2", "87.0", "42.0", "1.60", "1.20", "1.10", "1.90", "38.0%"],
+        ]
+    )
+    debt_df = pd.DataFrame(
+        [
+            {"report_date": "2025-12-31", "metric_name": "accounts_receivable", "value": 11_200_000_000.0, "yoy": 0.12},
+            {"report_date": "2025-12-31", "metric_name": "inventory", "value": 8_800_000_000.0, "yoy": 0.10},
+        ]
+    )
+    cash_df = pd.DataFrame(
+        [
+            {"report_date": "2024-12-31", "metric_name": "act_cash_flow_net", "value": 9_000_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "act_cash_flow_net", "value": 10_800_000_000.0},
+        ]
+    )
+    benefit_df = pd.DataFrame(
+        [
+            {"report_date": "2024-12-31", "metric_name": "parent_holder_net_profit", "value": 8_000_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "parent_holder_net_profit", "value": 9_600_000_000.0},
+        ]
+    )
+    pe_series = pd.DataFrame([{"date": "2026-05-09", "value": 15.0}])
+    pb_series = pd.DataFrame([{"date": "2026-05-09", "value": 4.0}])
+    market_cap_series = pd.DataFrame([{"date": "2026-05-09", "value": 520.0}])
+    financial_indicator_df = pd.DataFrame([{"REPORT_DATE": "2025-12-31"}])
+    dividend_history_df = pd.DataFrame(
+        [
+            {"报告时间": "2025年报", "派息比例": 12.0, "除权日": "2026-05-10"},
+            {"报告时间": "2024年报", "派息比例": 8.0, "除权日": "2025-08-01"},
+        ]
+    )
+
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_abstract_df", lambda symbol: abstract_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_debt_df", lambda symbol: debt_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_cash_df", lambda symbol: cash_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_benefit_df", lambda symbol: benefit_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_analysis_indicator_df", lambda symbol: financial_indicator_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_dividend_history_df", lambda symbol: dividend_history_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_daily_price_df", lambda symbol: (_ for _ in ()).throw(RuntimeError("price unavailable")))
+    monkeypatch.setattr(
+        cn_fetcher,
+        "_fetch_cn_valuation_series",
+        lambda symbol, indicator, period="近五年": {
+            "市盈率(TTM)": pe_series,
+            "市净率": pb_series,
+            "总市值": market_cap_series,
+        }[indicator],
+    )
+
+    result = cn_fetcher.fetch_cn_fundamental_snapshot("600900", name="长江电力")
+
+    assert result.snapshot.dividend_yield == 8.3333
+    assert result.field_sources is not None
+    assert result.field_sources["dividend_yield"] == "cninfo.dividend_history+baidu.pb+ths.abstract.book_value_per_share"
+    assert any("daily price fetch for dividend_yield fallback failed" in item for item in result.assumptions)
+
+
 def test_fetch_and_analyze_cn_snapshot_builds_game_content_scorecard(monkeypatch):
     fake_fetch_result = cn_fetcher.FundamentalSnapshotFetchResult(
         snapshot=cn_fetcher.FundamentalSnapshot(

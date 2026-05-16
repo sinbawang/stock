@@ -5,6 +5,7 @@ from fundamental.config.registry import get_submodel, get_submodel_for_symbol
 from fundamental.models.scorecard import FundamentalDimensionScore, FundamentalScoreCard
 from fundamental.models.snapshot import FundamentalSnapshot
 from fundamental.reporting import render_fundamental_brief, render_scorecard_text, save_fundamental_brief, save_scorecard_text
+from fundamental.scoring import base_engine
 from fundamental.services import analyze_snapshot
 from fundamental.services.fetch_and_analyze_cn_snapshot import _relax_missing_cn_dividend_yield
 from fundamental.validation import validate_snapshot_against_policy
@@ -525,6 +526,33 @@ def test_analyze_snapshot_scores_utility_operator_end_to_end():
     assert result.combined_comment is not None
     assert "公用事业与新能源运营基本面仍应围绕现金流、分红与负债表持续跟踪" in result.combined_comment
     assert result.combined_comment.index("当前最需要跟踪的是") < result.combined_comment.index("主要亮点是")
+
+
+def test_build_strengths_skips_yield_strength_when_primary_metric_missing():
+    submodel = get_submodel("utility_operator_v1")
+    dimension_scores = [
+        FundamentalDimensionScore(
+            dimension="yield_and_valuation",
+            score=26.0,
+            weight=30,
+            max_score=30.0,
+            missing_metrics=["dividend_yield"],
+            score_basis="已计分1/2项[PE分位 14.57->100.0]; 平均=100.0; 缺失[股息率 NA]; ×30/100=30.00",
+        ),
+        FundamentalDimensionScore(
+            dimension="cashflow_and_operating_efficiency",
+            score=25.0,
+            weight=25,
+            max_score=25.0,
+            missing_metrics=[],
+            score_basis="已计分1/1项[经营现金流/利润 1.76->100.0]; 平均=100.0; ×25/100=25.00",
+        ),
+    ]
+
+    strengths = base_engine._build_strengths(dimension_scores, submodel)
+
+    assert any("公用事业现金流兑现较好" in item for item in strengths)
+    assert not any("股息率与估值分位匹配较好" in item for item in strengths)
 
 
 def test_analyze_snapshot_scores_digital_infra_end_to_end():
