@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Union
 
+from fundamental.models.common import format_display_literal
 from fundamental.models.scorecard import FundamentalScoreCard
 from fundamental.models.snapshot import FundamentalSnapshot
 
@@ -65,7 +66,15 @@ def _format_scalar(value: object) -> str:
         return "true" if value else "false"
     if isinstance(value, float):
         return format(value, ".12g")
-    return str(value)
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(_format_scalar(item) for item in value) + "]"
+    if isinstance(value, str):
+        text = format_display_literal(value) or value
+    else:
+        text = str(value)
+    if any(char in text for char in [",", "，", "=", '"']):
+        return '"' + text.replace('"', '\\"') + '"'
+    return text
 
 
 def _render_snapshot_metric_lines(snapshot: Optional[FundamentalSnapshot]) -> list[str]:
@@ -75,12 +84,45 @@ def _render_snapshot_metric_lines(snapshot: Optional[FundamentalSnapshot]) -> li
     groups = (
         ("关键指标", ("pe_ttm", "pb", "ps_ttm", "peg", "dividend_yield")),
         (
+            "成长兑现指标",
+            ("revenue_growth", "net_profit_growth", "guidance_attainment"),
+        ),
+        (
+            "质量与稳健指标",
+            (
+                "roe",
+                "roe_3y_mean",
+                "roe_3y_cv",
+                "operating_cashflow_to_profit",
+                "operating_cashflow_to_profit_history",
+                "current_ratio",
+                "debt_to_asset",
+            ),
+        ),
+        (
             "现金流与杠杆指标",
             (
                 "operating_cashflow_growth",
                 "interest_bearing_debt_growth",
                 "capex_to_operating_cashflow",
                 "free_cashflow_yield",
+            ),
+        ),
+        (
+            "汽车经营专项指标",
+            (
+                "gross_margin",
+                "gross_margin_trend",
+                "overseas_revenue_share",
+                "price_war_pressure",
+            ),
+        ),
+        (
+            "资源经营专项指标",
+            (
+                "unit_cost_position",
+                "reserve_life_index",
+                "commodity_price_sensitivity",
             ),
         ),
         (

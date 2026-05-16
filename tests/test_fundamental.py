@@ -663,20 +663,21 @@ def test_render_fundamental_brief_includes_manual_supplement_block():
     assert "dividend_yield=6.3" in rendered
     assert "现金流与杠杆: operating_cashflow_growth=18.7, interest_bearing_debt_growth=5.3, capex_to_operating_cashflow=0.42, free_cashflow_yield=9.4" in rendered
     assert "手工补充字段:" in rendered
-    assert "杜邦拆解: 净利率=11.6, 总资产周转率=0.94, 权益乘数=1.5152, 杜邦驱动=margin_turnover" in rendered
+    assert "杜邦拆解: 净利率=11.6, 总资产周转率=0.94, 权益乘数=1.5152, 杜邦驱动=利润率与周转驱动" in rendered
     assert "- dividend_yield=6.3" in rendered
     assert "- reserve_life_index=14.5" in rendered
     assert '- notes="2025 annual report p.34, p.112"' in rendered
 
 
 def test_render_fundamental_brief_formats_concise_calculation_summary():
-    snapshot = make_platform_snapshot()
+    snapshot = make_platform_snapshot(guidance_attainment="beat")
     result = analyze_snapshot(snapshot, "platform_internet_v1")
 
     rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
 
     assert "计算说明:" in rendered
-    assert "- 盈利质量: 3/4项" in rendered
+    assert "- 盈利质量: 3/5项" in rendered
+    assert "指引兑现 超预期" in rendered
     assert "平均" in rendered
     assert "折算" in rendered
     assert "缺失 杜邦驱动" in rendered
@@ -707,6 +708,54 @@ def test_render_fundamental_brief_can_include_broker_metric_summary():
     rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
 
     assert "券商监管: net_capital_ratio=218" in rendered
+
+
+def test_render_fundamental_brief_can_include_auto_and_resource_specialist_summaries():
+    auto_snapshot = make_auto_manufacturing_snapshot(
+        gross_margin=16.8,
+        gross_margin_trend="improving",
+        overseas_revenue_share=31.5,
+        price_war_pressure="low",
+    )
+    auto_result = analyze_snapshot(auto_snapshot, "auto_manufacturing_v1")
+    auto_rendered = render_fundamental_brief(scorecard=auto_result, snapshot=auto_snapshot)
+
+    resource_snapshot = make_energy_resource_snapshot(
+        unit_cost_position=0.82,
+        reserve_life_index=14.5,
+        commodity_price_sensitivity=0.46,
+    )
+    resource_result = analyze_snapshot(resource_snapshot, "energy_resource_v1")
+    resource_rendered = render_fundamental_brief(scorecard=resource_result, snapshot=resource_snapshot)
+
+    assert "汽车经营专项: gross_margin=16.8, gross_margin_trend=改善, overseas_revenue_share=31.5, price_war_pressure=较低" in auto_rendered
+    assert "资源经营专项: unit_cost_position=0.82, reserve_life_index=14.5, commodity_price_sensitivity=0.46" in resource_rendered
+
+
+def test_render_fundamental_brief_can_include_general_quality_summary():
+    snapshot = make_platform_snapshot(
+        roe=18.6,
+        roe_3y_mean=17.2,
+        roe_3y_cv=0.18,
+        operating_cashflow_to_profit=1.12,
+        operating_cashflow_to_profit_history=[1.12, 1.04, 0.96],
+        current_ratio=1.46,
+        debt_to_asset=52.3,
+    )
+    result = analyze_snapshot(snapshot, "platform_internet_v1")
+
+    rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
+
+    assert "质量与稳健: roe=18.6, roe_3y_mean=17.2, roe_3y_cv=0.18, operating_cashflow_to_profit=1.12, operating_cashflow_to_profit_history=[1.12, 1.04, 0.96], current_ratio=1.46, debt_to_asset=52.3" in rendered
+
+
+def test_render_fundamental_brief_can_include_growth_delivery_summary():
+    snapshot = make_platform_snapshot(guidance_attainment="beat")
+    result = analyze_snapshot(snapshot, "platform_internet_v1")
+
+    rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
+
+    assert "成长兑现: revenue_growth=21.3, net_profit_growth=33.8, guidance_attainment=超预期" in rendered
 
 
 def test_safe_cn_valuation_series_returns_empty_frame_on_error(monkeypatch):
@@ -819,6 +868,27 @@ def test_render_scorecard_text_can_include_snapshot_metric_summary():
     assert "free_cashflow_yield=9.4" in rendered
 
 
+def test_render_scorecard_text_formats_dupont_driver_label_in_calculation_summary():
+    snapshot = make_platform_snapshot(dupont_driver="margin_turnover")
+    result = analyze_snapshot(snapshot, "platform_internet_v1")
+
+    rendered = render_scorecard_text(result)
+
+    assert "杜邦驱动 利润率与周转驱动->100.0" in rendered
+
+
+def test_render_scorecard_text_can_include_growth_delivery_metric_summary():
+    snapshot = make_platform_snapshot(guidance_attainment="beat")
+    result = analyze_snapshot(snapshot, "platform_internet_v1")
+
+    rendered = render_scorecard_text(result, snapshot=snapshot)
+
+    assert "成长兑现指标" in rendered
+    assert "revenue_growth=21.3" in rendered
+    assert "net_profit_growth=33.8" in rendered
+    assert "guidance_attainment=超预期" in rendered
+
+
 def test_render_scorecard_text_can_include_insurance_metric_summary():
     snapshot = make_insurance_snapshot()
     result = analyze_snapshot(snapshot, "insurance_v1")
@@ -855,6 +925,88 @@ def test_render_scorecard_text_can_include_broker_metric_summary():
 
     assert "券商监管指标" in rendered
     assert "net_capital_ratio=218" in rendered
+
+
+def test_render_scorecard_text_formats_auto_specialist_labels():
+    snapshot = make_auto_manufacturing_snapshot(
+        gross_margin=16.8,
+        gross_margin_trend="improving",
+        overseas_revenue_share=31.5,
+        price_war_pressure="low",
+    )
+    result = analyze_snapshot(snapshot, "auto_manufacturing_v1")
+
+    rendered = render_scorecard_text(result, snapshot=snapshot)
+
+    assert "gross_margin_trend=改善" in rendered
+    assert "price_war_pressure=较低" in rendered
+
+
+def test_render_scorecard_text_formats_auto_specialist_labels_in_calculation_summary():
+    snapshot = make_auto_manufacturing_snapshot(
+        gross_margin=16.8,
+        gross_margin_trend="improving",
+        price_war_pressure="low",
+    )
+    result = analyze_snapshot(snapshot, "auto_manufacturing_v1")
+
+    rendered = render_scorecard_text(result)
+
+    assert "毛利率趋势 改善->100.0" in rendered
+    assert "价格战压力 较低->100.0" in rendered
+
+
+def test_render_scorecard_text_can_include_auto_and_resource_specialist_summaries():
+    auto_snapshot = make_auto_manufacturing_snapshot(
+        gross_margin=16.8,
+        gross_margin_trend="improving",
+        overseas_revenue_share=31.5,
+        price_war_pressure="low",
+    )
+    auto_result = analyze_snapshot(auto_snapshot, "auto_manufacturing_v1")
+    auto_rendered = render_scorecard_text(auto_result, snapshot=auto_snapshot)
+
+    resource_snapshot = make_energy_resource_snapshot(
+        unit_cost_position=0.82,
+        reserve_life_index=14.5,
+        commodity_price_sensitivity=0.46,
+    )
+    resource_result = analyze_snapshot(resource_snapshot, "energy_resource_v1")
+    resource_rendered = render_scorecard_text(resource_result, snapshot=resource_snapshot)
+
+    assert "汽车经营专项指标" in auto_rendered
+    assert "gross_margin=16.8" in auto_rendered
+    assert "gross_margin_trend=改善" in auto_rendered
+    assert "overseas_revenue_share=31.5" in auto_rendered
+    assert "price_war_pressure=较低" in auto_rendered
+    assert "资源经营专项指标" in resource_rendered
+    assert "unit_cost_position=0.82" in resource_rendered
+    assert "reserve_life_index=14.5" in resource_rendered
+    assert "commodity_price_sensitivity=0.46" in resource_rendered
+
+
+def test_render_scorecard_text_can_include_general_quality_summary():
+    snapshot = make_platform_snapshot(
+        roe=18.6,
+        roe_3y_mean=17.2,
+        roe_3y_cv=0.18,
+        operating_cashflow_to_profit=1.12,
+        operating_cashflow_to_profit_history=[1.12, 1.04, 0.96],
+        current_ratio=1.46,
+        debt_to_asset=52.3,
+    )
+    result = analyze_snapshot(snapshot, "platform_internet_v1")
+
+    rendered = render_scorecard_text(result, snapshot=snapshot)
+
+    assert "质量与稳健指标" in rendered
+    assert "roe=18.6" in rendered
+    assert "roe_3y_mean=17.2" in rendered
+    assert "roe_3y_cv=0.18" in rendered
+    assert "operating_cashflow_to_profit=1.12" in rendered
+    assert "operating_cashflow_to_profit_history=[1.12, 1.04, 0.96]" in rendered
+    assert "current_ratio=1.46" in rendered
+    assert "debt_to_asset=52.3" in rendered
 
 
 def test_save_fundamental_brief_uses_submodel_in_filename(tmp_path):

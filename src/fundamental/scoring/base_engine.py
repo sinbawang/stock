@@ -3,7 +3,7 @@
 from typing import Callable, List, Optional, Sequence, Tuple
 
 from fundamental.config.models import DimensionConfig, SubmodelConfig
-from fundamental.models.common import Rating
+from fundamental.models.common import Rating, format_display_literal
 from fundamental.models.scorecard import (
     FundamentalDimensionScore,
     FundamentalScoreCard,
@@ -63,6 +63,8 @@ def _format_metric_value(value: object) -> str:
         return "NA"
     if isinstance(value, float):
         return f"{value:.2f}"
+    if isinstance(value, str):
+        return format_display_literal(value) or value
     return str(value)
 
 
