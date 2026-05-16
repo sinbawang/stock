@@ -154,7 +154,7 @@ def render_fundamental_brief(
 
     lines.extend(["", "补充说明:"])
     summary_parts: list[str] = []
-    for field_name in ("pe_ttm", "pb", "ps_ttm"):
+    for field_name in ("pe_ttm", "pb", "ps_ttm", "peg", "dividend_yield"):
         value = getattr(snapshot, field_name, None)
         if value is not None:
             summary_parts.append(f"{field_name}={_format_scalar(value)}")

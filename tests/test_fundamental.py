@@ -624,6 +624,7 @@ def test_render_fundamental_brief_includes_manual_supplement_block():
     snapshot = make_energy_resource_snapshot(
         symbol="601088",
         name="中国神华",
+        peg=1.24,
         dividend_yield=6.3,
         net_margin=11.6,
         asset_turnover=0.94,
@@ -655,6 +656,8 @@ def test_render_fundamental_brief_includes_manual_supplement_block():
     assert "- 股息与估值 " in rendered
     assert "计算说明:" in rendered
     assert "- 资源周期韧性:" in rendered
+    assert "peg=" in rendered
+    assert "dividend_yield=6.3" in rendered
     assert "手工补充字段:" in rendered
     assert "杜邦拆解: 净利率=11.6, 总资产周转率=0.94, 权益乘数=1.5152, 杜邦驱动=margin_turnover" in rendered
     assert "- dividend_yield=6.3" in rendered

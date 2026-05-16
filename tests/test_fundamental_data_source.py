@@ -212,6 +212,10 @@ def test_fetch_hk_fundamental_snapshot_builds_snapshot(monkeypatch):
             {"REPORT_DATE": "2024-12-31 00:00:00", "STD_ITEM_CODE": "004002003", "AMOUNT": 5032796666.67},
             {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "004002001", "AMOUNT": 21265800000.0},
             {"REPORT_DATE": "2024-12-31 00:00:00", "STD_ITEM_CODE": "004002001", "AMOUNT": 19332545454.55},
+            {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "004011010", "AMOUNT": 1500.0},
+            {"REPORT_DATE": "2024-12-31 00:00:00", "STD_ITEM_CODE": "004011010", "AMOUNT": 1200.0},
+            {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "004020001", "AMOUNT": 3300.0},
+            {"REPORT_DATE": "2024-12-31 00:00:00", "STD_ITEM_CODE": "004020001", "AMOUNT": 3000.0},
         ]
     )
 
@@ -232,6 +236,8 @@ def test_fetch_hk_fundamental_snapshot_builds_snapshot(monkeypatch):
     assert result.snapshot.equity_multiplier == 2.2976
     assert result.snapshot.asset_turnover is None
     assert result.snapshot.operating_cashflow_to_profit_history == [0.5915, 1.596, 2.9245]
+    assert result.snapshot.interest_bearing_debt_growth == 14.2857
+    assert result.snapshot.operating_cashflow_growth == -124.1746
     assert result.snapshot.accounts_receivable_growth == 0.2
     assert result.snapshot.inventory_growth == 0.1
     assert result.field_sources == {
@@ -244,6 +250,8 @@ def test_fetch_hk_fundamental_snapshot_builds_snapshot(monkeypatch):
         "equity_multiplier": "derived.debt_to_asset",
         "operating_cashflow_to_profit": "eastmoney.cashflow",
         "operating_cashflow_to_profit_history": "eastmoney.cashflow",
+        "interest_bearing_debt_growth": "derived.eastmoney.balance",
+        "operating_cashflow_growth": "derived.eastmoney.cashflow",
         "accounts_receivable_growth": "eastmoney.analysis",
         "inventory_growth": "eastmoney.analysis",
         "pe_ttm": "eastmoney+akshare.valuation",
@@ -298,8 +306,10 @@ def test_fetch_hk_fundamental_snapshot_derives_peg_and_dupont_driver_when_inputs
     assert result.snapshot.dupont_driver == "margin_turnover"
     assert result.snapshot.equity_multiplier == 1.8182
     assert result.snapshot.asset_turnover == 0.8525
+    assert result.snapshot.operating_cashflow_growth is None
     assert result.field_sources is not None
     assert result.field_sources["peg"] == "derived.pe_ttm+net_profit_growth"
+    assert "operating_cashflow_growth" not in result.field_sources
     assert result.field_sources["dupont_driver"] == "derived.roe+net_margin+debt_to_asset"
     assert result.field_sources["equity_multiplier"] == "derived.debt_to_asset"
     assert result.field_sources["asset_turnover"] == "derived.roe+net_margin+debt_to_asset"
@@ -963,6 +973,18 @@ def test_fetch_cn_fundamental_snapshot_builds_snapshot(monkeypatch):
             {"report_date": "2024-12-31", "metric_name": "inventory", "value": 8_000_000_000.0, "yoy": 0.08},
             {"report_date": "2025-12-31", "metric_name": "inventory", "value": 8_800_000_000.0, "yoy": 0.10},
             {"report_date": "2026-03-31", "metric_name": "inventory", "value": 9_200_000_000.0, "yoy": 0.11},
+            {"report_date": "2024-12-31", "metric_name": "short_term_loans", "value": 10_000_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "short_term_loans", "value": 12_000_000_000.0},
+            {"report_date": "2026-03-31", "metric_name": "short_term_loans", "value": 12_500_000_000.0},
+            {"report_date": "2024-12-31", "metric_name": "long_term_loan", "value": 20_000_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "long_term_loan", "value": 21_000_000_000.0},
+            {"report_date": "2026-03-31", "metric_name": "long_term_loan", "value": 21_500_000_000.0},
+            {"report_date": "2024-12-31", "metric_name": "bonds_payable", "value": 5_000_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "bonds_payable", "value": 7_000_000_000.0},
+            {"report_date": "2026-03-31", "metric_name": "bonds_payable", "value": 7_200_000_000.0},
+            {"report_date": "2024-12-31", "metric_name": "lease_debt", "value": 2_000_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "lease_debt", "value": 2_500_000_000.0},
+            {"report_date": "2026-03-31", "metric_name": "lease_debt", "value": 2_600_000_000.0},
         ]
     )
     cash_df = pd.DataFrame(
@@ -1028,14 +1050,73 @@ def test_fetch_cn_fundamental_snapshot_builds_snapshot(monkeypatch):
     assert result.snapshot.dupont_driver == "margin_turnover"
     assert result.snapshot.equity_multiplier == 1.6129
     assert result.snapshot.asset_turnover == 1.5913
+    assert result.snapshot.interest_bearing_debt_growth == 14.8649
+    assert result.snapshot.operating_cashflow_growth == 20.0
     assert result.field_sources is not None
     assert result.field_sources["accounts_receivable_growth"] == "ths.debt"
     assert result.field_sources["inventory_growth"] == "ths.debt"
+    assert result.field_sources["interest_bearing_debt_growth"] == "derived.ths.debt"
     assert result.field_sources["peg"] == "derived.pe_ttm+net_profit_growth"
+    assert result.field_sources["operating_cashflow_growth"] == "derived.ths.cash"
     assert result.field_sources["dupont_driver"] == "derived.roe+net_margin+debt_to_asset"
     assert result.field_sources["equity_multiplier"] == "derived.debt_to_asset"
     assert result.field_sources["asset_turnover"] == "derived.roe+net_margin+debt_to_asset"
     assert any("latest annual report period" in item for item in result.assumptions)
+
+
+def test_fetch_cn_fundamental_snapshot_supplements_dividend_yield_for_nonfinancial_symbol(monkeypatch):
+    abstract_df = pd.DataFrame(
+        [
+            ["2024-12-31", "8.00亿", "20.0%", "7.50亿", "18.0%", "100.00亿", "10.0%", "1.00", "5.00", "1.20", "2.30", "0.50", "20.0%", "45.0%", "8.0%", "7.5%", "120.0", "4.0", "90.0", "45.0", "1.50", "1.10", "1.00", "1.80", "40.0%"],
+            ["2025-12-31", "9.60亿", "15.0%", "9.00亿", "20.0%", "112.00亿", "12.0%", "1.20", "6.00", "1.40", "3.00", "0.60", "22.0%", "47.0%", "8.5%", "8.0%", "118.0", "4.2", "87.0", "42.0", "1.60", "1.20", "1.10", "1.90", "38.0%"],
+        ]
+    )
+    debt_df = pd.DataFrame(
+        [
+            {"report_date": "2024-12-31", "metric_name": "accounts_receivable", "value": 10_000_000_000.0, "yoy": 0.10},
+            {"report_date": "2025-12-31", "metric_name": "accounts_receivable", "value": 11_200_000_000.0, "yoy": 0.12},
+            {"report_date": "2024-12-31", "metric_name": "inventory", "value": 8_000_000_000.0, "yoy": 0.08},
+            {"report_date": "2025-12-31", "metric_name": "inventory", "value": 8_800_000_000.0, "yoy": 0.10},
+        ]
+    )
+    cash_df = pd.DataFrame(
+        [
+            {"report_date": "2024-12-31", "metric_name": "act_cash_flow_net", "value": 9_000_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "act_cash_flow_net", "value": 10_800_000_000.0},
+        ]
+    )
+    benefit_df = pd.DataFrame(
+        [
+            {"report_date": "2024-12-31", "metric_name": "parent_holder_net_profit", "value": 8_000_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "parent_holder_net_profit", "value": 9_600_000_000.0},
+        ]
+    )
+    pe_series = pd.DataFrame([{"date": "2026-05-09", "value": 15.0}])
+    pb_series = pd.DataFrame([{"date": "2026-05-09", "value": 3.2}])
+    market_cap_series = pd.DataFrame([{"date": "2026-05-09", "value": 520.0}])
+    financial_indicator_df = pd.DataFrame([{"REPORT_DATE": "2025-12-31", "股息率TTM": 4.8}])
+
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_abstract_df", lambda symbol: abstract_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_debt_df", lambda symbol: debt_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_cash_df", lambda symbol: cash_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_benefit_df", lambda symbol: benefit_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_analysis_indicator_df", lambda symbol: financial_indicator_df)
+    monkeypatch.setattr(
+        cn_fetcher,
+        "_fetch_cn_valuation_series",
+        lambda symbol, indicator, period="近五年": {
+            "市盈率(TTM)": pe_series,
+            "市净率": pb_series,
+            "总市值": market_cap_series,
+        }[indicator],
+    )
+
+    result = cn_fetcher.fetch_cn_fundamental_snapshot("600900", name="长江电力")
+
+    assert result.snapshot.dividend_yield == 4.8
+    assert result.field_sources is not None
+    assert result.field_sources["dividend_yield"] == "eastmoney.analysis_indicator"
+    assert any("dividend_yield" in item for item in result.assumptions)
 
 
 def test_fetch_and_analyze_cn_snapshot_builds_game_content_scorecard(monkeypatch):
