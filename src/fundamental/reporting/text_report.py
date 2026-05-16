@@ -48,6 +48,16 @@ METRIC_DISPLAY_NAMES = {
 }
 
 
+EXPECTED_INTERIM_COMPONENTS = {
+    "broker_v1": (
+        ("capital_refresh", 0.35, ("net_capital_ratio",)),
+        ("profitability_refresh", 0.3, ("roe",)),
+        ("business_growth_refresh", 0.2, ("revenue_growth", "net_profit_growth")),
+        ("shareholder_return_refresh", 0.15, ("pb", "dividend_yield")),
+    ),
+}
+
+
 def _display_metric_name(metric_name: str) -> str:
     return METRIC_DISPLAY_NAMES.get(metric_name, metric_name)
 
@@ -341,6 +351,24 @@ def _render_overlay_component(component: OverlayComponent) -> str:
     return " | ".join(parts)
 
 
+def _build_overlay_coverage_lines(interim_overlay, submodel_id: str) -> list[str]:
+    expected_components = EXPECTED_INTERIM_COMPONENTS.get(submodel_id, ())
+    if not expected_components:
+        return []
+
+    actual_component_names = {component.component for component in interim_overlay.components}
+    covered_weight = round(sum(component.weight for component in interim_overlay.components), 4)
+    missing_specs = [spec for spec in expected_components if spec[0] not in actual_component_names]
+    missing_weight = round(sum(weight for _, weight, _ in missing_specs), 4)
+
+    lines = [f"- 刷新覆盖率: {covered_weight:.0%}（缺失权重 {missing_weight:.0%}）。"]
+    if missing_specs:
+        for component_name, _, metric_names in missing_specs:
+            display_metrics = ", ".join(_display_metric_name(metric) for metric in metric_names)
+            lines.append(f"- 缺失刷新组件: {component_name}（缺失 {display_metrics}）。")
+    return lines
+
+
 def render_blended_scorecard_text(blended: BlendedFundamentalScoreCard) -> str:
     annual_anchor = blended.annual_anchor
     interim_overlay = blended.interim_overlay
@@ -390,6 +418,7 @@ def render_blended_scorecard_text(blended: BlendedFundamentalScoreCard) -> str:
 
     if interim_overlay is not None:
         body.extend(["", "季报刷新层"])
+        body.extend(_build_overlay_coverage_lines(interim_overlay, blended.submodel_id))
         body.extend(f"- {_render_overlay_component(component)}" for component in interim_overlay.components)
         if interim_overlay.drivers_positive:
             body.extend(["", "刷新层正向信号"])

@@ -15,7 +15,15 @@ from fundamental.reporting import (
     save_fundamental_brief,
     save_scorecard_text,
 )
-from fundamental.services import fetch_and_analyze_cn_blended_fundamentals, fetch_and_analyze_cn_snapshot, fetch_and_analyze_hk_snapshot
+from fundamental.services import (
+    fetch_and_analyze_cn_blended_fundamentals,
+    fetch_and_analyze_cn_snapshot,
+    fetch_and_analyze_hk_blended_fundamentals,
+    fetch_and_analyze_hk_snapshot,
+)
+
+
+DEFAULT_MANUAL_SUPPLEMENT_DIR = ROOT / "data" / "_meta" / "manual_supplements"
 
 
 def _infer_market(symbol: str) -> str:
@@ -25,6 +33,15 @@ def _infer_market(symbol: str) -> str:
     if normalized.isdigit() and len(normalized) == 5:
         return "HK"
     return "CN"
+
+
+def _resolve_manual_supplement_path(symbol: str, explicit_path: str | None) -> str | None:
+    if explicit_path:
+        return explicit_path
+    candidates = sorted(DEFAULT_MANUAL_SUPPLEMENT_DIR.glob(f"{symbol}_*.*"))
+    if not candidates:
+        return None
+    return str(candidates[0])
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,39 +68,59 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="For CN only, generate blended annual/interim brief and scorecard outputs",
     )
+    parser.add_argument(
+        "--blended-hk",
+        action="store_true",
+        help="For HK POC only, generate blended annual/interim brief and scorecard outputs",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     market = args.market if args.market != "auto" else _infer_market(args.symbol)
+    manual_supplement_path = _resolve_manual_supplement_path(args.symbol, args.manual_supplement_path)
     if args.blended_cn and market != "CN":
         raise RuntimeError("--blended-cn currently supports CN only")
+    if args.blended_hk and market != "HK":
+        raise RuntimeError("--blended-hk currently supports HK only")
+    if args.blended_cn and args.blended_hk:
+        raise RuntimeError("--blended-cn and --blended-hk are mutually exclusive")
 
-    if market == "HK":
+    blended_mode = args.blended_cn or args.blended_hk
+
+    if args.blended_hk:
+        result = fetch_and_analyze_hk_blended_fundamentals(
+            args.symbol,
+            name=args.name,
+            submodel=args.submodel,
+            quote_overlay_source=args.quote_overlay_source,
+            manual_supplement_path=manual_supplement_path,
+        )
+    elif market == "HK":
         result = fetch_and_analyze_hk_snapshot(
             args.symbol,
             name=args.name,
             submodel=args.submodel,
             quote_overlay_source=args.quote_overlay_source,
-            manual_supplement_path=args.manual_supplement_path,
+            manual_supplement_path=manual_supplement_path,
         )
     elif args.blended_cn:
         result = fetch_and_analyze_cn_blended_fundamentals(
             args.symbol,
             name=args.name,
             submodel=args.submodel,
-            manual_supplement_path=args.manual_supplement_path,
+            manual_supplement_path=manual_supplement_path,
         )
     else:
         result = fetch_and_analyze_cn_snapshot(
             args.symbol,
             name=args.name,
             submodel=args.submodel,
-            manual_supplement_path=args.manual_supplement_path,
+            manual_supplement_path=manual_supplement_path,
         )
 
-    if args.blended_cn:
+    if blended_mode:
         output_path = save_blended_fundamental_brief(
             blended=result.blended,
             output_dir=args.output_dir,
@@ -98,7 +135,7 @@ def main() -> None:
     print(output_path)
 
     if args.save_scorecard_text:
-        if args.blended_cn:
+        if blended_mode:
             scorecard_output_path = save_blended_scorecard_text(
                 blended=result.blended,
                 output_dir=args.scorecard_output_dir or args.output_dir,

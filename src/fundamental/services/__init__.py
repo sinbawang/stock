@@ -3,15 +3,18 @@
 from .analyze_snapshot import analyze_snapshot
 from .fetch_and_analyze_cn_blended import BlendedCnFundamentalAnalysis, fetch_and_analyze_cn_blended_fundamentals
 from .fetch_and_analyze_cn_snapshot import FetchedCnFundamentalAnalysis, fetch_and_analyze_cn_snapshot
+from .fetch_and_analyze_hk_blended import BlendedHkFundamentalAnalysis, fetch_and_analyze_hk_blended_fundamentals
 from .fetch_and_analyze_hk_snapshot import FetchedFundamentalAnalysis, fetch_and_analyze_hk_snapshot
 from .manual_supplement_loader import load_manual_supplement_file, parse_manual_supplement_text
 
 __all__ = [
 	"analyze_snapshot",
 	"BlendedCnFundamentalAnalysis",
+	"BlendedHkFundamentalAnalysis",
 	"FetchedFundamentalAnalysis",
 	"FetchedCnFundamentalAnalysis",
 	"fetch_and_analyze_cn_blended_fundamentals",
+	"fetch_and_analyze_hk_blended_fundamentals",
 	"fetch_and_analyze_hk_snapshot",
 	"fetch_and_analyze_cn_snapshot",
 	"load_manual_supplement_file",

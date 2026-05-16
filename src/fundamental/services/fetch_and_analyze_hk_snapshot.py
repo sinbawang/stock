@@ -97,6 +97,17 @@ def _relax_missing_peg(submodel: SubmodelConfig, missing_peg: bool) -> tuple[Sub
     )
 
 
+def resolve_hk_quote_overlay_source(
+    submodel: SubmodelConfig,
+    quote_overlay_source: Optional[str],
+) -> Optional[str]:
+    if quote_overlay_source is not None:
+        return quote_overlay_source
+    if submodel.submodel_id == "digital_infra_v1":
+        return "xueqiu"
+    return None
+
+
 def fetch_and_analyze_hk_snapshot(
     symbol: str,
     name: Optional[str] = None,
@@ -105,12 +116,12 @@ def fetch_and_analyze_hk_snapshot(
     manual_supplement: Optional[Mapping[str, Any]] = None,
     manual_supplement_path: Optional[str] = None,
 ) -> FetchedFundamentalAnalysis:
+    submodel_config = resolve_submodel_for_symbol(symbol, submodel)
     fetched = fetch_hk_fundamental_snapshot(
         symbol=symbol,
         name=name,
-        quote_overlay_source=quote_overlay_source,
+        quote_overlay_source=resolve_hk_quote_overlay_source(submodel_config, quote_overlay_source),
     )
-    submodel_config = resolve_submodel_for_symbol(fetched.snapshot.symbol, submodel)
     fetched = apply_manual_supplement(
         fetched,
         submodel_config,

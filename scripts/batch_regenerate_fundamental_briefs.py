@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -37,6 +38,11 @@ class BriefTarget:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Batch regenerate historical fundamental briefs into the current format.")
     parser.add_argument("--meta-dir", default=str(ROOT / "data" / "_meta"), help="Directory containing historical brief files")
+    parser.add_argument(
+        "--holdings-file",
+        default=None,
+        help="Optional JSON holdings file such as data/_meta/current_holdings.json; when provided, targets are loaded from it instead of historical brief files.",
+    )
     parser.add_argument(
         "--manual-supplement-dir",
         default=str(ROOT / "data" / "_meta" / "manual_supplements"),
@@ -75,6 +81,31 @@ def discover_targets(meta_dir: Path) -> list[BriefTarget]:
         symbol = match.group("symbol")
         name = match.group("name")
         dedup[f"{symbol}:{name}"] = BriefTarget(symbol=symbol, name=name)
+    return list(dedup.values())
+
+
+def discover_targets_from_holdings_file(holdings_file: Path) -> list[BriefTarget]:
+    payload = json.loads(holdings_file.read_text(encoding="utf-8"))
+
+    if isinstance(payload.get("markets"), dict):
+        raw_entries = [
+            entry
+            for market_holdings in payload["markets"].values()
+            if isinstance(market_holdings, list)
+            for entry in market_holdings
+        ]
+    else:
+        raw_entries = payload.get("holdings", [])
+
+    dedup: dict[str, BriefTarget] = {}
+    for entry in raw_entries:
+        if not isinstance(entry, dict):
+            continue
+        symbol = entry.get("symbol")
+        name = entry.get("name")
+        if not symbol or not name:
+            continue
+        dedup[f"{symbol}:{name}"] = BriefTarget(symbol=str(symbol), name=str(name))
     return list(dedup.values())
 
 
@@ -160,10 +191,16 @@ def main() -> None:
     scorecard_output_dir = Path(args.scorecard_output_dir) if args.scorecard_output_dir else output_dir
     supplement_dir = Path(args.manual_supplement_dir)
 
-    targets = discover_targets(meta_dir)
+    targets = (
+        discover_targets_from_holdings_file(Path(args.holdings_file))
+        if args.holdings_file
+        else discover_targets(meta_dir)
+    )
     if args.limit is not None:
         targets = targets[: args.limit]
     if not targets:
+        if args.holdings_file:
+            raise RuntimeError(f"No valid holdings targets found in: {args.holdings_file}")
         raise RuntimeError(f"No historical brief targets found under: {meta_dir}")
 
     generated_paths: list[Path] = []

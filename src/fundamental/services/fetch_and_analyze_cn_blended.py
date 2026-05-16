@@ -19,15 +19,24 @@ from fundamental.models.snapshot import FundamentalSnapshot
 from fundamental.scoring.common_rules import (
     score_core_tier1_ratio,
     score_debt_to_asset,
+    score_dividend_yield,
+    score_asset_turnover,
+    score_combined_ratio,
+    score_investment_return,
+    score_overseas_revenue_share,
     score_loan_deposit_growth_gap,
     score_net_interest_margin,
+    score_net_capital_ratio,
     score_net_profit_growth,
     score_npl_ratio,
     score_operating_cashflow_to_profit,
+    score_pb_financial,
+    score_price_war_pressure,
     score_provision_coverage_ratio,
     score_relative_pressure,
     score_revenue_growth,
     score_roe,
+    score_solvency_adequacy_ratio,
 )
 
 from .analyze_snapshot import resolve_submodel_for_symbol
@@ -85,6 +94,8 @@ def _smoothed_ocf_profit_proxy(snapshot: FundamentalSnapshot) -> Optional[float]
         return round(sum(present_history[:3]) / 3.0, 4)
     if len(present_history) >= 2:
         return round(sum(present_history[:2]) / 2.0, 4)
+    if len(present_history) == 1:
+        return round(present_history[0], 4)
     return snapshot.operating_cashflow_to_profit
 
 
@@ -279,6 +290,197 @@ def _build_interim_overlay_components(snapshot: FundamentalSnapshot, submodel: S
                 0.25,
                 (("roe", score_roe(annualized_roe)),),
                 note="为降低中间报告期失真，优先用年化 ROE 近似维持盈利质量刷新。",
+            ),
+        )
+    elif submodel.submodel_id == "platform_internet_v1":
+        smoothed_ocf_profit = _smoothed_ocf_profit_proxy(snapshot)
+        annualized_roe = _annualized_roe_proxy(snapshot)
+        components = (
+            _component_from_scores(
+                "growth_refresh",
+                0.4,
+                (
+                    ("revenue_growth", score_revenue_growth(snapshot.revenue_growth)),
+                    ("net_profit_growth", score_net_profit_growth(snapshot.net_profit_growth)),
+                ),
+                note="平台业务季报刷新先看收入与利润兑现。",
+            ),
+            _component_from_scores(
+                "cashflow_refresh",
+                0.35,
+                (("operating_cashflow_to_profit", score_operating_cashflow_to_profit(smoothed_ocf_profit)),),
+                note="为降低中间报告期噪音，优先用经营现金流/利润历史均值确认变现质量。",
+            ),
+            _component_from_scores(
+                "profit_quality_refresh",
+                0.25,
+                (("roe", score_roe(annualized_roe)),),
+                note="为降低中间报告期失真，优先用年化 ROE 近似维持平台盈利质量刷新。",
+            ),
+        )
+    elif submodel.submodel_id == "digital_infra_v1":
+        smoothed_ocf_profit = _smoothed_ocf_profit_proxy(snapshot)
+        components = (
+            _component_from_scores(
+                "growth_refresh",
+                0.25,
+                (
+                    ("revenue_growth", score_revenue_growth(snapshot.revenue_growth)),
+                    ("net_profit_growth", score_net_profit_growth(snapshot.net_profit_growth)),
+                ),
+                note="数字基础设施季报刷新先看主业收入与利润兑现，但权重低于现金流与股东回报。",
+            ),
+            _component_from_scores(
+                "cashflow_refresh",
+                0.45,
+                (("operating_cashflow_to_profit", score_operating_cashflow_to_profit(smoothed_ocf_profit)),),
+                note="为降低中间报告期噪音，优先用经营现金流/利润历史均值确认通信主业现金回笼质量。",
+            ),
+            _component_from_scores(
+                "shareholder_return_refresh",
+                0.3,
+                (
+                    ("pb", score_pb_financial(snapshot.pb)),
+                    ("dividend_yield", score_dividend_yield(snapshot.dividend_yield)),
+                ),
+                note="数字基础设施继续用 PB 与股息率近似刻画股东回报与防御性估值锚。",
+            ),
+        )
+    elif submodel.submodel_id == "semiconductor_hardtech_v1":
+        smoothed_ocf_profit = _smoothed_ocf_profit_proxy(snapshot)
+        components = (
+            _component_from_scores(
+                "growth_refresh",
+                0.3,
+                (
+                    ("revenue_growth", score_revenue_growth(snapshot.revenue_growth)),
+                    ("net_profit_growth", score_net_profit_growth(snapshot.net_profit_growth)),
+                ),
+                note="半导体季报刷新先看收入与利润兑现，但需要结合周期位置阅读。",
+            ),
+            _component_from_scores(
+                "cashflow_refresh",
+                0.25,
+                (("operating_cashflow_to_profit", score_operating_cashflow_to_profit(smoothed_ocf_profit)),),
+                note="为降低中间报告期噪音，优先用经营现金流/利润历史均值确认利润改善是否兑现成现金流。",
+            ),
+            _component_from_scores(
+                "operating_cycle_refresh",
+                0.45,
+                (
+                    (
+                        "accounts_receivable_growth",
+                        score_relative_pressure(snapshot.accounts_receivable_growth, snapshot.revenue_growth),
+                    ),
+                    (
+                        "inventory_growth",
+                        score_relative_pressure(snapshot.inventory_growth, snapshot.revenue_growth),
+                    ),
+                ),
+                note="库存与应收相对收入的压力，继续作为半导体周期位置与经营失真风险的 v1 代理。",
+            ),
+        )
+    elif submodel.submodel_id == "auto_manufacturing_v1":
+        smoothed_ocf_profit = _smoothed_ocf_profit_proxy(snapshot)
+        components = (
+            _component_from_scores(
+                "growth_refresh",
+                0.25,
+                (
+                    ("revenue_growth", score_revenue_growth(snapshot.revenue_growth)),
+                    ("net_profit_growth", score_net_profit_growth(snapshot.net_profit_growth)),
+                    ("overseas_revenue_share", score_overseas_revenue_share(snapshot.overseas_revenue_share)),
+                ),
+                note="汽车制造季报刷新先看收入、利润与海外收入结构是否继续兑现。",
+            ),
+            _component_from_scores(
+                "cashflow_refresh",
+                0.25,
+                (("operating_cashflow_to_profit", score_operating_cashflow_to_profit(smoothed_ocf_profit)),),
+                note="为降低中间报告期噪音，优先用经营现金流/利润历史均值确认汽车利润是否继续兑现成现金流。",
+            ),
+            _component_from_scores(
+                "inventory_channel_refresh",
+                0.5,
+                (
+                    (
+                        "accounts_receivable_growth",
+                        score_relative_pressure(snapshot.accounts_receivable_growth, snapshot.revenue_growth),
+                    ),
+                    (
+                        "inventory_growth",
+                        score_relative_pressure(snapshot.inventory_growth, snapshot.revenue_growth),
+                    ),
+                    ("asset_turnover", score_asset_turnover(snapshot.asset_turnover)),
+                    ("price_war_pressure", score_price_war_pressure(snapshot.price_war_pressure)),
+                ),
+                note="库存、应收、周转率与价格战压力共同作为汽车渠道健康与经营质量的 v1 刷新代理。",
+            ),
+        )
+    elif submodel.submodel_id == "insurance_v1":
+        annualized_roe = _annualized_roe_proxy(snapshot)
+        components = (
+            _component_from_scores(
+                "capital_refresh",
+                0.4,
+                (
+                    ("solvency_adequacy_ratio", score_solvency_adequacy_ratio(snapshot.solvency_adequacy_ratio)),
+                    ("combined_ratio", score_combined_ratio(snapshot.combined_ratio)),
+                ),
+                note="保险季报刷新优先看偿付能力与承保纪律；若 Q1 未披露综合成本率，则仅用已披露资本约束信号保守刷新。",
+            ),
+            _component_from_scores(
+                "profitability_refresh",
+                0.35,
+                (
+                    ("roe", score_roe(annualized_roe)),
+                    ("investment_return", score_investment_return(snapshot.investment_return)),
+                ),
+                note="保险盈利刷新优先用年化 ROE，投资收益率仅在中间期公开可得时参与。",
+            ),
+            _component_from_scores(
+                "business_growth_refresh",
+                0.25,
+                (
+                    ("embedded_value_growth", score_net_profit_growth(snapshot.embedded_value_growth)),
+                    ("new_business_value_growth", score_net_profit_growth(snapshot.new_business_value_growth)),
+                    ("net_profit_growth", score_net_profit_growth(snapshot.net_profit_growth)),
+                ),
+                note="EV/NBV 在 Q1 常缺失时，先用净利增速做保守业务刷新代理，避免把未披露字段误当成恶化。",
+            ),
+        )
+    elif submodel.submodel_id == "broker_v1":
+        annualized_roe = _annualized_roe_proxy(snapshot)
+        components = (
+            _component_from_scores(
+                "capital_refresh",
+                0.35,
+                (("net_capital_ratio", score_net_capital_ratio(snapshot.net_capital_ratio)),),
+                note="券商季报刷新优先看监管资本缓冲；若中间期未披露净资本比率，则该项不主动补年报代理值。",
+            ),
+            _component_from_scores(
+                "profitability_refresh",
+                0.3,
+                (("roe", score_roe(annualized_roe)),),
+                note="券商盈利刷新先用年化 ROE 近似，降低中间报告期利润季节性扰动。",
+            ),
+            _component_from_scores(
+                "business_growth_refresh",
+                0.2,
+                (
+                    ("revenue_growth", score_revenue_growth(snapshot.revenue_growth)),
+                    ("net_profit_growth", score_net_profit_growth(snapshot.net_profit_growth)),
+                ),
+                note="券商业务刷新仍以收入与利润兑现为主，但需要结合市场成交与投行业务周期阅读。",
+            ),
+            _component_from_scores(
+                "shareholder_return_refresh",
+                0.15,
+                (
+                    ("pb", score_pb_financial(snapshot.pb)),
+                    ("dividend_yield", score_dividend_yield(snapshot.dividend_yield)),
+                ),
+                note="券商继续用 PB 与股息率刻画股东回报与估值安全边际。",
             ),
         )
     else:

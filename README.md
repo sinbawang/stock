@@ -109,6 +109,12 @@
 .\venv\Scripts\python.exe scripts/batch_regenerate_fundamental_briefs.py --meta-dir data\_meta --save-scorecard-text
 ```
 
+如果已经把当前持仓维护在项目文件里，也可以直接按持仓清单批量生成：
+
+```powershell
+.\venv\Scripts\python.exe scripts/batch_regenerate_fundamental_briefs.py --holdings-file data\_meta\current_holdings.json --save-scorecard-text
+```
+
 如果你在 Python 代码里直接消费报告输出，当前推荐：
 
 ```python

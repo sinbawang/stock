@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -58,15 +59,62 @@ SECURITIES = [
     Security("00981", "中芯国际", "HK"),
 ]
 
+DEFAULT_HOLDINGS_FILE = ROOT / "data" / "_meta" / "current_holdings.json"
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="批量生成最新日线和 60M 缠论图、分析文本、操作建议，并可选发送到当前微信会话")
     parser.add_argument("--day-start", default="2026-01-01", help="日线起始日期")
     parser.add_argument("--m60-start", default="2026-01-01 09:30", help="60M 起始时间")
+    parser.add_argument(
+        "--holdings-file",
+        default=str(DEFAULT_HOLDINGS_FILE),
+        help="持仓清单 JSON 文件，默认读取 data/_meta/current_holdings.json；不存在时回退到脚本内置名单。",
+    )
     parser.add_argument("--send-current-chat", action="store_true", help="生成完成后发送到当前已打开微信会话")
     parser.add_argument("--send-only", action="store_true", help="只发送已生成的最新报告和图片，不重新生成")
     parser.add_argument("--target-label", default="888", help="仅用于日志展示的目标名称")
     return parser.parse_args()
+
+
+def _market_code_to_security_market(market_code: str, symbol: str) -> str:
+    if market_code == "HK":
+        return "HK"
+    if market_code == "CN":
+        return "A"
+    return "HK" if len(symbol) == 5 else "A"
+
+
+def load_securities(holdings_file: Path | None = None) -> list[Security]:
+    holdings_path = holdings_file or DEFAULT_HOLDINGS_FILE
+    if not holdings_path.exists():
+        return SECURITIES
+
+    payload = json.loads(holdings_path.read_text(encoding="utf-8"))
+    raw_entries: list[tuple[str | None, dict]] = []
+    markets = payload.get("markets")
+    if isinstance(markets, dict):
+        for market_code, market_holdings in markets.items():
+            if not isinstance(market_holdings, list):
+                continue
+            raw_entries.extend((market_code, entry) for entry in market_holdings if isinstance(entry, dict))
+    else:
+        for entry in payload.get("holdings", []):
+            if isinstance(entry, dict):
+                raw_entries.append((payload.get("market"), entry))
+
+    dedup: dict[str, Security] = {}
+    for market_code, entry in raw_entries:
+        symbol = str(entry.get("symbol") or "").strip()
+        name = str(entry.get("name") or "").strip()
+        if not symbol or not name:
+            continue
+        dedup[f"{symbol}:{name}"] = Security(
+            symbol=symbol,
+            name=name,
+            market=_market_code_to_security_market(str(market_code or "").upper(), symbol),
+        )
+    return list(dedup.values()) or SECURITIES
 
 
 def fetch_day_rows(security: Security, start: str) -> list[dict]:
@@ -348,15 +396,16 @@ def send_batch_current_chat(bundle: list[tuple[Security, dict[str, Path], dict[s
 
 def main() -> None:
     args = parse_args()
+    securities = load_securities(Path(args.holdings_file) if args.holdings_file else None)
     bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]] = []
     if args.send_only:
-        for security in SECURITIES:
+        for security in securities:
             day_case = load_existing_case(security, "day")
             m60_case = load_existing_case(security, "60m")
             bundle.append((security, day_case, m60_case))
             print(f"Loaded {security.name}")
     else:
-        for security in SECURITIES:
+        for security in securities:
             day_rows = fetch_day_rows(security, args.day_start)
             m60_rows = fetch_m60_rows(security, args.m60_start)
 

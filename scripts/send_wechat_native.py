@@ -6,6 +6,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pyperclip
+import pywintypes
 import win32api
 import win32con
 import win32clipboard
@@ -13,6 +14,10 @@ import win32gui
 import win32process
 import psutil
 from PIL import Image
+
+
+WINDOW_ATTACH_RETRIES = 3
+WINDOW_ATTACH_RETRY_DELAY_SECONDS = 0.8
 
 
 def find_wechat_window() -> int:
@@ -70,9 +75,11 @@ def hotkey(*vk_codes: int) -> None:
 
 
 def send_shortcut() -> None:
-    # WeChat commonly allows Alt+S regardless of whether Enter is configured
-    # for newline or send.
+    # Different WeChat desktop builds vary: some honor Alt+S, others only send
+    # on Enter. Trigger Alt+S first, then Enter as a low-risk fallback.
     hotkey(win32con.VK_MENU, ord("S"))
+    time.sleep(0.5)
+    tap(win32con.VK_RETURN)
     time.sleep(0.5)
 
 
@@ -124,6 +131,45 @@ def send_files(filepaths: list[str]) -> None:
     hotkey(win32con.VK_CONTROL, ord("V"))
     time.sleep(1.2)
     send_shortcut()
+
+
+def _is_retryable_wechat_window_error(exc: Exception) -> bool:
+    if isinstance(exc, RuntimeError):
+        return "未找到微信主窗口" in str(exc)
+    if isinstance(exc, pywintypes.error):
+        return bool(exc.args) and exc.args[0] == 1400
+    return False
+
+
+def _focus_chat_input(
+    contact: str | None = None,
+    result_index: int = 1,
+    visible_row_index: int | None = None,
+    current_chat_only: bool = False,
+    allow_search_switch: bool = False,
+) -> None:
+    last_exc: Exception | None = None
+    for attempt in range(WINDOW_ATTACH_RETRIES):
+        try:
+            hwnd = find_wechat_window()
+            rect = activate_window(hwnd)
+            switch_chat(
+                rect,
+                contact=contact,
+                result_index=result_index,
+                visible_row_index=visible_row_index,
+                current_chat_only=current_chat_only,
+                allow_search_switch=allow_search_switch,
+            )
+            click_ratio(rect, 0.67, 0.90)
+            return
+        except Exception as exc:
+            if not _is_retryable_wechat_window_error(exc) or attempt == WINDOW_ATTACH_RETRIES - 1:
+                raise
+            last_exc = exc
+            time.sleep(WINDOW_ATTACH_RETRY_DELAY_SECONDS)
+    if last_exc is not None:
+        raise last_exc
 
 
 def switch_chat(
@@ -182,20 +228,26 @@ def send_message(
     current_chat_only: bool = False,
     allow_search_switch: bool = False,
 ) -> None:
-    hwnd = find_wechat_window()
-    rect = activate_window(hwnd)
-    switch_chat(
-        rect,
-        contact=contact,
-        result_index=result_index,
-        visible_row_index=visible_row_index,
-        current_chat_only=current_chat_only,
-        allow_search_switch=allow_search_switch,
-    )
+    if message:
+        _focus_chat_input(
+            contact=contact,
+            result_index=result_index,
+            visible_row_index=visible_row_index,
+            current_chat_only=current_chat_only,
+            allow_search_switch=allow_search_switch,
+        )
+        send_to_current_chat(message=message, filepaths=None)
 
-    # Message input box in the right chat pane.
-    click_ratio(rect, 0.67, 0.90)
-    send_to_current_chat(message=message, filepaths=filepaths)
+    if filepaths:
+        for filepath in filepaths:
+            _focus_chat_input(
+                contact=contact,
+                result_index=result_index,
+                visible_row_index=visible_row_index,
+                current_chat_only=current_chat_only,
+                allow_search_switch=allow_search_switch,
+            )
+            send_to_current_chat(message=None, filepaths=[filepath])
 
 
 def main() -> None:

@@ -14,6 +14,7 @@ from fundamental.models.snapshot import FundamentalSnapshot
 
 from .text_report import (
     DIMENSION_LABELS,
+    _build_overlay_coverage_lines,
     _format_score_basis_for_display,
     _metric_unavailable_reason,
     _partition_missing_metrics,
@@ -374,6 +375,7 @@ def render_blended_fundamental_brief(
 
     if interim_overlay is not None:
         lines.extend(["", "季报刷新层拆解:"])
+        lines.extend(_build_overlay_coverage_lines(interim_overlay, blended.submodel_id))
         for component in interim_overlay.components:
             fragment = f"- {component.component}: {component.score:.2f} x {component.weight:.0%}"
             if component.covered_metrics:
