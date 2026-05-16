@@ -2,6 +2,7 @@ import pandas as pd
 
 from fundamental.data import cn_snapshot_fetcher
 from fundamental.config.registry import get_submodel, get_submodel_for_symbol
+from fundamental.models.scorecard import FundamentalDimensionScore, FundamentalScoreCard
 from fundamental.models.snapshot import FundamentalSnapshot
 from fundamental.reporting import render_fundamental_brief, render_scorecard_text, save_fundamental_brief, save_scorecard_text
 from fundamental.services import analyze_snapshot
@@ -683,6 +684,71 @@ def test_render_fundamental_brief_formats_concise_calculation_summary():
     assert "缺失 杜邦驱动" in rendered
 
 
+def test_render_fundamental_brief_marks_inapplicable_peg_and_dupont_driver():
+    snapshot = make_platform_snapshot(
+        pe_ttm=-19.74,
+        pe_percentile_5y=45.0,
+        pb=3.05,
+        peg=None,
+        revenue_growth=8.08,
+        net_profit_growth=-165.22,
+        roe=-14.43,
+        roe_3y_cv=2.60,
+        operating_cashflow_to_profit=0.5915,
+        operating_cashflow_to_profit_history=[0.5915, 1.596, 2.9245],
+        gross_margin=30.43,
+        gross_margin_trend="weakening",
+        net_margin=-6.40,
+        debt_to_asset=56.48,
+        dupont_driver=None,
+    )
+    result = FundamentalScoreCard(
+        symbol="03690",
+        name="美团",
+        market="HK",
+        report_period=snapshot.report_period,
+        industry_bucket="technology",
+        submodel_id="platform_internet_v1",
+        submodel_version="v1",
+        total_score=20.25,
+        rating="D",
+        red_flag=False,
+        dimension_scores=[
+            FundamentalDimensionScore(
+                dimension="profit_quality",
+                score=0.0,
+                weight=35,
+                max_score=35.0,
+                score_basis="已计分4/5项[ROE -14.43->0.0, ROE波动CV 2.60->0.0, 经营现金流/利润 0.59->0.0, 毛利率趋势 承压->0.0]; 平均=0.0; 缺失[杜邦驱动 NA]; ×35/100=0.00",
+            ),
+            FundamentalDimensionScore(
+                dimension="valuation_fit",
+                score=15.2,
+                weight=20,
+                max_score=20.0,
+                score_basis="已计分1/2项[PE分位 45.00->76.0]; 平均=76.0; 缺失[PEG NA]; ×20/100=15.20",
+            ),
+        ],
+        strengths=[],
+        risks=[],
+        warnings=[],
+        focus_questions=[],
+        missing_metrics=["dupont_driver", "peg", "user_growth"],
+        combined_comment="unit-test",
+    )
+
+    rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
+
+    assert "当前不适用字段:" in rendered
+    assert "- PEG（当前不适用：PE或净利增速为负）" in rendered
+    assert "- 杜邦驱动（当前不适用：ROE或净利率为负）" in rendered
+    assert "当前缺失字段:" in rendered
+    assert "- peg" not in rendered
+    assert "- dupont_driver" not in rendered
+    assert "不适用 杜邦驱动（ROE或净利率为负）" in rendered
+    assert "不适用 PEG（PE或净利增速为负）" in rendered
+
+
 def test_render_fundamental_brief_can_include_insurance_metric_summary():
     snapshot = make_insurance_snapshot()
     result = analyze_snapshot(snapshot, "insurance_v1")
@@ -728,8 +794,22 @@ def test_render_fundamental_brief_can_include_auto_and_resource_specialist_summa
     resource_result = analyze_snapshot(resource_snapshot, "energy_resource_v1")
     resource_rendered = render_fundamental_brief(scorecard=resource_result, snapshot=resource_snapshot)
 
-    assert "汽车经营专项: gross_margin=16.8, gross_margin_trend=改善, overseas_revenue_share=31.5, price_war_pressure=较低" in auto_rendered
+    assert "质量与稳健: roe=18.8, roe_3y_cv=0.03, gross_margin=16.8, gross_margin_trend=改善, operating_cashflow_to_profit=2.8" in auto_rendered
+    assert "汽车经营专项: overseas_revenue_share=31.5, price_war_pressure=较低" in auto_rendered
     assert "资源经营专项: unit_cost_position=0.82, reserve_life_index=14.5, commodity_price_sensitivity=0.46" in resource_rendered
+
+
+def test_render_fundamental_brief_does_not_show_auto_specialist_summary_for_non_auto_snapshot():
+    snapshot = make_semiconductor_snapshot(
+        gross_margin=22.4,
+        gross_margin_trend="improving",
+    )
+    result = analyze_snapshot(snapshot, "semiconductor_hardtech_v1")
+
+    rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
+
+    assert "汽车经营专项:" not in rendered
+    assert "质量与稳健: roe=9.8, roe_3y_cv=0.28, gross_margin=22.4, gross_margin_trend=改善, operating_cashflow_to_profit=0.84" in rendered
 
 
 def test_render_fundamental_brief_can_include_general_quality_summary():
@@ -839,11 +919,90 @@ def test_render_scorecard_text_outputs_readable_summary():
     assert "综合说明" in rendered
     assert "当前综合评级为 A" in rendered
     assert "缺失指标" in rendered
-    assert "- dupont_driver" in rendered
-    assert "- guidance_attainment" in rendered
+    assert "- 杜邦驱动" in rendered
+    assert "- 指引兑现" in rendered
     assert "杜邦驱动 NA" in rendered
     assert "已计分3/5项" in rendered
     assert rendered.index("关注问题") < rendered.index("维度得分")
+
+
+def test_render_scorecard_text_marks_inapplicable_peg_and_dupont_driver():
+    snapshot = make_platform_snapshot(
+        pe_ttm=-19.74,
+        pe_percentile_5y=45.0,
+        pb=3.05,
+        peg=None,
+        revenue_growth=8.08,
+        net_profit_growth=-165.22,
+        roe=-14.43,
+        roe_3y_cv=2.60,
+        operating_cashflow_to_profit=0.5915,
+        gross_margin=30.43,
+        gross_margin_trend="weakening",
+        net_margin=-6.40,
+        debt_to_asset=56.48,
+        dupont_driver=None,
+    )
+    result = FundamentalScoreCard(
+        symbol="03690",
+        name="美团",
+        market="HK",
+        report_period=snapshot.report_period,
+        industry_bucket="technology",
+        submodel_id="platform_internet_v1",
+        submodel_version="v1",
+        total_score=20.25,
+        rating="D",
+        red_flag=False,
+        dimension_scores=[
+            FundamentalDimensionScore(
+                dimension="profit_quality",
+                score=0.0,
+                weight=35,
+                max_score=35.0,
+                score_basis="已计分4/5项[ROE -14.43->0.0, ROE波动CV 2.60->0.0, 经营现金流/利润 0.59->0.0, 毛利率趋势 承压->0.0]; 平均=0.0; 缺失[杜邦驱动 NA]; ×35/100=0.00",
+            ),
+            FundamentalDimensionScore(
+                dimension="valuation_fit",
+                score=15.2,
+                weight=20,
+                max_score=20.0,
+                score_basis="已计分1/2项[PE分位 45.00->76.0]; 平均=76.0; 缺失[PEG NA]; ×20/100=15.20",
+            ),
+        ],
+        strengths=[],
+        risks=[],
+        warnings=[],
+        focus_questions=[],
+        missing_metrics=["dupont_driver", "peg", "user_growth"],
+        combined_comment="unit-test",
+    )
+
+    rendered = render_scorecard_text(result, snapshot=snapshot)
+
+    assert "当前不适用字段" in rendered
+    assert "- PEG（当前不适用：PE或净利增速为负）" in rendered
+    assert "- 杜邦驱动（当前不适用：ROE或净利率为负）" in rendered
+    assert "不适用[杜邦驱动: ROE或净利率为负]" in rendered
+    assert "不适用[PEG: PE或净利增速为负]" in rendered
+    assert "- peg" not in rendered
+    assert "- dupont_driver" not in rendered
+
+
+def test_render_scorecard_text_formats_missing_metric_labels_in_chinese():
+    snapshot = make_platform_snapshot(guidance_attainment=None, dupont_driver=None)
+    result = analyze_snapshot(snapshot, "platform_internet_v1")
+
+    rendered = render_scorecard_text(result, snapshot=snapshot)
+
+    assert "缺失指标" in rendered
+    assert "- 用户增长" in rendered
+    assert "- ARPU增长" in rendered
+    assert "- 递延收入增长" in rendered
+    assert "- 营销费用率" in rendered
+    assert "- guidance_attainment" not in rendered
+    assert "- user_growth" not in rendered
+    assert "- arpu_growth" not in rendered
 
 
 def test_render_scorecard_text_can_include_snapshot_metric_summary():
@@ -975,14 +1134,30 @@ def test_render_scorecard_text_can_include_auto_and_resource_specialist_summarie
     resource_rendered = render_scorecard_text(resource_result, snapshot=resource_snapshot)
 
     assert "汽车经营专项指标" in auto_rendered
-    assert "gross_margin=16.8" in auto_rendered
-    assert "gross_margin_trend=改善" in auto_rendered
     assert "overseas_revenue_share=31.5" in auto_rendered
     assert "price_war_pressure=较低" in auto_rendered
+    assert "质量与稳健指标" in auto_rendered
+    assert "gross_margin=16.8" in auto_rendered
+    assert "gross_margin_trend=改善" in auto_rendered
     assert "资源经营专项指标" in resource_rendered
     assert "unit_cost_position=0.82" in resource_rendered
     assert "reserve_life_index=14.5" in resource_rendered
     assert "commodity_price_sensitivity=0.46" in resource_rendered
+
+
+def test_render_scorecard_text_does_not_show_auto_specialist_summary_for_non_auto_snapshot():
+    snapshot = make_game_snapshot(
+        gross_margin=68.2,
+        gross_margin_trend="improving",
+    )
+    result = analyze_snapshot(snapshot, "game_content_v1")
+
+    rendered = render_scorecard_text(result, snapshot=snapshot)
+
+    assert "汽车经营专项指标" not in rendered
+    assert "质量与稳健指标" in rendered
+    assert "gross_margin=68.2" in rendered
+    assert "gross_margin_trend=改善" in rendered
 
 
 def test_render_scorecard_text_can_include_general_quality_summary():

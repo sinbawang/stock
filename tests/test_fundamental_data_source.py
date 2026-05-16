@@ -1200,6 +1200,8 @@ def test_fetch_cn_fundamental_snapshot_builds_snapshot(monkeypatch):
     assert result.snapshot.peg == 1.0
     assert result.snapshot.pb == 3.2
     assert result.snapshot.market_cap == 520.0
+    assert result.snapshot.gross_margin == 47.0
+    assert result.snapshot.gross_margin_trend == "improving"
     assert result.snapshot.net_margin == 8.5714
     assert result.snapshot.dupont_driver == "margin_turnover"
     assert result.snapshot.equity_multiplier == 1.6129
@@ -1213,12 +1215,15 @@ def test_fetch_cn_fundamental_snapshot_builds_snapshot(monkeypatch):
     assert result.field_sources["inventory_growth"] == "ths.debt"
     assert result.field_sources["interest_bearing_debt_growth"] == "derived.ths.debt"
     assert result.field_sources["peg"] == "derived.pe_ttm+net_profit_growth"
+    assert result.field_sources["gross_margin"] == "ths.abstract"
+    assert result.field_sources["gross_margin_trend"] == "derived.ths.abstract.gross_margin_history"
     assert result.field_sources["operating_cashflow_growth"] == "derived.ths.cash"
     assert result.field_sources["capex_to_operating_cashflow"] == "derived.ths.cash"
     assert result.field_sources["free_cashflow_yield"] == "derived.ths.cash+baidu.valuation"
     assert result.field_sources["dupont_driver"] == "derived.roe+net_margin+debt_to_asset"
     assert result.field_sources["equity_multiplier"] == "derived.debt_to_asset"
     assert result.field_sources["asset_turnover"] == "derived.roe+net_margin+debt_to_asset"
+    assert any("gross_margin_trend is derived" in item for item in result.assumptions)
     assert any("latest annual report period" in item for item in result.assumptions)
 
 

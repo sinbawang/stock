@@ -11,7 +11,12 @@ from fundamental.models.common import format_display_literal
 from fundamental.models.scorecard import FundamentalScoreCard
 from fundamental.models.snapshot import FundamentalSnapshot
 
-from .text_report import DIMENSION_LABELS
+from .text_report import (
+    DIMENSION_LABELS,
+    _format_score_basis_for_display,
+    _metric_unavailable_reason,
+    _partition_missing_metrics,
+)
 
 
 def _format_dimension_name(name: str) -> str:
@@ -74,7 +79,22 @@ def _dupont_summary_line(snapshot: FundamentalSnapshot) -> Optional[str]:
     return "- 杜邦拆解: " + ", ".join(items)
 
 
-def _key_metric_summary_lines(snapshot: FundamentalSnapshot) -> list[str]:
+def _should_include_auto_specialist_summary(
+    snapshot: FundamentalSnapshot,
+    scorecard: Optional[FundamentalScoreCard],
+) -> bool:
+    if scorecard is not None and scorecard.submodel_id.startswith("auto_"):
+        return True
+    return any(
+        getattr(snapshot, field_name, None) is not None
+        for field_name in ("overseas_revenue_share", "price_war_pressure")
+    )
+
+
+def _key_metric_summary_lines(
+    snapshot: FundamentalSnapshot,
+    scorecard: Optional[FundamentalScoreCard] = None,
+) -> list[str]:
     groups = (
         ("估值与回报", ("pe_ttm", "pb", "ps_ttm", "peg", "dividend_yield")),
         (
@@ -91,6 +111,8 @@ def _key_metric_summary_lines(snapshot: FundamentalSnapshot) -> list[str]:
                 "roe",
                 "roe_3y_mean",
                 "roe_3y_cv",
+                "gross_margin",
+                "gross_margin_trend",
                 "operating_cashflow_to_profit",
                 "operating_cashflow_to_profit_history",
                 "current_ratio",
@@ -109,8 +131,6 @@ def _key_metric_summary_lines(snapshot: FundamentalSnapshot) -> list[str]:
         (
             "汽车经营专项",
             (
-                "gross_margin",
-                "gross_margin_trend",
                 "overseas_revenue_share",
                 "price_war_pressure",
             ),
@@ -149,6 +169,8 @@ def _key_metric_summary_lines(snapshot: FundamentalSnapshot) -> list[str]:
 
     lines: list[str] = []
     for label, field_names in groups:
+        if label == "汽车经营专项" and not _should_include_auto_specialist_summary(snapshot, scorecard):
+            continue
         parts = []
         for field_name in field_names:
             value = getattr(snapshot, field_name, None)
@@ -181,6 +203,11 @@ def _format_score_basis_summary(score_basis: Optional[str]) -> Optional[str]:
             missing_text = part[3:-1].replace(" NA", "")
             normalized_parts.append("缺失 " + missing_text)
             continue
+        if part.startswith("不适用[") and part.endswith("]"):
+            unavailable_text = part[4:-1].replace(": ", "（")
+            unavailable_text = unavailable_text + "）" if "（" in unavailable_text else unavailable_text
+            normalized_parts.append("不适用 " + unavailable_text)
+            continue
         weighted_match = re.fullmatch(r"×\d+/100=(.*)", part)
         if weighted_match:
             normalized_parts.append(f"折算{weighted_match.group(1)}")
@@ -205,7 +232,7 @@ def render_fundamental_brief(
     strengths = _normalize_items(scorecard.strengths)
     risks = _normalize_items(scorecard.risks)
     warnings = _normalize_items(scorecard.warnings)
-    missing_metrics = _normalize_items(scorecard.missing_metrics)
+    missing_metrics, unavailable_metrics = _partition_missing_metrics(list(scorecard.missing_metrics), snapshot)
     supplement_lines = _manual_supplement_lines(snapshot, field_sources)
 
     lines = [
@@ -224,7 +251,11 @@ def render_fundamental_brief(
     calculation_lines = [
         f"- {_format_dimension_name(dimension.dimension)}: {summary}"
         for dimension in scorecard.dimension_scores
-        for summary in [_format_score_basis_summary(dimension.score_basis)]
+        for summary in [
+            _format_score_basis_summary(
+                _format_score_basis_for_display(dimension.score_basis, snapshot)
+            )
+        ]
         if summary
     ]
     if calculation_lines:
@@ -239,12 +270,15 @@ def render_fundamental_brief(
     if warnings:
         lines.extend(["", "警告:"])
         lines.extend(f"- {item}" for item in warnings)
+    if unavailable_metrics:
+        lines.extend(["", "当前不适用字段:"])
+        lines.extend(f"- {item}" for item in unavailable_metrics)
     if missing_metrics:
         lines.extend(["", "当前缺失字段:"])
         lines.extend(f"- {item}" for item in missing_metrics)
 
     lines.extend(["", "补充说明:"])
-    lines.extend(_key_metric_summary_lines(snapshot))
+    lines.extend(_key_metric_summary_lines(snapshot, scorecard=scorecard))
     dupont_summary = _dupont_summary_line(snapshot)
     if dupont_summary:
         lines.append(dupont_summary)

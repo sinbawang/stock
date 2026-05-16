@@ -25,6 +25,31 @@ DIMENSION_LABELS = {
     "resource_cycle_resilience": "资源周期韧性",
 }
 
+METRIC_DISPLAY_NAMES = {
+    "peg": "PEG",
+    "dupont_driver": "杜邦驱动",
+    "guidance_attainment": "指引兑现",
+    "user_growth": "用户增长",
+    "arpu_growth": "ARPU增长",
+    "deferred_revenue_growth": "递延收入增长",
+    "marketing_expense_ratio": "营销费用率",
+    "dividend_yield": "股息率",
+    "new_game_pipeline_strength": "新游储备强度",
+    "overseas_revenue_growth": "海外收入增长",
+    "overseas_revenue_share": "海外收入占比",
+    "order_backlog_growth": "订单增长",
+    "capacity_utilization": "产能利用率",
+    "capex_growth": "资本开支增长",
+    "wafer_price_trend": "晶圆价格趋势",
+    "inventory_growth_history": "存货增长历史",
+    "accounts_receivable_growth_history": "应收增长历史",
+    "order_backlog_history": "订单历史",
+}
+
+
+def _display_metric_name(metric_name: str) -> str:
+    return METRIC_DISPLAY_NAMES.get(metric_name, metric_name)
+
 
 def _format_dimension_name(name: str) -> str:
     return DIMENSION_LABELS.get(name, name)
@@ -41,6 +66,74 @@ def _normalize_items(values: list[str]) -> list[str]:
 
 def _sort_missing_metrics(values: list[str]) -> list[str]:
     return sorted(value for value in _normalize_items(values) if value != "notes")
+
+
+def _metric_unavailable_reason(metric_name: str, snapshot: Optional[FundamentalSnapshot]) -> Optional[str]:
+    if snapshot is None:
+        return None
+    if metric_name == "peg":
+        if (snapshot.pe_ttm is not None and snapshot.pe_ttm <= 0) or (
+            snapshot.net_profit_growth is not None and snapshot.net_profit_growth <= 0
+        ):
+            return "PE或净利增速为负"
+    if metric_name == "dupont_driver":
+        if (snapshot.roe is not None and snapshot.roe <= 0) or (
+            snapshot.net_margin is not None and snapshot.net_margin <= 0
+        ):
+            return "ROE或净利率为负"
+    return None
+
+
+def _partition_missing_metrics(
+    values: list[str],
+    snapshot: Optional[FundamentalSnapshot],
+) -> tuple[list[str], list[str]]:
+    missing: list[str] = []
+    unavailable: list[str] = []
+    for value in _sort_missing_metrics(values):
+        reason = _metric_unavailable_reason(value, snapshot)
+        if reason is None:
+            missing.append(_display_metric_name(value))
+            continue
+        display_name = _display_metric_name(value)
+        unavailable.append(f"{display_name}（当前不适用：{reason}）")
+    return missing, unavailable
+
+
+def _format_score_basis_for_display(
+    score_basis: Optional[str],
+    snapshot: Optional[FundamentalSnapshot],
+) -> Optional[str]:
+    if not score_basis:
+        return None
+
+    formatted_parts: list[str] = []
+    for part in (item.strip() for item in score_basis.split(";")):
+        if not part:
+            continue
+        if part.startswith("缺失[") and part.endswith("]"):
+            raw_items = [item.strip() for item in part[3:-1].split(",") if item.strip()]
+            missing_items: list[str] = []
+            unavailable_items: list[str] = []
+            for item in raw_items:
+                label = item.replace(" NA", "")
+                metric_name = None
+                if label == "PEG":
+                    metric_name = "peg"
+                elif label == "杜邦驱动":
+                    metric_name = "dupont_driver"
+                reason = _metric_unavailable_reason(metric_name, snapshot) if metric_name else None
+                if reason is None:
+                    missing_items.append(item)
+                    continue
+                unavailable_items.append(f"{label}: {reason}")
+            if missing_items:
+                formatted_parts.append(f"缺失[{', '.join(missing_items)}]")
+            if unavailable_items:
+                formatted_parts.append(f"不适用[{', '.join(unavailable_items)}]")
+            continue
+        formatted_parts.append(part)
+    return "; ".join(formatted_parts)
 
 
 def _render_lines(title: str, values: list[str]) -> list[str]:
@@ -77,7 +170,22 @@ def _format_scalar(value: object) -> str:
     return text
 
 
-def _render_snapshot_metric_lines(snapshot: Optional[FundamentalSnapshot]) -> list[str]:
+def _should_include_auto_specialist_summary(
+    snapshot: FundamentalSnapshot,
+    scorecard: FundamentalScoreCard,
+) -> bool:
+    if scorecard.submodel_id.startswith("auto_"):
+        return True
+    return any(
+        getattr(snapshot, field_name, None) is not None
+        for field_name in ("overseas_revenue_share", "price_war_pressure")
+    )
+
+
+def _render_snapshot_metric_lines(
+    snapshot: Optional[FundamentalSnapshot],
+    scorecard: Optional[FundamentalScoreCard] = None,
+) -> list[str]:
     if snapshot is None:
         return []
 
@@ -93,6 +201,8 @@ def _render_snapshot_metric_lines(snapshot: Optional[FundamentalSnapshot]) -> li
                 "roe",
                 "roe_3y_mean",
                 "roe_3y_cv",
+                "gross_margin",
+                "gross_margin_trend",
                 "operating_cashflow_to_profit",
                 "operating_cashflow_to_profit_history",
                 "current_ratio",
@@ -111,8 +221,6 @@ def _render_snapshot_metric_lines(snapshot: Optional[FundamentalSnapshot]) -> li
         (
             "汽车经营专项指标",
             (
-                "gross_margin",
-                "gross_margin_trend",
                 "overseas_revenue_share",
                 "price_war_pressure",
             ),
@@ -151,6 +259,12 @@ def _render_snapshot_metric_lines(snapshot: Optional[FundamentalSnapshot]) -> li
 
     lines: list[str] = []
     for title, field_names in groups:
+        if (
+            title == "汽车经营专项指标"
+            and scorecard is not None
+            and not _should_include_auto_specialist_summary(snapshot, scorecard)
+        ):
+            continue
         parts = []
         for field_name in field_names:
             value = getattr(snapshot, field_name, None)
@@ -185,27 +299,29 @@ def render_scorecard_text(scorecard: FundamentalScoreCard, snapshot: Optional[Fu
             f"- {_format_dimension_name(dimension.dimension)}: "
             f"{dimension.score:.2f}/{dimension.weight:.2f}"
         )
-        if dimension.score_basis:
-            dimension_lines.append(f"  计算: {dimension.score_basis}")
+        score_basis = _format_score_basis_for_display(dimension.score_basis, snapshot)
+        if score_basis:
+            dimension_lines.append(f"  计算: {score_basis}")
 
     body.extend(["", *dimension_lines])
 
     strengths = _normalize_items(scorecard.strengths)
     risks = _normalize_items(scorecard.risks)
     warnings = _normalize_items(scorecard.warnings)
-    missing_metrics = _sort_missing_metrics(scorecard.missing_metrics)
+    missing_metrics, unavailable_metrics = _partition_missing_metrics(scorecard.missing_metrics, snapshot)
 
     for title, values in (
         ("优势", strengths),
         ("风险", risks),
         ("警告", warnings),
+        ("当前不适用字段", unavailable_metrics),
         ("缺失指标", missing_metrics),
     ):
         section_lines = _render_lines(title, values)
         if section_lines:
             body.extend(["", *section_lines])
 
-    body.extend(_render_snapshot_metric_lines(snapshot))
+    body.extend(_render_snapshot_metric_lines(snapshot, scorecard=scorecard))
 
     if scorecard.combined_comment:
         body.extend(["", "综合说明", f"- {scorecard.combined_comment}"])
