@@ -3,7 +3,7 @@ import pandas as pd
 from fundamental.data import cn_snapshot_fetcher
 from fundamental.config.registry import get_submodel, get_submodel_for_symbol
 from fundamental.models.snapshot import FundamentalSnapshot
-from fundamental.reporting import render_fundamental_brief, render_scorecard_text
+from fundamental.reporting import render_fundamental_brief, render_scorecard_text, save_fundamental_brief, save_scorecard_text
 from fundamental.services import analyze_snapshot
 from fundamental.services.fetch_and_analyze_cn_snapshot import _relax_missing_cn_dividend_yield
 from fundamental.validation import validate_snapshot_against_policy
@@ -626,6 +626,9 @@ def test_render_fundamental_brief_includes_manual_supplement_block():
         name="中国神华",
         peg=1.24,
         dividend_yield=6.3,
+        operating_cashflow_growth=18.7,
+        interest_bearing_debt_growth=5.3,
+        free_cashflow_yield=9.4,
         net_margin=11.6,
         asset_turnover=0.94,
         equity_multiplier=1.5152,
@@ -658,6 +661,7 @@ def test_render_fundamental_brief_includes_manual_supplement_block():
     assert "- 资源周期韧性:" in rendered
     assert "peg=" in rendered
     assert "dividend_yield=6.3" in rendered
+    assert "现金流与杠杆: operating_cashflow_growth=18.7, interest_bearing_debt_growth=5.3, capex_to_operating_cashflow=0.42, free_cashflow_yield=9.4" in rendered
     assert "手工补充字段:" in rendered
     assert "杜邦拆解: 净利率=11.6, 总资产周转率=0.94, 权益乘数=1.5152, 杜邦驱动=margin_turnover" in rendered
     assert "- dividend_yield=6.3" in rendered
@@ -676,6 +680,33 @@ def test_render_fundamental_brief_formats_concise_calculation_summary():
     assert "平均" in rendered
     assert "折算" in rendered
     assert "缺失 杜邦驱动" in rendered
+
+
+def test_render_fundamental_brief_can_include_insurance_metric_summary():
+    snapshot = make_insurance_snapshot()
+    result = analyze_snapshot(snapshot, "insurance_v1")
+
+    rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
+
+    assert "保险经营与偿付: solvency_adequacy_ratio=228, combined_ratio=97.6, investment_return=4.7, embedded_value_growth=10.5, new_business_value_growth=12.3" in rendered
+
+
+def test_render_fundamental_brief_can_include_bank_metric_summary():
+    snapshot = make_bank_snapshot()
+    result = analyze_snapshot(snapshot, "bank_v1")
+
+    rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
+
+    assert "银行监管与息差: core_tier1_ratio=10.6, npl_ratio=1.28, provision_coverage_ratio=242, net_interest_margin=1.82, loan_deposit_growth_gap=1.4" in rendered
+
+
+def test_render_fundamental_brief_can_include_broker_metric_summary():
+    snapshot = make_broker_snapshot()
+    result = analyze_snapshot(snapshot, "broker_v1")
+
+    rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
+
+    assert "券商监管: net_capital_ratio=218" in rendered
 
 
 def test_safe_cn_valuation_series_returns_empty_frame_on_error(monkeypatch):
@@ -761,6 +792,104 @@ def test_render_scorecard_text_outputs_readable_summary():
     assert "缺失指标" in rendered
     assert "- dupont_driver" in rendered
     assert "- guidance_attainment" in rendered
-    assert "缺失[杜邦驱动 NA]" in rendered
-    assert "已计分3/4项" in rendered
+    assert "杜邦驱动 NA" in rendered
+    assert "已计分3/5项" in rendered
     assert rendered.index("关注问题") < rendered.index("维度得分")
+
+
+def test_render_scorecard_text_can_include_snapshot_metric_summary():
+    snapshot = make_energy_resource_snapshot(
+        operating_cashflow_growth=18.7,
+        interest_bearing_debt_growth=5.3,
+        capex_to_operating_cashflow=0.42,
+        free_cashflow_yield=9.4,
+        peg=1.24,
+    )
+    result = analyze_snapshot(snapshot, "energy_resource_v1")
+
+    rendered = render_scorecard_text(result, snapshot=snapshot)
+
+    assert "关键指标" in rendered
+    assert "pe_ttm" not in rendered
+    assert "dividend_yield=6.8" in rendered
+    assert "现金流与杠杆指标" in rendered
+    assert "operating_cashflow_growth=18.7" in rendered
+    assert "interest_bearing_debt_growth=5.3" in rendered
+    assert "capex_to_operating_cashflow=0.42" in rendered
+    assert "free_cashflow_yield=9.4" in rendered
+
+
+def test_render_scorecard_text_can_include_insurance_metric_summary():
+    snapshot = make_insurance_snapshot()
+    result = analyze_snapshot(snapshot, "insurance_v1")
+
+    rendered = render_scorecard_text(result, snapshot=snapshot)
+
+    assert "保险经营与偿付指标" in rendered
+    assert "solvency_adequacy_ratio=228" in rendered
+    assert "combined_ratio=97.6" in rendered
+    assert "investment_return=4.7" in rendered
+    assert "embedded_value_growth=10.5" in rendered
+    assert "new_business_value_growth=12.3" in rendered
+
+
+def test_render_scorecard_text_can_include_bank_metric_summary():
+    snapshot = make_bank_snapshot()
+    result = analyze_snapshot(snapshot, "bank_v1")
+
+    rendered = render_scorecard_text(result, snapshot=snapshot)
+
+    assert "银行监管与息差指标" in rendered
+    assert "core_tier1_ratio=10.6" in rendered
+    assert "npl_ratio=1.28" in rendered
+    assert "provision_coverage_ratio=242" in rendered
+    assert "net_interest_margin=1.82" in rendered
+    assert "loan_deposit_growth_gap=1.4" in rendered
+
+
+def test_render_scorecard_text_can_include_broker_metric_summary():
+    snapshot = make_broker_snapshot()
+    result = analyze_snapshot(snapshot, "broker_v1")
+
+    rendered = render_scorecard_text(result, snapshot=snapshot)
+
+    assert "券商监管指标" in rendered
+    assert "net_capital_ratio=218" in rendered
+
+
+def test_save_fundamental_brief_uses_submodel_in_filename(tmp_path):
+    snapshot = make_energy_resource_snapshot()
+    result = analyze_snapshot(snapshot, "energy_resource_v1")
+
+    output_path = save_fundamental_brief(
+        scorecard=result,
+        snapshot=snapshot,
+        output_dir=tmp_path,
+        generated_at=pd.Timestamp("2026-05-16T12:30:00").to_pydatetime(),
+    )
+
+    assert output_path.name == "601088_中国神华_energy_resource_v1_fundamental_brief_20260516_123000.txt"
+
+
+def test_save_scorecard_text_writes_snapshot_metric_summary(tmp_path):
+    snapshot = make_energy_resource_snapshot(
+        operating_cashflow_growth=18.7,
+        interest_bearing_debt_growth=5.3,
+        capex_to_operating_cashflow=0.42,
+        free_cashflow_yield=9.4,
+        peg=1.24,
+    )
+    result = analyze_snapshot(snapshot, "energy_resource_v1")
+
+    output_path = save_scorecard_text(
+        scorecard=result,
+        snapshot=snapshot,
+        output_dir=tmp_path,
+        generated_at=pd.Timestamp("2026-05-16T12:30:00").to_pydatetime(),
+    )
+
+    content = output_path.read_text(encoding="utf-8")
+    assert output_path.name == "601088_中国神华_energy_resource_v1_scorecard_20260516_123000.txt"
+    assert "现金流与杠杆指标" in content
+    assert "operating_cashflow_growth=18.7" in content
+    assert "free_cashflow_yield=9.4" in content

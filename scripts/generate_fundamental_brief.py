@@ -9,7 +9,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from fundamental.reporting import save_fundamental_brief
+from fundamental.reporting import save_fundamental_brief, save_scorecard_text
 from fundamental.services import fetch_and_analyze_cn_snapshot, fetch_and_analyze_hk_snapshot
 
 
@@ -31,6 +31,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--quote-overlay-source", default=None, help="HK only optional quote overlay source")
     parser.add_argument("--manual-supplement-path", default=None, help="Optional JSON or brief txt supplement file")
     parser.add_argument("--output-dir", default=str(ROOT / "data" / "_meta"), help="Output directory")
+    parser.add_argument(
+        "--save-scorecard-text",
+        action="store_true",
+        help="Also save a pure text scorecard report alongside the brief output",
+    )
+    parser.add_argument(
+        "--scorecard-output-dir",
+        default=None,
+        help="Optional scorecard text output directory, defaults to --output-dir",
+    )
     return parser.parse_args()
 
 
@@ -60,6 +70,14 @@ def main() -> None:
         output_dir=args.output_dir,
     )
     print(output_path)
+
+    if args.save_scorecard_text:
+        scorecard_output_path = save_scorecard_text(
+            scorecard=result.scorecard,
+            snapshot=result.fetched.snapshot,
+            output_dir=args.scorecard_output_dir or args.output_dir,
+        )
+        print(scorecard_output_path)
 
 
 if __name__ == "__main__":

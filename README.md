@@ -74,11 +74,57 @@
 - A 股基本面快照: `fundamental.data.fetch_cn_fundamental_snapshot(...)`
 - 港股抓取并分析: `fundamental.services.fetch_and_analyze_hk_snapshot(...)`
 - A 股抓取并分析: `fundamental.services.fetch_and_analyze_cn_snapshot(...)`
+- 基本面简报落盘: `fundamental.reporting.save_fundamental_brief(...)`
+- 纯文本评分卡落盘: `fundamental.reporting.save_scorecard_text(...)`
 
 对应的数据源约定见：
 
 - [docs/hk-minute-data-source.md](docs/hk-minute-data-source.md)
 - [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
+
+## 基本面报告输出
+
+当前脚本层已经同时支持两类文本产物：
+
+- `fundamental_brief`: 面向用户阅读的简报，包含评级、维度结论、警告、补充说明
+- `scorecard`: 更偏结构化的纯文本评分卡，保留维度打分、缺失字段和关键指标摘要
+
+单标的生成示例：
+
+```powershell
+.\venv\Scripts\python.exe scripts/generate_fundamental_brief.py 601088 --name 中国神华 --save-scorecard-text
+```
+
+生成后的 `brief` 和 `scorecard` 文件名当前都会带上 `submodel_id`，便于同一标的在多子模型场景下直接区分产物。
+
+如果希望把 scorecard 文本单独落到另一个目录：
+
+```powershell
+.\venv\Scripts\python.exe scripts/generate_fundamental_brief.py 03690 --name 美团 --market HK --quote-overlay-source xueqiu --save-scorecard-text --scorecard-output-dir data\_meta\scorecards
+```
+
+批量重生成为当前格式时，也可以一起输出 scorecard 文本：
+
+```powershell
+.\venv\Scripts\python.exe scripts/batch_regenerate_fundamental_briefs.py --meta-dir data\_meta --save-scorecard-text
+```
+
+如果你在 Python 代码里直接消费报告输出，当前推荐：
+
+```python
+from fundamental.reporting import save_fundamental_brief, save_scorecard_text
+
+brief_path = save_fundamental_brief(
+	scorecard=result.scorecard,
+	snapshot=result.fetched.snapshot,
+	field_sources=result.fetched.field_sources,
+)
+
+scorecard_path = save_scorecard_text(
+	scorecard=result.scorecard,
+	snapshot=result.fetched.snapshot,
+)
+```
 
 ## 项目结构
 
@@ -130,8 +176,9 @@ chanlun-stock/
 │       │   ├── base_engine.py
 │       │   ├── common_rules.py
 │       │   └── risk_rules.py
-│       ├── reporting/          # 文本报告渲染
+│       ├── reporting/          # brief / scorecard 文本报告渲染与保存
 │       │   ├── __init__.py
+│       │   ├── brief_report.py
 │       │   └── text_report.py
 │       └── services/           # 基本面分析入口
 │           ├── __init__.py

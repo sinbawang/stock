@@ -11,11 +11,16 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from fundamental.reporting import save_fundamental_brief
+from fundamental.reporting import save_fundamental_brief, save_scorecard_text
 from fundamental.services import fetch_and_analyze_cn_snapshot, fetch_and_analyze_hk_snapshot
 
 
-BRIEF_FILE_RE = re.compile(r"^(?P<symbol>\d{5,6})_(?P<name>.+?)_fundamental_brief_\d{8}_\d{6}\.txt$")
+BRIEF_FILE_RE = re.compile(
+    r"^(?P<symbol>\d{5,6})_"
+    r"(?P<name>.+?)"
+    r"(?:_(?P<submodel>[a-z0-9]+(?:_[a-z0-9]+)*_v\d+))?"
+    r"_fundamental_brief_\d{8}_\d{6}\.txt$"
+)
 
 
 @dataclass(frozen=True)
@@ -34,6 +39,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output-dir", default=None, help="Output directory, defaults to meta dir")
     parser.add_argument("--limit", type=int, default=None, help="Optional limit for regeneration count")
+    parser.add_argument(
+        "--save-scorecard-text",
+        action="store_true",
+        help="Also save a pure text scorecard report for each regenerated target",
+    )
+    parser.add_argument(
+        "--scorecard-output-dir",
+        default=None,
+        help="Optional scorecard text output directory, defaults to --output-dir or --meta-dir",
+    )
     return parser.parse_args()
 
 
@@ -60,7 +75,13 @@ def find_manual_supplement_path(symbol: str, supplement_dir: Path) -> str | None
     return str(candidates[0])
 
 
-def regenerate_one(target: BriefTarget, output_dir: Path, supplement_dir: Path) -> Path:
+def regenerate_one(
+    target: BriefTarget,
+    output_dir: Path,
+    supplement_dir: Path,
+    save_scorecard: bool = False,
+    scorecard_output_dir: Path | None = None,
+) -> list[Path]:
     market = infer_market(target.symbol)
     manual_supplement_path = find_manual_supplement_path(target.symbol, supplement_dir)
 
@@ -78,18 +99,32 @@ def regenerate_one(target: BriefTarget, output_dir: Path, supplement_dir: Path) 
             manual_supplement_path=manual_supplement_path,
         )
 
-    return save_fundamental_brief(
-        scorecard=result.scorecard,
-        snapshot=result.fetched.snapshot,
-        field_sources=result.fetched.field_sources,
-        output_dir=output_dir,
-    )
+    generated_paths = [
+        save_fundamental_brief(
+            scorecard=result.scorecard,
+            snapshot=result.fetched.snapshot,
+            field_sources=result.fetched.field_sources,
+            output_dir=output_dir,
+        )
+    ]
+
+    if save_scorecard:
+        generated_paths.append(
+            save_scorecard_text(
+                scorecard=result.scorecard,
+                snapshot=result.fetched.snapshot,
+                output_dir=scorecard_output_dir or output_dir,
+            )
+        )
+
+    return generated_paths
 
 
 def main() -> None:
     args = parse_args()
     meta_dir = Path(args.meta_dir)
     output_dir = Path(args.output_dir) if args.output_dir else meta_dir
+    scorecard_output_dir = Path(args.scorecard_output_dir) if args.scorecard_output_dir else output_dir
     supplement_dir = Path(args.manual_supplement_dir)
 
     targets = discover_targets(meta_dir)
@@ -100,7 +135,15 @@ def main() -> None:
 
     generated_paths: list[Path] = []
     for target in targets:
-        generated_paths.append(regenerate_one(target, output_dir, supplement_dir))
+        generated_paths.extend(
+            regenerate_one(
+                target,
+                output_dir,
+                supplement_dir,
+                save_scorecard=args.save_scorecard_text,
+                scorecard_output_dir=scorecard_output_dir,
+            )
+        )
 
     for path in generated_paths:
         print(path)

@@ -311,7 +311,30 @@ assumptions = result.assumptions
 
 - `scorecard.warnings` 已经会反映字段来源口径
 - `reporting.render_scorecard_text(...)` 已经会把维度得分的简版计算依据一起渲染出来
+- 如果把 `snapshot` 一起传给 `render_scorecard_text(...)`，文本报告还会附带关键指标与现金流/杠杆指标摘要
 - 因此脚本侧不应再重复手写“这个分数怎么来的”或“这个字段来自哪里”这类说明，除非需要额外业务总结
+
+如果希望直接把文本评分卡落盘，而不是只生成 brief，当前可以直接复用 reporting helper：
+
+```python
+from fundamental.reporting import save_scorecard_text
+
+scorecard_path = save_scorecard_text(
+  scorecard=result.scorecard,
+  snapshot=result.fetched.snapshot,
+  output_dir="data/_meta",
+)
+```
+
+脚本层也已经开放了对应参数：
+
+```powershell
+.\venv\Scripts\python.exe scripts/generate_fundamental_brief.py 601088 --name 中国神华 --save-scorecard-text
+```
+
+```powershell
+.\venv\Scripts\python.exe scripts/batch_regenerate_fundamental_briefs.py --save-scorecard-text
+```
 
 带雪球 overlay 抓取并直接分析：
 

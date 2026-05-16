@@ -68,6 +68,54 @@ def _dupont_summary_line(snapshot: FundamentalSnapshot) -> Optional[str]:
     return "- 杜邦拆解: " + ", ".join(items)
 
 
+def _key_metric_summary_lines(snapshot: FundamentalSnapshot) -> list[str]:
+    groups = (
+        ("估值与回报", ("pe_ttm", "pb", "ps_ttm", "peg", "dividend_yield")),
+        (
+            "现金流与杠杆",
+            (
+                "operating_cashflow_growth",
+                "interest_bearing_debt_growth",
+                "capex_to_operating_cashflow",
+                "free_cashflow_yield",
+            ),
+        ),
+        (
+            "银行监管与息差",
+            (
+                "capital_adequacy_ratio",
+                "core_tier1_ratio",
+                "npl_ratio",
+                "provision_coverage_ratio",
+                "net_interest_margin",
+                "loan_deposit_growth_gap",
+            ),
+        ),
+        (
+            "保险经营与偿付",
+            (
+                "solvency_adequacy_ratio",
+                "combined_ratio",
+                "investment_return",
+                "embedded_value_growth",
+                "new_business_value_growth",
+            ),
+        ),
+        ("券商监管", ("net_capital_ratio",)),
+    )
+
+    lines: list[str] = []
+    for label, field_names in groups:
+        parts = []
+        for field_name in field_names:
+            value = getattr(snapshot, field_name, None)
+            if value is not None:
+                parts.append(f"{field_name}={_format_scalar(value)}")
+        if parts:
+            lines.append(f"- {label}: " + ", ".join(parts))
+    return lines
+
+
 def _format_score_basis_summary(score_basis: Optional[str]) -> Optional[str]:
     if not score_basis:
         return None
@@ -153,13 +201,7 @@ def render_fundamental_brief(
         lines.extend(f"- {item}" for item in missing_metrics)
 
     lines.extend(["", "补充说明:"])
-    summary_parts: list[str] = []
-    for field_name in ("pe_ttm", "pb", "ps_ttm", "peg", "dividend_yield"):
-        value = getattr(snapshot, field_name, None)
-        if value is not None:
-            summary_parts.append(f"{field_name}={_format_scalar(value)}")
-    if summary_parts:
-        lines.append("- " + ", ".join(summary_parts))
+    lines.extend(_key_metric_summary_lines(snapshot))
     dupont_summary = _dupont_summary_line(snapshot)
     if dupont_summary:
         lines.append(dupont_summary)
@@ -184,7 +226,10 @@ def save_fundamental_brief(
     generated = generated_at or datetime.now()
     target_dir = Path(output_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
-    file_name = f"{scorecard.symbol}_{scorecard.name}_fundamental_brief_{generated.strftime('%Y%m%d_%H%M%S')}.txt"
+    file_name = (
+        f"{scorecard.symbol}_{scorecard.name}_{scorecard.submodel_id}_fundamental_brief_"
+        f"{generated.strftime('%Y%m%d_%H%M%S')}.txt"
+    )
     output_path = target_dir / file_name
     output_path.write_text(
         render_fundamental_brief(

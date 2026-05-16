@@ -5,6 +5,7 @@ import importlib
 import importlib.util
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 import pandas as pd
 
@@ -32,6 +33,7 @@ sys.modules[batch_regenerate_spec.name] = batch_regenerate_module
 batch_regenerate_spec.loader.exec_module(batch_regenerate_module)
 discover_targets = batch_regenerate_module.discover_targets
 find_manual_supplement_path = batch_regenerate_module.find_manual_supplement_path
+regenerate_one = batch_regenerate_module.regenerate_one
 
 fetch_service_module = importlib.import_module("fundamental.services.fetch_and_analyze_hk_snapshot")
 cn_fetch_service_module = importlib.import_module("fundamental.services.fetch_and_analyze_cn_snapshot")
@@ -114,6 +116,98 @@ def test_batch_regenerate_helpers_discover_targets_and_find_supplement(tmp_path)
     ]
     assert supplement_path is not None
     assert supplement_path.endswith("601088_中国神华_energy_resource_v1_latest.txt")
+
+
+def test_batch_regenerate_helpers_discover_targets_supports_submodel_brief_filenames(tmp_path):
+    meta_dir = tmp_path / "_meta"
+    meta_dir.mkdir(parents=True)
+
+    (
+        meta_dir / "601088_中国神华_energy_resource_v1_fundamental_brief_20260516_104035.txt"
+    ).write_text("brief", encoding="utf-8")
+
+    targets = discover_targets(meta_dir)
+
+    assert targets == [type(targets[0])(symbol="601088", name="中国神华")]
+
+
+def test_batch_regenerate_helpers_discover_targets_supports_mixed_brief_filename_formats(tmp_path):
+    meta_dir = tmp_path / "_meta"
+    meta_dir.mkdir(parents=True)
+
+    (meta_dir / "00700_腾讯_fundamental_brief_20260510_013550.txt").write_text("brief", encoding="utf-8")
+    (meta_dir / "00700_腾讯_platform_internet_v1_fundamental_brief_20260516_104035.txt").write_text(
+        "brief",
+        encoding="utf-8",
+    )
+    (meta_dir / "601088_中国神华_energy_resource_v1_fundamental_brief_20260516_104035.txt").write_text(
+        "brief",
+        encoding="utf-8",
+    )
+
+    targets = discover_targets(meta_dir)
+
+    assert targets == [
+        type(targets[0])(symbol="00700", name="腾讯"),
+        type(targets[0])(symbol="601088", name="中国神华"),
+    ]
+
+
+def test_batch_regenerate_helpers_regenerate_one_returns_brief_and_scorecard_paths(monkeypatch, tmp_path):
+    target = batch_regenerate_module.BriefTarget(symbol="601088", name="中国神华")
+    output_dir = tmp_path / "briefs"
+    scorecard_output_dir = tmp_path / "scorecards"
+    supplement_dir = tmp_path / "manual_supplements"
+    supplement_dir.mkdir(parents=True)
+    (supplement_dir / "601088_中国神华_energy_resource_v1_latest.txt").write_text("supplement", encoding="utf-8")
+
+    fake_result = SimpleNamespace(
+        scorecard=SimpleNamespace(submodel_id="energy_resource_v1"),
+        fetched=SimpleNamespace(snapshot=object(), field_sources={"market_cap": "unit-test"}),
+    )
+    calls: dict[str, object] = {}
+
+    def fake_fetch_cn_snapshot(symbol: str, name: str, manual_supplement_path: str | None = None):
+        calls["fetch"] = (symbol, name, manual_supplement_path)
+        return fake_result
+
+    def fake_save_fundamental_brief(*, scorecard, snapshot, field_sources, output_dir):
+        calls["brief"] = (scorecard, snapshot, field_sources, output_dir)
+        return Path(output_dir) / "brief.txt"
+
+    def fake_save_scorecard_text(*, scorecard, snapshot, output_dir):
+        calls["scorecard"] = (scorecard, snapshot, output_dir)
+        return Path(output_dir) / "scorecard.txt"
+
+    monkeypatch.setattr(batch_regenerate_module, "fetch_and_analyze_cn_snapshot", fake_fetch_cn_snapshot)
+    monkeypatch.setattr(batch_regenerate_module, "save_fundamental_brief", fake_save_fundamental_brief)
+    monkeypatch.setattr(batch_regenerate_module, "save_scorecard_text", fake_save_scorecard_text)
+
+    generated_paths = regenerate_one(
+        target,
+        output_dir=output_dir,
+        supplement_dir=supplement_dir,
+        save_scorecard=True,
+        scorecard_output_dir=scorecard_output_dir,
+    )
+
+    assert calls["fetch"] == (
+        "601088",
+        "中国神华",
+        str(supplement_dir / "601088_中国神华_energy_resource_v1_latest.txt"),
+    )
+    assert calls["brief"] == (
+        fake_result.scorecard,
+        fake_result.fetched.snapshot,
+        fake_result.fetched.field_sources,
+        output_dir,
+    )
+    assert calls["scorecard"] == (
+        fake_result.scorecard,
+        fake_result.fetched.snapshot,
+        scorecard_output_dir,
+    )
+    assert generated_paths == [output_dir / "brief.txt", scorecard_output_dir / "scorecard.txt"]
 
 
 def test_parse_manual_supplement_text_extracts_key_value_lines():
@@ -283,6 +377,8 @@ def test_fetch_hk_fundamental_snapshot_derives_peg_and_dupont_driver_when_inputs
     cashflow_df = pd.DataFrame(
         [
             {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "003999", "AMOUNT": 224.0},
+            {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "005005", "AMOUNT": 84.0},
+            {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "005007", "AMOUNT": 16.0},
         ]
     )
     balance_df = pd.DataFrame(
@@ -395,6 +491,8 @@ def test_fetch_hk_fundamental_snapshot_can_overlay_xueqiu_quote(monkeypatch):
     cashflow_df = pd.DataFrame(
         [
             {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "003999", "AMOUNT": 224.0},
+            {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "005005", "AMOUNT": 84.0},
+            {"REPORT_DATE": "2025-12-31 00:00:00", "STD_ITEM_CODE": "005007", "AMOUNT": 16.0},
         ]
     )
     balance_df = pd.DataFrame(
@@ -406,7 +504,7 @@ def test_fetch_hk_fundamental_snapshot_can_overlay_xueqiu_quote(monkeypatch):
         ]
     )
     xueqiu_quote = {
-        "market_capital": 518976727454.3,
+        "market_capital": 2400.0,
         "pe_ttm": -19.9634,
         "pb": 3.0092,
         "psr": 1.252,
@@ -421,13 +519,17 @@ def test_fetch_hk_fundamental_snapshot_can_overlay_xueqiu_quote(monkeypatch):
 
     result = fetcher.fetch_hk_fundamental_snapshot("03690", name="美团", quote_overlay_source="xueqiu")
 
-    assert result.snapshot.market_cap == 518976727454.3
+    assert result.snapshot.market_cap == 2400.0
     assert result.snapshot.dividend_yield == 0.7
     assert result.snapshot.pe_ttm == -12.0
     assert result.snapshot.pb == 3.2
     assert result.snapshot.ps_ttm == 1.28
+    assert result.snapshot.capex_to_operating_cashflow == 0.4464
+    assert result.snapshot.free_cashflow_yield == 5.1667
     assert result.field_sources is not None
     assert result.field_sources["market_cap"] == "xueqiu.quote"
+    assert result.field_sources["capex_to_operating_cashflow"] == "derived.eastmoney.cashflow"
+    assert result.field_sources["free_cashflow_yield"] == "derived.eastmoney.cashflow+xueqiu.quote"
     assert result.field_sources["dividend_yield"] == "xueqiu.quote"
     assert result.field_sources["pe_ttm"] == "eastmoney+akshare.valuation"
     assert result.field_sources["pb"] == "eastmoney+akshare.valuation"
@@ -756,7 +858,7 @@ def test_fetch_and_analyze_hk_snapshot_accepts_manual_supplement_for_insurance_f
     assert any("以下字段当前使用手工补充口径" in item for item in result.scorecard.warnings)
     assert any("投资收益率当前为手工补充/代理值" in item for item in result.scorecard.warnings)
     assert any("保险手工补充字段可能存在跨主体口径" in item for item in result.scorecard.warnings)
-    report_text = render_scorecard_text(result.scorecard)
+    report_text = render_scorecard_text(result.scorecard, snapshot=result.fetched.snapshot)
     assert "警告" in report_text
     assert "以下字段当前使用手工补充口径" in report_text
 
@@ -990,8 +1092,11 @@ def test_fetch_cn_fundamental_snapshot_builds_snapshot(monkeypatch):
     cash_df = pd.DataFrame(
         [
             {"report_date": "2024-12-31", "metric_name": "act_cash_flow_net", "value": 9_000_000_000.0},
+            {"report_date": "2024-12-31", "metric_name": "pay_fixed_assets_etc_cash", "value": 3_000_000_000.0},
             {"report_date": "2025-12-31", "metric_name": "act_cash_flow_net", "value": 10_800_000_000.0},
+            {"report_date": "2025-12-31", "metric_name": "pay_fixed_assets_etc_cash", "value": 3_600_000_000.0},
             {"report_date": "2026-03-31", "metric_name": "act_cash_flow_net", "value": 3_500_000_000.0},
+            {"report_date": "2026-03-31", "metric_name": "pay_fixed_assets_etc_cash", "value": 1_000_000_000.0},
         ]
     )
     benefit_df = pd.DataFrame(
@@ -1052,12 +1157,16 @@ def test_fetch_cn_fundamental_snapshot_builds_snapshot(monkeypatch):
     assert result.snapshot.asset_turnover == 1.5913
     assert result.snapshot.interest_bearing_debt_growth == 14.8649
     assert result.snapshot.operating_cashflow_growth == 20.0
+    assert result.snapshot.capex_to_operating_cashflow == 0.3333
+    assert result.snapshot.free_cashflow_yield == 13.8462
     assert result.field_sources is not None
     assert result.field_sources["accounts_receivable_growth"] == "ths.debt"
     assert result.field_sources["inventory_growth"] == "ths.debt"
     assert result.field_sources["interest_bearing_debt_growth"] == "derived.ths.debt"
     assert result.field_sources["peg"] == "derived.pe_ttm+net_profit_growth"
     assert result.field_sources["operating_cashflow_growth"] == "derived.ths.cash"
+    assert result.field_sources["capex_to_operating_cashflow"] == "derived.ths.cash"
+    assert result.field_sources["free_cashflow_yield"] == "derived.ths.cash+baidu.valuation"
     assert result.field_sources["dupont_driver"] == "derived.roe+net_margin+debt_to_asset"
     assert result.field_sources["equity_multiplier"] == "derived.debt_to_asset"
     assert result.field_sources["asset_turnover"] == "derived.roe+net_margin+debt_to_asset"
@@ -1187,7 +1296,7 @@ def test_fetch_and_analyze_cn_snapshot_warns_when_forced_to_quarterly_period(mon
     result = fetch_and_analyze_cn_snapshot("002555", name="三七互娱")
 
     assert any("2026-03-31 的一季报口径" in item for item in result.scorecard.warnings)
-    report_text = render_scorecard_text(result.scorecard)
+    report_text = render_scorecard_text(result.scorecard, snapshot=result.fetched.snapshot)
     assert "警告" in report_text
     assert "一季报口径" in report_text
     brief_text = render_fundamental_brief(result.scorecard, result.fetched.snapshot)
@@ -1332,7 +1441,7 @@ def test_fetch_and_analyze_cn_snapshot_accepts_manual_supplement_for_energy_fiel
     assert any("以下字段当前使用手工补充口径" in item for item in result.scorecard.warnings)
     assert any("能源资源手工补充字段可能包含研究口径或公告摘要口径" in item for item in result.scorecard.warnings)
 
-    report_text = render_scorecard_text(result.scorecard)
+    report_text = render_scorecard_text(result.scorecard, snapshot=result.fetched.snapshot)
     assert "警告" in report_text
     assert "以下字段当前使用手工补充口径" in report_text
 
@@ -1484,7 +1593,7 @@ def test_fetch_and_analyze_hk_snapshot_builds_insurance_scorecard_with_financial
     assert result.fetched.field_sources is not None
     assert result.fetched.field_sources["solvency_adequacy_ratio"] == "eastmoney.financial_indicator"
     assert any("Financial-sector fields are supplemented" in item for item in result.assumptions)
-    report_text = render_scorecard_text(result.scorecard)
+    report_text = render_scorecard_text(result.scorecard, snapshot=result.fetched.snapshot)
     assert "计算:" in report_text
     assert "综合偿付能力充足率 218.00" in report_text
     assert "×30/100=" in report_text
@@ -1628,7 +1737,7 @@ def test_fetch_and_analyze_hk_snapshot_warns_when_insurance_uses_official_solven
     )
 
     result = fetch_and_analyze_hk_snapshot("01339", name="中国人保")
-    report_text = render_scorecard_text(result.scorecard)
+    report_text = render_scorecard_text(result.scorecard, snapshot=result.fetched.snapshot)
 
     assert any("官网偿付能力报告摘要" in item for item in result.scorecard.warnings)
     assert any("2025-09-24" in item for item in result.scorecard.warnings)
@@ -1679,7 +1788,7 @@ def test_fetch_and_analyze_hk_snapshot_warns_when_forced_to_non_annual_period(mo
     result = fetch_and_analyze_hk_snapshot("01339", name="中国人保")
 
     assert any("2026-06-30 的中报口径" in item for item in result.scorecard.warnings)
-    report_text = render_scorecard_text(result.scorecard)
+    report_text = render_scorecard_text(result.scorecard, snapshot=result.fetched.snapshot)
     assert "警告" in report_text
     assert "中报口径" in report_text
     brief_text = render_fundamental_brief(result.scorecard, result.fetched.snapshot)
@@ -1726,7 +1835,7 @@ def test_fetch_and_analyze_hk_snapshot_warns_when_broker_uses_annual_report_prox
     )
 
     result = fetch_and_analyze_hk_snapshot("06886", name="华泰证券")
-    report_text = render_scorecard_text(result.scorecard)
+    report_text = render_scorecard_text(result.scorecard, snapshot=result.fetched.snapshot)
 
     assert any("风险覆盖率代理映射" in item for item in result.scorecard.warnings)
     assert "警告" in report_text
@@ -1777,7 +1886,7 @@ def test_fetch_and_analyze_hk_snapshot_builds_broker_scorecard_with_financial_fi
     assert result.fetched.snapshot.dividend_yield == 4.2
     assert result.fetched.field_sources is not None
     assert result.fetched.field_sources["net_capital_ratio"] == "eastmoney.financial_indicator"
-    report_text = render_scorecard_text(result.scorecard)
+    report_text = render_scorecard_text(result.scorecard, snapshot=result.fetched.snapshot)
     assert "净资本比率 182.00" in report_text
     assert "已计分" in report_text
     assert "- notes" not in report_text

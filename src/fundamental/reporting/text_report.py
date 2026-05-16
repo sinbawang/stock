@@ -1,6 +1,11 @@
 """Render a FundamentalScoreCard into a readable text summary."""
 
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, Union
+
 from fundamental.models.scorecard import FundamentalScoreCard
+from fundamental.models.snapshot import FundamentalSnapshot
 
 
 DIMENSION_LABELS = {
@@ -53,7 +58,68 @@ def _render_numbered_lines(title: str, values: list[str]) -> list[str]:
     return lines
 
 
-def render_scorecard_text(scorecard: FundamentalScoreCard) -> str:
+def _format_scalar(value: object) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float):
+        return format(value, ".12g")
+    return str(value)
+
+
+def _render_snapshot_metric_lines(snapshot: Optional[FundamentalSnapshot]) -> list[str]:
+    if snapshot is None:
+        return []
+
+    groups = (
+        ("关键指标", ("pe_ttm", "pb", "ps_ttm", "peg", "dividend_yield")),
+        (
+            "现金流与杠杆指标",
+            (
+                "operating_cashflow_growth",
+                "interest_bearing_debt_growth",
+                "capex_to_operating_cashflow",
+                "free_cashflow_yield",
+            ),
+        ),
+        (
+            "银行监管与息差指标",
+            (
+                "capital_adequacy_ratio",
+                "core_tier1_ratio",
+                "npl_ratio",
+                "provision_coverage_ratio",
+                "net_interest_margin",
+                "loan_deposit_growth_gap",
+            ),
+        ),
+        (
+            "保险经营与偿付指标",
+            (
+                "solvency_adequacy_ratio",
+                "combined_ratio",
+                "investment_return",
+                "embedded_value_growth",
+                "new_business_value_growth",
+            ),
+        ),
+        ("券商监管指标", ("net_capital_ratio",)),
+    )
+
+    lines: list[str] = []
+    for title, field_names in groups:
+        parts = []
+        for field_name in field_names:
+            value = getattr(snapshot, field_name, None)
+            if value is not None:
+                parts.append(f"{field_name}={_format_scalar(value)}")
+        if parts:
+            lines.extend(["", title, f"- {', '.join(parts)}"])
+    return lines
+
+
+def render_scorecard_text(scorecard: FundamentalScoreCard, snapshot: Optional[FundamentalSnapshot] = None) -> str:
     header = (
         f"{scorecard.name} ({scorecard.symbol}) | "
         f"{scorecard.industry_bucket}/{scorecard.submodel_id} | {scorecard.report_period.isoformat()}"
@@ -97,7 +163,30 @@ def render_scorecard_text(scorecard: FundamentalScoreCard) -> str:
         if section_lines:
             body.extend(["", *section_lines])
 
+    body.extend(_render_snapshot_metric_lines(snapshot))
+
     if scorecard.combined_comment:
         body.extend(["", "综合说明", f"- {scorecard.combined_comment}"])
 
     return "\n".join(line for line in body if line is not None).strip()
+
+
+def save_scorecard_text(
+    scorecard: FundamentalScoreCard,
+    snapshot: Optional[FundamentalSnapshot] = None,
+    output_dir: Union[str, Path] = "data/_meta",
+    generated_at: Optional[datetime] = None,
+) -> Path:
+    generated = generated_at or datetime.now()
+    target_dir = Path(output_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    file_name = (
+        f"{scorecard.symbol}_{scorecard.name}_{scorecard.submodel_id}_scorecard_"
+        f"{generated.strftime('%Y%m%d_%H%M%S')}.txt"
+    )
+    output_path = target_dir / file_name
+    output_path.write_text(
+        render_scorecard_text(scorecard=scorecard, snapshot=snapshot) + "\n",
+        encoding="utf-8",
+    )
+    return output_path
