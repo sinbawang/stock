@@ -9,8 +9,13 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from fundamental.reporting import save_fundamental_brief, save_scorecard_text
-from fundamental.services import fetch_and_analyze_cn_snapshot, fetch_and_analyze_hk_snapshot
+from fundamental.reporting import (
+    save_blended_fundamental_brief,
+    save_blended_scorecard_text,
+    save_fundamental_brief,
+    save_scorecard_text,
+)
+from fundamental.services import fetch_and_analyze_cn_blended_fundamentals, fetch_and_analyze_cn_snapshot, fetch_and_analyze_hk_snapshot
 
 
 def _infer_market(symbol: str) -> str:
@@ -41,18 +46,33 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional scorecard text output directory, defaults to --output-dir",
     )
+    parser.add_argument(
+        "--blended-cn",
+        action="store_true",
+        help="For CN only, generate blended annual/interim brief and scorecard outputs",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     market = args.market if args.market != "auto" else _infer_market(args.symbol)
+    if args.blended_cn and market != "CN":
+        raise RuntimeError("--blended-cn currently supports CN only")
+
     if market == "HK":
         result = fetch_and_analyze_hk_snapshot(
             args.symbol,
             name=args.name,
             submodel=args.submodel,
             quote_overlay_source=args.quote_overlay_source,
+            manual_supplement_path=args.manual_supplement_path,
+        )
+    elif args.blended_cn:
+        result = fetch_and_analyze_cn_blended_fundamentals(
+            args.symbol,
+            name=args.name,
+            submodel=args.submodel,
             manual_supplement_path=args.manual_supplement_path,
         )
     else:
@@ -63,20 +83,32 @@ def main() -> None:
             manual_supplement_path=args.manual_supplement_path,
         )
 
-    output_path = save_fundamental_brief(
-        scorecard=result.scorecard,
-        snapshot=result.fetched.snapshot,
-        field_sources=result.fetched.field_sources,
-        output_dir=args.output_dir,
-    )
+    if args.blended_cn:
+        output_path = save_blended_fundamental_brief(
+            blended=result.blended,
+            output_dir=args.output_dir,
+        )
+    else:
+        output_path = save_fundamental_brief(
+            scorecard=result.scorecard,
+            snapshot=result.fetched.snapshot,
+            field_sources=result.fetched.field_sources,
+            output_dir=args.output_dir,
+        )
     print(output_path)
 
     if args.save_scorecard_text:
-        scorecard_output_path = save_scorecard_text(
-            scorecard=result.scorecard,
-            snapshot=result.fetched.snapshot,
-            output_dir=args.scorecard_output_dir or args.output_dir,
-        )
+        if args.blended_cn:
+            scorecard_output_path = save_blended_scorecard_text(
+                blended=result.blended,
+                output_dir=args.scorecard_output_dir or args.output_dir,
+            )
+        else:
+            scorecard_output_path = save_scorecard_text(
+                scorecard=result.scorecard,
+                snapshot=result.fetched.snapshot,
+                output_dir=args.scorecard_output_dir or args.output_dir,
+            )
         print(scorecard_output_path)
 
 

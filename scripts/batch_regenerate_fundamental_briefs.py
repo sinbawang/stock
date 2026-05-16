@@ -11,8 +11,13 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from fundamental.reporting import save_fundamental_brief, save_scorecard_text
-from fundamental.services import fetch_and_analyze_cn_snapshot, fetch_and_analyze_hk_snapshot
+from fundamental.reporting import (
+    save_blended_fundamental_brief,
+    save_blended_scorecard_text,
+    save_fundamental_brief,
+    save_scorecard_text,
+)
+from fundamental.services import fetch_and_analyze_cn_blended_fundamentals, fetch_and_analyze_cn_snapshot, fetch_and_analyze_hk_snapshot
 
 
 BRIEF_FILE_RE = re.compile(
@@ -49,6 +54,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional scorecard text output directory, defaults to --output-dir or --meta-dir",
     )
+    parser.add_argument(
+        "--blended-cn",
+        action="store_true",
+        help="For CN targets only, regenerate blended annual/interim reports",
+    )
     return parser.parse_args()
 
 
@@ -81,6 +91,7 @@ def regenerate_one(
     supplement_dir: Path,
     save_scorecard: bool = False,
     scorecard_output_dir: Path | None = None,
+    blended_cn: bool = False,
 ) -> list[Path]:
     market = infer_market(target.symbol)
     manual_supplement_path = find_manual_supplement_path(target.symbol, supplement_dir)
@@ -92,6 +103,12 @@ def regenerate_one(
             quote_overlay_source="xueqiu",
             manual_supplement_path=manual_supplement_path,
         )
+    elif blended_cn:
+        result = fetch_and_analyze_cn_blended_fundamentals(
+            target.symbol,
+            name=target.name,
+            manual_supplement_path=manual_supplement_path,
+        )
     else:
         result = fetch_and_analyze_cn_snapshot(
             target.symbol,
@@ -99,23 +116,39 @@ def regenerate_one(
             manual_supplement_path=manual_supplement_path,
         )
 
-    generated_paths = [
-        save_fundamental_brief(
-            scorecard=result.scorecard,
-            snapshot=result.fetched.snapshot,
-            field_sources=result.fetched.field_sources,
-            output_dir=output_dir,
-        )
-    ]
-
-    if save_scorecard:
-        generated_paths.append(
-            save_scorecard_text(
+    if blended_cn and market == "CN":
+        generated_paths = [
+            save_blended_fundamental_brief(
+                blended=result.blended,
+                output_dir=output_dir,
+            )
+        ]
+    else:
+        generated_paths = [
+            save_fundamental_brief(
                 scorecard=result.scorecard,
                 snapshot=result.fetched.snapshot,
-                output_dir=scorecard_output_dir or output_dir,
+                field_sources=result.fetched.field_sources,
+                output_dir=output_dir,
             )
-        )
+        ]
+
+    if save_scorecard:
+        if blended_cn and market == "CN":
+            generated_paths.append(
+                save_blended_scorecard_text(
+                    blended=result.blended,
+                    output_dir=scorecard_output_dir or output_dir,
+                )
+            )
+        else:
+            generated_paths.append(
+                save_scorecard_text(
+                    scorecard=result.scorecard,
+                    snapshot=result.fetched.snapshot,
+                    output_dir=scorecard_output_dir or output_dir,
+                )
+            )
 
     return generated_paths
 
@@ -142,6 +175,7 @@ def main() -> None:
                 supplement_dir,
                 save_scorecard=args.save_scorecard_text,
                 scorecard_output_dir=scorecard_output_dir,
+                blended_cn=args.blended_cn,
             )
         )
 

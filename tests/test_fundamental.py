@@ -2,10 +2,21 @@ import pandas as pd
 
 from fundamental.data import cn_snapshot_fetcher
 from fundamental.config.registry import get_submodel, get_submodel_for_symbol
+from fundamental.models.blended import AnnualAnchorScore, BlendedFundamentalScoreCard, InterimOverlayScore, OverlayComponent
 from fundamental.models.scorecard import FundamentalDimensionScore, FundamentalScoreCard
 from fundamental.models.snapshot import FundamentalSnapshot
-from fundamental.reporting import render_fundamental_brief, render_scorecard_text, save_fundamental_brief, save_scorecard_text
+from fundamental.reporting import (
+    render_blended_fundamental_brief,
+    render_blended_scorecard_text,
+    render_fundamental_brief,
+    render_scorecard_text,
+    save_blended_fundamental_brief,
+    save_blended_scorecard_text,
+    save_fundamental_brief,
+    save_scorecard_text,
+)
 from fundamental.scoring import base_engine
+from fundamental.scoring.common_rules import score_debt_to_asset
 from fundamental.services import analyze_snapshot
 from fundamental.services.fetch_and_analyze_cn_snapshot import _relax_missing_cn_dividend_yield
 from fundamental.validation import validate_snapshot_against_policy
@@ -186,6 +197,60 @@ def make_utility_snapshot(**overrides) -> FundamentalSnapshot:
     }
     payload.update(overrides)
     return FundamentalSnapshot(**payload)
+
+
+def make_blended_cn_scorecard() -> BlendedFundamentalScoreCard:
+    annual_snapshot = make_utility_snapshot(report_period="2025-12-31")
+    annual_scorecard = analyze_snapshot(annual_snapshot, "utility_operator_v1")
+    interim_snapshot = make_utility_snapshot(
+        report_period="2026-03-31",
+        operating_cashflow_to_profit=1.22,
+        revenue_growth=12.0,
+        net_profit_growth=9.5,
+        debt_to_asset=54.0,
+    )
+    interim_overlay = InterimOverlayScore(
+        snapshot=interim_snapshot,
+        components=(
+            OverlayComponent(
+                component="growth_refresh",
+                score=78.0,
+                weight=0.35,
+                covered_metrics=("revenue_growth", "net_profit_growth"),
+            ),
+            OverlayComponent(
+                component="cashflow_refresh",
+                score=86.0,
+                weight=0.40,
+                covered_metrics=("operating_cashflow_to_profit",),
+                note="为降低 Q1 季节性噪音，优先用经营现金流/利润历史均值做刷新。",
+            ),
+            OverlayComponent(
+                component="resilience_refresh",
+                score=64.0,
+                weight=0.25,
+                covered_metrics=("debt_to_asset",),
+            ),
+        ),
+        overlay_score=77.3,
+        rating_hint="B",
+        covered_metrics=("revenue_growth", "net_profit_growth", "operating_cashflow_to_profit", "debt_to_asset"),
+        drivers_positive=("growth_refresh", "cashflow_refresh"),
+    )
+    return BlendedFundamentalScoreCard(
+        symbol=annual_snapshot.symbol,
+        name=annual_snapshot.name,
+        market=annual_snapshot.market,
+        submodel_id=annual_scorecard.submodel_id,
+        annual_anchor=AnnualAnchorScore(snapshot=annual_snapshot, scorecard=annual_scorecard),
+        interim_overlay=interim_overlay,
+        annual_weight=0.8,
+        interim_weight=0.2,
+        blended_total_score=round(annual_scorecard.total_score * 0.8 + interim_overlay.overlay_score * 0.2, 2),
+        blended_rating="B",
+        freshness_label="q1_refresh",
+        combined_comment="当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。",
+    )
 
 
 def make_digital_infra_snapshot(**overrides) -> FundamentalSnapshot:
@@ -1248,3 +1313,43 @@ def test_save_scorecard_text_writes_snapshot_metric_summary(tmp_path):
     assert "现金流与杠杆指标" in content
     assert "operating_cashflow_growth=18.7" in content
     assert "free_cashflow_yield=9.4" in content
+
+
+def test_render_blended_reports_include_anchor_and_overlay_sections():
+    blended = make_blended_cn_scorecard()
+
+    scorecard_text = render_blended_scorecard_text(blended)
+    brief_text = render_blended_fundamental_brief(blended)
+
+    assert "Blended总分" in scorecard_text
+    assert "锚定与刷新" in scorecard_text
+    assert "季报刷新层" in scorecard_text
+    assert "年报权重: 80% | 季报权重: 20%" in scorecard_text
+    assert "基本面混合简报" in brief_text
+    assert "年报锚定分" in brief_text
+    assert "季报刷新层拆解" in brief_text
+    assert "说明: 为降低 Q1 季节性噪音，优先用经营现金流/利润历史均值做刷新。" in brief_text
+
+
+def test_save_blended_outputs_use_blended_filenames(tmp_path):
+    blended = make_blended_cn_scorecard()
+
+    brief_path = save_blended_fundamental_brief(
+        blended=blended,
+        output_dir=tmp_path,
+        generated_at=pd.Timestamp("2026-05-16T12:30:00").to_pydatetime(),
+    )
+    scorecard_path = save_blended_scorecard_text(
+        blended=blended,
+        output_dir=tmp_path,
+        generated_at=pd.Timestamp("2026-05-16T12:30:00").to_pydatetime(),
+    )
+
+    assert brief_path.name == "600900_长江电力_utility_operator_v1_blended_fundamental_brief_20260516_123000.txt"
+    assert scorecard_path.name == "600900_长江电力_utility_operator_v1_blended_scorecard_20260516_123000.txt"
+
+
+def test_score_debt_to_asset_declines_linearly_between_40_and_70():
+    assert score_debt_to_asset(40.0) == 100.0
+    assert round(score_debt_to_asset(56.32) or 0.0, 2) == 45.60
+    assert score_debt_to_asset(70.0) == 0.0

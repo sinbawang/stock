@@ -18,6 +18,7 @@
 - [fundamental-module-spec.md](fundamental-module-spec.md): 模块目标、边界、输入输出和总骨架
 - [fundamental-industry-layering.md](fundamental-industry-layering.md): 行业分层方式，以及哪些行业共享主模型
 - [fundamental-tech-submodels.md](fundamental-tech-submodels.md): 科技行业子模型的业务差异和关注点
+- [fundamental-interim-scoring-design.md](fundamental-interim-scoring-design.md): 年报锚定 + 季报刷新评分的方案边界与总体设计
 
 读完这一层后，应该已经能回答：
 
@@ -53,6 +54,7 @@
 - [fundamental-python-model-draft.md](fundamental-python-model-draft.md): `FundamentalSnapshot` / `FundamentalScoreCard` 等对象如何表达
 - [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md): 子模型配置对象如何表达字段策略、维度、风险规则和解释文案
 - [fundamental-code-layout-draft.md](fundamental-code-layout-draft.md): `src/fundamental/` 目录应该如何拆分
+- [fundamental-interim-scoring-interface.md](fundamental-interim-scoring-interface.md): 跨报告期加权评分需要新增哪些对象、服务接口和输出结构
 
 读完这一层后，应该已经能回答：
 
@@ -90,8 +92,10 @@
 5. [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md)
 6. [fundamental-code-layout-draft.md](fundamental-code-layout-draft.md)
 7. [fundamental-roadmap.md](fundamental-roadmap.md)
-8. [combined-analysis-output-spec.md](combined-analysis-output-spec.md)
-9. [combined-analysis-service-interface.md](combined-analysis-service-interface.md)
+8. [fundamental-interim-scoring-design.md](fundamental-interim-scoring-design.md)
+9. [fundamental-interim-scoring-interface.md](fundamental-interim-scoring-interface.md)
+10. [combined-analysis-output-spec.md](combined-analysis-output-spec.md)
+11. [combined-analysis-service-interface.md](combined-analysis-service-interface.md)
 
 ## 当前实现快照
 
@@ -105,6 +109,7 @@
 - 当前代表标的映射里：长江电力与太阳能归入 `utility_operator_v1`，中国电信 H 股归入 `digital_infra_v1`，格力电器归入 `home_appliance_v1`，中航科工暂复用 `industrial_automation_v1`，中国神华挂接到 `energy_resource_v1`
 - 港股与 A 股都已有公共快照抓取入口，并能进入统一评分与报告链路
 - 港股金融 live 已有第一版 fallback 闭环，但仍保留部分 `manual supplement`
+- 当前评分口径仍是“优先年报，缺年报才回退最新报告期”；季报加权评分目前仍处于文档规划阶段，见 [fundamental-interim-scoring-design.md](fundamental-interim-scoring-design.md)
 
 如果想看更细的展开：
 

@@ -26,6 +26,7 @@ class FetchedCnFundamentalAnalysis:
     scorecard: FundamentalScoreCard
     assumptions: tuple[str, ...] = ()
 
+
 def _derive_cn_source_warnings(fetched: FundamentalSnapshotFetchResult) -> tuple[str, ...]:
     field_sources = fetched.field_sources or {}
     warnings: list[str] = []
@@ -53,6 +54,41 @@ def _derive_cn_source_warnings(fetched: FundamentalSnapshotFetchResult) -> tuple
             warnings.append("能源资源手工补充字段可能包含研究口径或公告摘要口径，应与公司原文披露口径区分阅读。")
 
     return normalize_warnings(warnings)
+
+
+def _analyze_cn_fetched_snapshot(
+    fetched: FundamentalSnapshotFetchResult,
+    submodel: Optional[str] = None,
+    manual_supplement: Optional[Mapping[str, Any]] = None,
+    manual_supplement_path: Optional[str] = None,
+) -> FetchedCnFundamentalAnalysis:
+    submodel_config = resolve_submodel_for_symbol(fetched.snapshot.symbol, submodel)
+    fetched = apply_manual_supplement(
+        fetched,
+        submodel_config,
+        resolve_manual_supplement(manual_supplement, manual_supplement_path),
+    )
+    analyzed_submodel, runtime_assumptions = _relax_missing_peg(
+        submodel_config,
+        missing_peg=fetched.snapshot.peg is None,
+    )
+    analyzed_submodel, cn_dividend_runtime_assumptions = _relax_missing_cn_dividend_yield(
+        analyzed_submodel,
+        missing_dividend_yield=fetched.snapshot.dividend_yield is None,
+    )
+    scorecard = analyze_snapshot(fetched.snapshot, analyzed_submodel)
+    source_warnings = _derive_cn_source_warnings(fetched)
+    if source_warnings:
+        scorecard = scorecard.model_copy(
+            update={
+                "warnings": list(dict.fromkeys([*scorecard.warnings, *source_warnings])),
+            }
+        )
+    return FetchedCnFundamentalAnalysis(
+        fetched=fetched,
+        scorecard=scorecard,
+        assumptions=fetched.assumptions + runtime_assumptions + cn_dividend_runtime_assumptions,
+    )
 
 
 def _relax_missing_peg(submodel: SubmodelConfig, missing_peg: bool) -> tuple[SubmodelConfig, tuple[str, ...]]:
@@ -98,30 +134,9 @@ def fetch_and_analyze_cn_snapshot(
     manual_supplement_path: Optional[str] = None,
 ) -> FetchedCnFundamentalAnalysis:
     fetched = fetch_cn_fundamental_snapshot(symbol=symbol, name=name)
-    submodel_config = resolve_submodel_for_symbol(fetched.snapshot.symbol, submodel)
-    fetched = apply_manual_supplement(
+    return _analyze_cn_fetched_snapshot(
         fetched,
-        submodel_config,
-        resolve_manual_supplement(manual_supplement, manual_supplement_path),
-    )
-    analyzed_submodel, runtime_assumptions = _relax_missing_peg(
-        submodel_config,
-        missing_peg=fetched.snapshot.peg is None,
-    )
-    analyzed_submodel, cn_dividend_runtime_assumptions = _relax_missing_cn_dividend_yield(
-        analyzed_submodel,
-        missing_dividend_yield=fetched.snapshot.dividend_yield is None,
-    )
-    scorecard = analyze_snapshot(fetched.snapshot, analyzed_submodel)
-    source_warnings = _derive_cn_source_warnings(fetched)
-    if source_warnings:
-        scorecard = scorecard.model_copy(
-            update={
-                "warnings": list(dict.fromkeys([*scorecard.warnings, *source_warnings])),
-            }
-        )
-    return FetchedCnFundamentalAnalysis(
-        fetched=fetched,
-        scorecard=scorecard,
-        assumptions=fetched.assumptions + runtime_assumptions + cn_dividend_runtime_assumptions,
+        submodel=submodel,
+        manual_supplement=manual_supplement,
+        manual_supplement_path=manual_supplement_path,
     )

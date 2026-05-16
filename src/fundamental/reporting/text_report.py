@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Union
 
+from fundamental.models.blended import BlendedFundamentalScoreCard, OverlayComponent
 from fundamental.models.common import format_display_literal
 from fundamental.models.scorecard import FundamentalScoreCard
 from fundamental.models.snapshot import FundamentalSnapshot
@@ -329,6 +330,108 @@ def render_scorecard_text(scorecard: FundamentalScoreCard, snapshot: Optional[Fu
     return "\n".join(line for line in body if line is not None).strip()
 
 
+def _render_overlay_component(component: OverlayComponent) -> str:
+    parts = [f"{component.component}: {component.score:.2f} x {component.weight:.0%}"]
+    if component.covered_metrics:
+        parts.append("覆盖=" + ", ".join(component.covered_metrics))
+    if component.missing_metrics:
+        parts.append("缺失=" + ", ".join(_display_metric_name(metric) for metric in component.missing_metrics))
+    if component.note:
+        parts.append(component.note)
+    return " | ".join(parts)
+
+
+def render_blended_scorecard_text(blended: BlendedFundamentalScoreCard) -> str:
+    annual_anchor = blended.annual_anchor
+    interim_overlay = blended.interim_overlay
+
+    header = (
+        f"{blended.name} ({blended.symbol}) | blended/{blended.submodel_id} | "
+        f"{annual_anchor.snapshot.report_period.isoformat()}"
+    )
+    if interim_overlay is not None:
+        header = header + f" -> {interim_overlay.snapshot.report_period.isoformat()}"
+
+    summary = (
+        f"Blended总分: {blended.blended_total_score:.2f} | "
+        f"评级: {blended.blended_rating} | "
+        f"年报权重: {blended.annual_weight:.0%} | 季报权重: {blended.interim_weight:.0%}"
+    )
+
+    body: list[str] = [header, summary, f"刷新标签: {blended.freshness_label}"]
+
+    body.extend(
+        [
+            "",
+            "锚定与刷新",
+            (
+                f"- 年报锚定: {annual_anchor.snapshot.report_period.isoformat()} | "
+                f"{annual_anchor.scorecard.total_score:.2f} | {annual_anchor.scorecard.rating}"
+            ),
+        ]
+    )
+    if interim_overlay is None:
+        body.append("- 季报刷新: 暂无更新的中间报告期")
+    else:
+        body.append(
+            f"- 季报刷新: {interim_overlay.snapshot.report_period.isoformat()} | "
+            f"{interim_overlay.overlay_score:.2f} | {interim_overlay.rating_hint or 'NA'}"
+        )
+
+    dimension_lines = ["年报维度得分"]
+    for dimension in annual_anchor.scorecard.dimension_scores:
+        dimension_lines.append(
+            f"- {_format_dimension_name(dimension.dimension)}: {dimension.score:.2f}/{dimension.weight:.2f}"
+        )
+        score_basis = _format_score_basis_for_display(dimension.score_basis, annual_anchor.snapshot)
+        if score_basis:
+            dimension_lines.append(f"  计算: {score_basis}")
+    body.extend(["", *dimension_lines])
+
+    if interim_overlay is not None:
+        body.extend(["", "季报刷新层"])
+        body.extend(f"- {_render_overlay_component(component)}" for component in interim_overlay.components)
+        if interim_overlay.drivers_positive:
+            body.extend(["", "刷新层正向信号"])
+            body.extend(f"- {item}" for item in interim_overlay.drivers_positive)
+        if interim_overlay.drivers_negative:
+            body.extend(["", "刷新层负向信号"])
+            body.extend(f"- {item}" for item in interim_overlay.drivers_negative)
+
+    strengths = _normalize_items(annual_anchor.scorecard.strengths)
+    risks = _normalize_items(annual_anchor.scorecard.risks)
+    warnings = _normalize_items(list(blended.warnings))
+    missing_metrics, unavailable_metrics = _partition_missing_metrics(
+        list(annual_anchor.scorecard.missing_metrics),
+        annual_anchor.snapshot,
+    )
+
+    for title, values in (
+        ("优势", strengths),
+        ("风险", risks),
+        ("警告", warnings),
+        ("当前不适用字段", unavailable_metrics),
+        ("缺失指标", missing_metrics),
+    ):
+        section_lines = _render_lines(title, values)
+        if section_lines:
+            body.extend(["", *section_lines])
+
+    annual_snapshot_lines = _render_snapshot_metric_lines(annual_anchor.snapshot, scorecard=annual_anchor.scorecard)
+    if annual_snapshot_lines:
+        body.extend(["", "年报锚定快照", *annual_snapshot_lines])
+
+    if interim_overlay is not None:
+        interim_snapshot_lines = _render_snapshot_metric_lines(interim_overlay.snapshot)
+        if interim_snapshot_lines:
+            body.extend(["", "季报刷新快照", *interim_snapshot_lines])
+
+    if blended.combined_comment:
+        body.extend(["", "综合说明", f"- {blended.combined_comment}"])
+
+    return "\n".join(line for line in body if line is not None).strip()
+
+
 def save_scorecard_text(
     scorecard: FundamentalScoreCard,
     snapshot: Optional[FundamentalSnapshot] = None,
@@ -345,6 +448,26 @@ def save_scorecard_text(
     output_path = target_dir / file_name
     output_path.write_text(
         render_scorecard_text(scorecard=scorecard, snapshot=snapshot) + "\n",
+        encoding="utf-8",
+    )
+    return output_path
+
+
+def save_blended_scorecard_text(
+    blended: BlendedFundamentalScoreCard,
+    output_dir: Union[str, Path] = "data/_meta",
+    generated_at: Optional[datetime] = None,
+) -> Path:
+    generated = generated_at or datetime.now()
+    target_dir = Path(output_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    file_name = (
+        f"{blended.symbol}_{blended.name}_{blended.submodel_id}_blended_scorecard_"
+        f"{generated.strftime('%Y%m%d_%H%M%S')}.txt"
+    )
+    output_path = target_dir / file_name
+    output_path.write_text(
+        render_blended_scorecard_text(blended=blended) + "\n",
         encoding="utf-8",
     )
     return output_path

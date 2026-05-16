@@ -224,3 +224,11 @@
 1. 报告期一致性已经从“文档问题”升级为“代码默认行为”，CN/HK 都优先年报，回退时必须显式留痕
 2. 当前 live 报告已经能同时解释“字段来自哪里”和“这次评分基于哪类报告期”
 3. 下一阶段如果继续扩 live 数据源，优先级应放在减少金融字段 fallback 与 `manual supplement`，而不是继续横向铺新行业桶
+
+截至 2026-05-16，路线图层面新增一条已经进入“先文档冻结”的方向：
+
+4. 当前 live 评分虽然已经做到“优先年报、回退留痕”，但仍没有解决“年报后新季报已披露、评分新鲜度滞后”的问题
+5. 对这个问题，当前建议方向不是“年报总分 + 季报总分”的简单线性混分，而是“年报锚定分 + 季报刷新层”
+6. 对应方案文档已新增：
+	- [fundamental-interim-scoring-design.md](fundamental-interim-scoring-design.md)
+	- [fundamental-interim-scoring-interface.md](fundamental-interim-scoring-interface.md)

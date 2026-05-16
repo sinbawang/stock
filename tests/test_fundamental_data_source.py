@@ -12,7 +12,9 @@ import pandas as pd
 from fundamental.config.registry import get_submodel_for_symbol
 from fundamental.data import cn_snapshot_fetcher as cn_fetcher
 from fundamental.data import hk_snapshot_fetcher as fetcher
+from fundamental.models.scorecard import FundamentalScoreCard
 from fundamental.reporting import render_fundamental_brief, render_scorecard_text
+from fundamental.services import fetch_and_analyze_cn_blended_fundamentals
 from fundamental.services.fetch_and_analyze_cn_snapshot import fetch_and_analyze_cn_snapshot
 from fundamental.services.fetch_and_analyze_hk_snapshot import fetch_and_analyze_hk_snapshot
 from fundamental.services.manual_supplement_helpers import apply_manual_supplement, resolve_manual_supplement
@@ -34,6 +36,16 @@ batch_regenerate_spec.loader.exec_module(batch_regenerate_module)
 discover_targets = batch_regenerate_module.discover_targets
 find_manual_supplement_path = batch_regenerate_module.find_manual_supplement_path
 regenerate_one = batch_regenerate_module.regenerate_one
+
+generate_brief_spec = importlib.util.spec_from_file_location(
+    "generate_fundamental_brief",
+    SCRIPTS / "generate_fundamental_brief.py",
+)
+if generate_brief_spec is None or generate_brief_spec.loader is None:
+    raise RuntimeError("failed to load generate_fundamental_brief.py for tests")
+generate_brief_module = importlib.util.module_from_spec(generate_brief_spec)
+sys.modules[generate_brief_spec.name] = generate_brief_module
+generate_brief_spec.loader.exec_module(generate_brief_module)
 
 fetch_service_module = importlib.import_module("fundamental.services.fetch_and_analyze_hk_snapshot")
 cn_fetch_service_module = importlib.import_module("fundamental.services.fetch_and_analyze_cn_snapshot")
@@ -208,6 +220,91 @@ def test_batch_regenerate_helpers_regenerate_one_returns_brief_and_scorecard_pat
         scorecard_output_dir,
     )
     assert generated_paths == [output_dir / "brief.txt", scorecard_output_dir / "scorecard.txt"]
+
+
+def test_batch_regenerate_helpers_regenerate_one_can_emit_blended_cn_outputs(monkeypatch, tmp_path):
+    target = batch_regenerate_module.BriefTarget(symbol="601088", name="中国神华")
+    output_dir = tmp_path / "briefs"
+    scorecard_output_dir = tmp_path / "scorecards"
+    supplement_dir = tmp_path / "manual_supplements"
+    supplement_dir.mkdir(parents=True)
+
+    fake_result = SimpleNamespace(blended=SimpleNamespace(submodel_id="energy_resource_v1"))
+    calls: dict[str, object] = {}
+
+    def fake_fetch_blended(symbol: str, name: str, manual_supplement_path: str | None = None):
+        calls["fetch"] = (symbol, name, manual_supplement_path)
+        return fake_result
+
+    def fake_save_blended_brief(*, blended, output_dir):
+        calls["brief"] = (blended, output_dir)
+        return Path(output_dir) / "blended-brief.txt"
+
+    def fake_save_blended_scorecard(*, blended, output_dir):
+        calls["scorecard"] = (blended, output_dir)
+        return Path(output_dir) / "blended-scorecard.txt"
+
+    monkeypatch.setattr(batch_regenerate_module, "fetch_and_analyze_cn_blended_fundamentals", fake_fetch_blended)
+    monkeypatch.setattr(batch_regenerate_module, "save_blended_fundamental_brief", fake_save_blended_brief)
+    monkeypatch.setattr(batch_regenerate_module, "save_blended_scorecard_text", fake_save_blended_scorecard)
+
+    generated_paths = regenerate_one(
+        target,
+        output_dir=output_dir,
+        supplement_dir=supplement_dir,
+        save_scorecard=True,
+        scorecard_output_dir=scorecard_output_dir,
+        blended_cn=True,
+    )
+
+    assert calls["fetch"] == ("601088", "中国神华", None)
+    assert calls["brief"] == (fake_result.blended, output_dir)
+    assert calls["scorecard"] == (fake_result.blended, scorecard_output_dir)
+    assert generated_paths == [output_dir / "blended-brief.txt", scorecard_output_dir / "blended-scorecard.txt"]
+
+
+def test_generate_fundamental_brief_main_routes_blended_cn_outputs(monkeypatch, tmp_path, capsys):
+    fake_result = SimpleNamespace(blended=SimpleNamespace(submodel_id="utility_operator_v1"))
+    calls: dict[str, object] = {}
+
+    def fake_fetch_blended(symbol: str, name: str, submodel: str | None = None, manual_supplement_path: str | None = None):
+        calls["fetch"] = (symbol, name, submodel, manual_supplement_path)
+        return fake_result
+
+    def fake_save_blended_brief(*, blended, output_dir):
+        calls["brief"] = (blended, output_dir)
+        return Path(output_dir) / "blended-brief.txt"
+
+    def fake_save_blended_scorecard(*, blended, output_dir):
+        calls["scorecard"] = (blended, output_dir)
+        return Path(output_dir) / "blended-scorecard.txt"
+
+    monkeypatch.setattr(generate_brief_module, "fetch_and_analyze_cn_blended_fundamentals", fake_fetch_blended)
+    monkeypatch.setattr(generate_brief_module, "save_blended_fundamental_brief", fake_save_blended_brief)
+    monkeypatch.setattr(generate_brief_module, "save_blended_scorecard_text", fake_save_blended_scorecard)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate_fundamental_brief.py",
+            "600900",
+            "--name",
+            "长江电力",
+            "--blended-cn",
+            "--output-dir",
+            str(tmp_path),
+            "--save-scorecard-text",
+        ],
+    )
+
+    generate_brief_module.main()
+
+    assert calls["fetch"] == ("600900", "长江电力", None, None)
+    assert calls["brief"] == (fake_result.blended, str(tmp_path))
+    assert calls["scorecard"] == (fake_result.blended, str(tmp_path))
+    stdout = capsys.readouterr().out
+    assert "blended-brief.txt" in stdout
+    assert "blended-scorecard.txt" in stdout
 
 
 def test_parse_manual_supplement_text_extracts_key_value_lines():
@@ -1478,6 +1575,710 @@ def test_fetch_cn_fundamental_snapshot_falls_back_to_pb_implied_price_when_daily
     assert result.field_sources is not None
     assert result.field_sources["dividend_yield"] == "cninfo.dividend_history+baidu.pb+ths.abstract.book_value_per_share"
     assert any("daily price fetch for dividend_yield fallback failed" in item for item in result.assumptions)
+
+
+def test_fetch_cn_fundamental_snapshot_can_select_latest_interim_report_period(monkeypatch):
+    abstract_df = pd.DataFrame(
+        [
+            ["2025-12-31", "9.60亿", "15.0%", "9.00亿", "20.0%", "112.00亿", "12.0%", "1.20", "6.00", "1.40", "3.00", "0.60", "22.0%", "47.0%", "8.5%", "8.0%", "118.0", "4.2", "87.0", "42.0", "1.60", "1.20", "1.10", "1.90", "38.0%"],
+            ["2026-03-31", "2.60亿", "8.0%", "2.40亿", "7.0%", "30.00亿", "5.5%", "0.32", "6.40", "1.45", "3.05", "0.18", "23.0%", "48.0%", "8.6%", "8.1%", "118.0", "4.2", "87.0", "42.0", "1.62", "1.22", "1.11", "1.92", "37.0%"],
+        ]
+    )
+    debt_df = pd.DataFrame(
+        [
+            {"report_date": "2025-12-31", "metric_name": "accounts_receivable", "value": 11_200_000_000.0, "yoy": 0.12},
+            {"report_date": "2026-03-31", "metric_name": "accounts_receivable", "value": 11_500_000_000.0, "yoy": 0.09},
+            {"report_date": "2025-12-31", "metric_name": "inventory", "value": 8_800_000_000.0, "yoy": 0.10},
+            {"report_date": "2026-03-31", "metric_name": "inventory", "value": 8_700_000_000.0, "yoy": 0.04},
+        ]
+    )
+    cash_df = pd.DataFrame(
+        [
+            {"report_date": "2025-12-31", "metric_name": "act_cash_flow_net", "value": 10_800_000_000.0},
+            {"report_date": "2026-03-31", "metric_name": "act_cash_flow_net", "value": 2_800_000_000.0},
+        ]
+    )
+    benefit_df = pd.DataFrame(
+        [
+            {"report_date": "2025-12-31", "metric_name": "parent_holder_net_profit", "value": 9_600_000_000.0},
+            {"report_date": "2026-03-31", "metric_name": "parent_holder_net_profit", "value": 2_600_000_000.0},
+        ]
+    )
+    pe_series = pd.DataFrame([{"date": "2026-05-09", "value": 15.0}])
+    pb_series = pd.DataFrame([{"date": "2026-05-09", "value": 3.2}])
+    market_cap_series = pd.DataFrame([{"date": "2026-05-09", "value": 520.0}])
+    financial_indicator_df = pd.DataFrame([
+        {"REPORT_DATE": "2025-12-31", "股息率TTM": 4.8},
+        {"REPORT_DATE": "2026-03-31", "股息率TTM": 5.1},
+    ])
+
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_abstract_df", lambda symbol: abstract_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_debt_df", lambda symbol: debt_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_cash_df", lambda symbol: cash_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_benefit_df", lambda symbol: benefit_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_financial_analysis_indicator_df", lambda symbol: financial_indicator_df)
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_dividend_history_df", lambda symbol: pd.DataFrame())
+    monkeypatch.setattr(cn_fetcher, "_fetch_cn_daily_price_df", lambda symbol: pd.DataFrame())
+    monkeypatch.setattr(
+        cn_fetcher,
+        "_fetch_cn_valuation_series",
+        lambda symbol, indicator, period="近五年": {
+            "市盈率(TTM)": pe_series,
+            "市净率": pb_series,
+            "总市值": market_cap_series,
+        }[indicator],
+    )
+
+    result = cn_fetcher.fetch_cn_fundamental_snapshot(
+        "600900",
+        name="长江电力",
+        report_period_preference="latest_interim",
+    )
+
+    assert result.snapshot.report_period == date(2026, 3, 31)
+    assert result.snapshot.period_type == "report"
+    assert result.snapshot.revenue_growth == 5.5
+    assert result.snapshot.dividend_yield == 5.1
+
+
+def test_fetch_cn_period_snapshots_returns_newer_interim_when_available(monkeypatch):
+    annual = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="600900",
+            name="长江电力",
+            market="CN",
+            report_period=date(2025, 12, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+        )
+    )
+    interim = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="600900",
+            name="长江电力",
+            market="CN",
+            report_period=date(2026, 3, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="report",
+        )
+    )
+
+    def fake_fetch(symbol: str, name: str | None = None, report_period_preference: str = "annual_preferred"):
+        return annual if report_period_preference == "annual_preferred" else interim
+
+    monkeypatch.setattr(cn_fetcher, "fetch_cn_fundamental_snapshot", fake_fetch)
+
+    result = cn_fetcher.fetch_cn_period_snapshots("600900", name="长江电力")
+
+    assert result.annual.snapshot.report_period == date(2025, 12, 31)
+    assert result.interim is not None
+    assert result.interim.snapshot.report_period == date(2026, 3, 31)
+
+
+def test_fetch_and_analyze_cn_blended_fundamentals_combines_annual_and_q1_scores(monkeypatch):
+    annual_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="600900",
+            name="长江电力",
+            market="CN",
+            report_period=date(2025, 12, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="annual",
+            roe=14.2,
+            roe_3y_cv=0.09,
+            operating_cashflow_to_profit=1.26,
+            revenue_growth=7.5,
+            net_profit_growth=8.4,
+            dividend_yield=3.6,
+            pe_percentile_5y=55.0,
+        ),
+        assumptions=("annual",),
+    )
+    annual_scorecard = FundamentalScoreCard(
+        symbol="600900",
+        name="长江电力",
+        market="CN",
+        report_period=date(2025, 12, 31),
+        industry_bucket="utility",
+        submodel_id="utility_operator_v1",
+        submodel_version="v1",
+        total_score=70.0,
+        rating="B",
+        red_flag=False,
+        dimension_scores=[],
+        strengths=[],
+        risks=[],
+        warnings=[],
+        focus_questions=[],
+        missing_metrics=[],
+        triggered_rules=[],
+    )
+    interim_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="600900",
+            name="长江电力",
+            market="CN",
+            report_period=date(2026, 3, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="report",
+            revenue_growth=12.0,
+            net_profit_growth=10.0,
+            operating_cashflow_to_profit=1.1,
+            debt_to_asset=56.0,
+        ),
+        assumptions=("interim",),
+    )
+
+    monkeypatch.setattr(
+        importlib.import_module("fundamental.services.fetch_and_analyze_cn_blended"),
+        "fetch_cn_period_snapshots",
+        lambda symbol, name=None: cn_fetcher.CnPeriodSnapshotsFetchResult(annual=annual_fetch, interim=interim_fetch),
+    )
+    monkeypatch.setattr(
+        importlib.import_module("fundamental.services.fetch_and_analyze_cn_blended"),
+        "_analyze_cn_fetched_snapshot",
+        lambda fetched, submodel=None, manual_supplement=None, manual_supplement_path=None: SimpleNamespace(
+            fetched=annual_fetch,
+            scorecard=annual_scorecard,
+            assumptions=("annual",),
+        ),
+    )
+
+    result = fetch_and_analyze_cn_blended_fundamentals("600900", name="长江电力")
+
+    assert result.blended.annual_weight == 0.8
+    assert result.blended.interim_weight == 0.2
+    assert result.interim_overlay is not None
+    assert result.interim_overlay.overlay_score > 0
+    assert result.blended.blended_total_score > 56.0
+    assert result.blended.freshness_label == "q1_refresh"
+
+
+def test_fetch_and_analyze_cn_blended_fundamentals_smooths_utility_q1_cashflow_refresh(monkeypatch):
+    annual_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="000591",
+            name="太阳能",
+            market="CN",
+            report_period=date(2025, 12, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="annual",
+            roe=3.47,
+            roe_3y_cv=0.2789,
+            operating_cashflow_to_profit=5.0246,
+            operating_cashflow_to_profit_history=[5.0246, 1.5422, 1.506],
+            revenue_growth=-17.91,
+            net_profit_growth=-32.87,
+            dividend_yield=2.0024,
+            pe_percentile_5y=100.0,
+            debt_to_asset=53.89,
+        ),
+        assumptions=("annual",),
+    )
+    annual_scorecard = FundamentalScoreCard(
+        symbol="000591",
+        name="太阳能",
+        market="CN",
+        report_period=date(2025, 12, 31),
+        industry_bucket="utility",
+        submodel_id="utility_operator_v1",
+        submodel_version="v1",
+        total_score=44.76,
+        rating="D",
+        red_flag=False,
+        dimension_scores=[],
+        strengths=[],
+        risks=[],
+        warnings=[],
+        focus_questions=[],
+        missing_metrics=[],
+        triggered_rules=[],
+    )
+    interim_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="000591",
+            name="太阳能",
+            market="CN",
+            report_period=date(2026, 3, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="report",
+            revenue_growth=-18.4,
+            net_profit_growth=-36.51,
+            operating_cashflow_to_profit=0.1304,
+            operating_cashflow_to_profit_history=[0.1304, 5.0246, 2.7351],
+            debt_to_asset=56.32,
+        ),
+        assumptions=("interim",),
+    )
+
+    blended_module = importlib.import_module("fundamental.services.fetch_and_analyze_cn_blended")
+    monkeypatch.setattr(
+        blended_module,
+        "fetch_cn_period_snapshots",
+        lambda symbol, name=None: cn_fetcher.CnPeriodSnapshotsFetchResult(annual=annual_fetch, interim=interim_fetch),
+    )
+    monkeypatch.setattr(
+        blended_module,
+        "_analyze_cn_fetched_snapshot",
+        lambda fetched, submodel=None, manual_supplement=None, manual_supplement_path=None: SimpleNamespace(
+            fetched=annual_fetch,
+            scorecard=annual_scorecard,
+            assumptions=("annual",),
+        ),
+    )
+
+    result = fetch_and_analyze_cn_blended_fundamentals("000591", name="太阳能")
+
+    assert result.interim_overlay is not None
+    component_scores = {component.component: component.score for component in result.interim_overlay.components}
+    assert component_scores["growth_refresh"] == 0.0
+    assert component_scores["cashflow_refresh"] > 0.0
+    assert round(component_scores["resilience_refresh"], 2) == 45.60
+    assert result.interim_overlay.overlay_score > 11.0
+
+
+def test_fetch_and_analyze_cn_blended_fundamentals_supports_industrial_automation_overlay(monkeypatch):
+    annual_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="300124",
+            name="汇川技术",
+            market="CN",
+            report_period=date(2025, 12, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="annual",
+            roe=19.4,
+            roe_3y_cv=0.16,
+            operating_cashflow_to_profit=1.12,
+            revenue_growth=18.0,
+            net_profit_growth=20.5,
+            accounts_receivable_growth=14.0,
+            inventory_growth=12.0,
+            pe_percentile_5y=48.0,
+        ),
+        assumptions=("annual",),
+    )
+    annual_scorecard = FundamentalScoreCard(
+        symbol="300124",
+        name="汇川技术",
+        market="CN",
+        report_period=date(2025, 12, 31),
+        industry_bucket="technology",
+        submodel_id="industrial_automation_v1",
+        submodel_version="v1",
+        total_score=67.81,
+        rating="B",
+        red_flag=False,
+        dimension_scores=[],
+        strengths=[],
+        risks=[],
+        warnings=[],
+        focus_questions=[],
+        missing_metrics=[],
+        triggered_rules=[],
+    )
+    interim_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="300124",
+            name="汇川技术",
+            market="CN",
+            report_period=date(2026, 3, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="report",
+            revenue_growth=21.0,
+            net_profit_growth=18.0,
+            operating_cashflow_to_profit=1.05,
+            operating_cashflow_to_profit_history=[1.05, 1.12, 1.08],
+            accounts_receivable_growth=9.0,
+            inventory_growth=7.0,
+        ),
+        assumptions=("interim",),
+    )
+
+    blended_module = importlib.import_module("fundamental.services.fetch_and_analyze_cn_blended")
+    monkeypatch.setattr(
+        blended_module,
+        "fetch_cn_period_snapshots",
+        lambda symbol, name=None: cn_fetcher.CnPeriodSnapshotsFetchResult(annual=annual_fetch, interim=interim_fetch),
+    )
+    monkeypatch.setattr(
+        blended_module,
+        "_analyze_cn_fetched_snapshot",
+        lambda fetched, submodel=None, manual_supplement=None, manual_supplement_path=None: SimpleNamespace(
+            fetched=annual_fetch,
+            scorecard=annual_scorecard,
+            assumptions=("annual",),
+        ),
+    )
+
+    result = fetch_and_analyze_cn_blended_fundamentals("300124", name="汇川技术")
+
+    assert result.interim_overlay is not None
+    assert result.blended.freshness_label == "q1_refresh"
+    assert {component.component for component in result.interim_overlay.components} == {
+        "growth_refresh",
+        "cashflow_refresh",
+        "operating_cycle_refresh",
+    }
+    assert result.blended.interim_weight == 0.2
+
+
+def test_fetch_and_analyze_cn_blended_fundamentals_smooths_industrial_q1_cashflow_refresh(monkeypatch):
+    annual_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="300124",
+            name="汇川技术",
+            market="CN",
+            report_period=date(2025, 12, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="annual",
+            roe=16.34,
+            roe_3y_cv=0.1357,
+            operating_cashflow_to_profit=1.323,
+            operating_cashflow_to_profit_history=[1.323, 1.6802, 0.7107],
+            revenue_growth=21.77,
+            net_profit_growth=17.84,
+            accounts_receivable_growth=0.08,
+            inventory_growth=0.16,
+            pe_percentile_5y=73.41,
+        ),
+        assumptions=("annual",),
+    )
+    annual_scorecard = FundamentalScoreCard(
+        symbol="300124",
+        name="汇川技术",
+        market="CN",
+        report_period=date(2025, 12, 31),
+        industry_bucket="technology",
+        submodel_id="industrial_automation_v1",
+        submodel_version="v1",
+        total_score=67.81,
+        rating="B",
+        red_flag=False,
+        dimension_scores=[],
+        strengths=[],
+        risks=[],
+        warnings=[],
+        focus_questions=[],
+        missing_metrics=[],
+        triggered_rules=[],
+    )
+    interim_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="300124",
+            name="汇川技术",
+            market="CN",
+            report_period=date(2026, 3, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="report",
+            revenue_growth=12.98,
+            net_profit_growth=-23.39,
+            operating_cashflow_to_profit=0.0928,
+            operating_cashflow_to_profit_history=[0.0928, 1.323, 0.924],
+            accounts_receivable_growth=-6.53,
+            inventory_growth=-6.45,
+        ),
+        assumptions=("interim",),
+    )
+
+    blended_module = importlib.import_module("fundamental.services.fetch_and_analyze_cn_blended")
+    monkeypatch.setattr(
+        blended_module,
+        "fetch_cn_period_snapshots",
+        lambda symbol, name=None: cn_fetcher.CnPeriodSnapshotsFetchResult(annual=annual_fetch, interim=interim_fetch),
+    )
+    monkeypatch.setattr(
+        blended_module,
+        "_analyze_cn_fetched_snapshot",
+        lambda fetched, submodel=None, manual_supplement=None, manual_supplement_path=None: SimpleNamespace(
+            fetched=annual_fetch,
+            scorecard=annual_scorecard,
+            assumptions=("annual",),
+        ),
+    )
+
+    result = fetch_and_analyze_cn_blended_fundamentals("300124", name="汇川技术")
+
+    assert result.interim_overlay is not None
+    component_scores = {component.component: component.score for component in result.interim_overlay.components}
+    assert component_scores["growth_refresh"] < 40.0
+    assert component_scores["cashflow_refresh"] > 0.0
+    assert component_scores["operating_cycle_refresh"] == 100.0
+    assert result.interim_overlay.overlay_score > 54.73
+
+
+def test_fetch_and_analyze_cn_blended_fundamentals_annualizes_bank_q1_roe_refresh(monkeypatch):
+    annual_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="601328",
+            name="交通银行",
+            market="CN",
+            report_period=date(2025, 12, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="annual",
+            roe=8.38,
+            core_tier1_ratio=11.43,
+            npl_ratio=1.28,
+            provision_coverage_ratio=208.38,
+            net_interest_margin=1.2,
+            loan_deposit_growth_gap=-0.5398,
+        ),
+        assumptions=("annual",),
+    )
+    annual_scorecard = FundamentalScoreCard(
+        symbol="601328",
+        name="交通银行",
+        market="CN",
+        report_period=date(2025, 12, 31),
+        industry_bucket="financial",
+        submodel_id="bank_v1",
+        submodel_version="v1",
+        total_score=64.22,
+        rating="C",
+        red_flag=False,
+        dimension_scores=[],
+        strengths=[],
+        risks=[],
+        warnings=[],
+        focus_questions=[],
+        missing_metrics=[],
+        triggered_rules=[],
+    )
+    interim_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="601328",
+            name="交通银行",
+            market="CN",
+            report_period=date(2026, 3, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="report",
+            roe=2.27,
+            core_tier1_ratio=11.25,
+            npl_ratio=1.3,
+            provision_coverage_ratio=202.8,
+            net_interest_margin=1.23,
+            loan_deposit_growth_gap=-0.5398,
+        ),
+        assumptions=("interim",),
+    )
+
+    blended_module = importlib.import_module("fundamental.services.fetch_and_analyze_cn_blended")
+    monkeypatch.setattr(
+        blended_module,
+        "fetch_cn_period_snapshots",
+        lambda symbol, name=None: cn_fetcher.CnPeriodSnapshotsFetchResult(annual=annual_fetch, interim=interim_fetch),
+    )
+    monkeypatch.setattr(
+        blended_module,
+        "_analyze_cn_fetched_snapshot",
+        lambda fetched, submodel=None, manual_supplement=None, manual_supplement_path=None: SimpleNamespace(
+            fetched=annual_fetch,
+            scorecard=annual_scorecard,
+            assumptions=("annual",),
+        ),
+    )
+
+    result = fetch_and_analyze_cn_blended_fundamentals("601328", name="交通银行")
+
+    assert result.interim_overlay is not None
+    components = {component.component: component for component in result.interim_overlay.components}
+    profitability_refresh = components["profitability_refresh"]
+    assert profitability_refresh.score > 1.75
+    assert profitability_refresh.covered_metrics == ("roe", "net_interest_margin")
+    assert profitability_refresh.note is not None
+    assert "年化 ROE" in profitability_refresh.note
+
+
+def test_fetch_and_analyze_cn_blended_fundamentals_supports_game_content_overlay(monkeypatch):
+    annual_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="002555",
+            name="三七互娱",
+            market="CN",
+            report_period=date(2025, 12, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="annual",
+            roe=22.0,
+            operating_cashflow_to_profit=1.18,
+            operating_cashflow_to_profit_history=[1.18, 1.02],
+            revenue_growth=16.0,
+            net_profit_growth=24.0,
+            pe_percentile_5y=43.0,
+        ),
+        assumptions=("annual",),
+    )
+    annual_scorecard = FundamentalScoreCard(
+        symbol="002555",
+        name="三七互娱",
+        market="CN",
+        report_period=date(2025, 12, 31),
+        industry_bucket="technology",
+        submodel_id="game_content_v1",
+        submodel_version="v1",
+        total_score=62.36,
+        rating="C",
+        red_flag=False,
+        dimension_scores=[],
+        strengths=[],
+        risks=[],
+        warnings=[],
+        focus_questions=[],
+        missing_metrics=[],
+        triggered_rules=[],
+    )
+    interim_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="002555",
+            name="三七互娱",
+            market="CN",
+            report_period=date(2026, 3, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="report",
+            roe=18.0,
+            revenue_growth=12.0,
+            net_profit_growth=10.0,
+            operating_cashflow_to_profit=1.01,
+            operating_cashflow_to_profit_history=[1.01, 1.18, 1.05],
+        ),
+        assumptions=("interim",),
+    )
+
+    blended_module = importlib.import_module("fundamental.services.fetch_and_analyze_cn_blended")
+    monkeypatch.setattr(
+        blended_module,
+        "fetch_cn_period_snapshots",
+        lambda symbol, name=None: cn_fetcher.CnPeriodSnapshotsFetchResult(annual=annual_fetch, interim=interim_fetch),
+    )
+    monkeypatch.setattr(
+        blended_module,
+        "_analyze_cn_fetched_snapshot",
+        lambda fetched, submodel=None, manual_supplement=None, manual_supplement_path=None: SimpleNamespace(
+            fetched=annual_fetch,
+            scorecard=annual_scorecard,
+            assumptions=("annual",),
+        ),
+    )
+
+    result = fetch_and_analyze_cn_blended_fundamentals("002555", name="三七互娱")
+
+    assert result.interim_overlay is not None
+    assert result.blended.freshness_label == "q1_refresh"
+    assert {component.component for component in result.interim_overlay.components} == {
+        "growth_refresh",
+        "cashflow_refresh",
+        "profit_quality_refresh",
+    }
+    assert result.blended.interim_weight == 0.2
+
+
+def test_fetch_and_analyze_cn_blended_fundamentals_smooths_game_q1_overlay(monkeypatch):
+    annual_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="002555",
+            name="三七互娱",
+            market="CN",
+            report_period=date(2025, 12, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="annual",
+            roe=21.73,
+            operating_cashflow_to_profit=1.22,
+            operating_cashflow_to_profit_history=[1.22, 1.1216, 1.1837],
+            revenue_growth=-8.46,
+            net_profit_growth=8.5,
+            pe_percentile_5y=38.95,
+        ),
+        assumptions=("annual",),
+    )
+    annual_scorecard = FundamentalScoreCard(
+        symbol="002555",
+        name="三七互娱",
+        market="CN",
+        report_period=date(2025, 12, 31),
+        industry_bucket="technology",
+        submodel_id="game_content_v1",
+        submodel_version="v1",
+        total_score=62.36,
+        rating="C",
+        red_flag=False,
+        dimension_scores=[],
+        strengths=[],
+        risks=[],
+        warnings=[],
+        focus_questions=[],
+        missing_metrics=[],
+        triggered_rules=[],
+    )
+    interim_fetch = cn_fetcher.FundamentalSnapshotFetchResult(
+        snapshot=cn_fetcher.FundamentalSnapshot(
+            symbol="002555",
+            name="三七互娱",
+            market="CN",
+            report_period=date(2026, 3, 31),
+            currency="CNY",
+            source="unit-test",
+            updated_at=pd.Timestamp("2026-05-10T00:00:00").to_pydatetime(),
+            period_type="report",
+            roe=6.22,
+            revenue_growth=-12.32,
+            net_profit_growth=59.02,
+            operating_cashflow_to_profit=0.4203,
+            operating_cashflow_to_profit_history=[0.4203, 1.22, 1.2654],
+        ),
+        assumptions=("interim",),
+    )
+
+    blended_module = importlib.import_module("fundamental.services.fetch_and_analyze_cn_blended")
+    monkeypatch.setattr(
+        blended_module,
+        "fetch_cn_period_snapshots",
+        lambda symbol, name=None: cn_fetcher.CnPeriodSnapshotsFetchResult(annual=annual_fetch, interim=interim_fetch),
+    )
+    monkeypatch.setattr(
+        blended_module,
+        "_analyze_cn_fetched_snapshot",
+        lambda fetched, submodel=None, manual_supplement=None, manual_supplement_path=None: SimpleNamespace(
+            fetched=annual_fetch,
+            scorecard=annual_scorecard,
+            assumptions=("annual",),
+        ),
+    )
+
+    result = fetch_and_analyze_cn_blended_fundamentals("002555", name="三七互娱")
+
+    assert result.interim_overlay is not None
+    component_scores = {component.component: component.score for component in result.interim_overlay.components}
+    assert component_scores["growth_refresh"] == 50.0
+    assert component_scores["cashflow_refresh"] > 0.0
+    assert component_scores["profit_quality_refresh"] > 0.0
+    assert result.interim_overlay.overlay_score > 20.0
 
 
 def test_fetch_and_analyze_cn_snapshot_builds_game_content_scorecard(monkeypatch):

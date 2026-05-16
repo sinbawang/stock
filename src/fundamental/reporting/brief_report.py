@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 from typing import Any, Mapping, Optional, Sequence
 
+from fundamental.models.blended import BlendedFundamentalScoreCard
 from fundamental.models.common import format_display_literal
 from fundamental.models.scorecard import FundamentalScoreCard
 from fundamental.models.snapshot import FundamentalSnapshot
@@ -315,6 +316,113 @@ def save_fundamental_brief(
             field_sources=field_sources,
             generated_at=generated,
         ),
+        encoding="utf-8",
+    )
+    return output_path
+
+
+def render_blended_fundamental_brief(
+    blended: BlendedFundamentalScoreCard,
+    generated_at: Optional[datetime] = None,
+) -> str:
+    generated = generated_at or datetime.now()
+    annual_anchor = blended.annual_anchor
+    interim_overlay = blended.interim_overlay
+    annual_scorecard = annual_anchor.scorecard
+    strengths = _normalize_items(annual_scorecard.strengths)
+    risks = _normalize_items(annual_scorecard.risks)
+    warnings = _normalize_items(list(blended.warnings))
+    missing_metrics, unavailable_metrics = _partition_missing_metrics(
+        list(annual_scorecard.missing_metrics),
+        annual_anchor.snapshot,
+    )
+
+    lines = [
+        f"{blended.name}基本面混合简报",
+        f"时间: {generated.strftime('%Y-%m-%d %H:%M')}",
+        (
+            f"标的: {blended.name}({blended.symbol})  年报: {annual_anchor.snapshot.report_period.isoformat()}"
+            + (
+                f"  季报: {interim_overlay.snapshot.report_period.isoformat()}"
+                if interim_overlay is not None
+                else "  季报: 暂无"
+            )
+        ),
+        (
+            f"评级: {blended.blended_rating}  Blended总分: {blended.blended_total_score:.2f}  "
+            f"年报权重: {blended.annual_weight:.0%}  季报权重: {blended.interim_weight:.0%}"
+        ),
+        f"子模型: {blended.submodel_id}  刷新标签: {blended.freshness_label}",
+        "",
+        "核心结论:",
+        f"- 年报锚定分: {annual_scorecard.total_score:.2f} ({annual_scorecard.rating})。",
+    ]
+    if interim_overlay is None:
+        lines.append("- 季报刷新层: 暂无更新的中间报告期。")
+    else:
+        lines.append(
+            f"- 季报刷新层: {interim_overlay.overlay_score:.2f} ({interim_overlay.rating_hint or 'NA'})。"
+        )
+    if blended.combined_comment:
+        lines.append(f"- 综合说明: {blended.combined_comment}")
+
+    lines.extend(["", "年报维度结论:"])
+    lines.extend(
+        f"- {_format_dimension_name(dimension.dimension)} {dimension.score:.2f}/{dimension.weight:.2f}。"
+        for dimension in annual_scorecard.dimension_scores
+    )
+
+    if interim_overlay is not None:
+        lines.extend(["", "季报刷新层拆解:"])
+        for component in interim_overlay.components:
+            fragment = f"- {component.component}: {component.score:.2f} x {component.weight:.0%}"
+            if component.covered_metrics:
+                fragment += "，覆盖 " + ", ".join(component.covered_metrics)
+            lines.append(fragment)
+            if component.note:
+                lines.append(f"  说明: {component.note}")
+
+    if strengths:
+        lines.extend(["", "亮点:"])
+        lines.extend(f"- {item}" for item in strengths)
+    if risks:
+        lines.extend(["", "风险:"])
+        lines.extend(f"- {item}" for item in risks)
+    if warnings:
+        lines.extend(["", "警告:"])
+        lines.extend(f"- {item}" for item in warnings)
+    if unavailable_metrics:
+        lines.extend(["", "当前不适用字段:"])
+        lines.extend(f"- {item}" for item in unavailable_metrics)
+    if missing_metrics:
+        lines.extend(["", "当前缺失字段:"])
+        lines.extend(f"- {item}" for item in missing_metrics)
+
+    lines.extend(["", "年报锚定快照:"])
+    lines.extend(_key_metric_summary_lines(annual_anchor.snapshot, scorecard=annual_scorecard))
+
+    if interim_overlay is not None:
+        lines.extend(["", "季报刷新快照:"])
+        lines.extend(_key_metric_summary_lines(interim_overlay.snapshot))
+
+    return "\n".join(lines).strip() + "\n"
+
+
+def save_blended_fundamental_brief(
+    blended: BlendedFundamentalScoreCard,
+    output_dir: str | Path = "data/_meta",
+    generated_at: Optional[datetime] = None,
+) -> Path:
+    generated = generated_at or datetime.now()
+    target_dir = Path(output_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    file_name = (
+        f"{blended.symbol}_{blended.name}_{blended.submodel_id}_blended_fundamental_brief_"
+        f"{generated.strftime('%Y%m%d_%H%M%S')}.txt"
+    )
+    output_path = target_dir / file_name
+    output_path.write_text(
+        render_blended_fundamental_brief(blended=blended, generated_at=generated),
         encoding="utf-8",
     )
     return output_path

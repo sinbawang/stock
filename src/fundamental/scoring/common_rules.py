@@ -97,7 +97,7 @@ def score_debt_to_asset(value: Optional[float]) -> Optional[float]:
         return 0.0
     if value <= 40:
         return 100.0
-    return _linear_score(value, 70.0, 40.0, 0.0, 100.0)
+    return _linear_score(value, 40.0, 70.0, 100.0, 0.0)
 
 
 def score_pb_financial(value: Optional[float]) -> Optional[float]:
