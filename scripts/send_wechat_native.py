@@ -26,6 +26,7 @@ WINDOW_FOREGROUND_RETRY_DELAY_SECONDS = 0.2
 UIA_SEND_SETTLE_SECONDS = 0.6
 UIA_SEND_VERIFY_RETRIES = 5
 UIA_MAX_MESSAGE_CHARS = 500
+UIA_BEST_EFFORT_MESSAGE_CHARS = 380
 
 
 def _wechat_process_names() -> set[str]:
@@ -69,7 +70,17 @@ def _get_wechat_window_spec():
         from pywinauto import Desktop
     except Exception as exc:
         raise RuntimeError("pywinauto 不可用，无法启用安全 UIA 发送") from exc
-    return Desktop(backend="uia").window(title="微信")
+    return Desktop(backend="uia").window(handle=find_wechat_window())
+
+
+def _focus_current_chat_input_via_uia() -> int:
+    win = _get_wechat_window_spec()
+    hwnd = win.wrapper_object().handle
+    _ensure_wechat_foreground(hwnd)
+    edit = win.child_window(auto_id="chat_input_field", control_type="Edit").wrapper_object()
+    edit.set_focus()
+    time.sleep(0.2)
+    return hwnd
 
 
 def _split_message_chunks(message: str, max_chars: int = UIA_MAX_MESSAGE_CHARS) -> list[str]:
@@ -116,6 +127,13 @@ def _message_list_contains(message_list, text: str) -> bool:
     return any(text in item for item in message_list.texts())
 
 
+def _split_message_best_effort_chunks(
+    message: str,
+    max_chars: int = UIA_BEST_EFFORT_MESSAGE_CHARS,
+) -> list[str]:
+    return _split_message_chunks(message, max_chars=max_chars)
+
+
 def _send_text_via_uia_current_chat(message: str) -> None:
     if not message:
         raise ValueError("message 不能为空")
@@ -143,14 +161,32 @@ def _send_text_via_uia_current_chat(message: str) -> None:
         for _ in range(UIA_SEND_VERIFY_RETRIES):
             time.sleep(UIA_SEND_SETTLE_SECONDS)
             after = message_list.texts()
-            if _message_list_contains(message_list, chunk) and after != before:
+            input_cleared = not edit.window_text().strip()
+            if (_message_list_contains(message_list, chunk) and after != before) or input_cleared:
                 verified = True
                 break
         if not verified:
             raise RuntimeError("UIA 发送后未在当前会话消息列表中确认到文本")
 
 
+def _send_text_via_uia_current_chat_best_effort(message: str) -> None:
+    chunks = _split_message_best_effort_chunks(message)
+    if not chunks:
+        return
+    for chunk in chunks:
+        try:
+            _focus_chat_input(current_chat_only=True)
+            hwnd = find_wechat_window()
+            send_to_current_chat(message=chunk, filepaths=None, hwnd=hwnd)
+        except Exception:
+            print("warning: best-effort current-chat send hit a control issue, but continues with the next chunk", flush=True)
+
+
 def find_wechat_window() -> int:
+    foreground = win32gui.GetForegroundWindow()
+    if _is_wechat_window(foreground) and win32gui.GetWindowText(foreground):
+        return foreground
+
     targets = _wechat_pids()
     matches: list[int] = []
 
@@ -359,9 +395,19 @@ def send_message(
     filepaths: list[str] | None = None,
     current_chat_only: bool = False,
     allow_search_switch: bool = False,
+    best_effort_current_chat_text: bool = False,
 ) -> None:
     if current_chat_only and message and not filepaths:
-        _send_text_via_uia_current_chat(message)
+        if best_effort_current_chat_text:
+            _send_text_via_uia_current_chat_best_effort(message)
+        else:
+            _send_text_via_uia_current_chat(message)
+        return
+
+    if current_chat_only and filepaths and not message:
+        for filepath in filepaths:
+            hwnd = _focus_current_chat_input_via_uia()
+            send_to_current_chat(message=None, filepaths=[filepath], hwnd=hwnd)
         return
 
     hwnd = find_wechat_window()
@@ -396,6 +442,7 @@ def main() -> None:
     parser.add_argument("--visible-row-index", type=int, default=None, help="1-based visible session row to click directly")
     parser.add_argument("--current-chat-only", action="store_true", help="Only send to the chat that is already open; do not switch chats")
     parser.add_argument("--allow-search-switch", action="store_true", help="Allow switching chats by search; disabled by default for safety")
+    parser.add_argument("--best-effort-current-chat-text", action="store_true", help="For current-chat text sends, do not fail the command when UIA verification is flaky")
     parser.add_argument("--file", dest="files", action="append", default=None, help="File path to paste and send; repeatable")
     args = parser.parse_args()
     message = args.message
@@ -411,6 +458,7 @@ def main() -> None:
         filepaths=args.files,
         current_chat_only=args.current_chat_only,
         allow_search_switch=args.allow_search_switch,
+        best_effort_current_chat_text=args.best_effort_current_chat_text,
     )
     target = args.contact or "<current-chat>"
     print(f"Attempted to send to {target}: {message or ''}")

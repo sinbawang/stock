@@ -365,6 +365,64 @@ def build_send_text(security: Security, day_report: Path, m60_report: Path) -> s
     )
 
 
+def build_send_text_60m_only(security: Security, m60_report: Path) -> str:
+    return f"【{security.name} {security.symbol} 60M】\n\n{m60_report.read_text(encoding='utf-8').strip()}"
+
+
+def _extract_summary_line(advice_path: Path, prefix: str) -> str:
+    for raw_line in advice_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if line.startswith(prefix):
+            return line.removeprefix(prefix).strip()
+    return ""
+
+
+def build_group_operation_summary(bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]]) -> str:
+    lines = [
+        "【全部持仓 60M 缠论综合操作建议】",
+        "",
+        f"生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"覆盖数量：{len(bundle)} 只持仓",
+        "",
+        "逐只建议：",
+    ]
+
+    bullish: list[str] = []
+    neutral: list[str] = []
+    bearish: list[str] = []
+
+    for security, _day_case, m60_case in bundle:
+        conclusion = _extract_summary_line(m60_case["advice"], "结论：") or "信号一般，保持耐心。"
+        suggestion = _extract_summary_line(m60_case["advice"], "建议：") or "继续跟踪后续一笔与中枢突破。"
+        lines.append(f"- {security.name}({security.symbol})：{conclusion} 建议：{suggestion}")
+
+        if any(keyword in conclusion for keyword in ("偏多", "偏强", "持有为主", "允许轻仓试错")):
+            bullish.append(f"{security.name}({security.symbol})")
+        elif any(keyword in conclusion for keyword in ("偏空", "偏弱", "减仓", "兑现")):
+            bearish.append(f"{security.name}({security.symbol})")
+        else:
+            neutral.append(f"{security.name}({security.symbol})")
+
+    lines.extend(
+        [
+            "",
+            "组合层结论：",
+            f"- 偏强观察组：{'、'.join(bullish) if bullish else '无'}",
+            f"- 震荡观察组：{'、'.join(neutral) if neutral else '无'}",
+            f"- 风险控制组：{'、'.join(bearish) if bearish else '无'}",
+            "- 操作原则：60M 只用于节奏和仓位管理，真正加减仓以中枢突破/跌破后的确认笔为准。",
+            "- 说明：以上仅基于最新 60M 缠论结构与 MACD 强弱，不构成投资建议。",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def write_group_operation_summary(bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]]) -> Path:
+    output_path = ROOT / "data" / "_meta" / f"group888_60m_operation_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    output_path.write_text(build_group_operation_summary(bundle), encoding="utf-8")
+    return output_path
+
+
 def latest_file(directory: Path, pattern: str) -> Path:
     matches = list(directory.glob(pattern))
     if not matches:
@@ -385,12 +443,28 @@ def load_existing_case(security: Security, timeframe: str) -> dict[str, Path]:
     }
 
 
-def send_batch_current_chat(bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]], target_label: str) -> None:
+def send_batch_current_chat(
+    bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]],
+    target_label: str,
+    summary_path: Path,
+) -> None:
+    print(f"Sending consolidated 60M summary to current chat ({target_label})")
+    send_message(
+        contact=None,
+        message=summary_path.read_text(encoding="utf-8"),
+        current_chat_only=True,
+        best_effort_current_chat_text=True,
+    )
+
     for security, day_case, m60_case in bundle:
-        message_text = build_send_text(security, day_case["report"], m60_case["report"])
+        message_text = build_send_text_60m_only(security, m60_case["report"])
         print(f"Sending {security.name} to current chat ({target_label})")
-        send_message(contact=None, message=message_text, current_chat_only=True)
-        send_message(contact=None, message=None, filepaths=[str(day_case["jpg"])], current_chat_only=True)
+        send_message(
+            contact=None,
+            message=message_text,
+            current_chat_only=True,
+            best_effort_current_chat_text=True,
+        )
         send_message(contact=None, message=None, filepaths=[str(m60_case["jpg"])], current_chat_only=True)
 
 
@@ -398,6 +472,7 @@ def main() -> None:
     args = parse_args()
     securities = load_securities(Path(args.holdings_file) if args.holdings_file else None)
     bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]] = []
+    summary_path: Path | None = None
     if args.send_only:
         for security in securities:
             day_case = load_existing_case(security, "day")
@@ -430,16 +505,19 @@ def main() -> None:
         lines = ["群聊 888 待发送清单", ""]
         for security, day_case, m60_case in bundle:
             lines.append(f"{security.name} ({security.symbol})")
-            lines.append(f"- 日线报告: {day_case['report']}")
-            lines.append(f"- 日线图片: {day_case['jpg']}")
             lines.append(f"- 60M 报告: {m60_case['report']}")
             lines.append(f"- 60M 图片: {m60_case['jpg']}")
             lines.append("")
         manifest.write_text("\n".join(lines), encoding="utf-8")
         print(f"Manifest: {manifest}")
 
+    summary_path = write_group_operation_summary(bundle)
+    print(f"Summary: {summary_path}")
+
     if args.send_current_chat:
-        send_batch_current_chat(bundle, args.target_label)
+        if summary_path is None:
+            raise RuntimeError("missing summary path")
+        send_batch_current_chat(bundle, args.target_label, summary_path)
 
 
 if __name__ == "__main__":

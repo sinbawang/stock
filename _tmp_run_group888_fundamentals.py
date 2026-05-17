@@ -16,13 +16,27 @@ if str(SRC) not in sys.path:
 if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
 
-from fundamental.reporting import save_blended_fundamental_brief
-from fundamental.services import fetch_and_analyze_cn_blended_fundamentals, fetch_and_analyze_hk_blended_fundamentals
+from fundamental.config.registry import get_submodel_for_symbol
+from fundamental.reporting import save_blended_fundamental_brief, save_fundamental_brief
+from fundamental.services import (
+    fetch_and_analyze_cn_blended_fundamentals,
+    fetch_and_analyze_hk_blended_fundamentals,
+    fetch_and_analyze_hk_snapshot,
+)
 from housekeep_generated_reports import build_housekeep_plan, execute_plan
 from send_wechat_native import send_message
 
 
 PROGRESS_LOG = ROOT / "data" / "_meta" / "_tmp_group888_progress.log"
+DEFAULT_MANUAL_SUPPLEMENT_DIR = ROOT / "data" / "_meta" / "manual_supplements"
+SUPPORTED_HK_BLENDED_SUBMODELS = {
+    "platform_internet_v1",
+    "digital_infra_v1",
+    "semiconductor_hardtech_v1",
+    "auto_manufacturing_v1",
+    "insurance_v1",
+    "broker_v1",
+}
 
 
 def log_line(message: str) -> None:
@@ -30,6 +44,13 @@ def log_line(message: str) -> None:
     print(stamped, flush=True)
     with PROGRESS_LOG.open("a", encoding="utf-8") as handle:
         handle.write(stamped + "\n")
+
+
+def resolve_manual_supplement_path(symbol: str) -> str | None:
+    candidates = sorted(DEFAULT_MANUAL_SUPPLEMENT_DIR.glob(f"{symbol}_*.*"))
+    if not candidates:
+        return None
+    return str(candidates[0])
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,25 +69,68 @@ def generate_reports() -> tuple[list[dict[str, object]], Path, Path]:
         for item in holdings.get("markets", {}).get(market, []):
             symbol = str(item["symbol"])
             name = str(item["name"])
+            manual_supplement_path = resolve_manual_supplement_path(symbol)
             log_line(f"generate:start {market} {symbol} {name}")
             if market == "HK":
-                result = fetch_and_analyze_hk_blended_fundamentals(symbol, name=name)
+                submodel = get_submodel_for_symbol(symbol)
+                if submodel is None:
+                    raise RuntimeError(f"unable to resolve submodel for {symbol}")
+                if submodel.submodel_id in SUPPORTED_HK_BLENDED_SUBMODELS:
+                    result = fetch_and_analyze_hk_blended_fundamentals(
+                        symbol,
+                        name=name,
+                        manual_supplement_path=manual_supplement_path,
+                    )
+                    blended = result.blended
+                    report_path = save_blended_fundamental_brief(blended=blended, output_dir=output_dir)
+                    annual_period = blended.annual_anchor.snapshot.report_period.isoformat()
+                    interim_period = (
+                        blended.interim_overlay.snapshot.report_period.isoformat()
+                        if blended.interim_overlay is not None
+                        else "NA"
+                    )
+                    rating = blended.blended_rating
+                    score = blended.blended_total_score
+                    freshness = blended.freshness_label
+                    submodel_id = blended.submodel_id
+                else:
+                    result = fetch_and_analyze_hk_snapshot(
+                        symbol,
+                        name=name,
+                        manual_supplement_path=manual_supplement_path,
+                    )
+                    report_path = save_fundamental_brief(
+                        scorecard=result.scorecard,
+                        snapshot=result.fetched.snapshot,
+                        field_sources=result.fetched.field_sources,
+                        output_dir=output_dir,
+                    )
+                    annual_period = result.fetched.snapshot.report_period.isoformat()
+                    interim_period = "NA"
+                    rating = result.scorecard.rating
+                    score = result.scorecard.total_score
+                    freshness = "snapshot_only"
+                    submodel_id = result.scorecard.submodel_id
             else:
                 result = fetch_and_analyze_cn_blended_fundamentals(symbol, name=name)
-            blended = result.blended
-            report_path = save_blended_fundamental_brief(blended=blended, output_dir=output_dir)
+                blended = result.blended
+                report_path = save_blended_fundamental_brief(blended=blended, output_dir=output_dir)
+                annual_period = blended.annual_anchor.snapshot.report_period.isoformat()
+                interim_period = blended.interim_overlay.snapshot.report_period.isoformat() if blended.interim_overlay is not None else "NA"
+                rating = blended.blended_rating
+                score = blended.blended_total_score
+                freshness = blended.freshness_label
+                submodel_id = blended.submodel_id
             log_line(f"generate:done {symbol} -> {report_path.name}")
-            annual_period = blended.annual_anchor.snapshot.report_period.isoformat()
-            interim_period = blended.interim_overlay.snapshot.report_period.isoformat() if blended.interim_overlay is not None else "NA"
             entries.append(
                 {
                     "symbol": symbol,
                     "name": name,
                     "market": market,
-                    "rating": blended.blended_rating,
-                    "score": blended.blended_total_score,
-                    "submodel": blended.submodel_id,
-                    "freshness": blended.freshness_label,
+                    "rating": rating,
+                    "score": score,
+                    "submodel": submodel_id,
+                    "freshness": freshness,
                     "annual_period": annual_period,
                     "interim_period": interim_period,
                     "path": report_path,
