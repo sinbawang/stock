@@ -109,6 +109,13 @@ def _manual_supplement_lines(snapshot: FundamentalSnapshot, field_sources: Optio
 
 
 def _dupont_summary_line(snapshot: FundamentalSnapshot) -> Optional[str]:
+    return _dupont_summary_line_filtered(snapshot, excluded_metrics=None)
+
+
+def _dupont_summary_line_filtered(
+    snapshot: FundamentalSnapshot,
+    excluded_metrics: Optional[set[str]],
+) -> Optional[str]:
     items: list[str] = []
     for label, field_name in (
         ("净利率", "net_margin"),
@@ -116,6 +123,8 @@ def _dupont_summary_line(snapshot: FundamentalSnapshot) -> Optional[str]:
         ("权益乘数", "equity_multiplier"),
         ("杜邦驱动", "dupont_driver"),
     ):
+        if excluded_metrics and field_name in excluded_metrics:
+            continue
         value = getattr(snapshot, field_name, None)
         if value is not None:
             items.append(f"{label}={_format_scalar(value)}")
@@ -139,7 +148,23 @@ def _should_include_auto_specialist_summary(
 def _key_metric_summary_lines(
     snapshot: FundamentalSnapshot,
     scorecard: Optional[FundamentalScoreCard] = None,
+    excluded_metrics: Optional[set[str]] = None,
 ) -> list[str]:
+    return [
+        f"- {label}: " + ", ".join(parts)
+        for label, parts in _key_metric_summary_groups(
+            snapshot,
+            scorecard=scorecard,
+            excluded_metrics=excluded_metrics,
+        )
+    ]
+
+
+def _key_metric_summary_groups(
+    snapshot: FundamentalSnapshot,
+    scorecard: Optional[FundamentalScoreCard] = None,
+    excluded_metrics: Optional[set[str]] = None,
+) -> list[tuple[str, list[str]]]:
     groups = (
         ("估值与回报", ("pe_ttm", "pb", "ps_ttm", "peg", "dividend_yield")),
         (
@@ -212,18 +237,67 @@ def _key_metric_summary_lines(
         ("券商监管", ("net_capital_ratio",)),
     )
 
-    lines: list[str] = []
+    lines: list[tuple[str, list[str]]] = []
     for label, field_names in groups:
         if label == "汽车经营专项" and not _should_include_auto_specialist_summary(snapshot, scorecard):
             continue
         parts = []
         for field_name in field_names:
+            if excluded_metrics and field_name in excluded_metrics:
+                continue
             value = getattr(snapshot, field_name, None)
             if value is not None:
                 parts.append(f"{field_name}={_format_scalar(value)}")
         if parts:
-            lines.append(f"- {label}: " + ", ".join(parts))
+            lines.append((label, parts))
     return lines
+
+
+def _key_metric_summary_block_lines(
+    snapshot: FundamentalSnapshot,
+    scorecard: Optional[FundamentalScoreCard] = None,
+    excluded_metrics: Optional[set[str]] = None,
+) -> list[str]:
+    lines: list[str] = []
+    for label, parts in _key_metric_summary_groups(
+        snapshot,
+        scorecard=scorecard,
+        excluded_metrics=excluded_metrics,
+    ):
+        lines.append(f"- {label}:")
+        lines.extend(f"  {part}" for part in parts)
+    return lines
+
+
+def _dupont_summary_block_lines(
+    snapshot: FundamentalSnapshot,
+    excluded_metrics: Optional[set[str]],
+) -> list[str]:
+    items: list[str] = []
+    for label, field_name in (
+        ("净利率", "net_margin"),
+        ("总资产周转率", "asset_turnover"),
+        ("权益乘数", "equity_multiplier"),
+        ("杜邦驱动", "dupont_driver"),
+    ):
+        if excluded_metrics and field_name in excluded_metrics:
+            continue
+        value = getattr(snapshot, field_name, None)
+        if value is not None:
+            items.append(f"{label}={_format_scalar(value)}")
+    if not items:
+        return []
+    return ["- 杜邦拆解:", *[f"  {item}" for item in items]]
+
+
+def _collect_blended_covered_metrics(blended: BlendedFundamentalScoreCard) -> set[str]:
+    covered_metrics: set[str] = set()
+    for dimension in blended.annual_anchor.scorecard.dimension_scores:
+        covered_metrics.update(metric_name for metric_name in dimension.used_metrics if metric_name)
+    if blended.interim_overlay is not None:
+        for component in blended.interim_overlay.components:
+            covered_metrics.update(metric_name for metric_name in component.covered_metrics if metric_name)
+    return covered_metrics
 
 
 def _format_score_basis_summary(score_basis: Optional[str]) -> Optional[str]:
@@ -557,6 +631,18 @@ def render_blended_fundamental_brief(
     if missing_metrics:
         lines.extend(["", "当前缺失字段:"])
         lines.extend(f"- {item}" for item in missing_metrics)
+
+    covered_metrics = _collect_blended_covered_metrics(blended)
+    supplemental_lines = _key_metric_summary_block_lines(
+        annual_anchor.snapshot,
+        scorecard=annual_scorecard,
+        excluded_metrics=covered_metrics,
+    )
+    dupont_lines = _dupont_summary_block_lines(annual_anchor.snapshot, excluded_metrics=covered_metrics)
+    if supplemental_lines or dupont_lines:
+        lines.extend(["", "年报补充指标:"])
+        lines.extend(supplemental_lines)
+        lines.extend(dupont_lines)
 
     return "\n".join(lines).strip() + "\n"
 

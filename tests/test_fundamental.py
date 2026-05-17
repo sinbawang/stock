@@ -1194,6 +1194,24 @@ def test_render_scorecard_text_formats_auto_specialist_labels():
     assert "price_war_pressure=较低" in rendered
 
 
+def test_growth_delivery_uses_only_configured_metrics():
+    digital_result = analyze_snapshot(make_digital_infra_snapshot(), "digital_infra_v1")
+    digital_growth = next(score for score in digital_result.dimension_scores if score.dimension == "growth_delivery")
+
+    assert digital_growth.score_basis is not None
+    assert "海外收入占比" not in digital_growth.score_basis
+    assert "指引兑现" not in digital_growth.score_basis
+
+    auto_result = analyze_snapshot(
+        make_auto_manufacturing_snapshot(overseas_revenue_share=31.5),
+        "auto_manufacturing_v1",
+    )
+    auto_growth = next(score for score in auto_result.dimension_scores if score.dimension == "growth_delivery")
+
+    assert auto_growth.score_basis is not None
+    assert "海外收入占比 31.50" in auto_growth.score_basis
+
+
 def test_render_scorecard_text_formats_auto_specialist_labels_in_calculation_summary():
     snapshot = make_auto_manufacturing_snapshot(
         gross_margin=16.8,
@@ -1317,6 +1335,7 @@ def test_save_scorecard_text_writes_snapshot_metric_summary(tmp_path):
 
 def test_render_blended_reports_include_anchor_and_overlay_sections():
     blended = make_blended_cn_scorecard()
+    blended.annual_anchor.snapshot.ps_ttm = 2.40
 
     scorecard_text = render_blended_scorecard_text(blended)
     brief_text = render_blended_fundamental_brief(blended)
@@ -1338,6 +1357,11 @@ def test_render_blended_reports_include_anchor_and_overlay_sections():
     assert "年报锚定快照" not in brief_text
     assert "季报刷新快照" not in brief_text
     assert "说明: 为降低 Q1 季节性噪音，优先用经营现金流/利润历史均值做刷新。" in brief_text
+    assert "年报补充指标" in brief_text
+    assert "- 估值与回报:" in brief_text
+    assert "  ps_ttm=2.40" in brief_text
+    assert "revenue_growth=7.50" not in brief_text
+    assert "net_profit_growth=8.40" not in brief_text
 
 
 def test_save_blended_outputs_use_blended_filenames(tmp_path):

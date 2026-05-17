@@ -132,6 +132,40 @@ def _score_growth_delivery(snapshot: FundamentalSnapshot) -> Optional[float]:
     )
 
 
+def _score_growth_delivery_configured(
+    snapshot: FundamentalSnapshot,
+    dimension: DimensionConfig,
+) -> Optional[float]:
+    metric_scores: list[Optional[float]] = []
+    for metric_name in dimension.primary_metrics + dimension.optional_metrics:
+        if metric_name == "revenue_growth":
+            metric_scores.append(score_revenue_growth(snapshot.revenue_growth))
+        elif metric_name == "net_profit_growth":
+            metric_scores.append(score_net_profit_growth(snapshot.net_profit_growth))
+        elif metric_name == "guidance_attainment":
+            metric_scores.append(score_guidance_attainment(snapshot.guidance_attainment))
+        elif metric_name == "overseas_revenue_share":
+            metric_scores.append(score_overseas_revenue_share(snapshot.overseas_revenue_share))
+    return _average(metric_scores)
+
+
+def _build_growth_delivery_parts(
+    snapshot: FundamentalSnapshot,
+    dimension: DimensionConfig,
+) -> tuple[tuple[str, Optional[float]], ...]:
+    parts: list[tuple[str, Optional[float]]] = []
+    for metric_name in dimension.primary_metrics + dimension.optional_metrics:
+        if metric_name == "revenue_growth":
+            parts.append((f"营收增速 {_format_metric_value(snapshot.revenue_growth)}", score_revenue_growth(snapshot.revenue_growth)))
+        elif metric_name == "net_profit_growth":
+            parts.append((f"净利增速 {_format_metric_value(snapshot.net_profit_growth)}", score_net_profit_growth(snapshot.net_profit_growth)))
+        elif metric_name == "guidance_attainment":
+            parts.append((f"指引兑现 {_format_metric_value(snapshot.guidance_attainment)}", score_guidance_attainment(snapshot.guidance_attainment)))
+        elif metric_name == "overseas_revenue_share":
+            parts.append((f"海外收入占比 {_format_metric_value(snapshot.overseas_revenue_share)}", score_overseas_revenue_share(snapshot.overseas_revenue_share)))
+    return tuple(parts)
+
+
 def _score_cashflow_efficiency(snapshot: FundamentalSnapshot) -> Optional[float]:
     return score_operating_cashflow_to_profit(snapshot.operating_cashflow_to_profit)
 
@@ -249,15 +283,7 @@ def _build_dimension_score_basis(
 
     if dimension.name == "growth_delivery":
         return _format_score_basis(
-            (
-                (f"营收增速 {_format_metric_value(snapshot.revenue_growth)}", score_revenue_growth(snapshot.revenue_growth)),
-                (f"净利增速 {_format_metric_value(snapshot.net_profit_growth)}", score_net_profit_growth(snapshot.net_profit_growth)),
-                (f"指引兑现 {_format_metric_value(snapshot.guidance_attainment)}", score_guidance_attainment(snapshot.guidance_attainment)),
-                (
-                    f"海外收入占比 {_format_metric_value(snapshot.overseas_revenue_share)}",
-                    score_overseas_revenue_share(snapshot.overseas_revenue_share),
-                ),
-            ),
+            _build_growth_delivery_parts(snapshot, dimension),
             normalized_score,
             dimension.weight,
         )
@@ -468,7 +494,10 @@ def _build_dimension_score(
 ) -> FundamentalDimensionScore:
     used_metrics, missing_metrics = _build_metric_lists(snapshot, dimension)
     scorer = DIMENSION_SCORERS.get(dimension.name)
-    normalized = scorer(snapshot) if scorer is not None else None
+    if dimension.name == "growth_delivery":
+        normalized = _score_growth_delivery_configured(snapshot, dimension)
+    else:
+        normalized = scorer(snapshot) if scorer is not None else None
     score = _weight_score(normalized, dimension.weight)
     score_basis = _build_dimension_score_basis(snapshot, dimension, normalized)
     notes: List[str] = []

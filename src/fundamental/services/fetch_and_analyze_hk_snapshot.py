@@ -103,7 +103,7 @@ def resolve_hk_quote_overlay_source(
 ) -> Optional[str]:
     if quote_overlay_source is not None:
         return quote_overlay_source
-    if submodel.submodel_id == "digital_infra_v1":
+    if submodel.submodel_id in {"digital_infra_v1", "auto_manufacturing_v1"}:
         return "xueqiu"
     return None
 
