@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 from typing import Any, Mapping, Optional, Sequence
 
-from fundamental.models.blended import BlendedFundamentalScoreCard
+from fundamental.models.blended import BlendedFundamentalScoreCard, OverlayComponent
 from fundamental.models.common import format_display_literal
 from fundamental.models.scorecard import FundamentalScoreCard
 from fundamental.models.snapshot import FundamentalSnapshot
@@ -15,10 +15,53 @@ from fundamental.models.snapshot import FundamentalSnapshot
 from .text_report import (
     DIMENSION_LABELS,
     _build_overlay_coverage_lines,
+    _display_metric_name,
     _format_score_basis_for_display,
     _metric_unavailable_reason,
     _partition_missing_metrics,
 )
+
+
+COMMON_METRIC_DISPLAY_NAMES = {
+    "roe": "ROE",
+    "roe_3y_mean": "3年ROE均值",
+    "roe_3y_cv": "ROE波动CV",
+    "gross_margin": "毛利率",
+    "gross_margin_trend": "毛利率趋势",
+    "operating_cashflow_to_profit": "经营现金流/利润",
+    "operating_cashflow_to_profit_history": "经营现金流/利润历史",
+    "revenue_growth": "营收增速",
+    "net_profit_growth": "净利增速",
+    "accounts_receivable_growth": "应收增速",
+    "inventory_growth": "存货增速",
+    "asset_turnover": "资产周转率",
+    "current_ratio": "流动比率",
+    "debt_to_asset": "资产负债率",
+    "pe_ttm": "PE(TTM)",
+    "pe_percentile_5y": "5年PE分位",
+    "pb": "PB",
+    "ps_ttm": "PS(TTM)",
+    "dividend_yield": "股息率",
+    "core_tier1_ratio": "核心一级资本充足率",
+    "npl_ratio": "不良率",
+    "provision_coverage_ratio": "拨备覆盖率",
+    "net_interest_margin": "净息差",
+    "loan_deposit_growth_gap": "存贷增速缺口",
+}
+
+INTERIM_COMPONENT_LABELS = {
+    "growth_refresh": "成长刷新",
+    "cashflow_refresh": "现金流刷新",
+    "resilience_refresh": "韧性刷新",
+    "operating_cycle_refresh": "营运周期刷新",
+    "channel_cycle_refresh": "渠道周期刷新",
+    "profit_quality_refresh": "盈利质量刷新",
+    "capital_refresh": "资本刷新",
+    "profitability_refresh": "盈利刷新",
+    "business_quality_refresh": "业务质量刷新",
+    "business_growth_refresh": "业务增长刷新",
+    "shareholder_return_refresh": "股东回报刷新",
+}
 
 
 def _format_dimension_name(name: str) -> str:
@@ -40,7 +83,7 @@ def _format_scalar(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, float):
-        return format(value, ".12g")
+        return f"{value:.2f}"
     if isinstance(value, int):
         return str(value)
     if isinstance(value, (list, tuple)):
@@ -221,7 +264,116 @@ def _format_score_basis_summary(score_basis: Optional[str]) -> Optional[str]:
 
     if not normalized_parts:
         return None
-    return "; ".join(normalized_parts)
+
+    summary = "; ".join(normalized_parts)
+    summary = re.sub(r"->(-?\d+(?:\.\d+)?)", lambda match: f"->{float(match.group(1)):.2f}", summary)
+    summary = re.sub(r"平均(-?\d+(?:\.\d+)?)", lambda match: f"平均{float(match.group(1)):.2f}", summary)
+    summary = re.sub(r"维度分(-?\d+(?:\.\d+)?)", lambda match: f"维度分{float(match.group(1)):.2f}", summary)
+    return summary
+
+
+def _format_metric_name(metric_name: str) -> str:
+    return COMMON_METRIC_DISPLAY_NAMES.get(metric_name, _display_metric_name(metric_name))
+
+
+def _format_metric_list(metric_names: Sequence[str]) -> Optional[str]:
+    items = [_format_metric_name(metric_name) for metric_name in metric_names if metric_name]
+    if not items:
+        return None
+    return "、".join(items)
+
+
+def _format_metric_value_pair(snapshot: FundamentalSnapshot, metric_name: str) -> str:
+    return f"{_format_metric_name(metric_name)}={_format_scalar(getattr(snapshot, metric_name, None))}"
+
+
+def _format_metric_value_list(snapshot: FundamentalSnapshot, metric_names: Sequence[str]) -> Optional[str]:
+    items = [_format_metric_value_pair(snapshot, metric_name) for metric_name in metric_names if metric_name]
+    if not items:
+        return None
+    return "、".join(items)
+
+
+def _split_dimension_summary_lines(summary: str) -> list[str]:
+    lines: list[str] = []
+    parts = [part.strip() for part in summary.split(";") if part.strip()]
+    if not parts:
+        return lines
+
+    first_part = parts[0]
+    first_match = re.match(r"^(\d+/\d+项)\s+(.*)$", first_part)
+    if first_match:
+        lines.append(first_match.group(1))
+        scored_items = [item.strip() for item in first_match.group(2).split(",") if item.strip()]
+        lines.extend(scored_items)
+    else:
+        lines.append(first_part)
+
+    for part in parts[1:]:
+        lines.append(part)
+    return lines
+
+
+def _build_dimension_calculation_lines(
+    scorecard: FundamentalScoreCard,
+    snapshot: FundamentalSnapshot,
+) -> list[str]:
+    lines: list[str] = []
+
+    for dimension in scorecard.dimension_scores:
+        summary = _format_score_basis_summary(
+            _format_score_basis_for_display(dimension.score_basis, snapshot)
+        )
+        if summary:
+            summary_lines = _split_dimension_summary_lines(summary)
+            if summary_lines:
+                lines.append(f"- {_format_dimension_name(dimension.dimension)}: {summary_lines[0]}")
+                lines.extend(f"  {line}" for line in summary_lines[1:])
+            else:
+                lines.append(f"- {_format_dimension_name(dimension.dimension)}:")
+        else:
+            lines.append(
+                f"- {_format_dimension_name(dimension.dimension)}: {dimension.score:.2f}/{dimension.weight:.2f}"
+            )
+
+    return lines
+
+
+def _format_component_name(name: str) -> str:
+    return INTERIM_COMPONENT_LABELS.get(name, name.replace("_", " ").title())
+
+
+def _build_interim_calculation_lines(
+    components: Sequence[OverlayComponent],
+    snapshot: FundamentalSnapshot,
+) -> list[str]:
+    lines: list[str] = []
+    for component in components:
+        contribution = component.score * component.weight
+        metric_names = list(component.covered_metrics) + [
+            metric_name for metric_name in component.missing_metrics if metric_name not in component.covered_metrics
+        ]
+        formula = "单指标刷新" if len(component.covered_metrics) <= 1 else "覆盖指标均值刷新"
+        if component.missing_metrics:
+            missing_text = _format_metric_list(component.missing_metrics)
+            if missing_text:
+                formula += f"；缺失 {missing_text}"
+        lines.append(f"- {_format_component_name(component.component)}:")
+
+        for metric_name in metric_names:
+            lines.append(f"  {_format_metric_value_pair(snapshot, metric_name)}")
+
+        lines.append(f"  {formula}")
+        lines.append(f"  折算{contribution:.2f}")
+
+        if component.note:
+            lines.append(f"  说明: {component.note}")
+
+    return lines
+
+
+def _render_interim_breakdown_line(component: OverlayComponent) -> str:
+    return f"- {_format_component_name(component.component)}: {component.score:.2f} x {component.weight:.0%}"
 
 
 def render_fundamental_brief(
@@ -341,48 +493,54 @@ def render_blended_fundamental_brief(
     lines = [
         f"{blended.name}基本面混合简报",
         f"时间: {generated.strftime('%Y-%m-%d %H:%M')}",
+        f"标的: {blended.name}({blended.symbol})",
+        "报告期:",
+        f"- 年报: {annual_anchor.snapshot.report_period.isoformat()}",
         (
-            f"标的: {blended.name}({blended.symbol})  年报: {annual_anchor.snapshot.report_period.isoformat()}"
-            + (
-                f"  季报: {interim_overlay.snapshot.report_period.isoformat()}"
-                if interim_overlay is not None
-                else "  季报: 暂无"
-            )
+            f"- 季报: {interim_overlay.snapshot.report_period.isoformat()}"
+            if interim_overlay is not None
+            else "- 季报: 暂无"
         ),
-        (
-            f"评级: {blended.blended_rating}  Blended总分: {blended.blended_total_score:.2f}  "
-            f"年报权重: {blended.annual_weight:.0%}  季报权重: {blended.interim_weight:.0%}"
-        ),
-        f"子模型: {blended.submodel_id}  刷新标签: {blended.freshness_label}",
-        "",
-        "核心结论:",
-        f"- 年报锚定分: {annual_scorecard.total_score:.2f} ({annual_scorecard.rating})。",
+        "评分概览:",
+        f"- 评级: {blended.blended_rating}",
+        f"- 总分: {blended.blended_total_score:.2f}",
     ]
+    lines.append(f"- 年报锚定分: {annual_scorecard.total_score:.2f} ({annual_scorecard.rating})。")
     if interim_overlay is None:
         lines.append("- 季报刷新层: 暂无更新的中间报告期。")
     else:
         lines.append(
             f"- 季报刷新层: {interim_overlay.overlay_score:.2f} ({interim_overlay.rating_hint or 'NA'})。"
         )
-    if blended.combined_comment:
-        lines.append(f"- 综合说明: {blended.combined_comment}")
+    lines.extend(
+        [
+            f"- 年报权重: {blended.annual_weight:.0%}",
+            f"- 季报权重: {blended.interim_weight:.0%}",
+            f"- 子模型: {blended.submodel_id}",
+            f"- 刷新标签: {blended.freshness_label}",
+        ]
+    )
 
     lines.extend(["", "年报维度结论:"])
     lines.extend(
         f"- {_format_dimension_name(dimension.dimension)} {dimension.score:.2f}/{dimension.weight:.2f}。"
         for dimension in annual_scorecard.dimension_scores
     )
+    annual_calculation_lines = _build_dimension_calculation_lines(annual_scorecard, annual_anchor.snapshot)
+    if annual_calculation_lines:
+        lines.extend(["", "年报维度分计算:", *annual_calculation_lines])
 
     if interim_overlay is not None:
         lines.extend(["", "季报刷新层拆解:"])
         lines.extend(_build_overlay_coverage_lines(interim_overlay, blended.submodel_id))
         for component in interim_overlay.components:
-            fragment = f"- {component.component}: {component.score:.2f} x {component.weight:.0%}"
-            if component.covered_metrics:
-                fragment += "，覆盖 " + ", ".join(component.covered_metrics)
-            lines.append(fragment)
-            if component.note:
-                lines.append(f"  说明: {component.note}")
+            lines.append(_render_interim_breakdown_line(component))
+        interim_calculation_lines = _build_interim_calculation_lines(
+            interim_overlay.components,
+            interim_overlay.snapshot,
+        )
+        if interim_calculation_lines:
+            lines.extend(["", "季报维度分计算:", *interim_calculation_lines])
 
     if strengths:
         lines.extend(["", "亮点:"])
@@ -399,13 +557,6 @@ def render_blended_fundamental_brief(
     if missing_metrics:
         lines.extend(["", "当前缺失字段:"])
         lines.extend(f"- {item}" for item in missing_metrics)
-
-    lines.extend(["", "年报锚定快照:"])
-    lines.extend(_key_metric_summary_lines(annual_anchor.snapshot, scorecard=annual_scorecard))
-
-    if interim_overlay is not None:
-        lines.extend(["", "季报刷新快照:"])
-        lines.extend(_key_metric_summary_lines(interim_overlay.snapshot))
 
     return "\n".join(lines).strip() + "\n"
 

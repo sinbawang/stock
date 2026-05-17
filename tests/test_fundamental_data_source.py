@@ -1652,14 +1652,16 @@ def test_send_wechat_native_send_message_retries_window_attach(monkeypatch):
 
     monkeypatch.setattr(send_wechat_module, "activate_window", fake_activate_window)
     monkeypatch.setattr(send_wechat_module, "switch_chat", lambda *args, **kwargs: None)
+    monkeypatch.setattr(send_wechat_module, "_send_text_via_uia_current_chat", lambda _message: (_ for _ in ()).throw(RuntimeError("uia disabled in test")))
+    monkeypatch.setattr(send_wechat_module, "_ensure_wechat_foreground", lambda _hwnd: None)
     monkeypatch.setattr(send_wechat_module, "click_ratio", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         send_wechat_module,
         "send_to_current_chat",
-        lambda message=None, filepaths=None: calls.append((message, filepaths)),
+        lambda message=None, filepaths=None, hwnd=None: calls.append((message, filepaths)),
     )
 
-    send_wechat_module.send_message(message="hello", current_chat_only=True)
+    send_wechat_module.send_message(message="hello", current_chat_only=False)
 
     assert activation_attempts["count"] == 2
     assert calls == [("hello", None)]
@@ -1673,17 +1675,89 @@ def test_send_wechat_native_send_message_sends_files_one_by_one(monkeypatch):
     monkeypatch.setattr(send_wechat_module, "find_wechat_window", lambda: 123)
     monkeypatch.setattr(send_wechat_module, "activate_window", lambda _hwnd: (0, 0, 1000, 800))
     monkeypatch.setattr(send_wechat_module, "switch_chat", lambda *args, **kwargs: None)
+    monkeypatch.setattr(send_wechat_module, "_ensure_wechat_foreground", lambda _hwnd: None)
     monkeypatch.setattr(send_wechat_module, "click_ratio", lambda _rect, rx, ry: focus_calls.append((rx, ry)))
     monkeypatch.setattr(
         send_wechat_module,
         "send_to_current_chat",
-        lambda message=None, filepaths=None: sent_calls.append((message, filepaths)),
+        lambda message=None, filepaths=None, hwnd=None: sent_calls.append((message, filepaths)),
     )
 
     send_wechat_module.send_message(filepaths=["a.txt", "b.txt"], current_chat_only=True)
 
     assert focus_calls == [(0.67, 0.9), (0.67, 0.9)]
     assert sent_calls == [(None, ["a.txt"]), (None, ["b.txt"])]
+
+
+def test_send_wechat_native_switch_chat_selects_first_search_result(monkeypatch):
+    taps: list[int] = []
+    typed: list[str] = []
+
+    monkeypatch.setattr(send_wechat_module.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(send_wechat_module, "click_ratio", lambda *args, **kwargs: None)
+    monkeypatch.setattr(send_wechat_module, "hotkey", lambda *args, **kwargs: None)
+    monkeypatch.setattr(send_wechat_module, "type_by_clipboard", lambda text: typed.append(text))
+    monkeypatch.setattr(send_wechat_module, "tap", lambda key: taps.append(key))
+
+    send_wechat_module.switch_chat(
+        (0, 0, 1000, 800),
+        contact="888",
+        result_index=1,
+        allow_search_switch=True,
+    )
+
+    assert typed == ["888"]
+    assert taps == [send_wechat_module.win32con.VK_BACK, send_wechat_module.win32con.VK_DOWN, send_wechat_module.win32con.VK_RETURN]
+
+
+def test_send_wechat_native_send_shortcut_only_uses_enter(monkeypatch):
+    taps: list[int] = []
+    ensured: list[int] = []
+
+    monkeypatch.setattr(send_wechat_module.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(send_wechat_module, "tap", lambda key: taps.append(key))
+    monkeypatch.setattr(send_wechat_module, "_ensure_wechat_foreground", lambda hwnd: ensured.append(hwnd))
+
+    send_wechat_module.send_shortcut(hwnd=123)
+
+    assert ensured == [123]
+    assert taps == [send_wechat_module.win32con.VK_RETURN]
+
+
+def test_send_wechat_native_click_ratio_restores_cursor(monkeypatch):
+    positions: list[tuple[int, int]] = []
+
+    monkeypatch.setattr(send_wechat_module.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(send_wechat_module.win32api, "GetCursorPos", lambda: (10, 20))
+    monkeypatch.setattr(send_wechat_module.win32api, "SetCursorPos", lambda pos: positions.append(pos))
+    monkeypatch.setattr(send_wechat_module.win32api, "mouse_event", lambda *args, **kwargs: None)
+
+    send_wechat_module.click_ratio((0, 0, 100, 100), 0.5, 0.5)
+
+    assert positions == [(50, 50), (10, 20)]
+
+
+def test_send_wechat_native_send_message_prefers_uia_for_current_chat_text(monkeypatch):
+    sent: list[str] = []
+
+    monkeypatch.setattr(send_wechat_module, "_send_text_via_uia_current_chat", lambda message: sent.append(message))
+    monkeypatch.setattr(send_wechat_module, "find_wechat_window", lambda: (_ for _ in ()).throw(AssertionError("should not use win32 path")))
+
+    send_wechat_module.send_message(message="hello", current_chat_only=True)
+
+    assert sent == ["hello"]
+
+
+def test_send_wechat_native_split_message_chunks_preserves_paragraphs():
+    message = "第一段" + "a" * 220 + "\n\n第二段" + "b" * 220 + "\n\n第三段" + "c" * 220
+
+    chunks = send_wechat_module._split_message_chunks(message, max_chars=260)
+
+    assert len(chunks) >= 3
+    assert all(len(chunk) <= 260 for chunk in chunks)
+    assert "第一段" in chunks[0]
+    assert any("第二段" in chunk for chunk in chunks)
+    assert any("第三段" in chunk for chunk in chunks)
 
 
 def test_fetch_hk_fundamental_snapshot_derives_peg_and_dupont_driver_when_inputs_available(monkeypatch):

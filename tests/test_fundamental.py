@@ -1328,6 +1328,15 @@ def test_render_blended_reports_include_anchor_and_overlay_sections():
     assert "基本面混合简报" in brief_text
     assert "年报锚定分" in brief_text
     assert "季报刷新层拆解" in brief_text
+    assert "年报维度分计算" in brief_text
+    assert "季报维度分计算" in brief_text
+    assert "- 盈利质量:" in brief_text
+    assert "折算" in brief_text
+    assert "- 现金流刷新:" in brief_text
+    assert "metrics:" not in brief_text
+    assert "formula:" not in brief_text
+    assert "年报锚定快照" not in brief_text
+    assert "季报刷新快照" not in brief_text
     assert "说明: 为降低 Q1 季节性噪音，优先用经营现金流/利润历史均值做刷新。" in brief_text
 
 

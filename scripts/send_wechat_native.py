@@ -18,14 +18,140 @@ from PIL import Image
 
 WINDOW_ATTACH_RETRIES = 3
 WINDOW_ATTACH_RETRY_DELAY_SECONDS = 0.8
+SEARCH_RESULTS_SETTLE_SECONDS = 1.0
+SEARCH_RESULT_SELECTION_STEP_SECONDS = 0.2
+CHAT_SWITCH_SETTLE_SECONDS = 1.5
+WINDOW_FOREGROUND_RETRIES = 5
+WINDOW_FOREGROUND_RETRY_DELAY_SECONDS = 0.2
+UIA_SEND_SETTLE_SECONDS = 0.6
+UIA_SEND_VERIFY_RETRIES = 5
+UIA_MAX_MESSAGE_CHARS = 500
+
+
+def _wechat_process_names() -> set[str]:
+    return {"weixin.exe", "wechatappex.exe"}
+
+
+def _wechat_pids() -> set[int]:
+    return {
+        proc.pid
+        for proc in psutil.process_iter(["name"])
+        if proc.info["name"] and proc.info["name"].lower() in _wechat_process_names()
+    }
+
+
+def _is_wechat_window(hwnd: int) -> bool:
+    if not hwnd or not win32gui.IsWindow(hwnd):
+        return False
+    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+    return pid in _wechat_pids()
+
+
+def _ensure_wechat_foreground(hwnd: int) -> None:
+    last_error: Exception | None = None
+    for _ in range(WINDOW_FOREGROUND_RETRIES):
+        foreground = win32gui.GetForegroundWindow()
+        if foreground == hwnd and _is_wechat_window(foreground):
+            return
+        try:
+            win32gui.ShowWindow(hwnd, 5)
+            win32gui.SetForegroundWindow(hwnd)
+        except pywintypes.error as exc:
+            last_error = exc
+        time.sleep(WINDOW_FOREGROUND_RETRY_DELAY_SECONDS)
+    if last_error is not None:
+        raise RuntimeError("微信窗口未成功置前") from last_error
+    raise RuntimeError("微信窗口未成功置前")
+
+
+def _get_wechat_window_spec():
+    try:
+        from pywinauto import Desktop
+    except Exception as exc:
+        raise RuntimeError("pywinauto 不可用，无法启用安全 UIA 发送") from exc
+    return Desktop(backend="uia").window(title="微信")
+
+
+def _split_message_chunks(message: str, max_chars: int = UIA_MAX_MESSAGE_CHARS) -> list[str]:
+    text = message.strip()
+    if not text:
+        return []
+    if len(text) <= max_chars:
+        return [text]
+
+    paragraphs = [part.strip() for part in text.split("\n\n") if part.strip()]
+    chunks: list[str] = []
+    current = ""
+    for paragraph in paragraphs:
+        candidate = f"{current}\n\n{paragraph}" if current else paragraph
+        if len(candidate) <= max_chars:
+            current = candidate
+            continue
+        if current:
+            chunks.append(current)
+            current = ""
+        if len(paragraph) <= max_chars:
+            current = paragraph
+            continue
+
+        lines = [line.rstrip() for line in paragraph.splitlines() if line.strip()]
+        line_chunk = ""
+        for line in lines:
+            line_candidate = f"{line_chunk}\n{line}" if line_chunk else line
+            if len(line_candidate) <= max_chars:
+                line_chunk = line_candidate
+                continue
+            if line_chunk:
+                chunks.append(line_chunk)
+            line_chunk = line
+        if line_chunk:
+            current = line_chunk
+
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _message_list_contains(message_list, text: str) -> bool:
+    return any(text in item for item in message_list.texts())
+
+
+def _send_text_via_uia_current_chat(message: str) -> None:
+    if not message:
+        raise ValueError("message 不能为空")
+
+    win = _get_wechat_window_spec()
+    hwnd = win.wrapper_object().handle
+    _ensure_wechat_foreground(hwnd)
+
+    edit = win.child_window(auto_id="chat_input_field", control_type="Edit").wrapper_object()
+    send_btn = win.child_window(title="发送", control_type="Button").wrapper_object()
+    message_list = win.child_window(auto_id="chat_message_list", control_type="List").wrapper_object()
+
+    chunks = _split_message_chunks(message)
+    if not chunks:
+        raise ValueError("message 不能为空")
+
+    for chunk in chunks:
+        before = message_list.texts()
+        edit.set_focus()
+        edit.set_edit_text("")
+        edit.set_edit_text(chunk)
+        send_btn.click_input()
+
+        verified = False
+        for _ in range(UIA_SEND_VERIFY_RETRIES):
+            time.sleep(UIA_SEND_SETTLE_SECONDS)
+            after = message_list.texts()
+            if _message_list_contains(message_list, chunk) and after != before:
+                verified = True
+                break
+        if not verified:
+            raise RuntimeError("UIA 发送后未在当前会话消息列表中确认到文本")
 
 
 def find_wechat_window() -> int:
-    targets = {
-        proc.pid
-        for proc in psutil.process_iter(["name"])
-        if proc.info["name"] and proc.info["name"].lower() in {"weixin.exe", "wechatappex.exe"}
-    }
+    targets = _wechat_pids()
     matches: list[int] = []
 
     def callback(hwnd: int, _: int) -> bool:
@@ -43,8 +169,7 @@ def find_wechat_window() -> int:
 
 
 def activate_window(hwnd: int) -> tuple[int, int, int, int]:
-    win32gui.ShowWindow(hwnd, 5)
-    win32gui.SetForegroundWindow(hwnd)
+    _ensure_wechat_foreground(hwnd)
     time.sleep(0.6)
     return win32gui.GetWindowRect(hwnd)
 
@@ -55,11 +180,15 @@ def click_ratio(rect: tuple[int, int, int, int], rx: float, ry: float) -> None:
     height = bottom - top
     x = left + int(width * rx)
     y = top + int(height * ry)
-    win32api.SetCursorPos((x, y))
-    time.sleep(0.15)
-    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-    time.sleep(0.35)
+    original_pos = win32api.GetCursorPos()
+    try:
+        win32api.SetCursorPos((x, y))
+        time.sleep(0.15)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+        time.sleep(0.35)
+    finally:
+        win32api.SetCursorPos(original_pos)
 
 
 def tap(vk_code: int) -> None:
@@ -74,11 +203,9 @@ def hotkey(*vk_codes: int) -> None:
         win32api.keybd_event(code, 0, win32con.KEYEVENTF_KEYUP, 0)
 
 
-def send_shortcut() -> None:
-    # Different WeChat desktop builds vary: some honor Alt+S, others only send
-    # on Enter. Trigger Alt+S first, then Enter as a low-risk fallback.
-    hotkey(win32con.VK_MENU, ord("S"))
-    time.sleep(0.5)
+def send_shortcut(hwnd: int | None = None) -> None:
+    if hwnd is not None:
+        _ensure_wechat_foreground(hwnd)
     tap(win32con.VK_RETURN)
     time.sleep(0.5)
 
@@ -114,7 +241,7 @@ def copy_image_to_clipboard(filepath: str) -> None:
         win32clipboard.CloseClipboard()
 
 
-def send_files(filepaths: list[str]) -> None:
+def send_files(filepaths: list[str], hwnd: int | None = None) -> None:
     if not filepaths:
         return
     image_suffixes = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
@@ -123,14 +250,14 @@ def send_files(filepaths: list[str]) -> None:
         time.sleep(0.15)
         hotkey(win32con.VK_CONTROL, ord("V"))
         time.sleep(1.2)
-        send_shortcut()
+        send_shortcut(hwnd)
         return
 
     copy_files_to_clipboard(filepaths)
     time.sleep(0.15)
     hotkey(win32con.VK_CONTROL, ord("V"))
     time.sleep(1.2)
-    send_shortcut()
+    send_shortcut(hwnd)
 
 
 def _is_retryable_wechat_window_error(exc: Exception) -> bool:
@@ -161,6 +288,7 @@ def _focus_chat_input(
                 current_chat_only=current_chat_only,
                 allow_search_switch=allow_search_switch,
             )
+            _ensure_wechat_foreground(hwnd)
             click_ratio(rect, 0.67, 0.90)
             return
         except Exception as exc:
@@ -194,29 +322,33 @@ def switch_chat(
         hotkey(win32con.VK_CONTROL, ord("A"))
         tap(win32con.VK_BACK)
         type_by_clipboard(contact)
-        time.sleep(0.8)
+        time.sleep(SEARCH_RESULTS_SETTLE_SECONDS)
 
         # Use keyboard navigation rather than a fixed click position because
         # WeChat search result layouts vary between versions and window sizes.
-        for _ in range(max(result_index - 1, 0)):
+        for _ in range(max(result_index, 1)):
             tap(win32con.VK_DOWN)
-            time.sleep(0.15)
+            time.sleep(SEARCH_RESULT_SELECTION_STEP_SECONDS)
         tap(win32con.VK_RETURN)
-        time.sleep(1.2)
+        time.sleep(CHAT_SWITCH_SETTLE_SECONDS)
         return
 
     raise RuntimeError("默认已禁用自动搜索切会话。请使用 --current-chat-only，或明确提供 --visible-row-index。")
 
 
-def send_to_current_chat(message: str | None = None, filepaths: list[str] | None = None) -> None:
+def send_to_current_chat(
+    message: str | None = None,
+    filepaths: list[str] | None = None,
+    hwnd: int | None = None,
+) -> None:
     if message:
         hotkey(win32con.VK_CONTROL, ord("A"))
         tap(win32con.VK_BACK)
         type_by_clipboard(message)
-        send_shortcut()
+        send_shortcut(hwnd)
 
     if filepaths:
-        send_files(filepaths)
+        send_files(filepaths, hwnd=hwnd)
 
 
 def send_message(
@@ -228,6 +360,11 @@ def send_message(
     current_chat_only: bool = False,
     allow_search_switch: bool = False,
 ) -> None:
+    if current_chat_only and message and not filepaths:
+        _send_text_via_uia_current_chat(message)
+        return
+
+    hwnd = find_wechat_window()
     if message:
         _focus_chat_input(
             contact=contact,
@@ -236,7 +373,7 @@ def send_message(
             current_chat_only=current_chat_only,
             allow_search_switch=allow_search_switch,
         )
-        send_to_current_chat(message=message, filepaths=None)
+        send_to_current_chat(message=message, filepaths=None, hwnd=hwnd)
 
     if filepaths:
         for filepath in filepaths:
@@ -247,7 +384,7 @@ def send_message(
                 current_chat_only=current_chat_only,
                 allow_search_switch=allow_search_switch,
             )
-            send_to_current_chat(message=None, filepaths=[filepath])
+            send_to_current_chat(message=None, filepaths=[filepath], hwnd=hwnd)
 
 
 def main() -> None:
