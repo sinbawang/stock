@@ -196,11 +196,11 @@ def batched_filepaths(entries: list[dict[str, object]], overview_path: Path, bat
 def send_to_group888(entries: list[dict[str, object]], overview_path: Path) -> None:
     intro = f"最新持仓基本面报告 {len(entries)} 份，另附综合总览 1 份。"
     log_line("send:start intro")
-    send_message(contact="888", message=intro, allow_search_switch=True)
+    send_message(contact="888", message=intro, allow_search_switch=True, duplicate_send_window_seconds=300)
     time.sleep(1.0)
     for batch in batched_filepaths(entries, overview_path):
         log_line(f"send:batch {len(batch)} files")
-        send_message(contact="888", filepaths=batch, allow_search_switch=True)
+        send_message(contact="888", filepaths=batch, allow_search_switch=True, duplicate_send_window_seconds=300)
         time.sleep(1.5)
 
 

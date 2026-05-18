@@ -24,6 +24,7 @@ SUPPORTED_HK_BLENDED_SUBMODELS = {
     "platform_internet_v1",
     "digital_infra_v1",
     "semiconductor_hardtech_v1",
+    "industrial_automation_v1",
     "auto_manufacturing_v1",
     "insurance_v1",
     "broker_v1",
@@ -49,7 +50,7 @@ def _analyze_hk_fetched_snapshot(
     submodel_config = resolve_submodel_for_symbol(fetched.snapshot.symbol, submodel)
     if submodel_config.submodel_id not in SUPPORTED_HK_BLENDED_SUBMODELS:
         raise RuntimeError(
-            "HK blended POC currently supports platform_internet_v1, digital_infra_v1, semiconductor_hardtech_v1, auto_manufacturing_v1, insurance_v1, and broker_v1 only; other HK submodels should be added incrementally."
+            "HK blended POC currently supports platform_internet_v1, digital_infra_v1, semiconductor_hardtech_v1, industrial_automation_v1, auto_manufacturing_v1, insurance_v1, and broker_v1 only; other HK submodels should be added incrementally."
         )
 
     supplemented = apply_manual_supplement(

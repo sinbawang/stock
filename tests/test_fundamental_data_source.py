@@ -1661,31 +1661,31 @@ def test_send_wechat_native_send_message_retries_window_attach(monkeypatch):
         lambda message=None, filepaths=None, hwnd=None: calls.append((message, filepaths)),
     )
 
-    send_wechat_module.send_message(message="hello", current_chat_only=False)
+    send_wechat_module.send_message(message="hello", current_chat_only=False, disable_dedupe=True)
 
     assert activation_attempts["count"] == 2
     assert calls == [("hello", None)]
 
 
 def test_send_wechat_native_send_message_sends_files_one_by_one(monkeypatch):
-    focus_calls: list[tuple[float, float]] = []
+    focus_calls: list[int] = []
     sent_calls: list[tuple[str | None, list[str] | None]] = []
 
     monkeypatch.setattr(send_wechat_module.time, "sleep", lambda _seconds: None)
     monkeypatch.setattr(send_wechat_module, "find_wechat_window", lambda: 123)
+    monkeypatch.setattr(send_wechat_module, "_focus_current_chat_input_via_uia", lambda: focus_calls.append(123) or 123)
     monkeypatch.setattr(send_wechat_module, "activate_window", lambda _hwnd: (0, 0, 1000, 800))
     monkeypatch.setattr(send_wechat_module, "switch_chat", lambda *args, **kwargs: None)
     monkeypatch.setattr(send_wechat_module, "_ensure_wechat_foreground", lambda _hwnd: None)
-    monkeypatch.setattr(send_wechat_module, "click_ratio", lambda _rect, rx, ry: focus_calls.append((rx, ry)))
     monkeypatch.setattr(
         send_wechat_module,
         "send_to_current_chat",
         lambda message=None, filepaths=None, hwnd=None: sent_calls.append((message, filepaths)),
     )
 
-    send_wechat_module.send_message(filepaths=["a.txt", "b.txt"], current_chat_only=True)
+    send_wechat_module.send_message(filepaths=["a.txt", "b.txt"], current_chat_only=True, disable_dedupe=True)
 
-    assert focus_calls == [(0.67, 0.9), (0.67, 0.9)]
+    assert focus_calls == [123, 123]
     assert sent_calls == [(None, ["a.txt"]), (None, ["b.txt"])]
 
 
@@ -1743,9 +1743,27 @@ def test_send_wechat_native_send_message_prefers_uia_for_current_chat_text(monke
     monkeypatch.setattr(send_wechat_module, "_send_text_via_uia_current_chat", lambda message: sent.append(message))
     monkeypatch.setattr(send_wechat_module, "find_wechat_window", lambda: (_ for _ in ()).throw(AssertionError("should not use win32 path")))
 
-    send_wechat_module.send_message(message="hello", current_chat_only=True)
+    send_wechat_module.send_message(message="hello", current_chat_only=True, disable_dedupe=True)
 
     assert sent == ["hello"]
+
+
+def test_send_wechat_native_send_message_skips_short_window_duplicates(monkeypatch):
+    sent: list[str] = []
+    dedupe_store: dict[str, float] = {}
+    now = {"value": 1000.0}
+
+    monkeypatch.setattr(send_wechat_module.time, "time", lambda: now["value"])
+    monkeypatch.setattr(send_wechat_module, "_load_send_dedupe_store", lambda: dict(dedupe_store))
+    monkeypatch.setattr(send_wechat_module, "_save_send_dedupe_store", lambda store: dedupe_store.clear() or dedupe_store.update(store))
+    monkeypatch.setattr(send_wechat_module, "_send_text_via_uia_current_chat", lambda message: sent.append(message))
+
+    send_wechat_module.send_message(message="hello", current_chat_only=True)
+    send_wechat_module.send_message(message="hello", current_chat_only=True)
+    now["value"] += send_wechat_module.DEFAULT_DUPLICATE_SEND_WINDOW_SECONDS + 1
+    send_wechat_module.send_message(message="hello", current_chat_only=True)
+
+    assert sent == ["hello", "hello"]
 
 
 def test_send_wechat_native_split_message_chunks_preserves_paragraphs():

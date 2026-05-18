@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import time
 from io import BytesIO
 from pathlib import Path
@@ -27,6 +29,9 @@ UIA_SEND_SETTLE_SECONDS = 0.6
 UIA_SEND_VERIFY_RETRIES = 5
 UIA_MAX_MESSAGE_CHARS = 500
 UIA_BEST_EFFORT_MESSAGE_CHARS = 380
+DEFAULT_DUPLICATE_SEND_WINDOW_SECONDS = 90.0
+ROOT = Path(__file__).resolve().parents[1]
+SEND_DEDUPE_STORE_PATH = ROOT / "data" / "_meta" / "wechat_send_dedupe.json"
 
 
 def _wechat_process_names() -> set[str]:
@@ -125,6 +130,68 @@ def _split_message_chunks(message: str, max_chars: int = UIA_MAX_MESSAGE_CHARS) 
 
 def _message_list_contains(message_list, text: str) -> bool:
     return any(text in item for item in message_list.texts())
+
+
+def _build_send_fingerprint(
+    contact: str | None,
+    message: str | None,
+    filepaths: list[str] | None,
+    current_chat_only: bool,
+) -> str:
+    normalized_paths = [str(Path(path).resolve()) for path in (filepaths or [])]
+    payload = {
+        "contact": (contact or "").strip(),
+        "message": (message or "").strip(),
+        "filepaths": normalized_paths,
+        "current_chat_only": current_chat_only,
+    }
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _load_send_dedupe_store() -> dict[str, float]:
+    if not SEND_DEDUPE_STORE_PATH.exists():
+        return {}
+    try:
+        data = json.loads(SEND_DEDUPE_STORE_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(key): float(value) for key, value in data.items() if isinstance(value, (int, float))}
+
+
+def _save_send_dedupe_store(store: dict[str, float]) -> None:
+    SEND_DEDUPE_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SEND_DEDUPE_STORE_PATH.write_text(
+        json.dumps(store, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
+def _should_skip_duplicate_send(
+    contact: str | None,
+    message: str | None,
+    filepaths: list[str] | None,
+    current_chat_only: bool,
+    duplicate_send_window_seconds: float,
+) -> bool:
+    if duplicate_send_window_seconds <= 0:
+        return False
+    fingerprint = _build_send_fingerprint(contact, message, filepaths, current_chat_only)
+    now = time.time()
+    store = _load_send_dedupe_store()
+    cutoff = now - max(duplicate_send_window_seconds * 4, duplicate_send_window_seconds)
+    trimmed_store = {
+        key: value
+        for key, value in store.items()
+        if value >= cutoff
+    }
+    last_sent_at = trimmed_store.get(fingerprint)
+    if last_sent_at is not None and now - last_sent_at < duplicate_send_window_seconds:
+        return True
+    trimmed_store[fingerprint] = now
+    _save_send_dedupe_store(trimmed_store)
+    return False
 
 
 def _split_message_best_effort_chunks(
@@ -396,7 +463,20 @@ def send_message(
     current_chat_only: bool = False,
     allow_search_switch: bool = False,
     best_effort_current_chat_text: bool = False,
+    duplicate_send_window_seconds: float = DEFAULT_DUPLICATE_SEND_WINDOW_SECONDS,
+    disable_dedupe: bool = False,
 ) -> None:
+    if not disable_dedupe and _should_skip_duplicate_send(
+        contact=contact,
+        message=message,
+        filepaths=filepaths,
+        current_chat_only=current_chat_only,
+        duplicate_send_window_seconds=duplicate_send_window_seconds,
+    ):
+        target = contact or "<current-chat>"
+        print(f"Skipped duplicate send to {target}")
+        return
+
     if current_chat_only and message and not filepaths:
         if best_effort_current_chat_text:
             _send_text_via_uia_current_chat_best_effort(message)
@@ -443,6 +523,8 @@ def main() -> None:
     parser.add_argument("--current-chat-only", action="store_true", help="Only send to the chat that is already open; do not switch chats")
     parser.add_argument("--allow-search-switch", action="store_true", help="Allow switching chats by search; disabled by default for safety")
     parser.add_argument("--best-effort-current-chat-text", action="store_true", help="For current-chat text sends, do not fail the command when UIA verification is flaky")
+    parser.add_argument("--disable-dedupe", action="store_true", help="Disable short-window duplicate-send protection")
+    parser.add_argument("--duplicate-send-window-seconds", type=float, default=DEFAULT_DUPLICATE_SEND_WINDOW_SECONDS, help="Skip duplicate sends within this many seconds; set to 0 to disable")
     parser.add_argument("--file", dest="files", action="append", default=None, help="File path to paste and send; repeatable")
     args = parser.parse_args()
     message = args.message
@@ -459,6 +541,8 @@ def main() -> None:
         current_chat_only=args.current_chat_only,
         allow_search_switch=args.allow_search_switch,
         best_effort_current_chat_text=args.best_effort_current_chat_text,
+        duplicate_send_window_seconds=args.duplicate_send_window_seconds,
+        disable_dedupe=args.disable_dedupe,
     )
     target = args.contact or "<current-chat>"
     print(f"Attempted to send to {target}: {message or ''}")

@@ -38,6 +38,7 @@ def main() -> None:
             message=message,
             current_chat_only=True,
             best_effort_current_chat_text=True,
+            duplicate_send_window_seconds=300,
         )
         time.sleep(0.8)
 
