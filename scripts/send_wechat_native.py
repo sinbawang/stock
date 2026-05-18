@@ -29,6 +29,7 @@ UIA_SEND_SETTLE_SECONDS = 0.6
 UIA_SEND_VERIFY_RETRIES = 5
 UIA_MAX_MESSAGE_CHARS = 500
 UIA_BEST_EFFORT_MESSAGE_CHARS = 380
+UIA_FILE_SEND_SETTLE_SECONDS = 0.8
 DEFAULT_DUPLICATE_SEND_WINDOW_SECONDS = 90.0
 ROOT = Path(__file__).resolve().parents[1]
 SEND_DEDUPE_STORE_PATH = ROOT / "data" / "_meta" / "wechat_send_dedupe.json"
@@ -234,6 +235,27 @@ def _send_text_via_uia_current_chat(message: str) -> None:
                 break
         if not verified:
             raise RuntimeError("UIA 发送后未在当前会话消息列表中确认到文本")
+
+
+def _send_files_via_uia_current_chat(filepaths: list[str]) -> int:
+    if not filepaths:
+        raise ValueError("filepaths 不能为空")
+
+    win = _get_wechat_window_spec()
+    hwnd = win.wrapper_object().handle
+    _ensure_wechat_foreground(hwnd)
+    message_list = win.child_window(auto_id="chat_message_list", control_type="List").wrapper_object()
+    before = message_list.texts()
+
+    send_files(filepaths, hwnd=hwnd)
+
+    for _ in range(UIA_SEND_VERIFY_RETRIES):
+        time.sleep(UIA_FILE_SEND_SETTLE_SECONDS)
+        after = message_list.texts()
+        if after != before:
+            return hwnd
+
+    raise RuntimeError("UIA 发送后未在当前会话消息列表中确认到附件/图片")
 
 
 def _send_text_via_uia_current_chat_best_effort(message: str) -> None:
@@ -486,8 +508,7 @@ def send_message(
 
     if current_chat_only and filepaths and not message:
         for filepath in filepaths:
-            hwnd = _focus_current_chat_input_via_uia()
-            send_to_current_chat(message=None, filepaths=[filepath], hwnd=hwnd)
+            _send_files_via_uia_current_chat([filepath])
         return
 
     hwnd = find_wechat_window()

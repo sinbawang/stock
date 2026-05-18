@@ -24,6 +24,7 @@ from fundamental.services import (
     fetch_and_analyze_hk_snapshot,
 )
 from housekeep_generated_reports import build_housekeep_plan, execute_plan
+from send_wechat_current_chat_text import send_current_chat_text, send_current_chat_text_file
 from send_wechat_native import send_message
 
 
@@ -188,20 +189,19 @@ def generate_reports() -> tuple[list[dict[str, object]], Path, Path]:
     return entries, overview_path, manifest_path
 
 
-def batched_filepaths(entries: list[dict[str, object]], overview_path: Path, batch_size: int = 5) -> list[list[str]]:
-    paths = [str(overview_path)] + [str(item["path"]) for item in entries]
-    return [paths[index : index + batch_size] for index in range(0, len(paths), batch_size)]
-
-
 def send_to_group888(entries: list[dict[str, object]], overview_path: Path) -> None:
     intro = f"最新持仓基本面报告 {len(entries)} 份，另附综合总览 1 份。"
     log_line("send:start intro")
-    send_message(contact="888", message=intro, allow_search_switch=True, duplicate_send_window_seconds=300)
+    send_current_chat_text(intro, duplicate_send_window_seconds=300)
     time.sleep(1.0)
-    for batch in batched_filepaths(entries, overview_path):
-        log_line(f"send:batch {len(batch)} files")
-        send_message(contact="888", filepaths=batch, allow_search_switch=True, duplicate_send_window_seconds=300)
-        time.sleep(1.5)
+    log_line(f"send:text {overview_path.name}")
+    send_current_chat_text_file(overview_path, duplicate_send_window_seconds=300)
+    time.sleep(0.8)
+    for entry in entries:
+        report_path = Path(str(entry["path"]))
+        log_line(f"send:text {report_path.name}")
+        send_current_chat_text_file(report_path, duplicate_send_window_seconds=300)
+        time.sleep(0.8)
 
 
 def housekeep() -> tuple[Path, ...]:

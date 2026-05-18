@@ -109,6 +109,41 @@
 .\venv\Scripts\python.exe scripts/batch_regenerate_fundamental_briefs.py --meta-dir data\_meta --save-scorecard-text
 ```
 
+如果要把已经生成好的文本报告发到当前已打开的微信会话，当前建议使用稳定的文本发送入口：
+
+```powershell
+.\venv\Scripts\python.exe scripts/send_wechat_current_chat_text.py data\_meta\02208_金风科技_industrial_automation_v1_blended_fundamental_brief_20260518_203254.txt
+```
+
+使用前先手动打开目标微信群或联系人会话。该入口默认只向当前会话发送文本文件，不执行自动搜索切换，也不依赖附件发送链路。
+
+如果要把已经生成好的结构图或其他文件发到当前已打开的微信会话，当前建议使用对应的文件发送入口：
+
+```powershell
+.\venv\Scripts\python.exe scripts/send_wechat_current_chat_files.py build\wechat\data\02208_金风科技\60m\02208_60m_20260109_to_20260518_normalized_with_boxes_wechat.jpg
+```
+
+该入口同样要求先手动打开目标会话；发送后会检查当前会话消息列表是否发生变化，避免“命令成功但微信未收到”的静默失败。
+
+如果要一次发送“文本报告 + 一张或多张图”，当前建议使用组合发送入口：
+
+```powershell
+.\venv\Scripts\python.exe scripts/send_wechat_current_chat_bundle.py --message-file data\_meta\02208_金风科技_industrial_automation_v1_blended_fundamental_brief_20260518_203254.txt --file build\wechat\data\02208_金风科技\60m\02208_60m_20260109_to_20260518_normalized_with_boxes_wechat.jpg
+```
+
+该入口会先发文本，再按当前会话发送文件，适合“报告正文 + 技术图”这类常见组合场景。
+
+如果希望把“生成 + 发送”合并成一条高层命令，当前建议使用统一任务入口：
+
+```powershell
+.\venv\Scripts\python.exe scripts/run_wechat_report_task.py fundamental 02208 --name 金风科技 --blended-hk
+.\venv\Scripts\python.exe scripts/run_wechat_report_task.py hk60m --symbol 02208 --name 金风科技
+.\venv\Scripts\python.exe scripts/run_wechat_report_task.py cn60m --symbol 300124 --name 汇川技术
+```
+
+这些命令默认面向“当前已打开微信会话”的发送场景；如果只想生成、不发送，可加 `--generate-only`。
+每次通过该统一入口执行后，都会在 `data\_meta` 额外落一份 `wechat_task_manifest_*` 审计文件，记录任务类型、参数、状态和生成/发送产物，便于后续回查与重放。
+
 如果已经把当前持仓维护在项目文件里，也可以直接按持仓清单批量生成：
 
 ```powershell

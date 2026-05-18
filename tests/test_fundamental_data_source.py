@@ -9,6 +9,7 @@ import sys
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 from fundamental.config.registry import get_submodel_for_symbol
 from fundamental.data import cn_snapshot_fetcher as cn_fetcher
@@ -1668,25 +1669,81 @@ def test_send_wechat_native_send_message_retries_window_attach(monkeypatch):
 
 
 def test_send_wechat_native_send_message_sends_files_one_by_one(monkeypatch):
-    focus_calls: list[int] = []
-    sent_calls: list[tuple[str | None, list[str] | None]] = []
+    sent_calls: list[list[str]] = []
 
     monkeypatch.setattr(send_wechat_module.time, "sleep", lambda _seconds: None)
     monkeypatch.setattr(send_wechat_module, "find_wechat_window", lambda: 123)
-    monkeypatch.setattr(send_wechat_module, "_focus_current_chat_input_via_uia", lambda: focus_calls.append(123) or 123)
-    monkeypatch.setattr(send_wechat_module, "activate_window", lambda _hwnd: (0, 0, 1000, 800))
-    monkeypatch.setattr(send_wechat_module, "switch_chat", lambda *args, **kwargs: None)
-    monkeypatch.setattr(send_wechat_module, "_ensure_wechat_foreground", lambda _hwnd: None)
-    monkeypatch.setattr(
-        send_wechat_module,
-        "send_to_current_chat",
-        lambda message=None, filepaths=None, hwnd=None: sent_calls.append((message, filepaths)),
-    )
+    monkeypatch.setattr(send_wechat_module, "_send_files_via_uia_current_chat", lambda filepaths: sent_calls.append(list(filepaths)) or 123)
 
     send_wechat_module.send_message(filepaths=["a.txt", "b.txt"], current_chat_only=True, disable_dedupe=True)
 
-    assert focus_calls == [123, 123]
-    assert sent_calls == [(None, ["a.txt"]), (None, ["b.txt"])]
+    assert sent_calls == [["a.txt"], ["b.txt"]]
+
+
+def test_send_wechat_native_send_files_via_uia_current_chat_verifies_message_list_change(monkeypatch):
+    message_states = [["before"], ["before"], ["after"]]
+    sent_calls: list[tuple[list[str], int | None]] = []
+
+    class FakeWrapper:
+        handle = 123
+
+    class FakeMessageList:
+        def texts(self):
+            if len(message_states) > 1:
+                return message_states.pop(0)
+            return message_states[0]
+
+    class FakeWindow:
+        def wrapper_object(self):
+            return FakeWrapper()
+
+        def child_window(self, auto_id=None, control_type=None):
+            assert auto_id == "chat_message_list"
+            assert control_type == "List"
+
+            class Child:
+                def wrapper_object(self_inner):
+                    return FakeMessageList()
+
+            return Child()
+
+    monkeypatch.setattr(send_wechat_module.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(send_wechat_module, "_get_wechat_window_spec", lambda: FakeWindow())
+    monkeypatch.setattr(send_wechat_module, "_ensure_wechat_foreground", lambda _hwnd: None)
+    monkeypatch.setattr(send_wechat_module, "send_files", lambda filepaths, hwnd=None: sent_calls.append((list(filepaths), hwnd)))
+
+    hwnd = send_wechat_module._send_files_via_uia_current_chat(["a.jpg"])
+
+    assert hwnd == 123
+    assert sent_calls == [(["a.jpg"], 123)]
+
+
+def test_send_wechat_native_send_files_via_uia_current_chat_raises_when_message_list_unchanged(monkeypatch):
+    class FakeWrapper:
+        handle = 123
+
+    class FakeMessageList:
+        def texts(self):
+            return ["same"]
+
+    class FakeWindow:
+        def wrapper_object(self):
+            return FakeWrapper()
+
+        def child_window(self, auto_id=None, control_type=None):
+            class Child:
+                def wrapper_object(self_inner):
+                    return FakeMessageList()
+
+            return Child()
+
+    monkeypatch.setattr(send_wechat_module.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(send_wechat_module, "_get_wechat_window_spec", lambda: FakeWindow())
+    monkeypatch.setattr(send_wechat_module, "_ensure_wechat_foreground", lambda _hwnd: None)
+    monkeypatch.setattr(send_wechat_module, "send_files", lambda filepaths, hwnd=None: None)
+
+    with pytest.raises(RuntimeError, match="附件/图片"):
+        send_wechat_module._send_files_via_uia_current_chat(["a.jpg"])
 
 
 def test_send_wechat_native_switch_chat_selects_first_search_result(monkeypatch):

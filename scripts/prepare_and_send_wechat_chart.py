@@ -7,6 +7,7 @@ from PIL import Image
 from reportlab.graphics import renderPM
 from svglib.svglib import svg2rlg
 
+from send_wechat_current_chat_bundle import send_current_chat_bundle
 from send_wechat_native import send_message
 
 
@@ -93,6 +94,20 @@ def main() -> None:
         raise ValueError("非 render-only 模式必须提供 --contact")
     if not args.current_chat_only and args.visible_row_index is None:
         raise ValueError("默认禁止自动切会话。请先手动打开目标聊天并使用 --current-chat-only，或明确提供 --visible-row-index。")
+
+    if args.current_chat_only:
+        message_file: Path | None = None
+        if args.message:
+            message_file = output_jpg.parent / f"{output_jpg.stem}_message.txt"
+            message_file.write_text(args.message, encoding="utf-8")
+        send_current_chat_bundle(
+            message_file=message_file,
+            files=[output_jpg],
+        )
+        if message_file is not None:
+            print(f"已尝试发送文本到当前会话: {message_file}")
+        print("已尝试发送图片到当前会话")
+        return
 
     if args.message:
         send_message(

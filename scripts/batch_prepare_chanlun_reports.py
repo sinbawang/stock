@@ -36,6 +36,8 @@ from export_structures_with_boxes import (
 )
 from prepare_and_send_wechat_chart import derive_output_paths, derive_wechat_output_dir, make_sendable_jpg, render_svg
 from run_hk_60m_chanlun_to_wechat import analyze_current_state, compute_bi_strengths, write_normalized_csv
+from send_wechat_current_chat_files import send_current_chat_files
+from send_wechat_current_chat_text import send_current_chat_text
 from send_wechat_native import send_message
 
 
@@ -449,23 +451,19 @@ def send_batch_current_chat(
     summary_path: Path,
 ) -> None:
     print(f"Sending consolidated 60M summary to current chat ({target_label})")
-    send_message(
-        contact=None,
-        message=summary_path.read_text(encoding="utf-8"),
-        current_chat_only=True,
-        best_effort_current_chat_text=True,
+    send_current_chat_text(
+        summary_path.read_text(encoding="utf-8"),
+        duplicate_send_window_seconds=300,
     )
 
     for security, day_case, m60_case in bundle:
         message_text = build_send_text_60m_only(security, m60_case["report"])
         print(f"Sending {security.name} to current chat ({target_label})")
-        send_message(
-            contact=None,
-            message=message_text,
-            current_chat_only=True,
-            best_effort_current_chat_text=True,
+        send_current_chat_text(
+            message_text,
+            duplicate_send_window_seconds=300,
         )
-        send_message(contact=None, message=None, filepaths=[str(m60_case["jpg"])], current_chat_only=True)
+        send_current_chat_files([m60_case["jpg"]], duplicate_send_window_seconds=300)
 
 
 def main() -> None:

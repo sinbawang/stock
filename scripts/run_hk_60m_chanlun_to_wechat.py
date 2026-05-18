@@ -30,6 +30,7 @@ from export_structures_with_boxes import (
     write_svg_with_inclusion_boxes,
 )
 from prepare_and_send_wechat_chart import derive_output_paths, make_sendable_jpg, render_svg
+from send_wechat_current_chat_bundle import send_current_chat_bundle
 from send_wechat_native import send_message
 
 
@@ -316,6 +317,15 @@ def main() -> None:
         raise ValueError("非 render-only 模式必须提供 --contact")
     if not args.current_chat_only and args.visible_row_index is None and not args.allow_search_switch:
         raise ValueError("默认禁止自动切会话。请先手动打开目标聊天并使用 --current-chat-only，或明确提供 --visible-row-index。")
+
+    if args.current_chat_only:
+        message_file = paths["base_dir"] / f"{paths['prefix'].name}_wechat_message.txt"
+        message_file.write_text(analysis_text, encoding="utf-8")
+        send_current_chat_bundle(
+            message_file=message_file,
+            files=[paths["jpg"]],
+        )
+        return
 
     send_message(
         args.contact,

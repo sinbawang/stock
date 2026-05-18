@@ -21,7 +21,8 @@ from chanlun.zhongshu import identify_zhongshu
 from export_structures_with_boxes import calculate_macd
 from prepare_and_send_wechat_chart import derive_output_paths
 from run_hk_60m_chanlun_to_wechat import analyze_current_state
-from send_wechat_native import send_message
+from send_wechat_current_chat_files import send_current_chat_files
+from send_wechat_current_chat_text import send_current_chat_text
 
 
 def main() -> None:
@@ -37,18 +38,11 @@ def main() -> None:
     macd_points = calculate_macd(raw_bars)
     message = analyze_current_state(raw_bars, bis, zhongshus, macd_points)
 
-    send_message(
-        "晨",
-        message=message,
-        visible_row_index=1,
-        filepaths=None,
+    send_current_chat_text(
+        message,
+        duplicate_send_window_seconds=300,
     )
-    send_message(
-        "晨",
-        message=None,
-        visible_row_index=1,
-        filepaths=[str(image_path)],
-    )
+    send_current_chat_files([image_path], duplicate_send_window_seconds=300)
     print("resent formatted text and image to 晨")
 
 

@@ -9,7 +9,7 @@ SCRIPTS = ROOT / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from send_wechat_native import send_message
+from send_wechat_current_chat_text import send_current_chat_text_file
 
 
 FILES = [
@@ -33,11 +33,8 @@ FILES = [
 def main() -> None:
     for path in FILES:
         print(f"sending {path.name}", flush=True)
-        message = path.read_text(encoding="utf-8")
-        send_message(
-            message=message,
-            current_chat_only=True,
-            best_effort_current_chat_text=True,
+        send_current_chat_text_file(
+            path,
             duplicate_send_window_seconds=300,
         )
         time.sleep(0.8)
