@@ -75,6 +75,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--send-current-chat", action="store_true", help="生成完成后发送到当前已打开微信会话")
     parser.add_argument("--send-only", action="store_true", help="只发送已生成的最新报告和图片，不重新生成")
+    parser.add_argument("--disable-dedupe", action="store_true", help="关闭短时间重复发送保护，用于立即重发")
     parser.add_argument("--target-label", default="888", help="仅用于日志展示的目标名称")
     return parser.parse_args()
 
@@ -439,8 +440,8 @@ def load_existing_case(security: Security, timeframe: str) -> dict[str, Path]:
         "report": latest_file(base_dir, "*_normalized_report.txt"),
         "analysis": latest_file(base_dir, "*_normalized_analysis.txt"),
         "advice": latest_file(base_dir, "*_normalized_advice.txt"),
-        "jpg": latest_file(wechat_dir, "*_normalized_wechat.jpg"),
-        "png": latest_file(wechat_dir, "*_normalized_full.png"),
+        "jpg": latest_file(wechat_dir, "*_normalized_with_boxes_wechat.jpg"),
+        "png": latest_file(wechat_dir, "*_normalized_with_boxes_full.png"),
         "svg": latest_file(base_dir, "*_normalized_with_boxes.svg"),
     }
 
@@ -449,11 +450,14 @@ def send_batch_current_chat(
     bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]],
     target_label: str,
     summary_path: Path,
+    *,
+    disable_dedupe: bool = False,
 ) -> None:
     print(f"Sending consolidated 60M summary to current chat ({target_label})")
     send_current_chat_text(
         summary_path.read_text(encoding="utf-8"),
         duplicate_send_window_seconds=300,
+        disable_dedupe=disable_dedupe,
     )
 
     for security, day_case, m60_case in bundle:
@@ -462,8 +466,13 @@ def send_batch_current_chat(
         send_current_chat_text(
             message_text,
             duplicate_send_window_seconds=300,
+            disable_dedupe=disable_dedupe,
         )
-        send_current_chat_files([m60_case["jpg"]], duplicate_send_window_seconds=300)
+        send_current_chat_files(
+            [m60_case["jpg"]],
+            duplicate_send_window_seconds=300,
+            disable_dedupe=disable_dedupe,
+        )
 
 
 def main() -> None:
@@ -515,7 +524,12 @@ def main() -> None:
     if args.send_current_chat:
         if summary_path is None:
             raise RuntimeError("missing summary path")
-        send_batch_current_chat(bundle, args.target_label, summary_path)
+        send_batch_current_chat(
+            bundle,
+            args.target_label,
+            summary_path,
+            disable_dedupe=args.disable_dedupe,
+        )
 
 
 if __name__ == "__main__":

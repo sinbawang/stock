@@ -89,6 +89,11 @@ def _focus_current_chat_input_via_uia() -> int:
     return hwnd
 
 
+def _open_search_box() -> None:
+    hotkey(win32con.VK_CONTROL, ord("F"))
+    time.sleep(0.2)
+
+
 def _split_message_chunks(message: str, max_chars: int = UIA_MAX_MESSAGE_CHARS) -> list[str]:
     text = message.strip()
     if not text:
@@ -188,11 +193,31 @@ def _should_skip_duplicate_send(
         if value >= cutoff
     }
     last_sent_at = trimmed_store.get(fingerprint)
-    if last_sent_at is not None and now - last_sent_at < duplicate_send_window_seconds:
-        return True
+    if trimmed_store != store:
+        _save_send_dedupe_store(trimmed_store)
+    return last_sent_at is not None and now - last_sent_at < duplicate_send_window_seconds
+
+
+def _record_duplicate_send(
+    contact: str | None,
+    message: str | None,
+    filepaths: list[str] | None,
+    current_chat_only: bool,
+    duplicate_send_window_seconds: float,
+) -> None:
+    if duplicate_send_window_seconds <= 0:
+        return
+    fingerprint = _build_send_fingerprint(contact, message, filepaths, current_chat_only)
+    now = time.time()
+    store = _load_send_dedupe_store()
+    cutoff = now - max(duplicate_send_window_seconds * 4, duplicate_send_window_seconds)
+    trimmed_store = {
+        key: value
+        for key, value in store.items()
+        if value >= cutoff
+    }
     trimmed_store[fingerprint] = now
     _save_send_dedupe_store(trimmed_store)
-    return False
 
 
 def _split_message_best_effort_chunks(
@@ -256,6 +281,16 @@ def _send_files_via_uia_current_chat(filepaths: list[str]) -> int:
             return hwnd
 
     raise RuntimeError("UIA 发送后未在当前会话消息列表中确认到附件/图片")
+
+
+def _send_files_via_current_chat_keyboard_only(filepaths: list[str]) -> None:
+    if not filepaths:
+        raise ValueError("filepaths 不能为空")
+
+    hwnd = find_wechat_window()
+    for filepath in filepaths:
+        _focus_chat_input(current_chat_only=True, require_input_focus=False)
+        send_to_current_chat(message=None, filepaths=[filepath], hwnd=hwnd)
 
 
 def _send_text_via_uia_current_chat_best_effort(message: str) -> None:
@@ -399,6 +434,7 @@ def _focus_chat_input(
     visible_row_index: int | None = None,
     current_chat_only: bool = False,
     allow_search_switch: bool = False,
+    require_input_focus: bool = True,
 ) -> None:
     last_exc: Exception | None = None
     for attempt in range(WINDOW_ATTACH_RETRIES):
@@ -414,7 +450,24 @@ def _focus_chat_input(
                 allow_search_switch=allow_search_switch,
             )
             _ensure_wechat_foreground(hwnd)
-            click_ratio(rect, 0.67, 0.90)
+            if require_input_focus:
+                try:
+                    click_ratio(rect, 0.67, 0.90)
+                except pywintypes.error:
+                    try:
+                        _focus_current_chat_input_via_uia()
+                        print(
+                            "warning: cursor-based chat input focus is unavailable; focused chat input via UIA fallback",
+                            flush=True,
+                        )
+                        return
+                    except Exception:
+                        pass
+                    mode = "current-chat" if current_chat_only else "chat-switched"
+                    print(
+                        f"warning: cursor-based chat input focus is unavailable; continuing with keyboard-only {mode} send",
+                        flush=True,
+                    )
             return
         except Exception as exc:
             if not _is_retryable_wechat_window_error(exc) or attempt == WINDOW_ATTACH_RETRIES - 1:
@@ -443,7 +496,7 @@ def switch_chat(
         return
 
     if allow_search_switch and contact:
-        click_ratio(rect, 0.17, 0.085)
+        _open_search_box()
         hotkey(win32con.VK_CONTROL, ord("A"))
         tap(win32con.VK_BACK)
         type_by_clipboard(contact)
@@ -503,27 +556,31 @@ def send_message(
         if best_effort_current_chat_text:
             _send_text_via_uia_current_chat_best_effort(message)
         else:
-            _send_text_via_uia_current_chat(message)
-        return
-
-    if current_chat_only and filepaths and not message:
-        for filepath in filepaths:
-            _send_files_via_uia_current_chat([filepath])
-        return
-
-    hwnd = find_wechat_window()
-    if message:
-        _focus_chat_input(
-            contact=contact,
-            result_index=result_index,
-            visible_row_index=visible_row_index,
-            current_chat_only=current_chat_only,
-            allow_search_switch=allow_search_switch,
-        )
-        send_to_current_chat(message=message, filepaths=None, hwnd=hwnd)
-
-    if filepaths:
-        for filepath in filepaths:
+            try:
+                _send_text_via_uia_current_chat(message)
+            except ValueError:
+                raise
+            except Exception as exc:
+                print(
+                    f"warning: strict current-chat UIA text send failed ({exc}); retrying with best-effort send",
+                    flush=True,
+                )
+                _send_text_via_uia_current_chat_best_effort(message)
+    elif current_chat_only and filepaths and not message:
+        try:
+            for filepath in filepaths:
+                _send_files_via_uia_current_chat([filepath])
+        except ValueError:
+            raise
+        except Exception as exc:
+            print(
+                f"warning: strict current-chat UIA file send failed ({exc}); retrying with keyboard-only send",
+                flush=True,
+            )
+            _send_files_via_current_chat_keyboard_only(filepaths)
+    else:
+        hwnd = find_wechat_window()
+        if message:
             _focus_chat_input(
                 contact=contact,
                 result_index=result_index,
@@ -531,7 +588,28 @@ def send_message(
                 current_chat_only=current_chat_only,
                 allow_search_switch=allow_search_switch,
             )
-            send_to_current_chat(message=None, filepaths=[filepath], hwnd=hwnd)
+            send_to_current_chat(message=message, filepaths=None, hwnd=hwnd)
+
+        if filepaths:
+            for filepath in filepaths:
+                _focus_chat_input(
+                    contact=contact,
+                    result_index=result_index,
+                    visible_row_index=visible_row_index,
+                    current_chat_only=current_chat_only,
+                    allow_search_switch=allow_search_switch,
+                    require_input_focus=True,
+                )
+                send_to_current_chat(message=None, filepaths=[filepath], hwnd=hwnd)
+
+    if not disable_dedupe:
+        _record_duplicate_send(
+            contact=contact,
+            message=message,
+            filepaths=filepaths,
+            current_chat_only=current_chat_only,
+            duplicate_send_window_seconds=duplicate_send_window_seconds,
+        )
 
 
 def main() -> None:

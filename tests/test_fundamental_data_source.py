@@ -1680,6 +1680,71 @@ def test_send_wechat_native_send_message_sends_files_one_by_one(monkeypatch):
     assert sent_calls == [["a.txt"], ["b.txt"]]
 
 
+def test_send_wechat_native_send_message_falls_back_to_keyboard_only_current_chat_files(monkeypatch):
+    fallback_calls: list[list[str]] = []
+
+    monkeypatch.setattr(
+        send_wechat_module,
+        "_send_files_via_uia_current_chat",
+        lambda _filepaths: (_ for _ in ()).throw(RuntimeError("uia file verification failed")),
+    )
+    monkeypatch.setattr(
+        send_wechat_module,
+        "_send_files_via_current_chat_keyboard_only",
+        lambda filepaths: fallback_calls.append(list(filepaths)),
+    )
+
+    send_wechat_module.send_message(filepaths=["a.txt", "b.txt"], current_chat_only=True, disable_dedupe=True)
+
+    assert fallback_calls == [["a.txt", "b.txt"]]
+
+
+def test_send_wechat_native_send_message_file_only_skips_input_focus_click(monkeypatch):
+    focus_flags: list[bool] = []
+    sent_calls: list[tuple[str | None, list[str] | None, int | None]] = []
+
+    monkeypatch.setattr(send_wechat_module, "find_wechat_window", lambda: 123)
+
+    def fake_focus_chat_input(*args, require_input_focus=True, **kwargs):
+        focus_flags.append(require_input_focus)
+
+    monkeypatch.setattr(send_wechat_module, "_focus_chat_input", fake_focus_chat_input)
+    monkeypatch.setattr(
+        send_wechat_module,
+        "send_to_current_chat",
+        lambda message=None, filepaths=None, hwnd=None: sent_calls.append((message, filepaths, hwnd)),
+    )
+
+    send_wechat_module.send_message(
+        contact="888",
+        filepaths=["a.txt"],
+        allow_search_switch=True,
+        disable_dedupe=True,
+    )
+
+    assert focus_flags == [False]
+    assert sent_calls == [(None, ["a.txt"], 123)]
+
+
+def test_send_wechat_native_focus_chat_input_tolerates_cursor_failure_for_current_chat(monkeypatch):
+    clicked: list[tuple[float, float]] = []
+
+    monkeypatch.setattr(send_wechat_module, "find_wechat_window", lambda: 123)
+    monkeypatch.setattr(send_wechat_module, "activate_window", lambda _hwnd: (0, 0, 1000, 800))
+    monkeypatch.setattr(send_wechat_module, "switch_chat", lambda *args, **kwargs: None)
+    monkeypatch.setattr(send_wechat_module, "_ensure_wechat_foreground", lambda _hwnd: None)
+
+    def fake_click_ratio(_rect, rx, ry):
+        clicked.append((rx, ry))
+        raise send_wechat_module.pywintypes.error(0, "SetCursorPos", "No error message is available")
+
+    monkeypatch.setattr(send_wechat_module, "click_ratio", fake_click_ratio)
+
+    send_wechat_module._focus_chat_input(current_chat_only=True)
+
+    assert clicked == [(0.67, 0.90)]
+
+
 def test_send_wechat_native_send_files_via_uia_current_chat_verifies_message_list_change(monkeypatch):
     message_states = [["before"], ["before"], ["after"]]
     sent_calls: list[tuple[list[str], int | None]] = []
@@ -1749,10 +1814,11 @@ def test_send_wechat_native_send_files_via_uia_current_chat_raises_when_message_
 def test_send_wechat_native_switch_chat_selects_first_search_result(monkeypatch):
     taps: list[int] = []
     typed: list[str] = []
+    hotkeys: list[tuple[int, ...]] = []
 
     monkeypatch.setattr(send_wechat_module.time, "sleep", lambda _seconds: None)
-    monkeypatch.setattr(send_wechat_module, "click_ratio", lambda *args, **kwargs: None)
-    monkeypatch.setattr(send_wechat_module, "hotkey", lambda *args, **kwargs: None)
+    monkeypatch.setattr(send_wechat_module, "click_ratio", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not click search box")))
+    monkeypatch.setattr(send_wechat_module, "hotkey", lambda *args, **kwargs: hotkeys.append(args))
     monkeypatch.setattr(send_wechat_module, "type_by_clipboard", lambda text: typed.append(text))
     monkeypatch.setattr(send_wechat_module, "tap", lambda key: taps.append(key))
 
@@ -1763,6 +1829,10 @@ def test_send_wechat_native_switch_chat_selects_first_search_result(monkeypatch)
         allow_search_switch=True,
     )
 
+    assert hotkeys == [
+        (send_wechat_module.win32con.VK_CONTROL, ord("F")),
+        (send_wechat_module.win32con.VK_CONTROL, ord("A")),
+    ]
     assert typed == ["888"]
     assert taps == [send_wechat_module.win32con.VK_BACK, send_wechat_module.win32con.VK_DOWN, send_wechat_module.win32con.VK_RETURN]
 
@@ -1805,6 +1875,25 @@ def test_send_wechat_native_send_message_prefers_uia_for_current_chat_text(monke
     assert sent == ["hello"]
 
 
+def test_send_wechat_native_send_message_falls_back_to_best_effort_current_chat_text(monkeypatch):
+    fallback_sent: list[str] = []
+
+    monkeypatch.setattr(
+        send_wechat_module,
+        "_send_text_via_uia_current_chat",
+        lambda _message: (_ for _ in ()).throw(RuntimeError("uia list verification failed")),
+    )
+    monkeypatch.setattr(
+        send_wechat_module,
+        "_send_text_via_uia_current_chat_best_effort",
+        lambda message: fallback_sent.append(message),
+    )
+
+    send_wechat_module.send_message(message="hello", current_chat_only=True, disable_dedupe=True)
+
+    assert fallback_sent == ["hello"]
+
+
 def test_send_wechat_native_send_message_skips_short_window_duplicates(monkeypatch):
     sent: list[str] = []
     dedupe_store: dict[str, float] = {}
@@ -1821,6 +1910,34 @@ def test_send_wechat_native_send_message_skips_short_window_duplicates(monkeypat
     send_wechat_module.send_message(message="hello", current_chat_only=True)
 
     assert sent == ["hello", "hello"]
+
+
+def test_send_wechat_native_failed_send_does_not_record_dedupe(monkeypatch):
+    dedupe_store: dict[str, float] = {}
+    save_calls: list[dict[str, float]] = []
+
+    monkeypatch.setattr(send_wechat_module, "_load_send_dedupe_store", lambda: dict(dedupe_store))
+    monkeypatch.setattr(
+        send_wechat_module,
+        "_save_send_dedupe_store",
+        lambda store: save_calls.append(dict(store)) or dedupe_store.clear() or dedupe_store.update(store),
+    )
+    monkeypatch.setattr(
+        send_wechat_module,
+        "_send_text_via_uia_current_chat",
+        lambda _message: (_ for _ in ()).throw(RuntimeError("hard failure")),
+    )
+    monkeypatch.setattr(
+        send_wechat_module,
+        "_send_text_via_uia_current_chat_best_effort",
+        lambda _message: (_ for _ in ()).throw(RuntimeError("fallback failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="fallback failure"):
+        send_wechat_module.send_message(message="hello", current_chat_only=True)
+
+    assert dedupe_store == {}
+    assert save_calls == []
 
 
 def test_send_wechat_native_split_message_chunks_preserves_paragraphs():
