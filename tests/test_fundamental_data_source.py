@@ -1811,6 +1811,46 @@ def test_send_wechat_native_send_files_via_uia_current_chat_raises_when_message_
         send_wechat_module._send_files_via_uia_current_chat(["a.jpg"])
 
 
+def test_send_wechat_native_send_files_via_uia_current_chat_detects_child_count_change(monkeypatch):
+    child_counts = [1, 1, 2]
+    sent_calls: list[tuple[list[str], int | None]] = []
+
+    class FakeWrapper:
+        handle = 123
+
+    class FakeMessageList:
+        def texts(self):
+            return ["same"]
+
+        def children(self):
+            if len(child_counts) > 1:
+                count = child_counts.pop(0)
+            else:
+                count = child_counts[0]
+            return [object() for _ in range(count)]
+
+    class FakeWindow:
+        def wrapper_object(self):
+            return FakeWrapper()
+
+        def child_window(self, auto_id=None, control_type=None):
+            class Child:
+                def wrapper_object(self_inner):
+                    return FakeMessageList()
+
+            return Child()
+
+    monkeypatch.setattr(send_wechat_module.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(send_wechat_module, "_get_wechat_window_spec", lambda: FakeWindow())
+    monkeypatch.setattr(send_wechat_module, "_ensure_wechat_foreground", lambda _hwnd: None)
+    monkeypatch.setattr(send_wechat_module, "send_files", lambda filepaths, hwnd=None: sent_calls.append((list(filepaths), hwnd)))
+
+    hwnd = send_wechat_module._send_files_via_uia_current_chat(["a.jpg"])
+
+    assert hwnd == 123
+    assert sent_calls == [(["a.jpg"], 123)]
+
+
 def test_send_wechat_native_switch_chat_selects_first_search_result(monkeypatch):
     taps: list[int] = []
     typed: list[str] = []
@@ -1894,6 +1934,27 @@ def test_send_wechat_native_send_message_falls_back_to_best_effort_current_chat_
     assert fallback_sent == ["hello"]
 
 
+def test_send_wechat_native_send_message_strict_current_chat_text_raises(monkeypatch):
+    monkeypatch.setattr(
+        send_wechat_module,
+        "_send_text_via_uia_current_chat",
+        lambda _message: (_ for _ in ()).throw(RuntimeError("uia list verification failed")),
+    )
+    monkeypatch.setattr(
+        send_wechat_module,
+        "_send_text_via_uia_current_chat_best_effort",
+        lambda _message: (_ for _ in ()).throw(AssertionError("should not fall back")),
+    )
+
+    with pytest.raises(RuntimeError, match="uia list verification failed"):
+        send_wechat_module.send_message(
+            message="hello",
+            current_chat_only=True,
+            allow_current_chat_fallback=False,
+            disable_dedupe=True,
+        )
+
+
 def test_send_wechat_native_send_message_skips_short_window_duplicates(monkeypatch):
     sent: list[str] = []
     dedupe_store: dict[str, float] = {}
@@ -1910,6 +1971,27 @@ def test_send_wechat_native_send_message_skips_short_window_duplicates(monkeypat
     send_wechat_module.send_message(message="hello", current_chat_only=True)
 
     assert sent == ["hello", "hello"]
+
+
+def test_send_wechat_native_send_message_strict_current_chat_files_raises(monkeypatch):
+    monkeypatch.setattr(
+        send_wechat_module,
+        "_send_files_via_uia_current_chat",
+        lambda _filepaths: (_ for _ in ()).throw(RuntimeError("uia file verification failed")),
+    )
+    monkeypatch.setattr(
+        send_wechat_module,
+        "_send_files_via_current_chat_keyboard_only",
+        lambda _filepaths: (_ for _ in ()).throw(AssertionError("should not fall back")),
+    )
+
+    with pytest.raises(RuntimeError, match="uia file verification failed"):
+        send_wechat_module.send_message(
+            filepaths=["a.txt"],
+            current_chat_only=True,
+            allow_current_chat_fallback=False,
+            disable_dedupe=True,
+        )
 
 
 def test_send_wechat_native_failed_send_does_not_record_dedupe(monkeypatch):

@@ -14,6 +14,7 @@ from send_wechat_native import send_message
 def send_current_chat_files(
     filepaths: list[str | Path],
     *,
+    strict_current_chat: bool = False,
     duplicate_send_window_seconds: float = 300.0,
     disable_dedupe: bool = False,
 ) -> list[Path]:
@@ -29,6 +30,7 @@ def send_current_chat_files(
         message=None,
         filepaths=[str(path) for path in resolved_paths],
         current_chat_only=True,
+        allow_current_chat_fallback=not strict_current_chat,
         duplicate_send_window_seconds=duplicate_send_window_seconds,
         disable_dedupe=disable_dedupe,
     )
@@ -40,6 +42,11 @@ def parse_args() -> argparse.Namespace:
         description="Send one or more files to the WeChat chat that is already open in the foreground.",
     )
     parser.add_argument("files", nargs="+", help="One or more file paths to send")
+    parser.add_argument(
+        "--strict-current-chat",
+        action="store_true",
+        help="Fail fast when strict UIA current-chat verification fails instead of falling back",
+    )
     parser.add_argument(
         "--disable-dedupe",
         action="store_true",
@@ -58,6 +65,7 @@ def main() -> None:
     args = parse_args()
     resolved_paths = send_current_chat_files(
         args.files,
+        strict_current_chat=args.strict_current_chat,
         duplicate_send_window_seconds=args.duplicate_send_window_seconds,
         disable_dedupe=args.disable_dedupe,
     )

@@ -14,6 +14,7 @@ from send_wechat_native import send_message
 def send_current_chat_text(
     message: str,
     *,
+    strict_current_chat: bool = False,
     duplicate_send_window_seconds: float = 300.0,
     disable_dedupe: bool = False,
 ) -> None:
@@ -24,6 +25,7 @@ def send_current_chat_text(
         contact=None,
         message=message,
         current_chat_only=True,
+        allow_current_chat_fallback=not strict_current_chat,
         duplicate_send_window_seconds=duplicate_send_window_seconds,
         disable_dedupe=disable_dedupe,
     )
@@ -32,6 +34,7 @@ def send_current_chat_text(
 def send_current_chat_text_file(
     message_file: str | Path,
     *,
+    strict_current_chat: bool = False,
     duplicate_send_window_seconds: float = 300.0,
     disable_dedupe: bool = False,
 ) -> Path:
@@ -42,6 +45,7 @@ def send_current_chat_text_file(
     message = message_path.read_text(encoding="utf-8")
     send_current_chat_text(
         message,
+        strict_current_chat=strict_current_chat,
         duplicate_send_window_seconds=duplicate_send_window_seconds,
         disable_dedupe=disable_dedupe,
     )
@@ -53,6 +57,11 @@ def parse_args() -> argparse.Namespace:
         description="Send a UTF-8 text file to the WeChat chat that is already open in the foreground.",
     )
     parser.add_argument("message_file", help="Path to a UTF-8 text file to send")
+    parser.add_argument(
+        "--strict-current-chat",
+        action="store_true",
+        help="Fail fast when strict UIA current-chat verification fails instead of falling back",
+    )
     parser.add_argument(
         "--disable-dedupe",
         action="store_true",
@@ -71,6 +80,7 @@ def main() -> None:
     args = parse_args()
     message_path = send_current_chat_text_file(
         args.message_file,
+        strict_current_chat=args.strict_current_chat,
         duplicate_send_window_seconds=args.duplicate_send_window_seconds,
         disable_dedupe=args.disable_dedupe,
     )

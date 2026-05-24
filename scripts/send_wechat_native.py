@@ -138,6 +138,21 @@ def _message_list_contains(message_list, text: str) -> bool:
     return any(text in item for item in message_list.texts())
 
 
+def _message_list_signature(message_list) -> tuple[tuple[str, ...], int | None]:
+    texts = tuple(message_list.texts())
+    item_count: int | None = None
+    for attr in ("children", "descendants"):
+        getter = getattr(message_list, attr, None)
+        if getter is None:
+            continue
+        try:
+            item_count = len(getter())
+            break
+        except Exception:
+            continue
+    return texts, item_count
+
+
 def _build_send_fingerprint(
     contact: str | None,
     message: str | None,
@@ -270,13 +285,13 @@ def _send_files_via_uia_current_chat(filepaths: list[str]) -> int:
     hwnd = win.wrapper_object().handle
     _ensure_wechat_foreground(hwnd)
     message_list = win.child_window(auto_id="chat_message_list", control_type="List").wrapper_object()
-    before = message_list.texts()
+    before = _message_list_signature(message_list)
 
     send_files(filepaths, hwnd=hwnd)
 
     for _ in range(UIA_SEND_VERIFY_RETRIES):
         time.sleep(UIA_FILE_SEND_SETTLE_SECONDS)
-        after = message_list.texts()
+        after = _message_list_signature(message_list)
         if after != before:
             return hwnd
 
@@ -538,6 +553,7 @@ def send_message(
     current_chat_only: bool = False,
     allow_search_switch: bool = False,
     best_effort_current_chat_text: bool = False,
+    allow_current_chat_fallback: bool = True,
     duplicate_send_window_seconds: float = DEFAULT_DUPLICATE_SEND_WINDOW_SECONDS,
     disable_dedupe: bool = False,
 ) -> None:
@@ -561,6 +577,8 @@ def send_message(
             except ValueError:
                 raise
             except Exception as exc:
+                if not allow_current_chat_fallback:
+                    raise
                 print(
                     f"warning: strict current-chat UIA text send failed ({exc}); retrying with best-effort send",
                     flush=True,
@@ -573,6 +591,8 @@ def send_message(
         except ValueError:
             raise
         except Exception as exc:
+            if not allow_current_chat_fallback:
+                raise
             print(
                 f"warning: strict current-chat UIA file send failed ({exc}); retrying with keyboard-only send",
                 flush=True,

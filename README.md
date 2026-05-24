@@ -43,6 +43,7 @@
 建议按“总边界 -> 字段边界 -> 数据源与实现 -> 联动扩展”的顺序阅读基本面文档。
 
 - [docs/chanlun-rule-spec.md](docs/chanlun-rule-spec.md): 缠论规则规格
+- [docs/capital-flow-module-spec.md](docs/capital-flow-module-spec.md): 资金面模块设计规格
 - [docs/hk-minute-data-source.md](docs/hk-minute-data-source.md): 港股分钟线数据源策略与调用约定
 
 基本面建议阅读顺序：
@@ -149,6 +150,77 @@
 ```powershell
 .\venv\Scripts\python.exe scripts/batch_regenerate_fundamental_briefs.py --holdings-file data\_meta\current_holdings.json --save-scorecard-text
 ```
+
+资金面也有独立的 A 股持仓批量入口，默认读取 `data\_meta\current_a_share_holdings.json`，并在 `data\_meta` 生成单标的资金面评分卡和批量概览：
+
+```powershell
+.\venv\Scripts\python.exe scripts\batch_generate_capital_flow_reports.py
+```
+
+公开资金流接口偶发断连时，脚本默认会尝试使用 `data\_meta\capital_flow_cache` 下 7 天内的缓存；如需禁用缓存或放宽缓存年龄：
+
+```powershell
+.\venv\Scripts\python.exe scripts\batch_generate_capital_flow_reports.py --no-cache
+.\venv\Scripts\python.exe scripts\batch_generate_capital_flow_reports.py --max-cache-age-days -1
+```
+
+如果东方财富主源和缓存都不可用，脚本默认会尝试同花顺低置信度 fallback；该口径使用资金净额替代主力净流入，并会在报告 `notes` 中标明。可用 `--no-fallback` 禁用。
+
+如果只想每天一条命令更新 A 股持仓资金面并生成三轴管理清单，可以使用：
+
+```powershell
+.\venv\Scripts\python.exe scripts\run_a_share_daily_overview.py
+```
+
+该入口会先生成 A 股资金面单标的报告与 `group_a_share_capital_flow_overview_*.txt`，再复用最新基本面简报、最新 60M 技术面组合建议和刚生成的资金面概览，输出 `group_a_share_combined_overview_*.txt`。常用调试参数与资金面批处理保持一致：
+
+```powershell
+.\venv\Scripts\python.exe scripts\run_a_share_daily_overview.py --limit 2
+.\venv\Scripts\python.exe scripts\run_a_share_daily_overview.py --max-cache-age-days -1
+.\venv\Scripts\python.exe scripts\run_a_share_daily_overview.py --no-fallback
+```
+
+每次运行默认还会在 `data\_meta` 写入 `a_share_daily_overview_manifest_*.json`，记录持仓输入、关键参数、资金面成功/失败数量、输出报告路径和微信发送状态；如不需要审计文件，可加 `--no-manifest`。
+
+如果要生成后把最终三轴管理清单发送到当前已打开的微信会话：
+
+```powershell
+.\venv\Scripts\python.exe scripts\run_a_share_daily_overview.py --send-wechat
+```
+
+发送前请先手动打开目标微信群或联系人会话。该开关只发送最终 `group_a_share_combined_overview_*.txt`，不发送单标的资金面明细。
+
+港股资金面有独立的持仓批量入口，默认读取 `data\_meta\current_h_share_holdings.json`，并在 `data\_meta` 生成 `group_h_share_capital_flow_overview_*.txt`：
+
+```powershell
+.\venv\Scripts\python.exe scripts\batch_generate_h_share_capital_flow_reports.py
+```
+
+当前 HK V1 使用东方财富港股通成份行情中的成交额/换手率、东方财富港股通个股成交榜历史中的个股南向净买额、东方财富沪深港通持股统计中的 1 日南向持股市值变化，以及 HKEX 日终沽空成交额，并支持 `data\_meta\capital_flow_cache` 缓存回退；沽空比例会在成交额可用时用 `沽空成交额 / 成交额` 计算。个股南向净买额当前只在标的进入港股通成交榜的交易日可用，因此港股资金面仍应与技术面和基本面联动判断，不应孤立使用。
+
+港股持仓也可以先生成同样结构的三段式综合概览：
+
+```powershell
+.\venv\Scripts\python.exe scripts\generate_h_share_combined_overview.py
+```
+
+该入口默认读取 `data\_meta\current_h_share_holdings.json`，复用最新港股基本面简报、最新 group888 60M 技术面组合建议，以及最新港股资金面批量概览，输出 `group_h_share_combined_overview_*.txt`。如果没有港股资金面概览，会显示 `missing/HK pending`；如果 HK V1 远端抓取失败，会显示 `failed/primary`。当前 HK V1 资金面线索不会单独给出完整资金确认加分。
+
+如果要每天一条命令更新港股持仓资金面、生成三轴管理清单，并可选发送到当前微信会话，可以使用：
+
+```powershell
+.\venv\Scripts\python.exe scripts\run_h_share_daily_overview.py
+```
+
+该入口会先生成港股资金面单标的报告与 `group_h_share_capital_flow_overview_*.txt`，再复用最新基本面简报、最新 60M 技术面组合建议和刚生成的资金面概览，输出 `group_h_share_combined_overview_*.txt`。每次运行默认还会在 `data\_meta` 写入 `h_share_daily_overview_manifest_*.json`，记录输入、参数、资金面成功/失败数量、输出路径和微信发送状态；如不需要审计文件，可加 `--no-manifest`。
+
+如果要生成后把最终港股三轴管理清单发送到当前已打开的微信会话：
+
+```powershell
+.\venv\Scripts\python.exe scripts\run_h_share_daily_overview.py --send-wechat
+```
+
+发送前请先手动打开目标微信群或联系人会话。该开关只发送最终 `group_h_share_combined_overview_*.txt`，不发送单标的资金面明细。
 
 如果你在 Python 代码里直接消费报告输出，当前推荐：
 

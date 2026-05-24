@@ -21,6 +21,7 @@ dependencies = [
     "mplfinance>=0.12.0",
     "typer>=0.9.0",
     "requests>=2.31.0",
+    "akshare>=1.18.0",
     "browser-cookie3>=0.20.1",
     "pypdf>=5.0.0",
 ]
@@ -55,7 +56,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["chanlun*", "fundamental*"]
+include = ["chanlun*", "fundamental*", "capital_flow*"]
 
 
 [tool.black]
