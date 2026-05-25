@@ -38,7 +38,12 @@ class CapitalFlowSnapshot(BaseModel):
     margin_balance_change: Optional[float] = None
 
     southbound_net_buy: Optional[float] = None
+    southbound_net_buy_3d: Optional[float] = None
+    southbound_net_buy_5d: Optional[float] = None
+    southbound_net_buy_10d: Optional[float] = None
     southbound_holding_change: Optional[float] = None
+    southbound_holding_change_5d: Optional[float] = None
+    southbound_holding_change_10d: Optional[float] = None
     short_sell_ratio: Optional[float] = None
     short_sell_turnover: Optional[float] = None
 

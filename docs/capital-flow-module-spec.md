@@ -112,11 +112,16 @@ A 股资金流字段：
 港股资金流字段：
 
 - `southbound_net_buy`: 南向净买入
+- `southbound_net_buy_3d`: 3 日南向净买入累计
+- `southbound_net_buy_5d`: 5 日南向净买入累计
+- `southbound_net_buy_10d`: 10 日南向净买入累计
 - `southbound_holding_change`: 南向持股变化
+- `southbound_holding_change_5d`: 5 日南向持股变化
+- `southbound_holding_change_10d`: 10 日南向持股变化
 - `short_sell_ratio`: 沽空比例
 - `short_sell_turnover`: 沽空成交额
 
-当前 HK V1 已接入六类公开数据：港股通成份行情用 `turnover` / `turnover_rate` 提供成交额和换手率量能线索，东方财富港股 1 分钟历史用于计算 `volume_ratio`，东方财富港股日线历史用于计算 `amount_ratio_5d`，东方财富港股通个股成交榜历史用 `southbound_net_buy` 提供个股南向净买额，沪深港通持股统计用 `southbound_holding_change` 提供 1 日南向持股市值变化，HKEX 日终沽空统计用 `short_sell_turnover` 提供沽空成交额；当成交额可用时，用 `short_sell_turnover / turnover * 100` 派生 `short_sell_ratio`。其中 `volume_ratio` 的当前口径是“最近 5 个交易日同一时刻的分钟成交量对比”，`amount_ratio_5d` 的当前口径是“当日成交额 / 最近 5 日平均成交额”。缓存文件分别为 `data/_meta/capital_flow_cache/hk_eastmoney_hk_connect_components.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_hk_minute_hist_<symbol>.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_hk_daily_hist_<symbol>.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_southbound_net_buy_<symbol>.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_southbound_holding.csv` 和 `data/_meta/capital_flow_cache/hk_hkex_short_selling_turnover.csv`。其中个股南向净买额只在标的进入港股通成交榜的交易日可用，因此缺失时应回退到南向持股变化与量能/沽空线索，而不是把缺失误判为净流出。
+当前 HK V1 已接入六类公开数据：港股通成份行情用 `turnover` / `turnover_rate` 提供成交额和换手率量能线索，东方财富港股 1 分钟历史用于计算 `volume_ratio`，东方财富港股日线历史用于计算 `amount_ratio_5d`，东方财富港股通个股成交榜历史用 `southbound_net_buy` 提供个股南向净买额，并进一步滚动累计出 `southbound_net_buy_3d/5d/10d`，沪深港通持股统计用 `southbound_holding_change` 提供 1 日南向持股市值变化，并进一步映射出 `southbound_holding_change_5d/10d`，HKEX 日终沽空统计用 `short_sell_turnover` 提供沽空成交额；当成交额可用时，用 `short_sell_turnover / turnover * 100` 派生 `short_sell_ratio`。其中 `volume_ratio` 的当前口径是“最近 5 个交易日同一时刻的分钟成交量对比”，`amount_ratio_5d` 的当前口径是“当日成交额 / 最近 5 日平均成交额”，`southbound_net_buy_3d/5d/10d` 的当前口径是“截至目标交易日的最近 3/5/10 个上榜交易日南向净买额累计值”，`southbound_holding_change_5d/10d` 的当前口径是“持股统计源直接提供的 5 日/10 日南向持股市值变化”。缓存文件分别为 `data/_meta/capital_flow_cache/hk_eastmoney_hk_connect_components.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_hk_minute_hist_<symbol>.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_hk_daily_hist_<symbol>.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_southbound_net_buy_<symbol>.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_southbound_holding.csv` 和 `data/_meta/capital_flow_cache/hk_hkex_short_selling_turnover.csv`。其中个股南向净买额只在标的进入港股通成交榜的交易日可用，因此缺失时应回退到南向持股变化与量能/沽空线索，而不是把缺失误判为净流出。
 
 事件字段：
 
@@ -194,6 +199,12 @@ V1 建议先使用五个维度，总分 100。
 - 当日大幅流入但 5 日、10 日仍为净流出
 - 单日放量后缺少持续性
 
+当前实现口径：
+
+- CN：优先使用 `main_net_inflow_3d/5d/10d` 判断多日持续性
+- HK：当 `southbound_net_buy_3d/5d/10d` 可用时，优先使用这组南向净买入累计窗口判断持续性；若缺失，则仍回退到其他已取得资金线索
+- HK 的该口径反映的是“最近若干个上榜交易日的港股通南向资金持续性”，不是全市场逐日主力净流入口径
+
 ### 5.3 `volume_confirmation` 量能确认，权重 20
 
 关注成交额、换手率、量比是否支持资金判断。
@@ -227,6 +238,12 @@ V1 建议先使用五个维度，总分 100。
 
 - 港股沽空比例偏高
 - 通道资金与价格方向背离
+
+当前实现口径：
+
+- CN：优先使用 `northbound_holding_change`、`southbound_holding_change`、`margin_balance_change` 等机构/通道线索
+- HK：优先使用 `southbound_holding_change` 和 `southbound_holding_change_5d` 作为机构化通道线索，再结合 `short_sell_ratio` 判断多空压力
+- `southbound_holding_change_10d` 当前已入模和报告，但暂未直接参与评分规则
 
 ### 5.5 `overheat_risk` 过热风险，权重 15
 

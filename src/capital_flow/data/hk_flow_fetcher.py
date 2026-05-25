@@ -391,6 +391,22 @@ def _compute_amount_ratio_5d_from_hist(df: pd.DataFrame, trade_date: date | None
     return amount / (sum(present_amounts) / len(present_amounts)), target_trade_date
 
 
+def _rolling_sum_until(df: pd.DataFrame, target_date: date, column: str, periods: int) -> float | None:
+    if df.empty or column not in df.columns or "日期" not in df.columns:
+        return None
+    working_df = df.copy()
+    working_df["日期"] = pd.to_datetime(working_df["日期"], errors="coerce")
+    working_df = working_df[pd.notna(working_df["日期"])].sort_values("日期")
+    if working_df.empty:
+        return None
+    window_df = working_df[working_df["日期"].dt.date <= target_date].tail(periods)
+    values = [_coerce_float(value) for value in window_df[column].tolist()]
+    present_values = [value for value in values if value is not None]
+    if not present_values:
+        return None
+    return float(sum(present_values))
+
+
 def _compute_intraday_volume_ratio_from_minute_hist(
     df: pd.DataFrame,
     trade_date: date | None,
@@ -939,7 +955,12 @@ def fetch_hk_capital_flow_snapshot(
     turnover_rate: float | None = None
     volume_ratio: float | None = None
     southbound_net_buy: float | None = None
+    southbound_net_buy_3d: float | None = None
+    southbound_net_buy_5d: float | None = None
+    southbound_net_buy_10d: float | None = None
     southbound_holding_change: float | None = None
+    southbound_holding_change_5d: float | None = None
+    southbound_holding_change_10d: float | None = None
     short_sell_turnover: float | None = None
     short_sell_ratio: float | None = None
     amount_ratio_5d: float | None = None
@@ -1006,7 +1027,12 @@ def fetch_hk_capital_flow_snapshot(
                 raise RuntimeError(f"南向净买额未找到 {normalized_symbol} {name}")
             raise RuntimeError(f"南向净买额未找到 {normalized_symbol} {name} 在 {trade_date.isoformat()} 的上榜记录")
         southbound_net_buy = _coerce_float(net_buy_row.get("港股通净买额"))
-        snapshot_trade_date = snapshot_trade_date or _coerce_date(net_buy_row.get("日期"))
+        net_buy_trade_date = _coerce_date(net_buy_row.get("日期"))
+        if net_buy_trade_date is not None:
+            southbound_net_buy_3d = _rolling_sum_until(net_buy_df, net_buy_trade_date, "港股通净买额", 3)
+            southbound_net_buy_5d = _rolling_sum_until(net_buy_df, net_buy_trade_date, "港股通净买额", 5)
+            southbound_net_buy_10d = _rolling_sum_until(net_buy_df, net_buy_trade_date, "港股通净买额", 10)
+        snapshot_trade_date = snapshot_trade_date or net_buy_trade_date
         sources.append(net_buy_source)
         raw_refs.append(f"{net_buy_source}:{_cache_path(actual_cache_dir, _southbound_net_buy_dataset(normalized_symbol))}")
     except Exception as exc:
@@ -1023,6 +1049,8 @@ def fetch_hk_capital_flow_snapshot(
         if holding_row is None:
             raise RuntimeError(f"南向持股统计未找到 {normalized_symbol} {name}")
         southbound_holding_change = _coerce_float(holding_row.get("持股市值变化-1日"))
+        southbound_holding_change_5d = _coerce_float(holding_row.get("持股市值变化-5日"))
+        southbound_holding_change_10d = _coerce_float(holding_row.get("持股市值变化-10日"))
         snapshot_trade_date = snapshot_trade_date or _coerce_date(holding_row.get("持股日期"))
         sources.append(holding_source)
         raw_refs.append(f"{holding_source}:{_cache_path(actual_cache_dir, SOUTHBOUND_HOLDING_CACHE_DATASET)}")
@@ -1060,8 +1088,12 @@ def fetch_hk_capital_flow_snapshot(
         notes.append("成交额/5日均值来自东方财富港股日线历史")
     if southbound_net_buy is not None:
         notes.append("南向净买额来自东方财富港股通个股成交榜历史，仅在个股上榜交易日可用")
+    if southbound_net_buy_3d is not None or southbound_net_buy_5d is not None or southbound_net_buy_10d is not None:
+        notes.append("南向净买额支持3/5/10日累计窗口，用于港股资金持续性判断")
     if southbound_holding_change is not None:
         notes.append("南向持股变化来自东方财富沪深港通持股统计的1日持股市值变化")
+    if southbound_holding_change_5d is not None or southbound_holding_change_10d is not None:
+        notes.append("南向持股变化补充提供5日/10日持股市值变化窗口")
     if short_sell_turnover is not None:
         notes.append("沽空成交额来自 HKEX 日终沽空统计；沽空比例用沽空成交额/成交额计算")
     if errors:
@@ -1083,7 +1115,12 @@ def fetch_hk_capital_flow_snapshot(
         volume_ratio=volume_ratio,
         amount_ratio_5d=amount_ratio_5d,
         southbound_net_buy=southbound_net_buy,
+        southbound_net_buy_3d=southbound_net_buy_3d,
+        southbound_net_buy_5d=southbound_net_buy_5d,
+        southbound_net_buy_10d=southbound_net_buy_10d,
         southbound_holding_change=southbound_holding_change,
+        southbound_holding_change_5d=southbound_holding_change_5d,
+        southbound_holding_change_10d=southbound_holding_change_10d,
         short_sell_ratio=short_sell_ratio,
         short_sell_turnover=short_sell_turnover,
         notes="；".join(notes),

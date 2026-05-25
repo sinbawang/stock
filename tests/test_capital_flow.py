@@ -163,6 +163,46 @@ def test_hk_scoring_raises_volume_overheat_threshold() -> None:
     assert not any(rule.rule_id == "volume_ratio_extreme" for rule in overheat_dimension.failed_rules)
 
 
+def test_hk_scoring_uses_southbound_net_buy_windows_for_persistence() -> None:
+    snapshot = CapitalFlowSnapshot(
+        symbol="00700",
+        name="腾讯",
+        market="HK",
+        trade_date=date(2026, 5, 24),
+        source="manual",
+        updated_at=datetime(2026, 5, 24, 12, 0, 0),
+        southbound_net_buy_3d=200_000_000,
+        southbound_net_buy_5d=350_000_000,
+        southbound_net_buy_10d=520_000_000,
+    )
+
+    scorecard = analyze_capital_flow_snapshot(snapshot)
+    persistence_dimension = next(item for item in scorecard.dimension_scores if item.dimension == "flow_persistence")
+
+    assert persistence_dimension.score == 20.0
+    assert any(rule.rule_id == "flow_persistence_positive" for rule in persistence_dimension.passed_rules)
+    assert any(rule.rule_id == "flow_persistence_confirmed" for rule in persistence_dimension.passed_rules)
+
+
+def test_hk_scoring_uses_southbound_holding_change_5d_for_institutional_hint() -> None:
+    snapshot = CapitalFlowSnapshot(
+        symbol="00700",
+        name="腾讯",
+        market="HK",
+        trade_date=date(2026, 5, 24),
+        source="manual",
+        updated_at=datetime(2026, 5, 24, 12, 0, 0),
+        southbound_holding_change_5d=800_000_000,
+        short_sell_ratio=12.0,
+    )
+
+    scorecard = analyze_capital_flow_snapshot(snapshot)
+    institutional_dimension = next(item for item in scorecard.dimension_scores if item.dimension == "institutional_hint")
+
+    assert institutional_dimension.score == 16.0
+    assert any(rule.rule_id == "institutional_channel_positive" for rule in institutional_dimension.passed_rules)
+
+
 def test_hk_scorecard_strong_sample_reaches_a_rating() -> None:
     snapshot = CapitalFlowSnapshot(
         symbol="00700",
@@ -799,9 +839,9 @@ def test_fetch_hk_capital_flow_snapshot_maps_southbound_net_buy(monkeypatch, tmp
     net_buy_df = pd.DataFrame(
         [
             {
-                "日期": [date(2026, 5, 22)],
-                "港股通净买额": [420_000_000],
-                "港股通成交额": [5_100_000_000],
+                "日期": [date(2026, 5, 22), date(2026, 5, 21), date(2026, 5, 20)],
+                "港股通净买额": [420_000_000, -50_000_000, 130_000_000],
+                "港股通成交额": [5_100_000_000, 4_600_000_000, 4_200_000_000],
             }
         ]
     ).explode(["日期", "港股通净买额", "港股通成交额"], ignore_index=True)
@@ -816,10 +856,14 @@ def test_fetch_hk_capital_flow_snapshot_maps_southbound_net_buy(monkeypatch, tmp
     assert snapshot.trade_date == date(2026, 5, 22)
     assert snapshot.source == "eastmoney.hk_connect_components+eastmoney.southbound_net_buy"
     assert snapshot.southbound_net_buy == 420_000_000
+    assert snapshot.southbound_net_buy_3d == 500_000_000
+    assert snapshot.southbound_net_buy_5d == 500_000_000
+    assert snapshot.southbound_net_buy_10d == 500_000_000
     assert snapshot.raw_payload_ref is not None
     assert "eastmoney.southbound_net_buy" in snapshot.raw_payload_ref
     assert snapshot.notes is not None
     assert "南向净买额来自东方财富港股通个股成交榜历史" in snapshot.notes
+    assert "南向净买额支持3/5/10日累计窗口" in snapshot.notes
     assert (tmp_path / "hk_eastmoney_southbound_net_buy_00700.csv").exists()
 
 
@@ -970,6 +1014,7 @@ def test_fetch_hk_capital_flow_snapshot_maps_southbound_holding(monkeypatch, tmp
                 "股票简称": "腾讯控股",
                 "持股市值变化-1日": 320_000_000,
                 "持股市值变化-5日": 1_100_000_000,
+                "持股市值变化-10日": 1_600_000_000,
             },
         ]
     )
@@ -985,10 +1030,13 @@ def test_fetch_hk_capital_flow_snapshot_maps_southbound_holding(monkeypatch, tmp
     assert snapshot.source == "eastmoney.hk_connect_components+eastmoney.southbound_holding"
     assert snapshot.turnover == 8_800_000_000
     assert snapshot.southbound_holding_change == 320_000_000
+    assert snapshot.southbound_holding_change_5d == 1_100_000_000
+    assert snapshot.southbound_holding_change_10d == 1_600_000_000
     assert snapshot.raw_payload_ref is not None
     assert "eastmoney.southbound_holding" in snapshot.raw_payload_ref
     assert snapshot.notes is not None
     assert "南向持股变化来自东方财富沪深港通持股统计" in snapshot.notes
+    assert "南向持股变化补充提供5日/10日持股市值变化窗口" in snapshot.notes
     assert (tmp_path / "hk_eastmoney_southbound_holding.csv").exists()
 
 

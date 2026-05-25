@@ -121,22 +121,44 @@ def _score_flow_direction(snapshot: CapitalFlowSnapshot) -> CapitalFlowDimension
 
 
 def _score_flow_persistence(snapshot: CapitalFlowSnapshot) -> CapitalFlowDimensionScore:
-    metrics = (
-        ("main_net_inflow_3d", snapshot.main_net_inflow_3d),
-        ("main_net_inflow_5d", snapshot.main_net_inflow_5d),
-        ("main_net_inflow_10d", snapshot.main_net_inflow_10d),
-    )
+    if snapshot.market == "HK" and any(
+        value is not None
+        for value in (snapshot.southbound_net_buy_3d, snapshot.southbound_net_buy_5d, snapshot.southbound_net_buy_10d)
+    ):
+        metrics = (
+            ("southbound_net_buy_3d", snapshot.southbound_net_buy_3d),
+            ("southbound_net_buy_5d", snapshot.southbound_net_buy_5d),
+            ("southbound_net_buy_10d", snapshot.southbound_net_buy_10d),
+        )
+        metric_values = (
+            snapshot.southbound_net_buy_3d,
+            snapshot.southbound_net_buy_5d,
+            snapshot.southbound_net_buy_10d,
+        )
+    else:
+        metrics = (
+            ("main_net_inflow_3d", snapshot.main_net_inflow_3d),
+            ("main_net_inflow_5d", snapshot.main_net_inflow_5d),
+            ("main_net_inflow_10d", snapshot.main_net_inflow_10d),
+        )
+        metric_values = (
+            snapshot.main_net_inflow_3d,
+            snapshot.main_net_inflow_5d,
+            snapshot.main_net_inflow_10d,
+        )
     score = 8.0
     passed: list[TriggeredRule] = []
     failed: list[TriggeredRule] = []
-    if any_positive(snapshot.main_net_inflow_3d, snapshot.main_net_inflow_5d, snapshot.main_net_inflow_10d):
+    if any_positive(*metric_values):
         score += 8.0
         passed.append(_rule("flow_persistence_positive", "pass", "多日窗口资金净流入"))
-    if snapshot.main_net_inflow_5d is not None and snapshot.main_net_inflow_10d is not None:
-        if snapshot.main_net_inflow_5d > 0 and snapshot.main_net_inflow_10d > 0:
+    metric_5d = metric_values[1]
+    metric_10d = metric_values[2]
+    if metric_5d is not None and metric_10d is not None:
+        if metric_5d > 0 and metric_10d > 0:
             score += 4.0
             passed.append(_rule("flow_persistence_confirmed", "pass", "5日与10日资金方向一致为正"))
-        elif snapshot.main_net_inflow_5d < 0 and snapshot.main_net_inflow_10d < 0:
+        elif metric_5d < 0 and metric_10d < 0:
             score -= 5.0
             failed.append(_rule("flow_persistence_negative", "risk", "5日与10日资金持续净流出"))
     return _build_dimension("flow_persistence", score, "按3/5/10日资金窗口持续性评分", metrics, passed, failed)
@@ -169,16 +191,29 @@ def _score_volume_confirmation(snapshot: CapitalFlowSnapshot) -> CapitalFlowDime
 
 
 def _score_institutional_hint(snapshot: CapitalFlowSnapshot) -> CapitalFlowDimensionScore:
-    metrics = (
-        ("northbound_holding_change", snapshot.northbound_holding_change),
-        ("southbound_holding_change", snapshot.southbound_holding_change),
-        ("margin_balance_change", snapshot.margin_balance_change),
-        ("short_sell_ratio", snapshot.short_sell_ratio),
-    )
+    if snapshot.market == "HK":
+        metrics = (
+            ("southbound_holding_change", snapshot.southbound_holding_change),
+            ("southbound_holding_change_5d", snapshot.southbound_holding_change_5d),
+            ("short_sell_ratio", snapshot.short_sell_ratio),
+        )
+        positive_inputs = (snapshot.southbound_holding_change, snapshot.southbound_holding_change_5d)
+    else:
+        metrics = (
+            ("northbound_holding_change", snapshot.northbound_holding_change),
+            ("southbound_holding_change", snapshot.southbound_holding_change),
+            ("margin_balance_change", snapshot.margin_balance_change),
+            ("short_sell_ratio", snapshot.short_sell_ratio),
+        )
+        positive_inputs = (
+            snapshot.northbound_holding_change,
+            snapshot.southbound_holding_change,
+            snapshot.margin_balance_change,
+        )
     score = 8.0
     passed: list[TriggeredRule] = []
     failed: list[TriggeredRule] = []
-    if any_positive(snapshot.northbound_holding_change, snapshot.southbound_holding_change, snapshot.margin_balance_change):
+    if any_positive(*positive_inputs):
         score += 8.0
         passed.append(_rule("institutional_channel_positive", "pass", "通道或杠杆资金出现正向变化"))
     if snapshot.short_sell_ratio is not None:
