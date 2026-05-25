@@ -79,9 +79,15 @@ def _render_snapshot_lines(snapshot: Optional[CapitalFlowSnapshot]) -> list[str]
         return []
     fields = (
         "main_net_inflow",
+        "main_net_inflow_3d",
         "main_net_inflow_5d",
         "southbound_net_buy",
+        "southbound_net_buy_3d",
+        "southbound_net_buy_5d",
+        "southbound_net_buy_10d",
         "southbound_holding_change",
+        "southbound_holding_change_5d",
+        "southbound_holding_change_10d",
         "northbound_holding_change",
         "margin_balance_change",
         "short_sell_ratio",

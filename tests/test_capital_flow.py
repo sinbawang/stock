@@ -79,6 +79,35 @@ def test_capital_flow_snapshot_scoring_and_rendering() -> None:
     assert "综合判断" in text
 
 
+def test_hk_rendering_includes_southbound_multi_day_fields() -> None:
+    snapshot = CapitalFlowSnapshot(
+        symbol="00700",
+        name="腾讯",
+        market="HK",
+        trade_date=date(2026, 5, 24),
+        source="manual",
+        updated_at=datetime(2026, 5, 24, 12, 0, 0),
+        southbound_net_buy=420_000_000,
+        southbound_net_buy_3d=500_000_000,
+        southbound_net_buy_5d=880_000_000,
+        southbound_net_buy_10d=1_350_000_000,
+        southbound_holding_change=320_000_000,
+        southbound_holding_change_5d=1_100_000_000,
+        southbound_holding_change_10d=1_600_000_000,
+    )
+
+    scorecard = analyze_capital_flow_snapshot(snapshot)
+    text = render_capital_flow_text(scorecard, snapshot)
+
+    assert "- 南向净买入: 420000000" in text
+    assert "- 3日南向净买入: 500000000" in text
+    assert "- 5日南向净买入: 880000000" in text
+    assert "- 10日南向净买入: 1350000000" in text
+    assert "- 南向持股变化: 320000000" in text
+    assert "- 5日南向持股变化: 1100000000" in text
+    assert "- 10日南向持股变化: 1600000000" in text
+
+
 def test_capital_flow_scoring_discounts_low_confidence_fallback_source() -> None:
     primary_snapshot = CapitalFlowSnapshot(
         symbol="601328",

@@ -46,6 +46,8 @@ from send_wechat_current_chat_text import send_current_chat_text_file
 
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "_meta"
 DEFAULT_CACHE_DIR = DEFAULT_OUTPUT_DIR / "capital_flow_cache"
+DEFAULT_HK_MINUTE_SOURCE = "xueqiu"
+DEFAULT_HK_MINUTE_FALLBACK_SOURCES = ("akshare",)
 
 
 def parse_args() -> argparse.Namespace:
@@ -54,8 +56,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", required=True, help="Security name")
     parser.add_argument("--start", default="2026-01-01 09:30", help="60M analysis start time")
     parser.add_argument("--end", default=None, help="Optional 60M analysis end time")
-    parser.add_argument("--source", default="xueqiu", choices=["xueqiu", "akshare"], help="Primary HK minute source")
-    parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="Optional fallback HK minute sources")
+    parser.add_argument("--source", default=DEFAULT_HK_MINUTE_SOURCE, choices=["xueqiu", "akshare"], help="Primary HK minute source")
+    parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="Optional fallback HK minute sources; defaults to akshare when primary source is xueqiu")
     parser.add_argument("--quote-overlay-source", default=None, help="Optional HK quote overlay source for fundamentals")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Output directory")
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help="Capital-flow cache directory")
@@ -72,6 +74,15 @@ def _extract_prefixed_value(text: str, prefix: str) -> str | None:
     if not match:
         return None
     return match.group(1).strip()
+
+
+def _resolve_minute_fallback_sources(primary_source: str, fallback_sources: tuple[str, ...] | None) -> tuple[str, ...] | None:
+    if fallback_sources:
+        normalized = tuple(source for source in fallback_sources if source != primary_source)
+        return normalized or None
+    if primary_source == DEFAULT_HK_MINUTE_SOURCE:
+        return DEFAULT_HK_MINUTE_FALLBACK_SOURCES
+    return None
 
 
 def _save_technical_report(
@@ -202,6 +213,11 @@ def main() -> None:
         path=fundamental_path,
     )
 
+    resolved_fallback_sources = _resolve_minute_fallback_sources(
+        args.source,
+        tuple(args.fallback_source) if args.fallback_source else None,
+    )
+
     technical_ref, technical_path = _save_technical_report(
         symbol=args.symbol,
         name=args.name,
@@ -209,7 +225,7 @@ def main() -> None:
         start=args.start,
         end=args.end,
         primary_source=args.source,
-        fallback_sources=tuple(args.fallback_source) if args.fallback_source else None,
+        fallback_sources=resolved_fallback_sources,
     )
 
     capital_flow_result = fetch_and_analyze_hk_flow(
