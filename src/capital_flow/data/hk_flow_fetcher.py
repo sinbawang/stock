@@ -21,6 +21,8 @@ from capital_flow.models.snapshot import CapitalFlowSnapshot
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CACHE_DIR = ROOT / "data" / "_meta" / "capital_flow_cache"
 HK_CONNECT_CACHE_DATASET = "eastmoney_hk_connect_components"
+HK_DAILY_HIST_CACHE_DATASET = "eastmoney_hk_daily_hist"
+HK_MINUTE_HIST_CACHE_DATASET = "eastmoney_hk_minute_hist"
 SOUTHBOUND_HOLDING_CACHE_DATASET = "eastmoney_southbound_holding"
 SOUTHBOUND_NET_BUY_CACHE_DATASET = "eastmoney_southbound_net_buy"
 HKEX_SHORT_SELLING_CACHE_DATASET = "hkex_short_selling_turnover"
@@ -263,6 +265,185 @@ def _fetch_hk_connect_components_df() -> pd.DataFrame:
     df = df.rename(columns=rename_map)
     output_columns = [column for column in rename_map.values() if column in df.columns]
     return df[output_columns].copy()
+
+
+def _hk_daily_hist_dataset(symbol: str) -> str:
+    return f"{HK_DAILY_HIST_CACHE_DATASET}_{symbol}"
+
+
+def _hk_minute_hist_dataset(symbol: str) -> str:
+    return f"{HK_MINUTE_HIST_CACHE_DATASET}_{symbol}"
+
+
+def _fetch_hk_daily_hist_df(symbol: str, start_date: date, end_date: date) -> pd.DataFrame:
+    _clear_proxy_env()
+    import akshare as ak  # type: ignore
+
+    return ak.stock_hk_hist(
+        symbol=symbol,
+        period="daily",
+        start_date=start_date.strftime("%Y%m%d"),
+        end_date=end_date.strftime("%Y%m%d"),
+        adjust="",
+    )
+
+
+def _fetch_hk_minute_hist_df(symbol: str) -> pd.DataFrame:
+    _clear_proxy_env()
+    import akshare as ak  # type: ignore
+
+    return ak.stock_hk_hist_min_em(symbol=symbol, period="1", adjust="")
+
+
+def _fetch_hk_daily_hist_with_cache(
+    symbol: str,
+    cache_dir: Path,
+    use_cache: bool = True,
+    max_cache_age_days: int | None = 7,
+) -> tuple[pd.DataFrame, str, list[str]]:
+    dataset = _hk_daily_hist_dataset(symbol)
+    key = _memory_cache_key(cache_dir, dataset, max_cache_age_days)
+    if key in _DATASET_MEMORY_CACHE:
+        df, source, notes = _DATASET_MEMORY_CACHE[key]
+        return df.copy(), source, list(notes)
+    if key in _DATASET_FAILURE_CACHE:
+        raise RuntimeError(_DATASET_FAILURE_CACHE[key])
+    notes: list[str] = []
+    today = date.today()
+    start_date = today - timedelta(days=45)
+    try:
+        df = _fetch_hk_daily_hist_df(symbol=symbol, start_date=start_date, end_date=today)
+        if df.empty:
+            raise RuntimeError(f"港股日线历史为空: {symbol}")
+        _write_cache(df, cache_dir, dataset)
+        result = (df, "eastmoney.hk_daily_hist", notes)
+        _DATASET_MEMORY_CACHE[key] = result
+        return df.copy(), result[1], list(result[2])
+    except Exception as exc:
+        if not use_cache:
+            raise
+        cached = _read_cache(cache_dir, dataset, max_cache_age_days=max_cache_age_days)
+        if cached is None or cached.empty:
+            _DATASET_FAILURE_CACHE[key] = str(exc)
+            raise
+        notes.append(f"港股日线历史远端抓取失败，使用本地缓存: {exc}")
+        result = (cached, "eastmoney.hk_daily_hist.cache", notes)
+        _DATASET_MEMORY_CACHE[key] = result
+        return cached.copy(), result[1], list(result[2])
+
+
+def _fetch_hk_minute_hist_with_cache(
+    symbol: str,
+    cache_dir: Path,
+    use_cache: bool = True,
+    max_cache_age_days: int | None = 7,
+) -> tuple[pd.DataFrame, str, list[str]]:
+    dataset = _hk_minute_hist_dataset(symbol)
+    key = _memory_cache_key(cache_dir, dataset, max_cache_age_days)
+    if key in _DATASET_MEMORY_CACHE:
+        df, source, notes = _DATASET_MEMORY_CACHE[key]
+        return df.copy(), source, list(notes)
+    if key in _DATASET_FAILURE_CACHE:
+        raise RuntimeError(_DATASET_FAILURE_CACHE[key])
+    notes: list[str] = []
+    try:
+        df = _fetch_hk_minute_hist_df(symbol=symbol)
+        if df.empty:
+            raise RuntimeError(f"港股分钟历史为空: {symbol}")
+        _write_cache(df, cache_dir, dataset)
+        result = (df, "eastmoney.hk_minute_hist", notes)
+        _DATASET_MEMORY_CACHE[key] = result
+        return df.copy(), result[1], list(result[2])
+    except Exception as exc:
+        if not use_cache:
+            raise
+        cached = _read_cache(cache_dir, dataset, max_cache_age_days=max_cache_age_days)
+        if cached is None or cached.empty:
+            _DATASET_FAILURE_CACHE[key] = str(exc)
+            raise
+        notes.append(f"港股分钟历史远端抓取失败，使用本地缓存: {exc}")
+        result = (cached, "eastmoney.hk_minute_hist.cache", notes)
+        _DATASET_MEMORY_CACHE[key] = result
+        return cached.copy(), result[1], list(result[2])
+
+
+def _compute_amount_ratio_5d_from_hist(df: pd.DataFrame, trade_date: date | None) -> tuple[float | None, date | None]:
+    if df.empty or "日期" not in df.columns:
+        return None, None
+    working_df = df.copy()
+    working_df["日期"] = pd.to_datetime(working_df["日期"], errors="coerce")
+    working_df = working_df[pd.notna(working_df["日期"])]
+    if working_df.empty:
+        return None, None
+    if trade_date is not None:
+        working_df = working_df[working_df["日期"].dt.date <= trade_date]
+    if working_df.empty:
+        return None, None
+    working_df = working_df.sort_values("日期").reset_index(drop=True)
+    row = working_df.iloc[-1]
+    target_trade_date = pd.Timestamp(row["日期"]).date()
+    amount = _coerce_float(row.get("成交额"))
+    amount_history = working_df[working_df["日期"].dt.date <= target_trade_date].tail(5)
+    amounts = [_coerce_float(value) for value in amount_history.get("成交额", pd.Series(dtype=float)).tolist()]
+    present_amounts = [value for value in amounts if value is not None and value > 0]
+    if amount is None or len(present_amounts) < 2:
+        return None, target_trade_date
+    return amount / (sum(present_amounts) / len(present_amounts)), target_trade_date
+
+
+def _compute_intraday_volume_ratio_from_minute_hist(
+    df: pd.DataFrame,
+    trade_date: date | None,
+) -> tuple[float | None, date | None]:
+    if df.empty or "时间" not in df.columns or "成交量" not in df.columns:
+        return None, None
+    working_df = df.copy()
+    working_df["时间"] = pd.to_datetime(working_df["时间"], errors="coerce")
+    working_df = working_df[pd.notna(working_df["时间"])].copy()
+    if working_df.empty:
+        return None, None
+    working_df["交易日期"] = working_df["时间"].dt.date
+    working_df["时刻"] = working_df["时间"].dt.strftime("%H:%M")
+    working_df["成交量"] = pd.to_numeric(working_df["成交量"], errors="coerce")
+    working_df = working_df[pd.notna(working_df["成交量"])].copy()
+    if working_df.empty:
+        return None, None
+    available_dates = sorted(working_df["交易日期"].dropna().unique())
+    if not available_dates:
+        return None, None
+    target_trade_date = available_dates[-1] if trade_date is None else max((d for d in available_dates if d <= trade_date), default=None)
+    if target_trade_date is None:
+        return None, None
+    target_day_df = working_df[working_df["交易日期"] == target_trade_date].sort_values("时间")
+    if target_day_df.empty:
+        return None, target_trade_date
+    cutoff_time = target_day_df.iloc[-1]["时刻"]
+
+    def _day_cutoff_volume(day_df: pd.DataFrame) -> float | None:
+        aligned = day_df[day_df["时刻"] <= cutoff_time].sort_values("时间")
+        if aligned.empty:
+            return None
+        volumes = aligned["成交量"].dropna()
+        if volumes.empty:
+            return None
+        if volumes.is_monotonic_increasing:
+            return float(volumes.iloc[-1])
+        return float(volumes.sum())
+
+    recent_dates = [d for d in available_dates if d <= target_trade_date][-5:]
+    volume_values = []
+    current_value = None
+    for current_date in recent_dates:
+        day_df = working_df[working_df["交易日期"] == current_date]
+        value = _day_cutoff_volume(day_df)
+        if value is None or value <= 0:
+            continue
+        volume_values.append(value)
+        if current_date == target_trade_date:
+            current_value = value
+    if current_value is None or len(volume_values) < 2:
+        return None, target_trade_date
+    return current_value / (sum(volume_values) / len(volume_values)), target_trade_date
 
 
 def _fetch_hk_connect_components_with_cache(
@@ -756,10 +937,12 @@ def fetch_hk_capital_flow_snapshot(
     errors: list[str] = []
     turnover: float | None = None
     turnover_rate: float | None = None
+    volume_ratio: float | None = None
     southbound_net_buy: float | None = None
     southbound_holding_change: float | None = None
     short_sell_turnover: float | None = None
     short_sell_ratio: float | None = None
+    amount_ratio_5d: float | None = None
     snapshot_trade_date = trade_date
 
     try:
@@ -778,6 +961,36 @@ def fetch_hk_capital_flow_snapshot(
         raw_refs.append(f"{components_source}:{_cache_path(actual_cache_dir, HK_CONNECT_CACHE_DATASET)}")
     except Exception as exc:
         errors.append(f"港股通成份行情不可用: {exc}")
+
+    try:
+        minute_df, minute_source, minute_notes = _fetch_hk_minute_hist_with_cache(
+            symbol=normalized_symbol,
+            cache_dir=actual_cache_dir,
+            use_cache=use_cache,
+            max_cache_age_days=max_cache_age_days,
+        )
+        notes.extend(minute_notes)
+        volume_ratio, minute_trade_date = _compute_intraday_volume_ratio_from_minute_hist(minute_df, trade_date)
+        if minute_trade_date is not None:
+            snapshot_trade_date = snapshot_trade_date or minute_trade_date
+            raw_refs.append(f"{minute_source}:{_cache_path(actual_cache_dir, _hk_minute_hist_dataset(normalized_symbol))}")
+    except Exception as exc:
+        errors.append(f"港股分钟历史不可用: {exc}")
+
+    try:
+        hist_df, hist_source, hist_notes = _fetch_hk_daily_hist_with_cache(
+            symbol=normalized_symbol,
+            cache_dir=actual_cache_dir,
+            use_cache=use_cache,
+            max_cache_age_days=max_cache_age_days,
+        )
+        notes.extend(hist_notes)
+        amount_ratio_5d, hist_trade_date = _compute_amount_ratio_5d_from_hist(hist_df, trade_date)
+        if hist_trade_date is not None:
+            snapshot_trade_date = snapshot_trade_date or hist_trade_date
+            raw_refs.append(f"{hist_source}:{_cache_path(actual_cache_dir, _hk_daily_hist_dataset(normalized_symbol))}")
+    except Exception as exc:
+        errors.append(f"港股日线历史不可用: {exc}")
 
     try:
         net_buy_df, net_buy_source, net_buy_notes = _fetch_hk_southbound_net_buy_with_cache(
@@ -841,6 +1054,10 @@ def fetch_hk_capital_flow_snapshot(
     actual_source = "+".join(sources) if source == "eastmoney.hk_connect_components" else source
     if turnover is not None or turnover_rate is not None:
         notes.append("港股 V1 使用港股通成份行情的成交额/换手率作为量能线索")
+    if volume_ratio is not None:
+        notes.append("量比来自东方财富港股最近5日同一时刻分钟成交量对比")
+    if amount_ratio_5d is not None:
+        notes.append("成交额/5日均值来自东方财富港股日线历史")
     if southbound_net_buy is not None:
         notes.append("南向净买额来自东方财富港股通个股成交榜历史，仅在个股上榜交易日可用")
     if southbound_holding_change is not None:
@@ -863,6 +1080,8 @@ def fetch_hk_capital_flow_snapshot(
         updated_at=datetime.now(),
         turnover=turnover,
         turnover_rate=turnover_rate,
+        volume_ratio=volume_ratio,
+        amount_ratio_5d=amount_ratio_5d,
         southbound_net_buy=southbound_net_buy,
         southbound_holding_change=southbound_holding_change,
         short_sell_ratio=short_sell_ratio,

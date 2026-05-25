@@ -70,7 +70,11 @@ def test_capital_flow_snapshot_scoring_and_rendering() -> None:
     assert scorecard.rating == "A"
     assert scorecard.red_flag is False
     assert "资金面评分卡: 300124 汇川技术" in text
+    assert "量能速览:" in text
+    assert "- 量比: 1.6" in text
+    assert "- 成交额/5日均值: 1.4" in text
     assert "数据源: manual" in text
+    assert text.index("量能速览:") < text.index("数据源: manual")
     assert "资金方向" in text
     assert "综合判断" in text
 
@@ -99,6 +103,170 @@ def test_capital_flow_scoring_discounts_low_confidence_fallback_source() -> None
     assert rating_rank[fallback_scorecard.rating] <= rating_rank[primary_scorecard.rating]
     assert any("低置信度资金流来源" in warning for warning in fallback_scorecard.warnings)
     assert any(rule.rule_id == "low_confidence_source_discount" for rule in fallback_scorecard.triggered_rules)
+
+
+def test_hk_scoring_uses_more_permissive_volume_confirmation_window() -> None:
+    snapshot = CapitalFlowSnapshot(
+        symbol="00700",
+        name="腾讯",
+        market="HK",
+        trade_date=date(2026, 5, 24),
+        source="manual",
+        updated_at=datetime(2026, 5, 24, 12, 0, 0),
+        volume_ratio=3.0,
+        amount_ratio_5d=2.8,
+    )
+
+    scorecard = analyze_capital_flow_snapshot(snapshot)
+    volume_dimension = next(item for item in scorecard.dimension_scores if item.dimension == "volume_confirmation")
+
+    assert volume_dimension.score == 20.0
+    assert any(rule.rule_id == "volume_ratio_confirmed" for rule in volume_dimension.passed_rules)
+    assert any(rule.rule_id == "amount_ratio_confirmed" for rule in volume_dimension.passed_rules)
+
+
+def test_cn_scoring_keeps_original_volume_confirmation_window() -> None:
+    snapshot = CapitalFlowSnapshot(
+        symbol="300124",
+        name="汇川技术",
+        market="CN",
+        trade_date=date(2026, 5, 24),
+        source="manual",
+        updated_at=datetime(2026, 5, 24, 12, 0, 0),
+        volume_ratio=3.0,
+        amount_ratio_5d=2.8,
+    )
+
+    scorecard = analyze_capital_flow_snapshot(snapshot)
+    volume_dimension = next(item for item in scorecard.dimension_scores if item.dimension == "volume_confirmation")
+
+    assert volume_dimension.score == 10.0
+    assert not volume_dimension.passed_rules
+
+
+def test_hk_scoring_raises_volume_overheat_threshold() -> None:
+    snapshot = CapitalFlowSnapshot(
+        symbol="00700",
+        name="腾讯",
+        market="HK",
+        trade_date=date(2026, 5, 24),
+        source="manual",
+        updated_at=datetime(2026, 5, 24, 12, 0, 0),
+        volume_ratio=5.5,
+    )
+
+    scorecard = analyze_capital_flow_snapshot(snapshot)
+    overheat_dimension = next(item for item in scorecard.dimension_scores if item.dimension == "overheat_risk")
+
+    assert overheat_dimension.score == 15.0
+    assert any(rule.rule_id == "no_obvious_overheat" for rule in overheat_dimension.passed_rules)
+    assert not any(rule.rule_id == "volume_ratio_extreme" for rule in overheat_dimension.failed_rules)
+
+
+def test_hk_scorecard_strong_sample_reaches_a_rating() -> None:
+    snapshot = CapitalFlowSnapshot(
+        symbol="00700",
+        name="腾讯",
+        market="HK",
+        trade_date=date(2026, 5, 24),
+        source="manual",
+        updated_at=datetime(2026, 5, 24, 12, 0, 0),
+        main_net_inflow=300_000_000,
+        southbound_net_buy=420_000_000,
+        main_net_inflow_3d=500_000_000,
+        main_net_inflow_5d=800_000_000,
+        main_net_inflow_10d=1_100_000_000,
+        volume_ratio=3.0,
+        amount_ratio_5d=2.8,
+        southbound_holding_change=320_000_000,
+        short_sell_ratio=7.5,
+        turnover_rate=1.8,
+    )
+
+    scorecard = analyze_capital_flow_snapshot(snapshot)
+
+    assert scorecard.total_score == 96.0
+    assert scorecard.rating == "A"
+    assert scorecard.red_flag is False
+    assert scorecard.combined_comment == "资金面呈正向确认，适合用于提高技术面信号置信度。"
+
+
+def test_hk_scorecard_mid_tier_sample_reaches_b_rating() -> None:
+    snapshot = CapitalFlowSnapshot(
+        symbol="00981",
+        name="中芯国际",
+        market="HK",
+        trade_date=date(2026, 5, 24),
+        source="manual",
+        updated_at=datetime(2026, 5, 24, 12, 0, 0),
+        volume_ratio=3.0,
+        amount_ratio_5d=2.8,
+        southbound_holding_change=180_000_000,
+        short_sell_ratio=11.0,
+        turnover_rate=2.4,
+    )
+
+    scorecard = analyze_capital_flow_snapshot(snapshot)
+
+    assert scorecard.total_score == 67.0
+    assert scorecard.rating == "B"
+    assert scorecard.red_flag is False
+    assert scorecard.combined_comment == "资金面信号中性，暂不构成强确认。"
+    assert any(rule.rule_id == "amount_ratio_confirmed" for rule in scorecard.triggered_rules)
+    assert any(rule.rule_id == "institutional_channel_positive" for rule in scorecard.triggered_rules)
+
+
+def test_hk_scorecard_weaker_sample_reaches_c_rating() -> None:
+    snapshot = CapitalFlowSnapshot(
+        symbol="01024",
+        name="快手",
+        market="HK",
+        trade_date=date(2026, 5, 24),
+        source="manual",
+        updated_at=datetime(2026, 5, 24, 12, 0, 0),
+        main_net_inflow=120_000_000,
+        southbound_net_buy=-100_000_000,
+        main_net_inflow_3d=150_000_000,
+        volume_ratio=2.2,
+        short_sell_ratio=22.0,
+        turnover_rate=2.0,
+    )
+
+    scorecard = analyze_capital_flow_snapshot(snapshot)
+
+    assert scorecard.total_score == 62.0
+    assert scorecard.rating == "C"
+    assert scorecard.red_flag is False
+    assert scorecard.combined_comment == "资金面存在风险信号，技术面结论需要降低确认度。"
+    assert any(rule.rule_id == "flow_direction_negative" for rule in scorecard.triggered_rules)
+    assert any(rule.rule_id == "volume_ratio_confirmed" for rule in scorecard.triggered_rules)
+    assert any(rule.rule_id == "short_sell_ratio_high" for rule in scorecard.triggered_rules)
+
+
+def test_hk_scorecard_overheated_sample_falls_to_d_rating() -> None:
+    snapshot = CapitalFlowSnapshot(
+        symbol="03690",
+        name="美团",
+        market="HK",
+        trade_date=date(2026, 5, 24),
+        source="manual",
+        updated_at=datetime(2026, 5, 24, 12, 0, 0),
+        southbound_net_buy=-180_000_000,
+        volume_ratio=6.2,
+        amount_ratio_5d=4.0,
+        southbound_holding_change=-90_000_000,
+        short_sell_ratio=22.0,
+        turnover_rate=18.0,
+    )
+
+    scorecard = analyze_capital_flow_snapshot(snapshot)
+
+    assert scorecard.total_score == 25.5
+    assert scorecard.rating == "D"
+    assert scorecard.red_flag is False
+    assert scorecard.combined_comment == "资金面存在风险信号，技术面结论需要降低确认度。"
+    assert any(rule.rule_id == "short_sell_ratio_high" for rule in scorecard.triggered_rules)
+    assert any(rule.rule_id == "volume_ratio_extreme" for rule in scorecard.triggered_rules)
 
 
 def test_fetch_cn_capital_flow_snapshot_maps_akshare_frames(monkeypatch, tmp_path) -> None:
@@ -132,9 +300,9 @@ def test_fetch_cn_capital_flow_snapshot_maps_akshare_frames(monkeypatch, tmp_pat
     )
     daily_df = pd.DataFrame(
         [
-            {"日期": "2026-05-18", "成交额": 100_000_000, "换手率": 1.0},
-            {"日期": "2026-05-19", "成交额": 150_000_000, "换手率": 1.2},
-            {"日期": "2026-05-20", "成交额": 200_000_000, "换手率": 1.5},
+            {"日期": "2026-05-18", "成交额": 100_000_000, "成交量": 10_000_000, "换手率": 1.0},
+            {"日期": "2026-05-19", "成交额": 150_000_000, "成交量": 12_000_000, "换手率": 1.2},
+            {"日期": "2026-05-20", "成交额": 200_000_000, "成交量": 18_000_000, "换手率": 1.5},
         ]
     )
 
@@ -161,10 +329,101 @@ def test_fetch_cn_capital_flow_snapshot_maps_akshare_frames(monkeypatch, tmp_pat
     assert snapshot.large_order_net_inflow == 17_000_000
     assert snapshot.turnover == 200_000_000
     assert snapshot.turnover_rate == 1.5
+    assert snapshot.volume_ratio == 18_000_000 / ((10_000_000 + 12_000_000 + 18_000_000) / 3)
     assert snapshot.amount_ratio_5d == 200_000_000 / 150_000_000
     assert snapshot.raw_payload_ref is not None
     assert "eastmoney.fund_flow" in snapshot.raw_payload_ref
     assert (tmp_path / "300124_eastmoney_fund_flow.csv").exists()
+
+
+def test_fetch_cn_capital_flow_snapshot_maps_institutional_and_event_fields(monkeypatch, tmp_path) -> None:
+    fund_flow_df = pd.DataFrame(
+        [
+            {
+                "日期": "2026-05-20",
+                "主力净流入-净额": 30_000_000,
+                "超大单净流入-净额": 13_000_000,
+                "大单净流入-净额": 17_000_000,
+                "中单净流入-净额": -4_000_000,
+                "小单净流入-净额": -26_000_000,
+            }
+        ]
+    )
+    daily_df = pd.DataFrame(
+        [
+            {"日期": "2026-05-19", "成交额": 150_000_000, "成交量": 12_000_000, "换手率": 1.2},
+            {"日期": "2026-05-20", "成交额": 200_000_000, "成交量": 18_000_000, "换手率": 1.5},
+        ]
+    )
+    northbound_df = pd.DataFrame(
+        [
+            {"持股日期": "2026-05-20", "持股市值变化-1日": 18_000_000},
+        ]
+    )
+    margin_today_df = pd.DataFrame(
+        [
+            {"标的证券代码": "300124", "融资余额": 520_000_000, "融资买入额": 80_000_000, "融资偿还额": 50_000_000},
+        ]
+    )
+    margin_prev_df = pd.DataFrame(
+        [
+            {"标的证券代码": "300124", "融资余额": 500_000_000, "融资买入额": 70_000_000, "融资偿还额": 55_000_000},
+        ]
+    )
+    dragon_tiger_df = pd.DataFrame(
+        [
+            {"代码": "300124", "上榜日": "2026-05-20"},
+        ]
+    )
+    block_trade_df = pd.DataFrame(
+        [
+            {"证券代码": "300124", "交易日期": "2026-05-20"},
+        ]
+    )
+
+    monkeypatch.setattr(cn_flow_fetcher, "_fetch_cn_fund_flow_df", lambda symbol: fund_flow_df)
+    monkeypatch.setattr(
+        cn_flow_fetcher,
+        "_fetch_cn_daily_price_df",
+        lambda symbol, start_date, end_date: daily_df,
+    )
+    monkeypatch.setattr(
+        cn_flow_fetcher,
+        "_fetch_cn_northbound_holding_df",
+        lambda symbol, start_date, end_date: northbound_df,
+    )
+
+    def fake_margin_detail(trade_date: date) -> pd.DataFrame:
+        if trade_date == date(2026, 5, 20):
+            return margin_today_df
+        if trade_date == date(2026, 5, 19):
+            return margin_prev_df
+        return pd.DataFrame(columns=margin_today_df.columns)
+
+    monkeypatch.setattr(cn_flow_fetcher, "_fetch_cn_margin_detail_szse_df", fake_margin_detail)
+    monkeypatch.setattr(cn_flow_fetcher, "_fetch_cn_dragon_tiger_detail_df", lambda trade_date: dragon_tiger_df)
+    monkeypatch.setattr(cn_flow_fetcher, "_fetch_cn_block_trade_detail_df", lambda trade_date: block_trade_df)
+
+    snapshot = cn_flow_fetcher.fetch_cn_capital_flow_snapshot(
+        symbol="300124",
+        name="汇川技术",
+        trade_date=date(2026, 5, 20),
+        cache_dir=tmp_path,
+    )
+
+    assert snapshot.northbound_holding_change == 18_000_000
+    assert snapshot.margin_balance_change == 20_000_000
+    assert snapshot.volume_ratio == 18_000_000 / 15_000_000
+    assert snapshot.dragon_tiger_flag is True
+    assert snapshot.block_trade_flag is True
+    assert snapshot.notes is not None
+    assert "北向持股变化来自东方财富沪深港通个股明细" in snapshot.notes
+    assert "融资余额变化来自交易所融资融券明细" in snapshot.notes
+    assert "出现龙虎榜事件" in snapshot.notes
+    assert "出现大宗交易事件" in snapshot.notes
+    assert snapshot.raw_payload_ref is not None
+    assert "eastmoney.hsgt_individual_detail" in snapshot.raw_payload_ref
+    assert "margin_detail" in snapshot.raw_payload_ref
 
 
 def test_fetch_cn_capital_flow_snapshot_uses_cache_after_remote_failure(monkeypatch, tmp_path) -> None:
@@ -423,8 +682,33 @@ def test_fetch_hk_capital_flow_snapshot_maps_connect_components(monkeypatch, tmp
             {"代码": "03690", "名称": "美团", "成交额": 2_100_000_000, "换手率": 1.35},
         ]
     )
+    minute_df = pd.DataFrame(
+        [
+            {"时间": "2026-05-20 09:31:00", "成交量": 20_000},
+            {"时间": "2026-05-20 09:32:00", "成交量": 100_000},
+            {"时间": "2026-05-21 09:31:00", "成交量": 25_000},
+            {"时间": "2026-05-21 09:32:00", "成交量": 120_000},
+            {"时间": "2026-05-22 09:31:00", "成交量": 30_000},
+            {"时间": "2026-05-22 09:32:00", "成交量": 140_000},
+            {"时间": "2026-05-23 09:31:00", "成交量": 35_000},
+            {"时间": "2026-05-23 09:32:00", "成交量": 160_000},
+            {"时间": "2026-05-24 09:31:00", "成交量": 40_000},
+            {"时间": "2026-05-24 09:32:00", "成交量": 180_000},
+        ]
+    )
+    hist_df = pd.DataFrame(
+        [
+            {"日期": date(2026, 5, 20), "成交额": 6_000_000_000},
+            {"日期": date(2026, 5, 21), "成交额": 7_000_000_000},
+            {"日期": date(2026, 5, 22), "成交额": 8_000_000_000},
+            {"日期": date(2026, 5, 23), "成交额": 9_000_000_000},
+            {"日期": date(2026, 5, 24), "成交额": 10_000_000_000},
+        ]
+    )
 
     monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_connect_components_df", lambda: components_df)
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_minute_hist_df", lambda symbol: minute_df)
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_daily_hist_df", lambda symbol, start_date, end_date: hist_df)
     monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_southbound_holding_df", lambda: (_ for _ in ()).throw(RuntimeError("southbound down")))
     monkeypatch.setattr(hk_flow_fetcher, "_fetch_hkex_short_selling_df", lambda trade_date=None: (_ for _ in ()).throw(RuntimeError("short down")))
 
@@ -441,11 +725,69 @@ def test_fetch_hk_capital_flow_snapshot_maps_connect_components(monkeypatch, tmp
     assert snapshot.source == "eastmoney.hk_connect_components"
     assert snapshot.turnover == 8_800_000_000
     assert snapshot.turnover_rate == 0.42
+    assert snapshot.volume_ratio == 180_000 / ((100_000 + 120_000 + 140_000 + 160_000 + 180_000) / 5)
+    assert snapshot.amount_ratio_5d == 10_000_000_000 / 8_000_000_000
     assert snapshot.raw_payload_ref is not None
     assert "eastmoney.hk_connect_components" in snapshot.raw_payload_ref
     assert snapshot.notes is not None
+    assert "量比来自东方财富港股最近5日同一时刻分钟成交量对比" in snapshot.notes
+    assert "成交额/5日均值来自东方财富港股日线历史" in snapshot.notes
     assert "个股南向净买额缺失时" in snapshot.notes
     assert (tmp_path / "hk_eastmoney_hk_connect_components.csv").exists()
+
+
+def test_fetch_hk_capital_flow_snapshot_uses_hist_cache_for_amount_ratio(monkeypatch, tmp_path) -> None:
+    cached_components_df = pd.DataFrame(
+        [
+            {"代码": "01024", "名称": "快手", "成交额": 1_500_000_000, "换手率": 2.1},
+        ]
+    )
+    cached_hist_df = pd.DataFrame(
+        [
+            {"日期": date(2026, 5, 20), "成交额": 1_000_000_000},
+            {"日期": date(2026, 5, 21), "成交额": 1_200_000_000},
+            {"日期": date(2026, 5, 22), "成交额": 1_300_000_000},
+            {"日期": date(2026, 5, 23), "成交额": 1_400_000_000},
+            {"日期": date(2026, 5, 24), "成交额": 1_500_000_000},
+        ]
+    )
+    cached_components_df.to_csv(tmp_path / "hk_eastmoney_hk_connect_components.csv", index=False, encoding="utf-8-sig")
+    cached_hist_df.to_csv(tmp_path / "hk_eastmoney_hk_daily_hist_01024.csv", index=False, encoding="utf-8-sig")
+    cached_minute_df = pd.DataFrame(
+        [
+            {"时间": "2026-05-20 09:31:00", "成交量": 10_000},
+            {"时间": "2026-05-20 09:32:00", "成交量": 50_000},
+            {"时间": "2026-05-21 09:31:00", "成交量": 12_000},
+            {"时间": "2026-05-21 09:32:00", "成交量": 60_000},
+            {"时间": "2026-05-22 09:31:00", "成交量": 14_000},
+            {"时间": "2026-05-22 09:32:00", "成交量": 70_000},
+            {"时间": "2026-05-23 09:31:00", "成交量": 16_000},
+            {"时间": "2026-05-23 09:32:00", "成交量": 80_000},
+            {"时间": "2026-05-24 09:31:00", "成交量": 18_000},
+            {"时间": "2026-05-24 09:32:00", "成交量": 90_000},
+        ]
+    )
+    cached_minute_df.to_csv(tmp_path / "hk_eastmoney_hk_minute_hist_01024.csv", index=False, encoding="utf-8-sig")
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_connect_components_df", lambda: (_ for _ in ()).throw(RuntimeError("remote down")))
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_minute_hist_df", lambda symbol: (_ for _ in ()).throw(RuntimeError("minute down")))
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_daily_hist_df", lambda symbol, start_date, end_date: (_ for _ in ()).throw(RuntimeError("hist down")))
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_southbound_holding_df", lambda: (_ for _ in ()).throw(RuntimeError("southbound down")))
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hkex_short_selling_df", lambda trade_date=None: (_ for _ in ()).throw(RuntimeError("short down")))
+
+    snapshot = hk_flow_fetcher.fetch_hk_capital_flow_snapshot(
+        symbol="01024.HK",
+        name="快手",
+        trade_date=date(2026, 5, 24),
+        cache_dir=tmp_path,
+        max_cache_age_days=7,
+    )
+
+    assert snapshot.source == "eastmoney.hk_connect_components.cache"
+    assert snapshot.volume_ratio == 90_000 / ((50_000 + 60_000 + 70_000 + 80_000 + 90_000) / 5)
+    assert snapshot.amount_ratio_5d == 1_500_000_000 / ((1_000_000_000 + 1_200_000_000 + 1_300_000_000 + 1_400_000_000 + 1_500_000_000) / 5)
+    assert snapshot.notes is not None
+    assert "港股分钟历史远端抓取失败，使用本地缓存" in snapshot.notes
+    assert "港股日线历史远端抓取失败，使用本地缓存" in snapshot.notes
 
 
 def test_fetch_hk_capital_flow_snapshot_maps_southbound_net_buy(monkeypatch, tmp_path) -> None:
@@ -599,6 +941,7 @@ def test_fetch_hk_capital_flow_snapshot_maps_hkex_short_selling(monkeypatch, tmp
     )
 
     monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_connect_components_df", lambda: components_df)
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_southbound_net_buy_df", lambda symbol: (_ for _ in ()).throw(RuntimeError("net buy down")))
     monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_southbound_holding_df", lambda: (_ for _ in ()).throw(RuntimeError("southbound down")))
     monkeypatch.setattr(hk_flow_fetcher, "_fetch_hkex_short_selling_df", lambda trade_date=None: short_df)
 
@@ -632,6 +975,7 @@ def test_fetch_hk_capital_flow_snapshot_maps_southbound_holding(monkeypatch, tmp
     )
 
     monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_connect_components_df", lambda: components_df)
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_southbound_net_buy_df", lambda symbol: (_ for _ in ()).throw(RuntimeError("net buy down")))
     monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_southbound_holding_df", lambda: holding_df)
     monkeypatch.setattr(hk_flow_fetcher, "_fetch_hkex_short_selling_df", lambda trade_date=None: (_ for _ in ()).throw(RuntimeError("short down")))
 
@@ -661,6 +1005,7 @@ def test_fetch_hk_capital_flow_snapshot_succeeds_with_southbound_when_components
     )
 
     monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_connect_components_df", lambda: (_ for _ in ()).throw(RuntimeError("quote down")))
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_southbound_net_buy_df", lambda symbol: (_ for _ in ()).throw(RuntimeError("net buy down")))
     monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_southbound_holding_df", lambda: holding_df)
     monkeypatch.setattr(hk_flow_fetcher, "_fetch_hkex_short_selling_df", lambda trade_date=None: (_ for _ in ()).throw(RuntimeError("short down")))
 

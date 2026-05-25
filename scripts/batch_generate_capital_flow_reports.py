@@ -14,6 +14,7 @@ if str(SRC) not in sys.path:
 
 from capital_flow.reporting import save_capital_flow_text
 from capital_flow.services import fetch_and_analyze_cn_flow
+from report_retention import prune_older_outputs
 
 
 DEFAULT_HOLDINGS_FILE = ROOT / "data" / "_meta" / "current_a_share_holdings.json"
@@ -208,7 +209,8 @@ def _sorted_results(results: list[BatchCapitalFlowResult]) -> list[BatchCapitalF
 
 def save_batch_summary(results: list[BatchCapitalFlowResult], output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / f"group_a_share_capital_flow_overview_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    file_prefix = "group_a_share_capital_flow_overview_"
+    path = output_dir / f"{file_prefix}{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     source_counts: dict[str, int] = {}
     for item in results:
         source_counts[_source_bucket(item.source)] = source_counts.get(_source_bucket(item.source), 0) + 1
@@ -264,6 +266,7 @@ def save_batch_summary(results: list[BatchCapitalFlowResult], output_dir: Path) 
         lines.extend(["", "## 口径与失败说明", ""])
         lines.extend(detail_lines)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    prune_older_outputs(output_dir, f"{file_prefix}*.txt", keep_path=path)
     return path
 
 

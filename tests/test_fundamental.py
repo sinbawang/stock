@@ -1309,6 +1309,26 @@ def test_save_fundamental_brief_uses_submodel_in_filename(tmp_path):
     assert output_path.name == "601088_中国神华_energy_resource_v1_fundamental_brief_20260516_123000.txt"
 
 
+def test_save_fundamental_brief_prunes_older_matching_reports(tmp_path):
+    snapshot = make_energy_resource_snapshot()
+    result = analyze_snapshot(snapshot, "energy_resource_v1")
+    old_path = tmp_path / "601088_中国神华_energy_resource_v1_fundamental_brief_20260515_123000.txt"
+    old_path.write_text("old", encoding="utf-8")
+    untouched_path = tmp_path / "601088_中国神华_energy_resource_v1_scorecard_20260515_123000.txt"
+    untouched_path.write_text("keep", encoding="utf-8")
+
+    output_path = save_fundamental_brief(
+        scorecard=result,
+        snapshot=snapshot,
+        output_dir=tmp_path,
+        generated_at=pd.Timestamp("2026-05-16T12:30:00").to_pydatetime(),
+    )
+
+    assert output_path.exists()
+    assert not old_path.exists()
+    assert untouched_path.exists()
+
+
 def test_save_scorecard_text_writes_snapshot_metric_summary(tmp_path):
     snapshot = make_energy_resource_snapshot(
         operating_cashflow_growth=18.7,
@@ -1380,6 +1400,24 @@ def test_save_blended_outputs_use_blended_filenames(tmp_path):
 
     assert brief_path.name == "600900_长江电力_utility_operator_v1_blended_fundamental_brief_20260516_123000.txt"
     assert scorecard_path.name == "600900_长江电力_utility_operator_v1_blended_scorecard_20260516_123000.txt"
+
+
+def test_save_blended_fundamental_brief_prunes_older_matching_reports(tmp_path):
+    blended = make_blended_cn_scorecard()
+    old_path = tmp_path / "600900_长江电力_utility_operator_v1_blended_fundamental_brief_20260515_123000.txt"
+    old_path.write_text("old", encoding="utf-8")
+    untouched_path = tmp_path / "600900_长江电力_utility_operator_v1_blended_scorecard_20260515_123000.txt"
+    untouched_path.write_text("keep", encoding="utf-8")
+
+    brief_path = save_blended_fundamental_brief(
+        blended=blended,
+        output_dir=tmp_path,
+        generated_at=pd.Timestamp("2026-05-16T12:30:00").to_pydatetime(),
+    )
+
+    assert brief_path.exists()
+    assert not old_path.exists()
+    assert untouched_path.exists()
 
 
 def test_score_debt_to_asset_declines_linearly_between_40_and_70():

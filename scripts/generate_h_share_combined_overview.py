@@ -13,6 +13,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from report_retention import prune_older_outputs
+
 
 DEFAULT_HOLDINGS_FILE = ROOT / "data" / "_meta" / "current_h_share_holdings.json"
 DEFAULT_META_DIR = ROOT / "data" / "_meta"
@@ -455,8 +457,10 @@ def render_combined_overview(rows: list[CombinedOverviewRow], technical_summary_
 
 def save_combined_overview(text: str, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / f"group_h_share_combined_overview_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    file_prefix = "group_h_share_combined_overview_"
+    path = output_dir / f"{file_prefix}{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     path.write_text(text, encoding="utf-8")
+    prune_older_outputs(output_dir, f"{file_prefix}*.txt", keep_path=path)
     return path
 
 

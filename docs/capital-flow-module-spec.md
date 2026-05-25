@@ -116,7 +116,7 @@ A 股资金流字段：
 - `short_sell_ratio`: 沽空比例
 - `short_sell_turnover`: 沽空成交额
 
-当前 HK V1 已接入四类公开数据：港股通成份行情用 `turnover` / `turnover_rate` 提供成交额和换手率量能线索，东方财富港股通个股成交榜历史用 `southbound_net_buy` 提供个股南向净买额，沪深港通持股统计用 `southbound_holding_change` 提供 1 日南向持股市值变化，HKEX 日终沽空统计用 `short_sell_turnover` 提供沽空成交额；当成交额可用时，用 `short_sell_turnover / turnover * 100` 派生 `short_sell_ratio`。缓存文件分别为 `data/_meta/capital_flow_cache/hk_eastmoney_hk_connect_components.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_southbound_net_buy_<symbol>.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_southbound_holding.csv` 和 `data/_meta/capital_flow_cache/hk_hkex_short_selling_turnover.csv`。其中个股南向净买额只在标的进入港股通成交榜的交易日可用，因此缺失时应回退到南向持股变化与量能/沽空线索，而不是把缺失误判为净流出。
+当前 HK V1 已接入六类公开数据：港股通成份行情用 `turnover` / `turnover_rate` 提供成交额和换手率量能线索，东方财富港股 1 分钟历史用于计算 `volume_ratio`，东方财富港股日线历史用于计算 `amount_ratio_5d`，东方财富港股通个股成交榜历史用 `southbound_net_buy` 提供个股南向净买额，沪深港通持股统计用 `southbound_holding_change` 提供 1 日南向持股市值变化，HKEX 日终沽空统计用 `short_sell_turnover` 提供沽空成交额；当成交额可用时，用 `short_sell_turnover / turnover * 100` 派生 `short_sell_ratio`。其中 `volume_ratio` 的当前口径是“最近 5 个交易日同一时刻的分钟成交量对比”，`amount_ratio_5d` 的当前口径是“当日成交额 / 最近 5 日平均成交额”。缓存文件分别为 `data/_meta/capital_flow_cache/hk_eastmoney_hk_connect_components.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_hk_minute_hist_<symbol>.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_hk_daily_hist_<symbol>.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_southbound_net_buy_<symbol>.csv`、`data/_meta/capital_flow_cache/hk_eastmoney_southbound_holding.csv` 和 `data/_meta/capital_flow_cache/hk_hkex_short_selling_turnover.csv`。其中个股南向净买额只在标的进入港股通成交榜的交易日可用，因此缺失时应回退到南向持股变化与量能/沽空线索，而不是把缺失误判为净流出。
 
 事件字段：
 
@@ -208,6 +208,12 @@ V1 建议先使用五个维度，总分 100。
 - 放量滞涨
 - 突然极端放量但资金净流出
 
+当前实现口径：
+
+- CN：`volume_ratio` 在 `1.0-2.5` 记作“量比温和放大”，`amount_ratio_5d` 在 `1.0-2.5` 记作“成交额温和放大”
+- HK：`volume_ratio` 在 `1.0-3.2` 记作“量比温和放大”，`amount_ratio_5d` 在 `1.0-3.0` 记作“成交额温和放大”
+- 该差异用于反映港股分钟量能波动通常高于 A 股、但仍不希望把极端脉冲误判为正向确认
+
 ### 5.4 `institutional_hint` 通道与机构线索，权重 20
 
 关注北向、南向、融资余额、沽空比例等相对机构化的线索。
@@ -231,6 +237,12 @@ V1 建议先使用五个维度，总分 100。
 - 量比极高
 - 换手率异常高
 - 龙虎榜或大宗交易事件带来短期扰动
+
+当前实现口径：
+
+- CN：`volume_ratio >= 5.0` 视为“量比极端放大”
+- HK：`volume_ratio >= 6.0` 视为“量比极端放大”
+- `turnover_rate >= 15` 仍统一视为偏高换手风险，后续如发现 HK 样本分布显著不同，再单独拆市场阈值
 
 ## 6. 数据口径约定
 
@@ -269,6 +281,6 @@ V1 建议先使用五个维度，总分 100。
 6. 增加 A 股低置信度 fallback，已完成初版，主源和缓存不可用时用同花顺资金净额替代主力净流入口径；同花顺 fallback 周期表会落地到 `data/_meta/capital_flow_cache`，后续远端失败时可继续回退到最近一次成功缓存
 7. 增加 A 股第二 fallback 来源，已完成初版，同花顺不可用时用腾讯分笔成交的买盘成交金额减卖盘成交金额近似资金净额，并标记为低置信度口径
 8. 为低置信度 fallback 增加评分降权，已完成初版，`*.fallback` 来源总分按 85% 保守折减，并在 warning 中标明
-9. 对港股接入 HK V1 数据源，已完成初版，当前来自东方财富港股通成份行情的成交额/换手率、沪深港通持股统计的 1 日南向持股市值变化，以及 HKEX 日终沽空成交额，并支持本地缓存回退
-10. 对港股继续接入个股南向净买入等更高置信度字段
+9. 对港股接入 HK V1 数据源，已完成初版，当前已覆盖港股通成份行情的成交额/换手率、港股 1 分钟历史量比、港股日线成交额均值、个股南向净买入、沪深港通持股统计的 1 日南向持股市值变化，以及 HKEX 日终沽空成交额，并支持本地缓存回退
+10. 对港股继续提升量比/换手等阈值口径，按更多真实样本迭代市场特异性评分参数
 11. 最后再接入联合分析服务

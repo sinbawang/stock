@@ -6,6 +6,7 @@ from typing import Optional, Union
 
 from capital_flow.models.scorecard import CapitalFlowScoreCard
 from capital_flow.models.snapshot import CapitalFlowSnapshot
+from report_retention import prune_older_outputs
 
 
 DIMENSION_LABELS = {
@@ -49,14 +50,29 @@ def _format_value(value: Optional[float]) -> str:
     return format(value, ".12g")
 
 
+def _render_volume_highlight_lines(snapshot: Optional[CapitalFlowSnapshot]) -> list[str]:
+    if snapshot is None:
+        return []
+    fields = (
+        "volume_ratio",
+        "amount_ratio_5d",
+        "turnover_rate",
+        "turnover",
+    )
+    lines = ["量能速览:"]
+    for field_name in fields:
+        value = getattr(snapshot, field_name, None)
+        if value is not None:
+            lines.append(f"- {_metric_label(field_name)}: {_format_value(value)}")
+    if len(lines) == 1:
+        return []
+    return lines
+
+
 def _render_snapshot_lines(snapshot: Optional[CapitalFlowSnapshot]) -> list[str]:
     if snapshot is None:
         return []
     fields = (
-        "turnover",
-        "turnover_rate",
-        "volume_ratio",
-        "amount_ratio_5d",
         "main_net_inflow",
         "main_net_inflow_5d",
         "southbound_net_buy",
@@ -101,6 +117,10 @@ def render_capital_flow_text(
         f"- 评级: {scorecard.rating}",
         f"- 红线: {'是' if scorecard.red_flag else '否'}",
     ]
+    volume_highlight_lines = _render_volume_highlight_lines(snapshot)
+    if volume_highlight_lines:
+        lines.append("")
+        lines.extend(volume_highlight_lines)
     lines.extend(_render_snapshot_source_lines(snapshot))
     lines.append("")
 
@@ -150,10 +170,9 @@ def save_capital_flow_text(
 
     target_dir = Path(output_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
-    filename = (
-        f"{scorecard.symbol}_{scorecard.name}_capital_flow_"
-        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-    )
+    file_prefix = f"{scorecard.symbol}_{scorecard.name}_capital_flow_"
+    filename = f"{file_prefix}{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     path = target_dir / filename
     path.write_text(render_capital_flow_text(scorecard, snapshot), encoding="utf-8")
+    prune_older_outputs(target_dir, f"{file_prefix}*.txt", keep_path=path)
     return path

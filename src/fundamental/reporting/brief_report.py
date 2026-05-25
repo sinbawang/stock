@@ -11,6 +11,7 @@ from fundamental.models.blended import BlendedFundamentalScoreCard, OverlayCompo
 from fundamental.models.common import format_display_literal
 from fundamental.models.scorecard import FundamentalScoreCard
 from fundamental.models.snapshot import FundamentalSnapshot
+from report_retention import prune_older_outputs
 
 from .text_report import (
     DIMENSION_LABELS,
@@ -531,10 +532,8 @@ def save_fundamental_brief(
     generated = generated_at or datetime.now()
     target_dir = Path(output_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
-    file_name = (
-        f"{scorecard.symbol}_{scorecard.name}_{scorecard.submodel_id}_fundamental_brief_"
-        f"{generated.strftime('%Y%m%d_%H%M%S')}.txt"
-    )
+    file_prefix = f"{scorecard.symbol}_{scorecard.name}_{scorecard.submodel_id}_fundamental_brief_"
+    file_name = f"{file_prefix}{generated.strftime('%Y%m%d_%H%M%S')}.txt"
     output_path = target_dir / file_name
     output_path.write_text(
         render_fundamental_brief(
@@ -545,6 +544,7 @@ def save_fundamental_brief(
         ),
         encoding="utf-8",
     )
+    prune_older_outputs(target_dir, f"{file_prefix}*.txt", keep_path=output_path)
     return output_path
 
 
@@ -655,13 +655,12 @@ def save_blended_fundamental_brief(
     generated = generated_at or datetime.now()
     target_dir = Path(output_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
-    file_name = (
-        f"{blended.symbol}_{blended.name}_{blended.submodel_id}_blended_fundamental_brief_"
-        f"{generated.strftime('%Y%m%d_%H%M%S')}.txt"
-    )
+    file_prefix = f"{blended.symbol}_{blended.name}_{blended.submodel_id}_blended_fundamental_brief_"
+    file_name = f"{file_prefix}{generated.strftime('%Y%m%d_%H%M%S')}.txt"
     output_path = target_dir / file_name
     output_path.write_text(
         render_blended_fundamental_brief(blended=blended, generated_at=generated),
         encoding="utf-8",
     )
+    prune_older_outputs(target_dir, f"{file_prefix}*.txt", keep_path=output_path)
     return output_path

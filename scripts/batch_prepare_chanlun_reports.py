@@ -15,6 +15,8 @@ if str(SRC) not in sys.path:
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+from report_retention import prune_older_outputs
+
 from chanlun.bi import identify_bis
 from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
@@ -421,8 +423,10 @@ def build_group_operation_summary(bundle: list[tuple[Security, dict[str, Path], 
 
 
 def write_group_operation_summary(bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]]) -> Path:
-    output_path = ROOT / "data" / "_meta" / f"group888_60m_operation_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    file_prefix = "group888_60m_operation_summary_"
+    output_path = ROOT / "data" / "_meta" / f"{file_prefix}{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     output_path.write_text(build_group_operation_summary(bundle), encoding="utf-8")
+    prune_older_outputs(output_path.parent, f"{file_prefix}*.txt", keep_path=output_path)
     return output_path
 
 

@@ -26,6 +26,24 @@ DIMENSION_WEIGHTS = OrderedDict(
 LOW_CONFIDENCE_SOURCE_DISCOUNT = 0.85
 
 
+def _volume_thresholds(snapshot: CapitalFlowSnapshot) -> dict[str, float]:
+    if snapshot.market == "HK":
+        return {
+            "volume_confirm_low": 1.0,
+            "volume_confirm_high": 3.2,
+            "amount_confirm_low": 1.0,
+            "amount_confirm_high": 3.0,
+            "volume_overheat": 6.0,
+        }
+    return {
+        "volume_confirm_low": 1.0,
+        "volume_confirm_high": 2.5,
+        "amount_confirm_low": 1.0,
+        "amount_confirm_high": 2.5,
+        "volume_overheat": 5.0,
+    }
+
+
 def _rating(total_score: float, red_flag: bool) -> str:
     if red_flag or total_score < 50:
         return "D"
@@ -125,6 +143,7 @@ def _score_flow_persistence(snapshot: CapitalFlowSnapshot) -> CapitalFlowDimensi
 
 
 def _score_volume_confirmation(snapshot: CapitalFlowSnapshot) -> CapitalFlowDimensionScore:
+    thresholds = _volume_thresholds(snapshot)
     metrics = (
         ("turnover_rate", snapshot.turnover_rate),
         ("volume_ratio", snapshot.volume_ratio),
@@ -134,13 +153,16 @@ def _score_volume_confirmation(snapshot: CapitalFlowSnapshot) -> CapitalFlowDime
     passed: list[TriggeredRule] = []
     failed: list[TriggeredRule] = []
     if snapshot.volume_ratio is not None:
-        if 1.0 <= snapshot.volume_ratio <= 2.5:
+        if thresholds["volume_confirm_low"] <= snapshot.volume_ratio <= thresholds["volume_confirm_high"]:
             score += 6.0
             passed.append(_rule("volume_ratio_confirmed", "pass", "量比温和放大"))
-        elif snapshot.volume_ratio > 4.0:
+        elif snapshot.volume_ratio > thresholds["volume_overheat"] - 1:
             score -= 5.0
             failed.append(_rule("volume_ratio_overheated", "risk", "量比异常放大"))
-    if snapshot.amount_ratio_5d is not None and 1.0 <= snapshot.amount_ratio_5d <= 2.5:
+    if (
+        snapshot.amount_ratio_5d is not None
+        and thresholds["amount_confirm_low"] <= snapshot.amount_ratio_5d <= thresholds["amount_confirm_high"]
+    ):
         score += 4.0
         passed.append(_rule("amount_ratio_confirmed", "pass", "成交额相对5日均值温和放大"))
     return _build_dimension("volume_confirmation", score, "按量比、换手和成交额放大情况评分", metrics, passed, failed)
@@ -170,6 +192,7 @@ def _score_institutional_hint(snapshot: CapitalFlowSnapshot) -> CapitalFlowDimen
 
 
 def _score_overheat_risk(snapshot: CapitalFlowSnapshot) -> CapitalFlowDimensionScore:
+    thresholds = _volume_thresholds(snapshot)
     metrics = (
         ("turnover_rate", snapshot.turnover_rate),
         ("volume_ratio", snapshot.volume_ratio),
@@ -181,7 +204,7 @@ def _score_overheat_risk(snapshot: CapitalFlowSnapshot) -> CapitalFlowDimensionS
     if snapshot.turnover_rate is not None and snapshot.turnover_rate >= 15:
         score -= 5.0
         failed.append(_rule("turnover_rate_overheated", "risk", "换手率偏高，短线拥挤风险上升"))
-    if snapshot.volume_ratio is not None and snapshot.volume_ratio >= 5:
+    if snapshot.volume_ratio is not None and snapshot.volume_ratio >= thresholds["volume_overheat"]:
         score -= 5.0
         failed.append(_rule("volume_ratio_extreme", "risk", "量比极端放大"))
     if snapshot.dragon_tiger_flag or snapshot.block_trade_flag:

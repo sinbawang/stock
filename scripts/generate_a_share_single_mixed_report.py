@@ -27,6 +27,7 @@ from chanlun.zhongshu import identify_zhongshu
 from export_structures_with_boxes import calculate_macd
 from fundamental.reporting import save_blended_fundamental_brief
 from fundamental.services import fetch_and_analyze_cn_blended_fundamentals
+from report_retention import prune_older_outputs
 from generate_a_share_combined_overview import (
     CapitalFlowRef,
     CombinedOverviewRow,
@@ -117,7 +118,8 @@ def _save_technical_report(
     suggestion = _extract_prefixed_value(advice_text, "建议：") or "等待更多技术面确认。"
 
     generated_at = datetime.now()
-    output_path = output_dir / f"{normalized_symbol}_{name}_tech_60m_{generated_at.strftime('%Y%m%d_%H%M%S')}.txt"
+    file_prefix = f"{normalized_symbol}_{name}_tech_60m_"
+    output_path = output_dir / f"{file_prefix}{generated_at.strftime('%Y%m%d_%H%M%S')}.txt"
     report_text = "\n".join(
         [
             f"# 技术面观察: {normalized_symbol} {name}",
@@ -135,6 +137,7 @@ def _save_technical_report(
         ]
     )
     output_path.write_text(report_text + "\n", encoding="utf-8")
+    prune_older_outputs(output_dir, f"{file_prefix}*.txt", keep_path=output_path)
     return TechnicalRef(conclusion=conclusion, suggestion=suggestion, path=output_path), output_path
 
 
@@ -147,7 +150,8 @@ def _save_combined_report(
     capital_flow_path: Path,
 ) -> Path:
     generated_at = datetime.now()
-    path = output_dir / f"{row.target.symbol}_{row.target.name}_mixed_overview_{generated_at.strftime('%Y%m%d_%H%M%S')}.txt"
+    file_prefix = f"{row.target.symbol}_{row.target.name}_mixed_overview_"
+    path = output_dir / f"{file_prefix}{generated_at.strftime('%Y%m%d_%H%M%S')}.txt"
     text = "\n".join(
         [
             f"# A股单股三轴混合分析: {row.target.symbol} {row.target.name}",
@@ -178,6 +182,7 @@ def _save_combined_report(
         ]
     )
     path.write_text(text + "\n", encoding="utf-8")
+    prune_older_outputs(output_dir, f"{file_prefix}*.txt", keep_path=path)
     return path
 
 
