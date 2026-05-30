@@ -36,11 +36,13 @@ from export_structures_with_boxes import (
     export_zhongshus,
     write_svg_with_inclusion_boxes,
 )
-from prepare_and_send_wechat_chart import derive_output_paths, derive_wechat_output_dir, make_sendable_jpg, render_svg
+from prepare_and_send_wechat_chart import derive_output_paths, make_sendable_jpg, render_svg
+from report_json import write_json
 from run_hk_60m_chanlun_to_wechat import analyze_current_state, compute_bi_strengths, write_normalized_csv
 from send_wechat_current_chat_files import send_current_chat_files
 from send_wechat_current_chat_text import send_current_chat_text
 from send_wechat_native import send_message
+from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file, timeframe_report_paths
 
 
 @dataclass(frozen=True)
@@ -63,17 +65,18 @@ SECURITIES = [
     Security("00981", "中芯国际", "HK"),
 ]
 
-DEFAULT_HOLDINGS_FILE = ROOT / "data" / "_meta" / "current_holdings.json"
+DEFAULT_HOLDINGS_FILE = holdings_file()
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="批量生成最新日线和 60M 缠论图、分析文本、操作建议，并可选发送到当前微信会话")
+    parser = argparse.ArgumentParser(description="批量生成最新日线、60M、15M 缠论图、分析文本、操作建议，并可选发送到当前微信会话")
     parser.add_argument("--day-start", default="2026-01-01", help="日线起始日期")
     parser.add_argument("--m60-start", default="2026-01-01 09:30", help="60M 起始时间")
+    parser.add_argument("--m15-start", default="2026-04-01 09:30", help="15M 起始时间")
     parser.add_argument(
         "--holdings-file",
         default=str(DEFAULT_HOLDINGS_FILE),
-        help="持仓清单 JSON 文件，默认读取 data/_meta/current_holdings.json；不存在时回退到脚本内置名单。",
+        help="持仓清单 JSON 文件，默认读取 data/stock_holdings.json；不存在时回退到脚本内置名单。",
     )
     parser.add_argument("--send-current-chat", action="store_true", help="生成完成后发送到当前已打开微信会话")
     parser.add_argument("--send-only", action="store_true", help="只发送已生成的最新报告和图片，不重新生成")
@@ -132,6 +135,12 @@ def fetch_m60_rows(security: Security, start: str) -> list[dict]:
     if security.market == "HK":
         return fetch_hk_minute(security.symbol, period="60", start=start, adjust="qfq", source="xueqiu")
     return fetch_kline(security.symbol, start=start, interval="m60")
+
+
+def fetch_m15_rows(security: Security, start: str) -> list[dict]:
+    if security.market == "HK":
+        return fetch_hk_minute(security.symbol, period="15", start=start, adjust="qfq", source="xueqiu")
+    return fetch_kline(security.symbol, start=start, interval="m15")
 
 
 def save_rows(security: Security, timeframe: str, rows: list[dict], path: Path) -> None:
@@ -275,15 +284,17 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
     return "\n".join(lines)
 
 
-def export_case(security: Security, timeframe: str, rows: list[dict], base_dir: Path, stem: str, title: str) -> dict[str, Path]:
-    prefix = f"{stem}_normalized"
-    raw_csv = base_dir / f"{stem}.csv"
-    normalized_csv = base_dir / f"{prefix}.csv"
-    svg = base_dir / f"{prefix}_with_boxes.svg"
-    png, jpg = derive_output_paths(svg)
-    analysis_path = base_dir / f"{prefix}_analysis.txt"
-    advice_path = base_dir / f"{prefix}_advice.txt"
-    report_path = base_dir / f"{prefix}_report.txt"
+def export_case(security: Security, timeframe: str, rows: list[dict], title: str) -> dict[str, Path]:
+    layout = timeframe_report_paths(security.symbol, timeframe, rows)
+    raw_csv = layout.raw_csv
+    normalized_csv = layout.normalized_csv
+    svg = layout.chart_svg
+    png = layout.chart_png
+    jpg = layout.chart_jpg
+    analysis_path = layout.root_dir / "analysis.txt"
+    advice_path = layout.root_dir / "advice.txt"
+    report_path = layout.root_dir / "report.txt"
+    tech_json_path = layout.technical_report_json
 
     save_rows(security, timeframe, rows, raw_csv)
     raw_bars = clean_bars(read_bars_from_csv(str(raw_csv)))
@@ -302,11 +313,11 @@ def export_case(security: Security, timeframe: str, rows: list[dict], base_dir: 
             confirmed_fx_ids.add(bi.end_fx_id)
     unconfirmed_end_fx_ids = {bi.end_fx_id for bi in bis if not bi.is_confirmed}
 
-    export_fractals(base_dir / f"{prefix}_fractals.csv", normalized_bars, fractals, confirmed_fx_ids, unconfirmed_end_fx_ids)
-    export_confirmed_fractals(base_dir / f"{prefix}_confirmed_fractals.csv", normalized_bars, fractals, confirmed_fx_ids)
-    export_bis(base_dir / f"{prefix}_bis.csv", bis)
-    export_zhongshus(base_dir / f"{prefix}_zhongshu.csv", zhongshus)
-    export_macd(base_dir / f"{prefix}_macd.csv", macd_points)
+    export_fractals(layout.fractals_csv, normalized_bars, fractals, confirmed_fx_ids, unconfirmed_end_fx_ids)
+    export_confirmed_fractals(layout.confirmed_fractals_csv, normalized_bars, fractals, confirmed_fx_ids)
+    export_bis(layout.bis_csv, bis)
+    export_zhongshus(layout.zhongshu_csv, zhongshus)
+    export_macd(layout.macd_csv, macd_points)
     normalized_shims = [
         type(
             "NormalizedCsvRowShim",
@@ -343,6 +354,9 @@ def export_case(security: Security, timeframe: str, rows: list[dict], base_dir: 
     if timeframe == "day":
         analysis_text = analysis_text.replace("60M", "日线")
         timeframe_label = "日线"
+    elif timeframe == "15m":
+        analysis_text = analysis_text.replace("60M", "15M")
+        timeframe_label = "15M"
     else:
         timeframe_label = "60M"
     signals = extract_signals(bis, zhongshus, macd_points)
@@ -352,10 +366,40 @@ def export_case(security: Security, timeframe: str, rows: list[dict], base_dir: 
     analysis_path.write_text(analysis_text + "\n", encoding="utf-8")
     advice_path.write_text(advice_text + "\n", encoding="utf-8")
     report_path.write_text(report_text, encoding="utf-8")
+    write_json(
+        tech_json_path,
+        {
+            "report_type": "technical",
+            "symbol": security.symbol,
+            "name": security.name,
+            "timeframe": timeframe,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "summary": {
+                "conclusion": _extract_summary_line(advice_path, "结论：") or None,
+                "suggestion": _extract_summary_line(advice_path, "建议：") or None,
+            },
+            "analysis_text": analysis_text,
+            "advice_text": advice_text,
+            "artifacts": {
+                "raw_csv": raw_csv,
+                "normalized_csv": normalized_csv,
+                "fractals_csv": layout.fractals_csv,
+                "confirmed_fractals_csv": layout.confirmed_fractals_csv,
+                "bis_csv": layout.bis_csv,
+                "zhongshu_csv": layout.zhongshu_csv,
+                "macd_csv": layout.macd_csv,
+                "structure_svg": svg,
+                "structure_png": png,
+                "structure_jpg": jpg,
+                "report_txt": report_path,
+            },
+        },
+    )
     return {
         "analysis": analysis_path,
         "advice": advice_path,
         "report": report_path,
+        "tech_json": tech_json_path,
         "jpg": jpg,
         "png": png,
         "svg": svg,
@@ -424,30 +468,26 @@ def build_group_operation_summary(bundle: list[tuple[Security, dict[str, Path], 
 
 def write_group_operation_summary(bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]]) -> Path:
     file_prefix = "group888_60m_operation_summary_"
-    output_path = ROOT / "data" / "_meta" / f"{file_prefix}{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    REPORTS_META_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = REPORTS_META_DIR / f"{file_prefix}{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     output_path.write_text(build_group_operation_summary(bundle), encoding="utf-8")
     prune_older_outputs(output_path.parent, f"{file_prefix}*.txt", keep_path=output_path)
     return output_path
 
 
-def latest_file(directory: Path, pattern: str) -> Path:
-    matches = list(directory.glob(pattern))
-    if not matches:
-        raise FileNotFoundError(f"未找到文件: {directory / pattern}")
-    return max(matches, key=lambda item: item.stat().st_mtime)
-
-
 def load_existing_case(security: Security, timeframe: str) -> dict[str, Path]:
-    base_dir = ROOT / "data" / f"{security.symbol}_{security.name}" / timeframe
-    wechat_dir = derive_wechat_output_dir(base_dir / "placeholder.svg")
-    return {
-        "report": latest_file(base_dir, "*_normalized_report.txt"),
-        "analysis": latest_file(base_dir, "*_normalized_analysis.txt"),
-        "advice": latest_file(base_dir, "*_normalized_advice.txt"),
-        "jpg": latest_file(wechat_dir, "*_normalized_with_boxes_wechat.jpg"),
-        "png": latest_file(wechat_dir, "*_normalized_with_boxes_full.png"),
-        "svg": latest_file(base_dir, "*_normalized_with_boxes.svg"),
-    }
+    base_dir = REPORTS_DIR / security.symbol / timeframe
+    if (base_dir / "report.txt").exists():
+        return {
+            "report": base_dir / "report.txt",
+            "analysis": base_dir / "analysis.txt",
+            "advice": base_dir / "advice.txt",
+            "tech_json": base_dir / "tech.json",
+            "jpg": base_dir / "structure.jpg",
+            "png": base_dir / "structure.png",
+            "svg": base_dir / "structure.svg",
+        }
+    raise FileNotFoundError(f"未找到规范技术报告目录: {base_dir}")
 
 
 def send_batch_current_chat(
@@ -494,25 +534,16 @@ def main() -> None:
         for security in securities:
             day_rows = fetch_day_rows(security, args.day_start)
             m60_rows = fetch_m60_rows(security, args.m60_start)
+            m15_rows = fetch_m15_rows(security, args.m15_start)
 
-            security_dir = ROOT / "data" / f"{security.symbol}_{security.name}"
-            day_dir = security_dir / "day"
-            m60_dir = security_dir / "60m"
-            day_dir.mkdir(parents=True, exist_ok=True)
-            m60_dir.mkdir(parents=True, exist_ok=True)
-
-            day_stem = f"{security.symbol}_daily_{day_rows[0]['ts'].replace('-', '')}_to_{day_rows[-1]['ts'].replace('-', '')}"
-            m60_stem = (
-                f"{security.symbol}_60m_{m60_rows[0]['ts'][0:10].replace('-', '')}_"
-                f"to_{m60_rows[-1]['ts'][0:10].replace('-', '')}"
-            )
-
-            day_case = export_case(security, "day", day_rows, day_dir, day_stem, f"{security.symbol} {security.name} day")
-            m60_case = export_case(security, "60m", m60_rows, m60_dir, m60_stem, f"{security.symbol} {security.name} 60m")
+            day_case = export_case(security, "day", day_rows, f"{security.symbol} {security.name} day")
+            m60_case = export_case(security, "60m", m60_rows, f"{security.symbol} {security.name} 60m")
+            export_case(security, "15m", m15_rows, f"{security.symbol} {security.name} 15m")
             bundle.append((security, day_case, m60_case))
             print(f"Prepared {security.name}")
 
-        manifest = ROOT / "data" / "_meta" / f"group888_send_manifest_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        REPORTS_META_DIR.mkdir(parents=True, exist_ok=True)
+        manifest = REPORTS_META_DIR / f"group888_send_manifest_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
         lines = ["群聊 888 待发送清单", ""]
         for security, day_case, m60_case in bundle:
             lines.append(f"{security.name} ({security.symbol})")

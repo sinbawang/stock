@@ -97,7 +97,7 @@ try:
     print(df.head(3))
     
     # 保存到 CSV
-    output_path = "data/03690_美团/60m/3690_60m_tushare.csv"
+    output_path = "data/reports/03690/60m/analyze/3690_60m_tushare.csv"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df.to_csv(output_path, index=False)
     print(f"\n已保存到：{output_path}")

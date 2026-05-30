@@ -16,16 +16,18 @@ if str(SCRIPTS) not in sys.path:
 
 from generate_h_share_single_compact_report import generate_report
 from report_retention import prune_older_outputs
+from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
-DEFAULT_HOLDINGS_FILE = ROOT / "data" / "_meta" / "current_holdings.json"
-DEFAULT_META_DIR = ROOT / "data" / "_meta"
+DEFAULT_HOLDINGS_FILE = holdings_file()
+DEFAULT_REPORT_ROOT = REPORTS_DIR
+DEFAULT_OUTPUT_DIR = REPORTS_META_DIR
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Batch generate compact three-axis single-stock reports for all current holdings.")
     parser.add_argument("--holdings-file", default=str(DEFAULT_HOLDINGS_FILE), help="Combined holdings JSON file")
-    parser.add_argument("--meta-dir", default=str(DEFAULT_META_DIR), help="Directory containing source reports")
-    parser.add_argument("--output-dir", default=str(DEFAULT_META_DIR), help="Output directory")
+    parser.add_argument("--report-root", default=str(DEFAULT_REPORT_ROOT), help="Canonical per-symbol reports root")
+    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Output directory")
     parser.add_argument("--limit", type=int, default=None, help="Optional max number of holdings")
     return parser.parse_args()
 
@@ -69,7 +71,7 @@ def save_batch_compact_report(report_paths: list[Path], output_dir: Path) -> Pat
 def main() -> None:
     args = parse_args()
     holdings_file = Path(args.holdings_file)
-    meta_dir = Path(args.meta_dir)
+    report_root = Path(args.report_root)
     output_dir = Path(args.output_dir)
     targets = _load_targets(holdings_file)
     if args.limit is not None:
@@ -83,8 +85,8 @@ def main() -> None:
             generate_report(
                 symbol=target["symbol"].zfill(5) if target["market"] == "HK" else target["symbol"],
                 name=target["name"],
-                meta_dir=meta_dir,
-                output_dir=output_dir,
+                report_root=report_root,
+                output_dir=report_root / (target["symbol"].zfill(5) if target["market"] == "HK" else target["symbol"]),
             )
         )
         print(f"{target['symbol']} {target['name']} -> {report_paths[-1]}")

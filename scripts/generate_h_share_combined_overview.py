@@ -14,10 +14,11 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from report_retention import prune_older_outputs
+from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
 
-DEFAULT_HOLDINGS_FILE = ROOT / "data" / "_meta" / "current_h_share_holdings.json"
-DEFAULT_META_DIR = ROOT / "data" / "_meta"
+DEFAULT_HOLDINGS_FILE = holdings_file()
+DEFAULT_META_DIR = REPORTS_META_DIR
 
 
 @dataclass(frozen=True)
@@ -124,6 +125,16 @@ def _extract_text(text: str, pattern: str) -> str | None:
 
 
 def load_fundamental_ref(target: CombinedTarget, meta_dir: Path) -> FundamentalBriefRef:
+    json_path = meta_dir / target.symbol / "base.json" if (meta_dir / target.symbol / "base.json").exists() else REPORTS_DIR / target.symbol / "base.json"
+    if json_path.exists():
+        payload = json.loads(json_path.read_text(encoding="utf-8"))
+        summary = payload.get("summary", {})
+        return FundamentalBriefRef(
+            score=summary.get("score"),
+            rating=summary.get("rating"),
+            submodel=summary.get("submodel"),
+            path=json_path,
+        )
     path = latest_file(meta_dir, f"{target.symbol}_{target.name}*_fundamental_brief_*.txt")
     if path is None:
         return FundamentalBriefRef()
@@ -145,7 +156,23 @@ def load_fundamental_ref(target: CombinedTarget, meta_dir: Path) -> FundamentalB
 def load_latest_technical_map(meta_dir: Path) -> tuple[dict[str, TechnicalRef], Path | None]:
     path = latest_file(meta_dir, "group888_60m_operation_summary_*.txt")
     if path is None:
-        return {}, None
+        refs: dict[str, TechnicalRef] = {}
+        candidate_roots = [meta_dir, REPORTS_DIR]
+        for root in candidate_roots:
+            if not root.exists():
+                continue
+            for symbol_dir in [item for item in root.iterdir() if item.is_dir() and item.name != "_meta"]:
+                tech_path = symbol_dir / "60m" / "tech.json"
+                if not tech_path.exists():
+                    continue
+                payload = json.loads(tech_path.read_text(encoding="utf-8"))
+                summary = payload.get("summary", {})
+                refs[symbol_dir.name.zfill(5)] = TechnicalRef(
+                    conclusion=summary.get("conclusion"),
+                    suggestion=summary.get("suggestion"),
+                    path=tech_path,
+                )
+        return refs, None
     refs: dict[str, TechnicalRef] = {}
     line_re = re.compile(r"^-\s*(?P<name>.+?)\((?P<symbol>\d{5,6})\)：(?P<conclusion>.*?)\s+建议：(?P<suggestion>.*)$")
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -191,7 +218,23 @@ def _parse_capital_flow_overview(path: Path) -> dict[str, CapitalFlowRef]:
 def load_latest_capital_flow_map(meta_dir: Path, target_symbols: set[str] | None = None) -> tuple[dict[str, CapitalFlowRef], Path | None]:
     candidates = sorted(meta_dir.glob("group_h_share_capital_flow_overview_*.txt"), key=lambda item: item.stat().st_mtime, reverse=True)
     if not candidates:
-        return {}, None
+        refs: dict[str, CapitalFlowRef] = {}
+        symbols = target_symbols or set()
+        for symbol in symbols:
+            for json_path in (meta_dir / symbol / "fund.json", REPORTS_DIR / symbol / "fund.json"):
+                if not json_path.exists():
+                    continue
+                payload = json.loads(json_path.read_text(encoding="utf-8"))
+                summary = payload.get("summary", {})
+                refs[symbol] = CapitalFlowRef(
+                    score=summary.get("score"),
+                    rating=summary.get("rating"),
+                    source=summary.get("source"),
+                    bucket=summary.get("bucket"),
+                    path=json_path,
+                )
+                break
+        return refs, None
     best_refs: dict[str, CapitalFlowRef] = {}
     best_path: Path | None = None
     best_coverage = -1
@@ -444,9 +487,10 @@ def render_combined_overview(rows: list[CombinedOverviewRow], technical_summary_
             "",
             "## 口径说明",
             "",
-            "- fundamental 读取最新基本面简报中的总分/评级。",
-            "- technical 读取最新 group888 60M 缠论综合操作建议中的港股行。",
-            "- capital_flow 优先读取最新港股资金面批量概览；HK V1 使用港股通成份行情成交额/换手率、个股南向净买额、南向持股变化和 HKEX 沽空成交额。",
+            "- fundamental 优先读取 reports/<symbol>/base.json，缺失时回退到旧版基本面简报文本。",
+            "- technical 优先读取 reports/<symbol>/60m/tech.json；存在组合摘要时仍复用最新 group888 60M 缠论综合操作建议中的港股行。",
+            "- capital_flow 优先读取最新港股资金面批量概览。HK V1 使用港股通成份行情成交额/换手率、个股南向净买额、南向持股变化和 HKEX 沽空成交额。",
+            "- 若批量概览暂缺，则回退读取 reports/<symbol>/fund.json。",
             "- 个股南向净买额来自东方财富港股通个股成交榜历史，仅在个股进入成交榜的交易日可用；沽空比例依赖成交额可用性。",
             "- priority/action 是三轴对照后的管理标签；当前港股资金分会直接影响 confirming/mixed/cautious 分组。",
             "- 本报告用于三轴对照，不构成投资建议。",

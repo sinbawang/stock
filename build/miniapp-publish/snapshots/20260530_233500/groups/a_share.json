@@ -1,0 +1,104 @@
+{
+  "schema_version": "v1",
+  "group": "a_share",
+  "generated_at": "2026-05-30T20:05:33",
+  "counts": {
+    "today_action": 0,
+    "watch_pool": 5,
+    "risk_pool": 1
+  },
+  "sections": [
+    {
+      "key": "today_action",
+      "title": "今日动作",
+      "items": []
+    },
+    {
+      "key": "watch_pool",
+      "title": "观察池",
+      "items": [
+        {
+          "priority": "P2",
+          "action": "等待触发",
+          "symbol": "000651",
+          "name": "格力电器",
+          "bucket": "watch",
+          "fundamental": "54.8/C",
+          "technical": "偏强，持有为主。",
+          "capital_flow": "51.4/C/fallback",
+          "comment": "观察：60M 技术节奏偏积极"
+        },
+        {
+          "priority": "P2",
+          "action": "等待触发",
+          "symbol": "601328",
+          "name": "交通银行",
+          "bucket": "watch",
+          "fundamental": "65.4/B",
+          "technical": "震荡，等待方向选择。",
+          "capital_flow": "59.1/C/fallback",
+          "comment": "观察：基本面质量较好"
+        },
+        {
+          "priority": "P3",
+          "action": "等待冲突缓解",
+          "symbol": "000591",
+          "name": "太阳能",
+          "bucket": "mixed",
+          "fundamental": "46.0/C",
+          "technical": "偏多，允许轻仓试错。",
+          "capital_flow": "74.0/B/cache",
+          "comment": "分化：60M 技术节奏偏积极；资金面有一定确认；基本面偏弱"
+        },
+        {
+          "priority": "P3",
+          "action": "等待冲突缓解",
+          "symbol": "300124",
+          "name": "汇川技术",
+          "bucket": "mixed",
+          "fundamental": "73.8/B",
+          "technical": "信号一般，保持耐心。",
+          "capital_flow": "37.8/D/fallback",
+          "comment": "分化：基本面质量较好；资金面偏弱"
+        },
+        {
+          "priority": "P3",
+          "action": "等待冲突缓解",
+          "symbol": "600900",
+          "name": "长江电力",
+          "bucket": "mixed",
+          "fundamental": "75.8/B",
+          "technical": "偏空，优先减仓或兑现。",
+          "capital_flow": "59.1/C/fallback",
+          "comment": "分化：基本面质量较好；60M 技术节奏偏弱"
+        }
+      ]
+    },
+    {
+      "key": "risk_pool",
+      "title": "风险池",
+      "items": [
+        {
+          "priority": "P5",
+          "action": "暂停加仓",
+          "symbol": "002555",
+          "name": "三七互娱",
+          "bucket": "cautious",
+          "fundamental": "66.3/B",
+          "technical": "偏空，优先减仓或兑现。",
+          "capital_flow": "44.6/D/fallback",
+          "comment": "谨慎：60M 技术节奏偏弱；资金面偏弱"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    "fundamental 优先读取 reports/<symbol>/base.json，缺失时回退到旧版基本面简报文本。",
+    "technical 优先读取 reports/<symbol>/60m/tech.json；存在组合摘要时仍复用最新 group888 60M 缠论综合操作建议。",
+    "capital_flow 读取最新 A 股资金面批量概览；若为 fallback 来源，已在资金面评分中保守折减。",
+    "若单股批量概览暂缺，则回退读取 reports/<symbol>/fund.json。",
+    "priority/action 是三轴对照后的管理标签，只用于观察清单排序；今日动作/观察池/风险池按 priority 派生。",
+    "本报告用于三轴对照，不构成投资建议。"
+  ],
+  "source_file": "group_a_share_combined_overview_20260530_200533.txt"
+}

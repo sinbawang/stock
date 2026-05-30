@@ -51,6 +51,7 @@ batch_prepare_module = importlib.util.module_from_spec(batch_prepare_spec)
 sys.modules[batch_prepare_spec.name] = batch_prepare_module
 batch_prepare_spec.loader.exec_module(batch_prepare_module)
 load_batch_prepare_securities = batch_prepare_module.load_securities
+load_existing_case = batch_prepare_module.load_existing_case
 
 send_wechat_spec = importlib.util.spec_from_file_location(
     "send_wechat_native",
@@ -218,6 +219,33 @@ def test_batch_regenerate_helpers_discover_targets_from_combined_holdings_file(t
                 type(targets[0])(symbol="00700", name="腾讯"),
                 type(targets[0])(symbol="03690", name="美团"),
         ]
+
+
+def test_batch_prepare_load_existing_case_reads_only_canonical_reports(tmp_path, monkeypatch):
+    reports_dir = tmp_path / "data" / "reports" / "601328" / "60m"
+    reports_dir.mkdir(parents=True)
+    for file_name in ("report.txt", "analysis.txt", "advice.txt", "tech.json", "structure.jpg", "structure.png", "structure.svg"):
+        (reports_dir / file_name).write_text(file_name, encoding="utf-8")
+
+    monkeypatch.setattr(batch_prepare_module, "REPORTS_DIR", tmp_path / "data" / "reports")
+    security = batch_prepare_module.Security(symbol="601328", name="交通银行", market="CN")
+
+    case = load_existing_case(security, "60m")
+
+    assert case["report"] == reports_dir / "report.txt"
+    assert case["jpg"] == reports_dir / "structure.jpg"
+
+
+def test_batch_prepare_load_existing_case_does_not_fallback_to_legacy_data_dir(tmp_path, monkeypatch):
+    legacy_dir = tmp_path / "data" / "601328_交通银行" / "60m"
+    legacy_dir.mkdir(parents=True)
+    (legacy_dir / "601328_60m_normalized_report.txt").write_text("legacy", encoding="utf-8")
+
+    monkeypatch.setattr(batch_prepare_module, "REPORTS_DIR", tmp_path / "data" / "reports")
+    security = batch_prepare_module.Security(symbol="601328", name="交通银行", market="CN")
+
+    with pytest.raises(FileNotFoundError, match="规范技术报告目录"):
+        load_existing_case(security, "60m")
 
 
 def test_batch_regenerate_helpers_discover_targets_from_single_market_holdings_file(tmp_path):

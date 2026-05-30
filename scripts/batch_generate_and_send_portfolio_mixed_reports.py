@@ -17,9 +17,10 @@ if str(SCRIPTS) not in sys.path:
 
 from send_wechat_current_chat_text import send_current_chat_text
 from send_wechat_native import _split_message_chunks
+from storage_layout import holdings_file
 
 
-DEFAULT_HOLDINGS_FILE = ROOT / "data" / "_meta" / "current_holdings.json"
+DEFAULT_HOLDINGS_FILE = holdings_file()
 DEFAULT_TEXT_CHUNK_CHARS = 320
 
 

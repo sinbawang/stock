@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import json
 import sys
 
 
@@ -199,3 +200,71 @@ def test_management_section_splits_action_watch_and_risk_pools() -> None:
     assert _management_section(action_row) == "今日动作"
     assert _management_section(watch_row) == "观察池"
     assert _management_section(risk_row) == "风险池"
+
+
+def test_combined_a_share_overview_reads_new_reports_layout_json(tmp_path) -> None:
+    holdings_file = tmp_path / "holdings.json"
+    holdings_file.write_text(
+        """
+{
+  "market": "CN",
+  "holdings": [
+    {"symbol": "601328", "name": "交通银行"}
+  ]
+}
+""",
+        encoding="utf-8",
+    )
+
+    stock_dir = tmp_path / "601328"
+    (stock_dir / "60m").mkdir(parents=True)
+    (stock_dir / "base.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "score": 69.2,
+                    "rating": "B",
+                    "submodel": "bank_v1",
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (stock_dir / "fund.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "score": 59.1,
+                    "rating": "C",
+                    "bucket": "neutral",
+                    "source": "fallback",
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (stock_dir / "60m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "conclusion": "偏多，允许轻仓试错。",
+                    "suggestion": "分批试仓。",
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    targets = discover_targets_from_holdings_file(holdings_file)
+    rows, technical_path, capital_path = build_rows(targets, tmp_path)
+    text = render_combined_overview(rows, technical_path, capital_path)
+
+    assert len(rows) == 1
+    assert rows[0].fundamental.path == stock_dir / "base.json"
+    assert rows[0].capital_flow.path == stock_dir / "fund.json"
+    assert rows[0].technical.path == stock_dir / "60m" / "tech.json"
+    assert rows[0].combined_bucket == "confirming"
+    assert "P1 | 跟踪试仓 | 601328 | 交通银行 | confirming | 69.2/B | 偏多，允许轻仓试错。 | 59.1/C/fallback" in text

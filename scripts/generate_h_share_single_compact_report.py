@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -16,8 +17,9 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from report_retention import prune_older_outputs
+from storage_layout import REPORTS_DIR, stock_report_dir, stock_overview_report_path
 
-DEFAULT_META_DIR = ROOT / "data" / "_meta"
+DEFAULT_REPORT_ROOT = REPORTS_DIR
 DEFAULT_BUILD_DIR = ROOT / "build" / "wechat"
 
 
@@ -25,8 +27,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate a compact single H-share report with fundamental, capital-flow, technical, and 60M chart refs.")
     parser.add_argument("symbol", help="HK symbol such as 00700")
     parser.add_argument("--name", required=True, help="Security name")
-    parser.add_argument("--meta-dir", default=str(DEFAULT_META_DIR), help="Directory containing generated report files")
-    parser.add_argument("--output-dir", default=str(DEFAULT_META_DIR), help="Output directory for compact report")
+    parser.add_argument("--report-root", default=str(DEFAULT_REPORT_ROOT), help="Canonical reports root directory")
+    parser.add_argument("--output-dir", default=None, help="Optional output directory for compact report")
     parser.add_argument("--refresh-chart", action="store_true", help="Try refreshing the 60M chart before rendering compact report")
     parser.add_argument("--source", default="xueqiu", choices=["xueqiu", "akshare"], help="Primary HK minute source when refreshing chart")
     parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="Fallback HK minute source when refreshing chart")
@@ -44,6 +46,12 @@ def _read(path: Path | None) -> str:
     if path is None:
         return ""
     return path.read_text(encoding="utf-8")
+
+
+def _read_json(path: Path | None) -> dict:
+    if path is None or not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _extract_text(text: str, pattern: str) -> str | None:
@@ -151,10 +159,101 @@ def _append_section(lines: list[str], title: str, body: list[str]) -> None:
     lines.extend(body)
 
 
+def _compact_fundamental_payload(payload: dict) -> list[str]:
+    summary = payload.get("summary") or {}
+    if not summary:
+        return ["评级: missing"]
+    lines = [f"评级: {summary.get('rating') or 'missing'} / {summary.get('score') or 'missing'}"]
+    comment = summary.get("comment")
+    if comment:
+        lines.append(f"判断: {comment}")
+
+    blended = payload.get("blended") or {}
+    dimension_scores = (blended.get("annual_anchor") or {}).get("scorecard", {}).get("dimension_scores") or []
+    if dimension_scores:
+        top_dimensions = sorted(dimension_scores, key=lambda item: item.get("score", 0), reverse=True)[:2]
+        highlights = [f"{item.get('dimension', 'unknown')}: {item.get('score', 'missing')}" for item in top_dimensions]
+        lines.append("亮点: " + "；".join(highlights))
+
+    missing_metrics = []
+    for item in dimension_scores:
+        missing_metrics.extend(item.get("missing_metrics") or [])
+    if missing_metrics:
+        unique_missing = []
+        for metric in missing_metrics:
+            if metric not in unique_missing:
+                unique_missing.append(metric)
+        lines.append("跟踪: " + " / ".join(unique_missing[:3]))
+    return lines
+
+
+def _compact_capital_flow_payload(payload: dict) -> list[str]:
+    summary = payload.get("summary") or {}
+    scorecard = payload.get("scorecard") or {}
+    if not summary and not scorecard:
+        return ["评级: missing"]
+    trade_date = scorecard.get("trade_date") or "missing"
+    score = summary.get("score")
+    score_text = f"{score}/100" if score is not None else "missing"
+    lines = [f"日期: {trade_date}", f"评级: {summary.get('rating') or scorecard.get('rating') or 'missing'} / {score_text}"]
+
+    key_metrics = []
+    snapshot = payload.get("snapshot") or {}
+    metric_map = [
+        ("southbound_net_buy", "南向净买入"),
+        ("southbound_net_buy_5d", "5日南向净买入"),
+        ("southbound_holding_change", "南向持股变化"),
+        ("short_sell_ratio", "沽空比例"),
+    ]
+    for key, label in metric_map:
+        value = snapshot.get(key)
+        if value is not None:
+            key_metrics.append(f"{label}: {value}")
+    if key_metrics:
+        lines.append("关键指标:")
+        lines.extend(f"  {index}. {value}" for index, value in enumerate(key_metrics[:4], start=1))
+
+    comment = summary.get("comment")
+    if comment:
+        lines.append(f"操盘: {comment}")
+
+    missing = []
+    for item in scorecard.get("dimension_scores") or []:
+        missing.extend(item.get("missing_metrics") or [])
+    if missing:
+        unique_missing = []
+        for metric in missing:
+            if metric not in unique_missing:
+                unique_missing.append(metric)
+        lines.append("缺口: " + " / ".join(unique_missing[:4]))
+    return lines
+
+
+def _compact_technical_payload(payload: dict) -> list[str]:
+    summary = payload.get("summary") or {}
+    if not summary:
+        return ["结论: missing"]
+    analysis_text = payload.get("analysis_text") or ""
+    lines = [
+        f"结论: {summary.get('conclusion') or 'missing'}",
+        f"建议: {summary.get('suggestion') or 'missing'}",
+    ]
+    overview = _limit_lines(_extract_section_lines(analysis_text, "概览："), 3)
+    structure = _limit_lines(_extract_section_lines(analysis_text, "结构："), 3)
+    signals = _limit_lines(_extract_section_lines(analysis_text, "信号："), 4)
+    if overview:
+        lines.append("概览: " + _join_short(overview, 3))
+    if structure:
+        lines.append("结构: " + _join_short(structure, 3))
+    if signals:
+        lines.append("信号: " + _join_short(signals, 4))
+    return lines
+
+
 def _find_latest_chart(symbol: str, name: str) -> Path | None:
     patterns = [
-        DEFAULT_BUILD_DIR / "data" / f"{symbol}_{name}" / "60m" / "*_with_boxes_wechat.jpg",
-        ROOT / "data" / f"{symbol}_{name}" / "60m" / "*_with_boxes.svg",
+        DEFAULT_BUILD_DIR / "data" / symbol / "60m" / "structure.jpg",
+        ROOT / "data" / "reports" / symbol / "60m" / "structure.svg",
     ]
     matches: list[Path] = []
     for pattern in patterns:
@@ -188,13 +287,14 @@ def generate_report(
     *,
     symbol: str,
     name: str,
-    meta_dir: Path,
+    report_root: Path,
     output_dir: Path,
     chart_note: str | None = None,
 ) -> Path:
-    fundamental_path = _latest_file(meta_dir, f"{symbol}_{name}*_fundamental_brief_*.txt")
-    capital_path = _latest_file(meta_dir, f"{symbol}_{name}_capital_flow_*.txt")
-    technical_path = _latest_file(meta_dir, f"{symbol}_{name}_tech_60m_*.txt")
+    stock_dir = report_root / symbol
+    fundamental_path = stock_dir / "base.json"
+    capital_path = stock_dir / "fund.json"
+    technical_path = stock_dir / "60m" / "tech.json"
     chart_path = _find_latest_chart(symbol, name)
 
     generated_at = datetime.now()
@@ -205,9 +305,14 @@ def generate_report(
         f"{name} {symbol}｜三轴操盘摘要",
         f"时间: {generated_at.strftime('%Y-%m-%d %H:%M')}",
     ]
-    _append_section(lines, "【基本面】", _compact_fundamental(_read(fundamental_path)))
-    _append_section(lines, "【资金面】", _compact_capital_flow(_read(capital_path)))
-    _append_section(lines, "【技术面】", _compact_technical(_read(technical_path)))
+    _append_section(lines, "【基本面】", _compact_fundamental_payload(_read_json(fundamental_path)))
+    _append_section(lines, "【资金面】", _compact_capital_flow_payload(_read_json(capital_path)))
+    _append_section(lines, "【技术面】", _compact_technical_payload(_read_json(technical_path)))
+    canonical_overview = stock_overview_report_path(symbol)
+    if canonical_overview.exists():
+        lines.extend(["", f"概览原文: {canonical_overview}"])
+    if chart_path is not None:
+        lines.extend([f"60M图: {chart_path}"])
     if chart_note:
         lines.extend(["", "【提示】", f"60M图刷新失败，已复用最新已有图。原因: {chart_note}"])
 
@@ -222,11 +327,14 @@ def main() -> None:
     chart_note = None
     if args.refresh_chart:
         chart_note = _refresh_chart(args)
+    symbol = args.symbol.zfill(5)
+    report_root = Path(args.report_root)
+    output_dir = Path(args.output_dir) if args.output_dir else stock_report_dir(symbol)
     path = generate_report(
-        symbol=args.symbol.zfill(5),
+        symbol=symbol,
         name=args.name,
-        meta_dir=Path(args.meta_dir),
-        output_dir=Path(args.output_dir),
+        report_root=report_root,
+        output_dir=output_dir,
         chart_note=chart_note,
     )
     print(f"compact_report= {path}")

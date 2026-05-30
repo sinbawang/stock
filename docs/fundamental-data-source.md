@@ -194,7 +194,7 @@
 如果要判断估值字段应该优先信哪个源，不要只靠一次聊天里的探测，直接跑对照脚本：
 
 ```powershell
-c:/sinba/stock/venv/Scripts/python.exe scripts/compare_hk_valuation_sources.py 03690 --name 美团 --output data/_meta/hk_valuation_compare_03690_20260510.md
+c:/sinba/stock/venv/Scripts/python.exe scripts/compare_hk_valuation_sources.py 03690 --name 美团 --output data/reports/_meta/hk_valuation_compare_03690_20260510.md
 ```
 
 当前脚本：
@@ -206,13 +206,13 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/compare_hk_valuation_sources.py 0
 
 当前实测样本：
 
-- [data/_meta/hk_valuation_compare_03690_20260510.md](../data/_meta/hk_valuation_compare_03690_20260510.md)
-- [data/_meta/hk_valuation_compare_batch_20260510.md](../data/_meta/hk_valuation_compare_batch_20260510.md)
+- [data/reports/_meta/hk_valuation_compare_03690_20260510.md](../data/reports/_meta/hk_valuation_compare_03690_20260510.md)
+- [data/reports/_meta/hk_valuation_compare_batch_20260510.md](../data/reports/_meta/hk_valuation_compare_batch_20260510.md)
 
 批量示例：
 
 ```powershell
-c:/sinba/stock/venv/Scripts/python.exe scripts/compare_hk_valuation_sources.py --symbols 03690 00700 00981 --output data/_meta/hk_valuation_compare_batch_20260510.md
+c:/sinba/stock/venv/Scripts/python.exe scripts/compare_hk_valuation_sources.py --symbols 03690 00700 00981 --output data/reports/_meta/hk_valuation_compare_batch_20260510.md
 ```
 
 在这份样本里，`pe_ttm`、`pb`、`ps_ttm` 的双源差异都不大，因此当前更合理的策略仍然是：

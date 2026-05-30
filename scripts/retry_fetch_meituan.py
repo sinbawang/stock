@@ -22,7 +22,7 @@ for i, w in enumerate([0] + waits):
         print(f"失败: {e}", flush=True)
 
 if rows:
-    save_to_csv(rows, r"data/03690/60m/03690_60m.csv")
+    save_to_csv(rows, r"data/reports/03690/60m/analyze/03690_60m.csv")
     print("首:", rows[0])
     print("末:", rows[-1])
 else:

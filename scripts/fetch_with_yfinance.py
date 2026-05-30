@@ -31,7 +31,7 @@ try:
     print(f"  {data.iloc[-1].to_dict()}")
     
     # 保存到 CSV
-    output_path = "data/03690_美团/60m/3690_60m_yfinance.csv"
+    output_path = "data/reports/03690/60m/analyze/3690_60m_yfinance.csv"
     
     rows = []
     for ts, row in data.iterrows():

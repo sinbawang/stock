@@ -2,7 +2,7 @@
 港股行情数据获取（腾讯财经接口，不依赖代理）。
 
 用法:
-    python -m chanlun.data.hk_fetcher --symbol 03690 --start 2026-03-03 --output data/03690_美团/day/3690_daily.csv
+    python -m chanlun.data.hk_fetcher --symbol 03690 --start 2026-03-03 --output data/reports/03690/day/analyze/3690_daily.csv
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ from datetime import date
 from pathlib import Path
 from typing import Optional
 from urllib.request import Request, build_opener, ProxyHandler, HTTPSHandler
+
+from storage_layout import REPORTS_DIR
 
 
 def _make_opener() -> object:
@@ -135,10 +137,7 @@ def main():
     if args.output:
         save_to_csv(rows, args.output)
     else:
-        if args.symbol == "03690":
-            default_path = f"data/03690_美团/day/{args.symbol}_daily_{args.start}_{args.end or 'today'}.csv"
-        else:
-            default_path = f"data/{args.symbol}/day/{args.symbol}_daily_{args.start}_{args.end or 'today'}.csv"
+        default_path = REPORTS_DIR / args.symbol.zfill(5) / "day" / "analyze" / f"{args.symbol}_daily_{args.start}_{args.end or 'today'}.csv"
         save_to_csv(rows, default_path)
 
 

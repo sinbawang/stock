@@ -8,7 +8,7 @@
 示例:
     from chanlun.data.kline_fetcher import fetch_kline, save_to_csv
     rows = fetch_kline("03690", start="2026-03-03", end="2026-04-12", interval="day")
-    save_to_csv(rows, "data/03690_美团/day/3690_daily.csv")
+    save_to_csv(rows, "data/reports/03690/day/analyze/3690_daily.csv")
 """
 
 from __future__ import annotations

@@ -131,8 +131,8 @@ def main() -> None:
     parser.add_argument("--symbol", default="3690.HK", help="标的代码，默认 3690.HK")
     parser.add_argument("--start", default="2026-01-05", help="开始日期 YYYY-MM-DD")
     parser.add_argument("--end", default=date.today().strftime("%Y-%m-%d"), help="结束日期 YYYY-MM-DD")
-    parser.add_argument("--output-csv", default="data/03690_美团/60m/3690_60m_longbridge.csv", help="输出 CSV")
-    parser.add_argument("--output-png", default="data/03690_美团/60m/3690_60m_longbridge.png", help="输出图像")
+    parser.add_argument("--output-csv", default="data/reports/03690/60m/analyze/3690_60m_longbridge.csv", help="输出 CSV")
+    parser.add_argument("--output-png", default="data/reports/03690/60m/3690_60m_longbridge.png", help="输出图像")
     args = parser.parse_args()
 
     start = datetime.strptime(args.start, "%Y-%m-%d").date()

@@ -12,7 +12,7 @@
     rows, used_source = fetch_hk_minute_with_policy(
         "03690", period="60", start="2026-03-01 09:30", end="2026-04-25 16:00"
     )
-    save_to_csv(rows, f"data/03690_美团/60m/03690_60m_{used_source}.csv")
+    save_to_csv(rows, f"data/reports/03690/60m/analyze/03690_60m_{used_source}.csv")
 
 CLI:
     python -m chanlun.data.hk_minute_fetcher --symbol 03690 --period 60 \
@@ -28,6 +28,8 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 import requests
+
+from storage_layout import REPORTS_DIR
 
 _ALLOWED_PERIODS = {"1", "5", "15", "30", "60"}
 _ALLOWED_ADJUSTS = {"", "qfq", "hfq"}
@@ -500,7 +502,7 @@ def main():
         out = args.output
     else:
         code = _normalize_symbol(args.symbol)
-        out = f"data/{code}/{args.period}m/{code}_{args.period}m.csv"
+        out = REPORTS_DIR / code / f"{args.period}m" / "analyze" / f"{code}_{args.period}m.csv"
     save_to_csv(rows, out)
 
 

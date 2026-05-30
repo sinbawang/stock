@@ -85,9 +85,9 @@ def plot_with_fractals(kline_csv: str, fractal_csv: str, output_png: str, title:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="日K叠加分型标记")
-    parser.add_argument("--kline", default="data/300124_汇川技术/day/300124_daily_20250930_to_20260412.csv")
-    parser.add_argument("--fractals", default="data/300124_汇川技术/day/300124_daily_strict_fractals.csv")
-    parser.add_argument("--output", default="data/300124_汇川技术/day/300124_daily_with_fractals.png")
+    parser.add_argument("--kline", default="data/reports/300124/day/analyze/300124_daily_20250930_to_20260412.csv")
+    parser.add_argument("--fractals", default="data/reports/300124/day/analyze/300124_daily_strict_fractals.csv")
+    parser.add_argument("--output", default="data/reports/300124/day/300124_daily_with_fractals.png")
     parser.add_argument("--title", default="300124 Daily Kline with Fractals")
     args = parser.parse_args()
 

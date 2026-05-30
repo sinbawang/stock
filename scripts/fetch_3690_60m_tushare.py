@@ -16,8 +16,8 @@ pro = ts.pro_api(TOKEN)
 SYMBOL = "03690.HK"
 START = datetime(2026, 3, 3)
 END   = datetime(2026, 4, 12, 17, 0, 0)
-OUTPUT_CSV = "data/03690_美团/60m/3690_60m_tushare.csv"
-OUTPUT_PNG = "data/03690_美团/60m/3690_60m_tushare.png"
+OUTPUT_CSV = "data/reports/03690/60m/analyze/3690_60m_tushare.csv"
+OUTPUT_PNG = "data/reports/03690/60m/3690_60m_tushare.png"
 
 MAX_RETRIES = 5
 RETRY_WAIT  = 65  # 超过 1 分钟，确保每分钟配额复位
@@ -75,7 +75,7 @@ print(f"  末条: {result.iloc[-1]['ts']}  收={result.iloc[-1]['close']}")
 
 # ─── 3. 保存 CSV ──────────────────────────────────────────
 
-Path("data").mkdir(exist_ok=True)
+Path(OUTPUT_CSV).parent.mkdir(parents=True, exist_ok=True)
 result.to_csv(OUTPUT_CSV, index=False)
 print(f"\n✓ 已保存到 {OUTPUT_CSV}")
 

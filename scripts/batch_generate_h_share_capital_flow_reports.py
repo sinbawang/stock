@@ -14,12 +14,14 @@ if str(SRC) not in sys.path:
 
 from capital_flow.reporting import save_capital_flow_text
 from capital_flow.services import fetch_and_analyze_hk_flow
+from report_json import write_json
 from report_retention import prune_older_outputs
+from storage_layout import CAPITAL_FLOW_CACHE_DIR, REPORTS_META_DIR, holdings_file, stock_fund_report_path
 
 
-DEFAULT_HOLDINGS_FILE = ROOT / "data" / "_meta" / "current_h_share_holdings.json"
-DEFAULT_OUTPUT_DIR = ROOT / "data" / "_meta"
-DEFAULT_CACHE_DIR = ROOT / "data" / "_meta" / "capital_flow_cache"
+DEFAULT_HOLDINGS_FILE = holdings_file()
+DEFAULT_OUTPUT_DIR = REPORTS_META_DIR
+DEFAULT_CACHE_DIR = CAPITAL_FLOW_CACHE_DIR
 DEFAULT_HK_FLOW_SOURCE = "eastmoney.hk_connect_components+eastmoney.southbound_net_buy+eastmoney.southbound_holding+hkex.short_selling_turnover"
 
 
@@ -112,7 +114,33 @@ def generate_one(
         cache_dir=cache_dir,
         max_cache_age_days=max_cache_age_days,
     )
-    report_path = save_capital_flow_text(scorecard=result.scorecard, snapshot=result.snapshot, output_dir=output_dir)
+    bucket = (
+        "strong"
+        if result.scorecard.total_score >= 80
+        else "watch"
+        if result.scorecard.total_score >= 65
+        else "neutral"
+        if result.scorecard.total_score >= 50
+        else "weak"
+    )
+    report_path = write_json(
+        stock_fund_report_path(target.symbol),
+        {
+            "report_type": "capital_flow",
+            "symbol": target.symbol,
+            "name": target.name,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "summary": {
+                "score": result.scorecard.total_score,
+                "rating": result.scorecard.rating,
+                "bucket": bucket,
+                "source": result.snapshot.source,
+                "comment": getattr(result.scorecard, "combined_comment", None),
+            },
+            "scorecard": result.scorecard,
+            "snapshot": result.snapshot,
+        },
+    )
     return BatchCapitalFlowResult(
         target=target,
         status="ok",

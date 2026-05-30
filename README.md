@@ -83,6 +83,21 @@
 - [docs/hk-minute-data-source.md](docs/hk-minute-data-source.md)
 - [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
 
+## 当前目录约定
+
+当前默认按下面的目录协议维护持仓与报告：
+
+- 持仓清单统一维护在 `data/stock_holdings.json`
+- 单股报告统一落在 `data/reports/<symbol>/`
+- 基本面报告：`data/reports/<symbol>/base.json`
+- 资金面报告：`data/reports/<symbol>/fund.json`
+- 单股综合分析：`data/reports/<symbol>/overview.txt`
+- 缠论级别目录：`data/reports/<symbol>/day/`、`data/reports/<symbol>/60m/`、`data/reports/<symbol>/15m/`
+- 分析 CSV 落在对应级别下的 `analyze/` 子目录
+- 结构图和技术面 JSON 落在对应级别根目录，例如 `structure.svg`、`tech.json`
+- 组合级概览、批量摘要、manifest 审计文件统一落在 `data/reports/_meta/`
+- 原始缓存和外部源缓存继续保留在 `data/_meta/`，例如 `data/_meta/capital_flow_cache/`
+
 ## 基本面报告输出
 
 当前脚本层已经同时支持两类文本产物：
@@ -113,7 +128,7 @@
 如果要把已经生成好的文本报告发到当前已打开的微信会话，当前建议使用稳定的文本发送入口：
 
 ```powershell
-.\venv\Scripts\python.exe scripts/send_wechat_current_chat_text.py data\_meta\02208_金风科技_industrial_automation_v1_blended_fundamental_brief_20260518_203254.txt
+.\venv\Scripts\python.exe scripts/send_wechat_current_chat_text.py data\reports\00700\overview.txt
 ```
 
 使用前先手动打开目标微信群或联系人会话。该入口默认只向当前会话发送文本文件，不执行自动搜索切换，也不依赖附件发送链路。
@@ -121,7 +136,7 @@
 如果要把已经生成好的结构图或其他文件发到当前已打开的微信会话，当前建议使用对应的文件发送入口：
 
 ```powershell
-.\venv\Scripts\python.exe scripts/send_wechat_current_chat_files.py build\wechat\data\02208_金风科技\60m\02208_60m_20260109_to_20260518_normalized_with_boxes_wechat.jpg
+.\venv\Scripts\python.exe scripts/send_wechat_current_chat_files.py build\wechat\data\02208\60m\structure.jpg
 ```
 
 该入口同样要求先手动打开目标会话；发送后会检查当前会话消息列表是否发生变化，避免“命令成功但微信未收到”的静默失败。
@@ -129,7 +144,7 @@
 如果要一次发送“文本报告 + 一张或多张图”，当前建议使用组合发送入口：
 
 ```powershell
-.\venv\Scripts\python.exe scripts/send_wechat_current_chat_bundle.py --message-file data\_meta\02208_金风科技_industrial_automation_v1_blended_fundamental_brief_20260518_203254.txt --file build\wechat\data\02208_金风科技\60m\02208_60m_20260109_to_20260518_normalized_with_boxes_wechat.jpg
+.\venv\Scripts\python.exe scripts/send_wechat_current_chat_bundle.py --message-file data\reports\00700\overview.txt --file data\reports\00700\60m\structure.jpg
 ```
 
 该入口会先发文本，再按当前会话发送文件，适合“报告正文 + 技术图”这类常见组合场景。
@@ -143,15 +158,31 @@
 ```
 
 这些命令默认面向“当前已打开微信会话”的发送场景；如果只想生成、不发送，可加 `--generate-only`。
-每次通过该统一入口执行后，都会在 `data\_meta` 额外落一份 `wechat_task_manifest_*` 审计文件，记录任务类型、参数、状态和生成/发送产物，便于后续回查与重放。
+每次通过该统一入口执行后，都会在 `data\reports\_meta` 额外落一份 `wechat_task_manifest_*` 审计文件，记录任务类型、参数、状态和生成/发送产物，便于后续回查与重放。
+
+如果需要生成单标的三轴 compact 摘要，当前 compact 链已经直接读取 canonical 报告目录，不再依赖 `data\_meta` 下的历史文本归档：
+
+```powershell
+.\venv\Scripts\python.exe scripts\generate_h_share_single_compact_report.py 00700 --name 腾讯
+```
+
+该入口默认读取 `data\reports\00700\base.json`、`data\reports\00700\fund.json`、`data\reports\00700\60m\tech.json`，并将 compact 摘要写回 `data\reports\00700\00700_腾讯_single_compact_时间戳.txt`。如果需要重新刷新 60M 图，可额外加 `--refresh-chart`。
+
+如果要按持仓批量生成 compact 摘要与组合级 compact 汇总：
+
+```powershell
+.\venv\Scripts\python.exe scripts\batch_generate_single_compact_reports.py
+```
+
+该入口默认读取 `data\stock_holdings.json` 和 `data\reports\<symbol>\*.json`，将单股 compact 摘要写回各自 `data\reports\<symbol>` 目录，并在 `data\reports\_meta` 生成 `group888_single_compact_*.txt`。
 
 如果已经把当前持仓维护在项目文件里，也可以直接按持仓清单批量生成：
 
 ```powershell
-.\venv\Scripts\python.exe scripts/batch_regenerate_fundamental_briefs.py --holdings-file data\_meta\current_holdings.json --save-scorecard-text
+.\venv\Scripts\python.exe scripts/batch_regenerate_fundamental_briefs.py --holdings-file data\stock_holdings.json --save-scorecard-text
 ```
 
-资金面也有独立的 A 股持仓批量入口，默认读取 `data\_meta\current_a_share_holdings.json`，并在 `data\_meta` 生成单标的资金面评分卡和批量概览：
+资金面也有独立的 A 股持仓批量入口，默认读取 `data\stock_holdings.json`，并在 `reports\<symbol>\fund.json` 更新单标的资金面报告，在 `reports\_meta` 生成批量概览：
 
 ```powershell
 .\venv\Scripts\python.exe scripts\batch_generate_capital_flow_reports.py
@@ -180,7 +211,7 @@
 .\venv\Scripts\python.exe scripts\run_a_share_daily_overview.py --no-fallback
 ```
 
-每次运行默认还会在 `data\_meta` 写入 `a_share_daily_overview_manifest_*.json`，记录持仓输入、关键参数、资金面成功/失败数量、输出报告路径和微信发送状态；如不需要审计文件，可加 `--no-manifest`。
+每次运行默认还会在 `data\reports\_meta` 写入 `a_share_daily_overview_manifest_*.json`，记录持仓输入、关键参数、资金面成功/失败数量、输出报告路径和微信发送状态；如不需要审计文件，可加 `--no-manifest`。
 
 如果要生成后把最终三轴管理清单发送到当前已打开的微信会话：
 
@@ -190,7 +221,7 @@
 
 发送前请先手动打开目标微信群或联系人会话。该开关只发送最终 `group_a_share_combined_overview_*.txt`，不发送单标的资金面明细。
 
-港股资金面有独立的持仓批量入口，默认读取 `data\_meta\current_h_share_holdings.json`，并在 `data\_meta` 生成 `group_h_share_capital_flow_overview_*.txt`：
+港股资金面有独立的持仓批量入口，默认读取 `data\stock_holdings.json`，并在 `reports\<symbol>\fund.json` 更新单标的资金面报告，在 `reports\_meta` 生成 `group_h_share_capital_flow_overview_*.txt`：
 
 ```powershell
 .\venv\Scripts\python.exe scripts\batch_generate_h_share_capital_flow_reports.py
@@ -204,7 +235,7 @@
 .\venv\Scripts\python.exe scripts\generate_h_share_combined_overview.py
 ```
 
-该入口默认读取 `data\_meta\current_h_share_holdings.json`，复用最新港股基本面简报、最新 group888 60M 技术面组合建议，以及最新港股资金面批量概览，输出 `group_h_share_combined_overview_*.txt`。如果没有港股资金面概览，会显示 `missing/HK pending`；如果 HK V1 远端抓取失败，会显示 `failed/primary`。当前 HK V1 资金面线索不会单独给出完整资金确认加分。
+该入口默认读取 `data\stock_holdings.json`，复用 `data/reports/<symbol>/base.json`、`data/reports/<symbol>/60m/tech.json`、最新 group888 60M 技术面组合建议，以及最新港股资金面批量概览，输出 `data/reports/_meta/group_h_share_combined_overview_*.txt`。如果没有港股资金面概览，会显示 `missing/HK pending`；如果 HK V1 远端抓取失败，会显示 `failed/primary`。当前 HK V1 资金面线索不会单独给出完整资金确认加分。
 
 如果要每天一条命令更新港股持仓资金面、生成三轴管理清单，并可选发送到当前微信会话，可以使用：
 
@@ -212,7 +243,7 @@
 .\venv\Scripts\python.exe scripts\run_h_share_daily_overview.py
 ```
 
-该入口会先生成港股资金面单标的报告与 `group_h_share_capital_flow_overview_*.txt`，再复用最新基本面简报、最新 60M 技术面组合建议和刚生成的资金面概览，输出 `group_h_share_combined_overview_*.txt`。每次运行默认还会在 `data\_meta` 写入 `h_share_daily_overview_manifest_*.json`，记录输入、参数、资金面成功/失败数量、输出路径和微信发送状态；如不需要审计文件，可加 `--no-manifest`。
+该入口会先生成港股资金面单标的报告与 `group_h_share_capital_flow_overview_*.txt`，再复用最新基本面简报、最新 60M 技术面组合建议和刚生成的资金面概览，输出 `data/reports/_meta/group_h_share_combined_overview_*.txt`。每次运行默认还会在 `data/reports/_meta` 写入 `h_share_daily_overview_manifest_*.json`，记录输入、参数、资金面成功/失败数量、输出路径和微信发送状态；如不需要审计文件，可加 `--no-manifest`。
 
 如果要生成后把最终港股三轴管理清单发送到当前已打开的微信会话：
 
@@ -351,9 +382,9 @@ chanlun-stock/
 
 ```bash
 python scripts/export_structures_with_boxes.py \
-	--raw "data/300124_汇川技术/60m/300124_60m_20260116_to_20260419.csv" \
-	--normalized "data/300124_汇川技术/60m/300124_60m_20260116_to_20260419_normalized.csv" \
-	--output-dir "data/300124_汇川技术/60m" \
+	--raw "data/reports/300124/60m/analyze/300124_60m_20260116_to_20260419.csv" \
+	--normalized "data/reports/300124/60m/analyze/300124_60m_20260116_to_20260419_normalized.csv" \
+	--output-dir "data/reports/300124/60m" \
 	--prefix "300124_60m_20260116_to_20260419_normalized"
 ```
 

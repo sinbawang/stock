@@ -73,6 +73,7 @@
 - [fundamental-snapshot-example.md](fundamental-snapshot-example.md): 标准输入样例
 - [combined-analysis-output-spec.md](combined-analysis-output-spec.md): 当前 `plus_60m` 联合文本与微信发送产物的输出规格
 - [combined-analysis-service-interface.md](combined-analysis-service-interface.md): 当前联合分析链路应如何从脚本拼装收敛为公共服务接口
+- [miniapp-cloud-publish-schema.md](miniapp-cloud-publish-schema.md): 面向微信小程序原生渲染的云存储发布层协议
 
 读完这一层后，应该已经能回答：
 
@@ -96,6 +97,7 @@
 9. [fundamental-interim-scoring-interface.md](fundamental-interim-scoring-interface.md)
 10. [combined-analysis-output-spec.md](combined-analysis-output-spec.md)
 11. [combined-analysis-service-interface.md](combined-analysis-service-interface.md)
+12. [miniapp-cloud-publish-schema.md](miniapp-cloud-publish-schema.md)
 
 ## 当前实现快照
 

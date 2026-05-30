@@ -105,8 +105,8 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="从日 K 生成模拟分钟 K 线")
-    parser.add_argument("--daily-csv", default="data/03690_美团/day/3690_daily.csv", help="输入日 K CSV")
-    parser.add_argument("--output-csv", default="data/03690_美团/60m/3690_60m_simulated.csv", help="输出分钟 K CSV")
+    parser.add_argument("--daily-csv", default="data/reports/03690/day/analyze/3690_daily.csv", help="输入日 K CSV")
+    parser.add_argument("--output-csv", default="data/reports/03690/60m/analyze/3690_60m_simulated.csv", help="输出分钟 K CSV")
     args = parser.parse_args()
     
     simulate_minute_klines_from_daily(args.daily_csv, args.output_csv)

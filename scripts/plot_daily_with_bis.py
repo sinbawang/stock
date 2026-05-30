@@ -109,10 +109,10 @@ def plot_daily_with_bis(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="日K叠加分型和笔")
-    parser.add_argument("--kline", default="data/300124_汇川技术/day/300124_daily_20250930_to_20260412.csv")
-    parser.add_argument("--fractals", default="data/300124_汇川技术/day/300124_daily_strict_fractals.csv")
-    parser.add_argument("--bis", default="data/300124_汇川技术/day/300124_daily_strict_bis.csv")
-    parser.add_argument("--output", default="data/300124_汇川技术/day/300124_daily_with_bis.png")
+    parser.add_argument("--kline", default="data/reports/300124/day/analyze/300124_daily_20250930_to_20260412.csv")
+    parser.add_argument("--fractals", default="data/reports/300124/day/analyze/300124_daily_strict_fractals.csv")
+    parser.add_argument("--bis", default="data/reports/300124/day/analyze/300124_daily_strict_bis.csv")
+    parser.add_argument("--output", default="data/reports/300124/day/300124_daily_with_bis.png")
     parser.add_argument("--title", default="300124 Daily with Fractals and Bis")
     args = parser.parse_args()
 

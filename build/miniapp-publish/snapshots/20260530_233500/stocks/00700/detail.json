@@ -1,0 +1,120 @@
+{
+  "schema_version": "v1",
+  "symbol": "00700",
+  "name": "腾讯",
+  "market": "HK",
+  "updated_at": "2026-05-30T20:37:30",
+  "headline": {
+    "title": "腾讯 00700",
+    "subtitle": "三轴综合观察",
+    "priority": "P3",
+    "action": "等待冲突缓解",
+    "bucket": "mixed"
+  },
+  "overview": {
+    "summary": "分化：基本面质量较好；60M 技术节奏偏弱；资金面已有覆盖，但尚未形成强确认",
+    "bullets": [
+      "基本面 86.39/A",
+      "60M 技术面 偏空，优先减仓或兑现。",
+      "资金面 60.5/C"
+    ]
+  },
+  "sections": [
+    {
+      "key": "fundamental",
+      "title": "基本面",
+      "rating": "A",
+      "score": 86.39,
+      "submodel": "platform_internet_v1",
+      "report_period": "2025-12-31",
+      "summary": "当前综合评级为 A，平台基本面整体处于可跟踪区间。主要亮点是平台经营利润质量较好，利润与现金流匹配度较高。当前最需要跟踪的是后续增长兑现和现金流转化能否延续当前评分。",
+      "highlights": [
+        "平台经营利润质量较好，利润与现金流匹配度较高。",
+        "平台现金流兑现较好，经营效率和变现能力表现稳定。",
+        "平台估值匹配度较好，当前估值对增长的透支相对有限。"
+      ],
+      "risks": [],
+      "follow_ups": [
+        "增长有没有兑现成利润",
+        "利润有没有兑现成现金流",
+        "当前估值是否仍要求高增长持续"
+      ],
+      "warnings": []
+    },
+    {
+      "key": "technical",
+      "title": "技术面",
+      "timeframe": "60m",
+      "source": "xueqiu",
+      "conclusion": "偏空，优先减仓或兑现。",
+      "suggestion": "反抽不过 479.60 以减仓为主，不逆势加仓。",
+      "overview": [
+        "时间区间：2026-01-21 14:00 到 2026-05-29 16:00",
+        "K线数量：共 504 根 60M K线",
+        "中枢数量：当前识别到 2 个中枢",
+        "最新中枢：486.20-514.50，覆盖 04-09 11:30 到 04-30 12:00"
+      ],
+      "structure": [
+        "最新确认向上笔：05-11 10:30 到 05-14 10:30，高点 479.60",
+        "未确认向下笔：05-14 10:30 到 05-28 14:00，低点 420.40"
+      ],
+      "signals": [
+        "顶背驰：无",
+        "底背驰：无",
+        "买点：当前无确认一二三类买点",
+        "卖点：sell_3"
+      ],
+      "focus": [
+        "观察重点：是否重新站回中枢 486.20-514.50，以及后续一笔是否形成有效突破"
+      ]
+    },
+    {
+      "key": "capital_flow",
+      "title": "资金面",
+      "rating": "C",
+      "score": 60.5,
+      "source": "eastmoney.southbound_net_buy+eastmoney.southbound_holding.cache",
+      "trade_date": "2026-05-29",
+      "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
+      "strengths": [
+        "关键资金指标出现净流入",
+        "通道或杠杆资金出现正向变化",
+        "未见明显过热信号"
+      ],
+      "risks": [
+        "5日与10日资金持续净流出"
+      ],
+      "warnings": [
+        "资金面部分指标缺失，评分只反映已取得字段"
+      ],
+      "metrics": [
+        {
+          "label": "南向净买入",
+          "value": "687488320.0"
+        },
+        {
+          "label": "南向持股变化",
+          "value": "2955034370.0"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "timeframe": "60m",
+      "path": "stocks/00700/charts/60m.jpg",
+      "label": "60M 结构图"
+    },
+    {
+      "timeframe": "15m",
+      "path": "stocks/00700/charts/15m.jpg",
+      "label": "15M 结构图"
+    },
+    {
+      "timeframe": "day",
+      "path": "stocks/00700/charts/day.jpg",
+      "label": "DAY 结构图"
+    }
+  ],
+  "disclaimer": "本页面仅用于持仓跟踪与研究，不构成投资建议。"
+}

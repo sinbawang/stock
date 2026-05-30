@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from chanlun.data.hk_minute_fetcher import fetch_hk_minute, save_to_csv  # noqa: E402
 
 WAITS = [0, 60, 120, 240, 480, 960]  # 立即 + 1/2/4/8/16 分钟
-OUT = "data/03690_美团/60m/03690_60m_full.csv"
+OUT = "data/reports/03690/60m/analyze/03690_60m_full.csv"
 
 for i, wait in enumerate(WAITS):
     if wait:

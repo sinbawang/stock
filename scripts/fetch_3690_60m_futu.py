@@ -88,8 +88,8 @@ def main() -> None:
     parser.add_argument("--end", default="2026-04-25", help="结束日期 YYYY-MM-DD")
     parser.add_argument("--host", default="127.0.0.1", help="OpenD 主机")
     parser.add_argument("--port", default=11111, type=int, help="OpenD 端口")
-    parser.add_argument("--output-csv", default="data/03690_美团/60m/3690_60m_futu.csv", help="输出 CSV")
-    parser.add_argument("--output-png", default="data/03690_美团/60m/3690_60m_futu.png", help="输出图像")
+    parser.add_argument("--output-csv", default="data/reports/03690/60m/analyze/3690_60m_futu.csv", help="输出 CSV")
+    parser.add_argument("--output-png", default="data/reports/03690/60m/3690_60m_futu.png", help="输出图像")
     args = parser.parse_args()
 
     print(f"正在通过富途 OpenAPI 获取 {args.code} 60m: {args.start} ~ {args.end}")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from datetime import datetime
@@ -42,10 +43,13 @@ from generate_h_share_combined_overview import (
 )
 from run_hk_60m_chanlun_to_wechat import analyze_current_state, build_paths
 from send_wechat_current_chat_text import send_current_chat_text_file
+from report_json import write_json
+from storage_layout import CAPITAL_FLOW_CACHE_DIR, stock_base_report_path, stock_fund_report_path, stock_overview_report_path, stock_report_dir
 
 
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "_meta"
-DEFAULT_CACHE_DIR = DEFAULT_OUTPUT_DIR / "capital_flow_cache"
+DEFAULT_CACHE_DIR = CAPITAL_FLOW_CACHE_DIR
+DEFAULT_MANUAL_SUPPLEMENT_DIR = ROOT / "data" / "_meta" / "manual_supplements"
 DEFAULT_HK_MINUTE_SOURCE = "xueqiu"
 DEFAULT_HK_MINUTE_FALLBACK_SOURCES = ("akshare",)
 
@@ -59,6 +63,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source", default=DEFAULT_HK_MINUTE_SOURCE, choices=["xueqiu", "akshare"], help="Primary HK minute source")
     parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="Optional fallback HK minute sources; defaults to akshare when primary source is xueqiu")
     parser.add_argument("--quote-overlay-source", default=None, help="Optional HK quote overlay source for fundamentals")
+    parser.add_argument("--manual-supplement-path", default=None, help="Optional JSON or brief txt supplement file for HK fundamentals")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Output directory")
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help="Capital-flow cache directory")
     parser.add_argument("--max-cache-age-days", type=int, default=7, help="Maximum accepted cache age in days")
@@ -66,6 +71,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--disable-dedupe", action="store_true", help="Disable short-window duplicate-send protection")
     parser.add_argument("--duplicate-send-window-seconds", type=float, default=300.0, help="Skip duplicate sends within this many seconds; set to 0 to disable")
     return parser.parse_args()
+
+
+def _resolve_manual_supplement_path(symbol: str, explicit_path: str | None) -> str | None:
+    if explicit_path:
+        return explicit_path
+    candidates = sorted(DEFAULT_MANUAL_SUPPLEMENT_DIR.glob(f"{symbol}_*.*"))
+    if not candidates:
+        return None
+    return str(candidates[0])
 
 
 def _extract_prefixed_value(text: str, prefix: str) -> str | None:
@@ -123,27 +137,21 @@ def _save_technical_report(
     conclusion = _extract_prefixed_value(advice_text, "结论：") or "missing"
     suggestion = _extract_prefixed_value(advice_text, "建议：") or "等待更多技术面确认。"
 
-    generated_at = datetime.now()
-    file_prefix = f"{symbol}_{name}_tech_60m_"
-    output_path = output_dir / f"{file_prefix}{generated_at.strftime('%Y%m%d_%H%M%S')}.txt"
-    report_text = "\n".join(
-        [
-            f"# 技术面观察: {symbol} {name}",
-            "",
-            f"- 周期: 60M",
-            f"- 数据源: {used_source}",
-            f"- 结论: {conclusion}",
-            f"- 建议: {suggestion}",
-            "",
-            analysis_text,
-            "",
-            advice_text,
-            "",
-            f"Generated at: {generated_at.isoformat(timespec='seconds')}",
-        ]
+    output_path = output_dir / "60m" / "tech.json"
+    write_json(
+        output_path,
+        {
+            "report_type": "technical",
+            "symbol": symbol,
+            "name": name,
+            "timeframe": "60m",
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "source": used_source,
+            "summary": {"conclusion": conclusion, "suggestion": suggestion},
+            "analysis_text": analysis_text,
+            "advice_text": advice_text,
+        },
     )
-    output_path.write_text(report_text + "\n", encoding="utf-8")
-    prune_older_outputs(output_dir, f"{file_prefix}*.txt", keep_path=output_path)
     return TechnicalRef(conclusion=conclusion, suggestion=suggestion, path=output_path), output_path
 
 
@@ -157,7 +165,8 @@ def _save_combined_report(
 ) -> Path:
     generated_at = datetime.now()
     file_prefix = f"{row.target.symbol}_{row.target.name}_mixed_overview_"
-    path = output_dir / f"{file_prefix}{generated_at.strftime('%Y%m%d_%H%M%S')}.txt"
+    archived_path = output_dir / f"{file_prefix}{generated_at.strftime('%Y%m%d_%H%M%S')}.txt"
+    latest_path = stock_overview_report_path(row.target.symbol) if output_dir == stock_report_dir(row.target.symbol) else output_dir / "overview.txt"
     text = "\n".join(
         [
             f"# 港股单股三轴混合分析: {row.target.symbol} {row.target.name}",
@@ -187,24 +196,41 @@ def _save_combined_report(
             "- 本报告用于三轴对照，不构成投资建议。",
         ]
     )
-    path.write_text(text + "\n", encoding="utf-8")
-    prune_older_outputs(output_dir, f"{file_prefix}*.txt", keep_path=path)
-    return path
+    report_text = text + "\n"
+    archived_path.write_text(report_text, encoding="utf-8")
+    latest_path.write_text(report_text, encoding="utf-8")
+    prune_older_outputs(output_dir, f"{file_prefix}*.txt", keep_path=archived_path)
+    return latest_path
 
 
 def main() -> None:
     args = parse_args()
-    output_dir = Path(args.output_dir)
+    output_dir = stock_report_dir(args.symbol.zfill(5)) if Path(args.output_dir) == DEFAULT_OUTPUT_DIR else Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    manual_supplement_path = _resolve_manual_supplement_path(args.symbol.zfill(5), args.manual_supplement_path)
 
     fundamental_result = fetch_and_analyze_hk_blended_fundamentals(
         args.symbol,
         name=args.name,
         quote_overlay_source=args.quote_overlay_source,
+        manual_supplement_path=manual_supplement_path,
     )
-    fundamental_path = save_blended_fundamental_brief(
-        blended=fundamental_result.blended,
-        output_dir=output_dir,
+    fundamental_path = write_json(
+        stock_base_report_path(args.symbol.zfill(5)) if output_dir == stock_report_dir(args.symbol.zfill(5)) else output_dir / "base.json",
+        {
+            "report_type": "fundamental",
+            "symbol": args.symbol.zfill(5),
+            "name": args.name,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "summary": {
+                "score": fundamental_result.blended.blended_total_score,
+                "rating": fundamental_result.blended.blended_rating,
+                "submodel": fundamental_result.blended.submodel_id,
+                "freshness_label": getattr(fundamental_result.blended, "freshness_label", None),
+                "comment": getattr(fundamental_result.blended, "combined_comment", None),
+            },
+            "blended": fundamental_result.blended,
+        },
     )
     fundamental_ref = FundamentalBriefRef(
         score=fundamental_result.blended.blended_total_score,
@@ -235,24 +261,38 @@ def main() -> None:
         cache_dir=Path(args.cache_dir),
         max_cache_age_days=args.max_cache_age_days,
     )
-    capital_flow_path = save_capital_flow_text(
-        scorecard=capital_flow_result.scorecard,
-        snapshot=capital_flow_result.snapshot,
-        output_dir=output_dir,
+    capital_bucket = (
+        "strong"
+        if capital_flow_result.scorecard.total_score >= 80
+        else "watch"
+        if capital_flow_result.scorecard.total_score >= 65
+        else "neutral"
+        if capital_flow_result.scorecard.total_score >= 50
+        else "weak"
+    )
+    capital_flow_path = write_json(
+        stock_fund_report_path(args.symbol.zfill(5)) if output_dir == stock_report_dir(args.symbol.zfill(5)) else output_dir / "fund.json",
+        {
+            "report_type": "capital_flow",
+            "symbol": args.symbol.zfill(5),
+            "name": args.name,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "summary": {
+                "score": capital_flow_result.scorecard.total_score,
+                "rating": capital_flow_result.scorecard.rating,
+                "bucket": capital_bucket,
+                "source": capital_flow_result.snapshot.source,
+                "comment": getattr(capital_flow_result.scorecard, "combined_comment", None),
+            },
+            "scorecard": capital_flow_result.scorecard,
+            "snapshot": capital_flow_result.snapshot,
+        },
     )
     capital_flow_ref = CapitalFlowRef(
         score=capital_flow_result.scorecard.total_score,
         rating=capital_flow_result.scorecard.rating,
         source=capital_flow_result.snapshot.source,
-        bucket=(
-            "strong"
-            if capital_flow_result.scorecard.total_score >= 80
-            else "watch"
-            if capital_flow_result.scorecard.total_score >= 65
-            else "neutral"
-            if capital_flow_result.scorecard.total_score >= 50
-            else "weak"
-        ),
+        bucket=capital_bucket,
         path=capital_flow_path,
     )
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,6 +13,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import generate_h_share_single_compact_report as module
+import batch_generate_single_compact_reports as batch_module
 
 
 def test_compact_capital_flow_omits_non_operational_sections() -> None:
@@ -57,61 +59,75 @@ def test_compact_capital_flow_omits_non_operational_sections() -> None:
 
 
 def test_generate_report_writes_compact_single_stock_text(tmp_path: Path, monkeypatch) -> None:
-    meta_dir = tmp_path / "meta"
-    meta_dir.mkdir()
-    (meta_dir / "00700_腾讯_platform_internet_v1_blended_fundamental_brief_20260525_010000.txt").write_text(
-        """腾讯基本面简报
-评级: A  总分: 86.10
-
-亮点:
-- 盈利质量较好。
-
-当前缺失字段:
-- guidance_attainment
-
-补充说明:
-- 综合说明: 当前综合评级为 A，平台基本面整体处于可跟踪区间。
-""",
+    report_root = tmp_path / "reports"
+    stock_dir = report_root / "00700"
+    (stock_dir / "60m").mkdir(parents=True)
+    (stock_dir / "base.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "score": 86.1,
+                    "rating": "A",
+                    "comment": "当前综合评级为 A，平台基本面整体处于可跟踪区间。",
+                },
+                "blended": {
+                    "annual_anchor": {
+                        "scorecard": {
+                            "dimension_scores": [
+                                {"dimension": "profit_quality", "score": 34.57, "missing_metrics": []},
+                                {"dimension": "growth_delivery", "score": 15.27, "missing_metrics": ["guidance_attainment"]},
+                            ]
+                        }
+                    }
+                },
+            },
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
-    (meta_dir / "00700_腾讯_capital_flow_20260525_010000.txt").write_text(
-        """# 资金面评分卡: 00700 腾讯
-- 交易日: 2026-05-22
-- 总分: 52.5/100
-- 评级: C
-- 数据源: hidden
-
-关键资金指标:
-- 南向净买入: -1
-
-风险线索:
-- 关键资金指标出现净流出
-
-综合判断:
-资金面存在风险信号。
-""",
+    (stock_dir / "fund.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "score": 52.5,
+                    "rating": "C",
+                    "comment": "资金面存在风险信号。",
+                },
+                "scorecard": {
+                    "trade_date": "2026-05-22",
+                    "dimension_scores": [
+                        {"missing_metrics": ["short_sell_ratio", "amount_ratio_5d"]},
+                    ],
+                },
+                "snapshot": {
+                    "southbound_net_buy": -1,
+                },
+            },
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
-    (meta_dir / "00700_腾讯_tech_60m_20260525_010000.txt").write_text(
-        """# 技术面观察: 00700 腾讯
-- 结论: 偏空，优先减仓或兑现。
-- 建议: 反抽不过 479.60 以减仓为主。
-
-结构：
-- 未确认向下笔。
-
-信号：
-- 卖点：sell_3
-""",
+    (stock_dir / "60m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "conclusion": "偏空，优先减仓或兑现。",
+                    "suggestion": "反抽不过 479.60 以减仓为主。",
+                },
+                "analysis_text": "概览：\n- 时间区间：2026-05-01 到 2026-05-22\n\n结构：\n- 未确认向下笔。\n\n信号：\n- 卖点：sell_3\n",
+            },
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
+    (stock_dir / "overview.txt").write_text("canonical overview", encoding="utf-8")
     monkeypatch.setattr(module, "_find_latest_chart", lambda symbol, name: Path("chart.jpg"))
 
     path = module.generate_report(
         symbol="00700",
         name="腾讯",
-        meta_dir=meta_dir,
-        output_dir=tmp_path,
+        report_root=report_root,
+        output_dir=stock_dir,
     )
 
     output = path.read_text(encoding="utf-8")
@@ -119,6 +135,56 @@ def test_generate_report_writes_compact_single_stock_text(tmp_path: Path, monkey
     assert "【基本面】" in output
     assert "【资金面】" in output
     assert "【技术面】" in output
-    assert "【附件】" not in output
-    assert "60M图: chart.jpg" not in output
-    assert "数据源: hidden" not in output
+    assert "60M图: chart.jpg" in output
+    assert "概览原文:" in output
+    assert "guidance_attainment" in output
+    assert "short_sell_ratio" in output
+
+
+def test_batch_main_writes_symbol_compacts_and_group_summary(tmp_path: Path, monkeypatch) -> None:
+    holdings_path = tmp_path / "stock_holdings.json"
+    holdings_path.write_text(
+        json.dumps(
+            {
+                "markets": {
+                    "HK": [{"symbol": "00700", "name": "腾讯"}],
+                    "CN": [{"symbol": "300124", "name": "汇川技术"}],
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    report_root = tmp_path / "reports"
+    output_dir = tmp_path / "reports" / "_meta"
+
+    def fake_generate_report(*, symbol: str, name: str, report_root: Path, output_dir: Path, chart_note: str | None = None) -> Path:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        path = output_dir / f"{symbol}_{name}_single_compact_20260530_210000.txt"
+        path.write_text(f"{name} {symbol}\n", encoding="utf-8")
+        return path
+
+    monkeypatch.setattr(batch_module, "generate_report", fake_generate_report)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "batch_generate_single_compact_reports.py",
+            "--holdings-file",
+            str(holdings_path),
+            "--report-root",
+            str(report_root),
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    batch_module.main()
+
+    assert (report_root / "00700" / "00700_腾讯_single_compact_20260530_210000.txt").exists()
+    assert (report_root / "300124" / "300124_汇川技术_single_compact_20260530_210000.txt").exists()
+    summaries = list(output_dir.glob("group888_single_compact_*.txt"))
+    assert len(summaries) == 1
+    summary_text = summaries[0].read_text(encoding="utf-8")
+    assert "腾讯 00700" in summary_text
+    assert "汇川技术 300124" in summary_text

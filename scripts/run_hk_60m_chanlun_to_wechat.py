@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import datetime
 import sys
 from pathlib import Path
 from typing import Any
@@ -29,9 +30,11 @@ from export_structures_with_boxes import (
     export_zhongshus,
     write_svg_with_inclusion_boxes,
 )
-from prepare_and_send_wechat_chart import derive_output_paths, make_sendable_jpg, render_svg
+from prepare_and_send_wechat_chart import make_sendable_jpg, render_svg
+from report_json import write_json
 from send_wechat_current_chat_bundle import send_current_chat_bundle
 from send_wechat_native import send_message
+from storage_layout import timeframe_report_paths
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,22 +89,21 @@ def write_normalized_csv(path: Path, rows: list[NormalizedBar]) -> None:
 
 
 def build_paths(symbol: str, name: str, bars: list[dict]) -> dict[str, Path]:
-    first_day = bars[0]["ts"][0:10].replace("-", "")
-    last_day = bars[-1]["ts"][0:10].replace("-", "")
-    base_dir = ROOT / "data" / f"{symbol}_{name}" / "60m"
-    base_dir.mkdir(parents=True, exist_ok=True)
-    stem = f"{symbol}_60m_{first_day}_to_{last_day}"
-    prefix = f"{stem}_normalized"
-    svg_path = base_dir / f"{prefix}_with_boxes.svg"
-    png_path, jpg_path = derive_output_paths(svg_path)
+    layout = timeframe_report_paths(symbol, "60m", bars)
     return {
-        "base_dir": base_dir,
-        "raw_csv": base_dir / f"{stem}.csv",
-        "normalized_csv": base_dir / f"{stem}_normalized.csv",
-        "svg": svg_path,
-        "png": png_path,
-        "jpg": jpg_path,
-        "prefix": base_dir / prefix,
+        "base_dir": layout.root_dir,
+        "analyze_dir": layout.analyze_dir,
+        "raw_csv": layout.raw_csv,
+        "normalized_csv": layout.normalized_csv,
+        "fractals_csv": layout.fractals_csv,
+        "confirmed_fractals_csv": layout.confirmed_fractals_csv,
+        "bis_csv": layout.bis_csv,
+        "zhongshu_csv": layout.zhongshu_csv,
+        "macd_csv": layout.macd_csv,
+        "svg": layout.chart_svg,
+        "png": layout.chart_png,
+        "jpg": layout.chart_jpg,
+        "prefix": Path(layout.stem + "_normalized"),
     }
 
 
@@ -234,6 +236,65 @@ def analyze_current_state(
     return "\n".join(sections)
 
 
+def _extract_prefixed_value(text: str, prefix: str) -> str | None:
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line.startswith(prefix):
+            return line.removeprefix(prefix).strip()
+    return None
+
+
+def write_technical_report_json(
+    *,
+    path: Path,
+    symbol: str,
+    name: str,
+    timeframe: str,
+    source: str,
+    analysis_text: str,
+    advice_text: str,
+    raw_csv: Path,
+    normalized_csv: Path,
+    chart_svg: Path,
+    chart_png: Path,
+    chart_jpg: Path,
+    fractal_count: int,
+    bi_count: int,
+    confirmed_bi_count: int,
+    zhongshu_count: int,
+) -> Path:
+    return write_json(
+        path,
+        {
+            "report_type": "technical",
+            "symbol": symbol,
+            "name": name,
+            "timeframe": timeframe,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "source": source,
+            "summary": {
+                "conclusion": _extract_prefixed_value(advice_text, "结论："),
+                "suggestion": _extract_prefixed_value(advice_text, "建议："),
+            },
+            "analysis_text": analysis_text,
+            "advice_text": advice_text,
+            "artifacts": {
+                "raw_csv": raw_csv,
+                "normalized_csv": normalized_csv,
+                "structure_svg": chart_svg,
+                "structure_png": chart_png,
+                "structure_jpg": chart_jpg,
+            },
+            "stats": {
+                "fractals": fractal_count,
+                "bis": bi_count,
+                "confirmed_bis": confirmed_bi_count,
+                "zhongshus": zhongshu_count,
+            },
+        },
+    )
+
+
 def main() -> None:
     args = parse_args()
     rows, used_source = fetch_hk_minute_with_policy(
@@ -268,12 +329,11 @@ def main() -> None:
             confirmed_fx_ids.add(bi.end_fx_id)
     unconfirmed_end_fx_ids = {bi.end_fx_id for bi in bis if not bi.is_confirmed}
 
-    prefix_name = paths["prefix"].name
-    export_fractals(paths["base_dir"] / f"{prefix_name}_fractals.csv", normalized_bars, fractals, confirmed_fx_ids, unconfirmed_end_fx_ids)
-    export_confirmed_fractals(paths["base_dir"] / f"{prefix_name}_confirmed_fractals.csv", normalized_bars, fractals, confirmed_fx_ids)
-    export_bis(paths["base_dir"] / f"{prefix_name}_bis.csv", bis)
-    export_zhongshus(paths["base_dir"] / f"{prefix_name}_zhongshu.csv", zhongshus)
-    export_macd(paths["base_dir"] / f"{prefix_name}_macd.csv", macd_points)
+    export_fractals(paths["fractals_csv"], normalized_bars, fractals, confirmed_fx_ids, unconfirmed_end_fx_ids)
+    export_confirmed_fractals(paths["confirmed_fractals_csv"], normalized_bars, fractals, confirmed_fx_ids)
+    export_bis(paths["bis_csv"], bis)
+    export_zhongshus(paths["zhongshu_csv"], zhongshus)
+    export_macd(paths["macd_csv"], macd_points)
     write_svg_with_inclusion_boxes(
         raw_bars,
         [
@@ -302,6 +362,25 @@ def main() -> None:
     render_svg(paths["svg"], paths["png"])
     make_sendable_jpg(paths["png"], paths["jpg"])
     analysis_text = analyze_current_state(args.name, raw_bars, bis, zhongshus, macd_points)
+    advice_text = ""
+    technical_report_path = write_technical_report_json(
+        path=paths["base_dir"] / "tech.json",
+        symbol=args.symbol,
+        name=args.name,
+        timeframe="60m",
+        source=used_source,
+        analysis_text=analysis_text,
+        advice_text=advice_text,
+        raw_csv=paths["raw_csv"],
+        normalized_csv=paths["normalized_csv"],
+        chart_svg=paths["svg"],
+        chart_png=paths["png"],
+        chart_jpg=paths["jpg"],
+        fractal_count=len(fractals),
+        bi_count=len(bis),
+        confirmed_bi_count=len(confirmed_bis),
+        zhongshu_count=len(zhongshus),
+    )
 
     print(f"原始 CSV: {paths['raw_csv']}")
     print(f"分钟数据源: {used_source}")
@@ -309,6 +388,7 @@ def main() -> None:
     print(f"结构图 SVG: {paths['svg']}")
     print(f"完整 PNG: {paths['png']}")
     print(f"微信 JPG: {paths['jpg']}")
+    print(f"技术报告 JSON: {technical_report_path}")
     print(f"分析文本: {analysis_text}")
 
     if args.render_only:

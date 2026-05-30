@@ -84,8 +84,8 @@ def normalize_csv(input_csv: str, output_csv: str) -> pd.DataFrame:
 def main() -> None:
     parser = argparse.ArgumentParser(description="标准化中文分钟线 CSV 并绘制 K 线图")
     parser.add_argument("--input", required=True, help="输入 CSV 路径（同花顺/平安导出）")
-    parser.add_argument("--output-csv", default="data/03690_美团/60m/3690_60m_real.csv", help="标准化输出 CSV")
-    parser.add_argument("--output-png", default="data/03690_美团/60m/3690_60m_real.png", help="输出 K 线图")
+    parser.add_argument("--output-csv", default="data/reports/03690/60m/analyze/3690_60m_real.csv", help="标准化输出 CSV")
+    parser.add_argument("--output-png", default="data/reports/03690/60m/3690_60m_real.png", help="输出 K 线图")
     parser.add_argument("--title", default="03690 60m Kline (Real)", help="图表标题")
     args = parser.parse_args()
 

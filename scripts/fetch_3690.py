@@ -33,13 +33,17 @@ rows = []
 for k in klines:
     p = k.split(",")
     if len(p) < 7:
+        continue
     rows.append({
         "ts":         p[0],
         "open":       p[1],
+        "high":       p[3],
+        "low":        p[4],
+        "close":      p[2],
         "volume":     int(float(p[5])),
         "change_pct": p[8] if len(p) > 8 else "",
     })
-outfile = "data/03690_美团/day/3690_daily.csv"
+outfile = "data/reports/03690/day/analyze/3690_daily.csv"
 Path(outfile).parent.mkdir(parents=True, exist_ok=True)
 with open(outfile, "w", newline="", encoding="utf-8") as f:
     writer = csv.DictWriter(f, fieldnames=["ts","open","high","low","close","volume","change_pct"])
@@ -110,7 +114,7 @@ for k in klines:
 # 按日期升序
 rows.sort(key=lambda r: r["ts"])
 
-outfile = "data/03690_美团/day/3690_daily.csv"
+outfile = "data/reports/03690/day/analyze/3690_daily.csv"
 Path(outfile).parent.mkdir(parents=True, exist_ok=True)
 with open(outfile, "w", newline="", encoding="utf-8") as f:
     writer = csv.DictWriter(f, fieldnames=["ts","open","high","low","close","volume"])

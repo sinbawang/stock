@@ -18,11 +18,12 @@ if str(SRC) not in sys.path:
 import batch_generate_h_share_capital_flow_reports as capital_batch
 import generate_h_share_combined_overview as combined_overview
 import send_wechat_current_chat_text as wechat_text
+from storage_layout import CAPITAL_FLOW_CACHE_DIR, REPORTS_META_DIR, holdings_file
 
 
-DEFAULT_HOLDINGS_FILE = ROOT / "data" / "_meta" / "current_h_share_holdings.json"
-DEFAULT_META_DIR = ROOT / "data" / "_meta"
-DEFAULT_CACHE_DIR = DEFAULT_META_DIR / "capital_flow_cache"
+DEFAULT_HOLDINGS_FILE = holdings_file()
+DEFAULT_META_DIR = REPORTS_META_DIR
+DEFAULT_CACHE_DIR = CAPITAL_FLOW_CACHE_DIR
 
 
 @dataclass(frozen=True)

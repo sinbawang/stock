@@ -60,8 +60,8 @@ def plot_kline(csv_path: str, output_path: str, title: str = "Kline") -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CSV K 线图可视化")
-    parser.add_argument("--input", default="data/03690_美团/day/3690_daily.csv", help="输入 CSV 路径")
-    parser.add_argument("--output", default="data/03690_美团/day/3690_daily_kline.png", help="输出图片路径")
+    parser.add_argument("--input", default="data/reports/03690/day/analyze/3690_daily.csv", help="输入 CSV 路径")
+    parser.add_argument("--output", default="data/reports/03690/day/3690_daily_kline.png", help="输出图片路径")
     parser.add_argument("--title", default="HK03690 Daily Kline", help="图标题")
     args = parser.parse_args()
 

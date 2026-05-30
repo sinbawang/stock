@@ -1,0 +1,41 @@
+{
+  "schema_version": "v1",
+  "symbol": "01339",
+  "name": "中国人保",
+  "market": "HK",
+  "updated_at": "2026-05-30T20:30:25",
+  "priority": "P5",
+  "action": "暂停加仓",
+  "bucket": "cautious",
+  "comment": "谨慎：60M 技术节奏偏弱；资金面偏弱；资金面出现净流出或空头压力，拖累确认度",
+  "cards": {
+    "fundamental": {
+      "score": 77.88,
+      "rating": "B",
+      "summary": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+    },
+    "technical": {
+      "timeframe": "60m",
+      "conclusion": "偏弱，先观望。",
+      "suggestion": "等待重新站回 5.33-5.67 再考虑参与，未站回前不追。"
+    },
+    "capital_flow": {
+      "score": 44.5,
+      "rating": "D",
+      "source": "eastmoney.southbound_net_buy+eastmoney.southbound_holding.cache",
+      "summary": "资金面存在风险信号，技术面结论需要降低确认度。"
+    }
+  },
+  "cover_chart": {
+    "timeframe": "60m",
+    "path": "stocks/01339/charts/60m.jpg"
+  },
+  "jump": {
+    "detail": "stocks/01339/detail.json"
+  },
+  "tags": [
+    "cautious",
+    "P5",
+    "暂停加仓"
+  ]
+}

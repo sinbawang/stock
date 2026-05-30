@@ -26,6 +26,19 @@ def test_resolve_minute_fallback_sources_respects_explicit_sources() -> None:
     assert module._resolve_minute_fallback_sources("akshare", ("xueqiu",)) == ("xueqiu",)
 
 
+def test_resolve_manual_supplement_path_prefers_explicit_path(tmp_path: Path) -> None:
+    explicit = tmp_path / "manual.json"
+    explicit.write_text("{}", encoding="utf-8")
+    assert module._resolve_manual_supplement_path("01339", str(explicit)) == str(explicit)
+
+
+def test_resolve_manual_supplement_path_finds_symbol_template(monkeypatch, tmp_path: Path) -> None:
+    candidate = tmp_path / "01339_中国人保_insurance_v1_latest.json"
+    candidate.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(module, "DEFAULT_MANUAL_SUPPLEMENT_DIR", tmp_path)
+    assert module._resolve_manual_supplement_path("01339", None) == str(candidate)
+
+
 def test_main_passes_default_minute_fallback_to_technical_step(monkeypatch, tmp_path: Path) -> None:
     args = argparse.Namespace(
         symbol="00700",
@@ -35,6 +48,7 @@ def test_main_passes_default_minute_fallback_to_technical_step(monkeypatch, tmp_
         source="xueqiu",
         fallback_source=None,
         quote_overlay_source=None,
+        manual_supplement_path=None,
         output_dir=str(tmp_path),
         cache_dir=str(tmp_path / "cache"),
         max_cache_age_days=7,
@@ -43,6 +57,7 @@ def test_main_passes_default_minute_fallback_to_technical_step(monkeypatch, tmp_
         duplicate_send_window_seconds=300.0,
     )
     monkeypatch.setattr(module, "parse_args", lambda: args)
+    monkeypatch.setattr(module, "_resolve_manual_supplement_path", lambda symbol, explicit_path: str(tmp_path / "00700.json"))
 
     blended = SimpleNamespace(
         blended_total_score=86.1,
@@ -61,6 +76,13 @@ def test_main_passes_default_minute_fallback_to_technical_step(monkeypatch, tmp_
     )
 
     captured: dict[str, tuple[str, ...] | None] = {}
+    captured_manual: dict[str, str | None] = {}
+
+    def fake_fetch_and_analyze_hk_blended_fundamentals(*args, **kwargs):
+        captured_manual["path"] = kwargs.get("manual_supplement_path")
+        return SimpleNamespace(blended=blended)
+
+    monkeypatch.setattr(module, "fetch_and_analyze_hk_blended_fundamentals", fake_fetch_and_analyze_hk_blended_fundamentals)
 
     def fake_save_technical_report(**kwargs):
         captured["fallback_sources"] = kwargs["fallback_sources"]
@@ -89,3 +111,28 @@ def test_main_passes_default_minute_fallback_to_technical_step(monkeypatch, tmp_
     module.main()
 
     assert captured["fallback_sources"] == ("akshare",)
+    assert captured_manual["path"] == str(tmp_path / "00700.json")
+
+
+def test_save_combined_report_writes_latest_overview_file(tmp_path: Path) -> None:
+    row = SimpleNamespace(
+        target=SimpleNamespace(symbol="00700", name="腾讯"),
+        fundamental=SimpleNamespace(score=86.1, rating="A"),
+        technical=SimpleNamespace(conclusion="偏多", suggestion="继续观察"),
+        capital_flow=SimpleNamespace(bucket="watch", source="eastmoney", score=52.5, rating="C"),
+        combined_bucket="P2",
+        combined_comment="三轴维持观察",
+    )
+
+    overview_path = module._save_combined_report(
+        row=row,
+        output_dir=tmp_path,
+        fundamental_path=tmp_path / "base.json",
+        technical_path=tmp_path / "60m" / "tech.json",
+        capital_flow_path=tmp_path / "fund.json",
+    )
+
+    assert overview_path == tmp_path / "overview.txt"
+    assert overview_path.exists()
+    assert "00700 腾讯" in overview_path.read_text(encoding="utf-8")
+    assert list(tmp_path.glob("*_mixed_overview_*.txt"))

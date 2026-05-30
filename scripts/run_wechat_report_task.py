@@ -22,10 +22,11 @@ from fundamental.services import (
     fetch_and_analyze_hk_snapshot,
 )
 from send_wechat_current_chat_text import send_current_chat_text_file
+from storage_layout import REPORTS_META_DIR
 
 
 DEFAULT_MANUAL_SUPPLEMENT_DIR = ROOT / "data" / "_meta" / "manual_supplements"
-AUDIT_OUTPUT_DIR = ROOT / "data" / "_meta"
+AUDIT_OUTPUT_DIR = REPORTS_META_DIR
 
 
 def _infer_market(symbol: str) -> str:

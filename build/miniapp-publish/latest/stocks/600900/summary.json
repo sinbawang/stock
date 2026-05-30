@@ -1,0 +1,41 @@
+{
+  "schema_version": "v1",
+  "symbol": "600900",
+  "name": "长江电力",
+  "market": "CN",
+  "updated_at": "2026-05-30T20:36:21",
+  "priority": "P3",
+  "action": "等待冲突缓解",
+  "bucket": "mixed",
+  "comment": "分化：基本面质量较好；60M 技术节奏偏弱",
+  "cards": {
+    "fundamental": {
+      "score": 75.75,
+      "rating": "B",
+      "summary": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+    },
+    "technical": {
+      "timeframe": "60m",
+      "conclusion": "偏空，优先减仓或兑现。",
+      "suggestion": "反抽不过 27.41 以减仓为主，不逆势加仓。"
+    },
+    "capital_flow": {
+      "score": 59.07,
+      "rating": "C",
+      "source": "ths.fund_flow.fallback",
+      "summary": "资金面信号中性，暂不构成强确认。"
+    }
+  },
+  "cover_chart": {
+    "timeframe": "60m",
+    "path": "stocks/600900/charts/60m.jpg"
+  },
+  "jump": {
+    "detail": "stocks/600900/detail.json"
+  },
+  "tags": [
+    "mixed",
+    "P3",
+    "等待冲突缓解"
+  ]
+}

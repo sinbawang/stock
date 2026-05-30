@@ -1,8 +1,8 @@
 """通用 K 线抓取脚本。
 
 示例:
-    python scripts/fetch_kline.py --symbol 03690 --start 2026-03-03 --end 2026-04-12 --interval day --output data/03690_美团/day/3690_daily.csv
-    python scripts/fetch_kline.py --symbol sz000001 --start 2026-04-01 --end 2026-04-12 --interval 60m --output data/000001_平安银行/60m/sz000001_60m.csv
+    python scripts/fetch_kline.py --symbol 03690 --start 2026-03-03 --end 2026-04-12 --interval day --output data/reports/03690/day/analyze/3690_daily.csv
+    python scripts/fetch_kline.py --symbol sz000001 --start 2026-04-01 --end 2026-04-12 --interval 60m --output data/reports/000001/60m/analyze/sz000001_60m.csv
 """
 
 from __future__ import annotations

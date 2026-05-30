@@ -45,7 +45,7 @@ def _resolve_manual_supplement_path(symbol: str, explicit_path: str | None) -> s
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate a fundamental brief text file under data/_meta.")
+    parser = argparse.ArgumentParser(description="Generate a fundamental brief text file. The per-stock canonical report now lives under reports/<symbol>/base.json.")
     parser.add_argument("symbol", help="Symbol such as 00700 or 601088")
     parser.add_argument("--name", required=True, help="Security name")
     parser.add_argument("--market", choices=["auto", "HK", "CN"], default="auto", help="Market routing")
