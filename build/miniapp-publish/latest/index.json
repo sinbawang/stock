@@ -1,15 +1,15 @@
 {
   "schema_version": "v1",
-  "generated_at": "2026-05-30T22:28:21",
+  "generated_at": "2026-05-31T01:44:07",
   "source_root": "data/reports",
   "markets": [
     "CN",
     "HK"
   ],
   "counts": {
-    "stocks": 14,
+    "stocks": 15,
     "cn": 6,
-    "hk": 8
+    "hk": 9
   },
   "groups": {
     "portfolio": "groups/portfolio.json",
@@ -119,7 +119,7 @@
       "symbol": "00175",
       "name": "吉利汽车",
       "market": "HK",
-      "updated_at": "2026-05-30T20:37:27",
+      "updated_at": "2026-05-31T01:37:16",
       "summary": "stocks/00175/summary.json",
       "detail": "stocks/00175/detail.json",
       "cover_chart": "stocks/00175/charts/60m.jpg",
@@ -212,6 +212,16 @@
         "P5",
         "暂停加仓"
       ]
+    },
+    {
+      "symbol": "09988",
+      "name": "阿里巴巴",
+      "market": "HK",
+      "updated_at": "2026-05-31T01:44:06",
+      "summary": "stocks/09988/summary.json",
+      "detail": "stocks/09988/detail.json",
+      "cover_chart": "stocks/09988/charts/60m.jpg",
+      "tags": []
     }
   ]
 }

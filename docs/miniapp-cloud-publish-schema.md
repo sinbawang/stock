@@ -120,6 +120,40 @@ miniapp-publish/
 
 当前上传脚本默认上传本地 `build/miniapp-publish/latest` 到云端 `miniapp-publish/latest`，并在本地生成 `build/miniapp-publish/cloudbase-upload-manifest.json`。
 
+如果你的目标是“新增一只持仓后，尽快让小程序看到最新结果”，当前推荐直接使用一键总控脚本：
+
+- `scripts/refresh_holdings_publish_to_cloudbase.py`
+
+它会顺序执行三件事：
+
+- 重新生成持仓股 mixed 报告和 60M 结构图
+- 重新构建 `build/miniapp-publish/latest`
+- 上传到 CloudBase 云存储
+
+示例：
+
+```powershell
+$env:CLOUDBASE_ENV_ID="cloudbase-d9gplq92zc1d88ee6"
+$env:CLOUDBASE_REGION="ap-guangzhou"
+$env:CLOUDBASE_APIKEY="<your-api-key>"
+c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloudbase.py --latest-only
+```
+
+如果只想重生某一只股票，例如 `09988`，但仍然重建并发布完整的 `latest`：
+
+```powershell
+$env:CLOUDBASE_ENV_ID="cloudbase-d9gplq92zc1d88ee6"
+$env:CLOUDBASE_REGION="ap-guangzhou"
+$env:CLOUDBASE_APIKEY="<your-api-key>"
+c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloudbase.py --symbols 09988 --latest-only
+```
+
+如果只想验证发布层重建而不上传：
+
+```powershell
+c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloudbase.py --skip-regenerate --skip-upload --latest-only
+```
+
 当前推荐环境变量：
 
 - `CLOUDBASE_ENV_ID` 或 `TCB_ENV_ID`

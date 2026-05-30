@@ -3,7 +3,7 @@
   "symbol": "00175",
   "name": "吉利汽车",
   "market": "HK",
-  "updated_at": "2026-05-30T20:37:27",
+  "updated_at": "2026-05-31T01:37:16",
   "headline": {
     "title": "吉利汽车 00175",
     "subtitle": "三轴综合观察",
@@ -15,7 +15,7 @@
     "summary": "分化：基本面质量较好；60M 技术节奏偏积极；资金面已有覆盖，但尚未形成强确认",
     "bullets": [
       "基本面 65.5/B",
-      "60M 技术面 偏多，允许轻仓试错。",
+      "60M 技术面 missing",
       "资金面 50.5/C"
     ]
   },
@@ -47,8 +47,8 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "xueqiu",
-      "conclusion": "偏多，允许轻仓试错。",
-      "suggestion": "分批试仓，跌破 18.26 则严格止损。",
+      "conclusion": null,
+      "suggestion": null,
       "overview": [
         "时间区间：2026-01-21 14:00 到 2026-05-29 16:00",
         "K线数量：共 504 根 60M K线",

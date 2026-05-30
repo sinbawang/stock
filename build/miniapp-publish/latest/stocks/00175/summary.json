@@ -3,7 +3,7 @@
   "symbol": "00175",
   "name": "吉利汽车",
   "market": "HK",
-  "updated_at": "2026-05-30T20:37:27",
+  "updated_at": "2026-05-31T01:37:16",
   "priority": "P3",
   "action": "等待冲突缓解",
   "bucket": "mixed",
@@ -16,8 +16,8 @@
     },
     "technical": {
       "timeframe": "60m",
-      "conclusion": "偏多，允许轻仓试错。",
-      "suggestion": "分批试仓，跌破 18.26 则严格止损。"
+      "conclusion": null,
+      "suggestion": null
     },
     "capital_flow": {
       "score": 50.5,
