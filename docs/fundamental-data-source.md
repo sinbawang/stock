@@ -14,8 +14,8 @@
 
 看完这份文档后，下一步通常是：
 
-- Python 模型草案: [fundamental-python-model-draft.md](fundamental-python-model-draft.md)
-- 代码目录草案: [fundamental-code-layout-draft.md](fundamental-code-layout-draft.md)
+- Python 模型说明: [fundamental-python-model.md](fundamental-python-model.md)
+- 代码目录说明: [fundamental-code-layout.md](fundamental-code-layout.md)
 
 ## 当前结论
 

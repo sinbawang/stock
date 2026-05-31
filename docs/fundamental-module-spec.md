@@ -1,4 +1,4 @@
-# 基本面模块设计规格 v0.1
+# 基本面模块设计规格
 
 这份文档用于先定义“基本面分析模块要做什么、输入输出是什么、边界在哪里”，作为后续实现代码的依据。
 
@@ -8,10 +8,10 @@
 
 - 字段边界: [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md)
 - 数据源入口: [fundamental-data-source.md](fundamental-data-source.md)
-- Python 模型: [fundamental-python-model-draft.md](fundamental-python-model-draft.md)
-- 代码目录: [fundamental-code-layout-draft.md](fundamental-code-layout-draft.md)
+- Python 模型: [fundamental-python-model.md](fundamental-python-model.md)
+- 代码目录: [fundamental-code-layout.md](fundamental-code-layout.md)
 
-如果后续要开始把这些领域对象落成 Python 类，数据模型草案见 [fundamental-python-model-draft.md](fundamental-python-model-draft.md)。
+如果后续要开始把这些领域对象落成 Python 类，数据模型说明见 [fundamental-python-model.md](fundamental-python-model.md)。
 
 目标不是直接做成全自动财报系统，而是先建立一个可解释、可测试、可扩展的基本面分析骨架，并能和现有缠论技术面分析组合使用。
 

@@ -47,13 +47,13 @@
 - 哪些字段来自主源，哪些字段允许 overlay
 - 哪些港股金融字段当前来自官方披露 fallback，哪些仍来自 `manual supplement`
 
-## 3. 模型与实现草案
+## 3. 模型与实现
 
 再看这组文档，目的是把规则落成更接近代码的对象与目录设计。
 
-- [fundamental-python-model-draft.md](fundamental-python-model-draft.md): `FundamentalSnapshot` / `FundamentalScoreCard` 等对象如何表达
-- [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md): 子模型配置对象如何表达字段策略、维度、风险规则和解释文案
-- [fundamental-code-layout-draft.md](fundamental-code-layout-draft.md): `src/fundamental/` 目录应该如何拆分
+- [fundamental-python-model.md](fundamental-python-model.md): `FundamentalSnapshot` / `FundamentalScoreCard` 等对象如何表达
+- [fundamental-submodel-config.md](fundamental-submodel-config.md): 子模型配置对象如何表达字段策略、维度、风险规则和解释文案
+- [fundamental-code-layout.md](fundamental-code-layout.md): `src/fundamental/` 目录应该如何拆分
 - [fundamental-interim-scoring-interface.md](fundamental-interim-scoring-interface.md): 跨报告期加权评分需要新增哪些对象、服务接口和输出结构
 
 读完这一层后，应该已经能回答：
@@ -63,7 +63,7 @@
 - 数据、校验、评分、报告、服务为什么要分层
 - 为什么报告层现在能直接输出“字段来源警告”和“维度得分计算说明”
 
-补充说明：虽然 [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md) 的名字仍保留“tech”，但当前它实际上已经能帮助理解跨行业注册表和配置对象结构。
+补充说明：[fundamental-submodel-config.md](fundamental-submodel-config.md) 虽然最初从科技子模型文档展开，但当前它已经能帮助理解跨行业注册表和配置对象结构。
 
 ## 4. 路线图与样例
 
@@ -89,9 +89,9 @@
 1. [fundamental-module-spec.md](fundamental-module-spec.md)
 2. [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md)
 3. [fundamental-data-source.md](fundamental-data-source.md)
-4. [fundamental-python-model-draft.md](fundamental-python-model-draft.md)
-5. [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md)
-6. [fundamental-code-layout-draft.md](fundamental-code-layout-draft.md)
+4. [fundamental-python-model.md](fundamental-python-model.md)
+5. [fundamental-submodel-config.md](fundamental-submodel-config.md)
+6. [fundamental-code-layout.md](fundamental-code-layout.md)
 7. [fundamental-roadmap.md](fundamental-roadmap.md)
 8. [fundamental-interim-scoring-design.md](fundamental-interim-scoring-design.md)
 9. [fundamental-interim-scoring-interface.md](fundamental-interim-scoring-interface.md)
@@ -103,15 +103,15 @@
 
 如果只想先知道“现在已经做到哪里”，先看这几条：
 
-- 行业桶已经覆盖：金融、科技、公用事业与新能源运营、数字基础设施、家电消费制造
 - 行业桶已经覆盖：金融、科技、公用事业与新能源运营、数字基础设施、家电消费制造、能源资源
 - 科技子模型已经覆盖：平台互联网、半导体与电子硬科技、工业自动化与智能装备、游戏与数字内容
 - 金融子模型已经覆盖：银行、保险、券商
-- 当前持仓相关映射里：长江电力与太阳能归入 `utility_operator_v1`，中国电信 H 股归入 `digital_infra_v1`，格力电器归入 `home_appliance_v1`，中航科工暂复用 `industrial_automation_v1`
 - 当前代表标的映射里：长江电力与太阳能归入 `utility_operator_v1`，中国电信 H 股归入 `digital_infra_v1`，格力电器归入 `home_appliance_v1`，中航科工暂复用 `industrial_automation_v1`，中国神华挂接到 `energy_resource_v1`
 - 港股与 A 股都已有公共快照抓取入口，并能进入统一评分与报告链路
 - 港股金融 live 已有第一版 fallback 闭环，但仍保留部分 `manual supplement`
-- 当前评分口径仍是“优先年报，缺年报才回退最新报告期”；季报加权评分目前仍处于文档规划阶段，见 [fundamental-interim-scoring-design.md](fundamental-interim-scoring-design.md)
+- 当前评分口径仍是“优先年报，缺年报才回退最新报告期”；在此基础上，CN / HK 都已经新增 blended 年报锚定 + 中间报告刷新服务与报告输出
+- blended 能力当前已落地的数据与服务入口见 `fetch_cn_period_snapshots(...)`、`fetch_hk_period_snapshots(...)`、`fetch_and_analyze_cn_blended_fundamentals(...)`、`fetch_and_analyze_hk_blended_fundamentals(...)`
+- blended CLI 当前已通过 `scripts/generate_fundamental_brief.py` 暴露 `--blended-cn` 与 `--blended-hk` 开关；更细的权重 profile 与指定期别参数仍未在 CLI 层开放
 
 如果想看更细的展开：
 

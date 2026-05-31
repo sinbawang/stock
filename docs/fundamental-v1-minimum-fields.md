@@ -1,4 +1,4 @@
-# 基本面第一版最小字段集 v0.1
+# 基本面第一版最小字段集
 
 这份文档用于回答一个非常具体的问题：
 
@@ -14,8 +14,8 @@
 
 - 上游总规格: [fundamental-module-spec.md](fundamental-module-spec.md)
 - 下游数据源映射: [fundamental-data-source.md](fundamental-data-source.md)
-- 下游 Python 模型: [fundamental-python-model-draft.md](fundamental-python-model-draft.md)
-- 下游配置草案: [fundamental-tech-config-draft.md](fundamental-tech-config-draft.md)
+- 下游 Python 模型: [fundamental-python-model.md](fundamental-python-model.md)
+- 下游配置说明: [fundamental-submodel-config.md](fundamental-submodel-config.md)
 
 ## 1. 使用原则
 

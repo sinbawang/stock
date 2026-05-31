@@ -1,4 +1,4 @@
-# 基本面快照输入样例 v0.1
+# 基本面快照输入样例
 
 这份文档定义当前项目统一采用的标准输入样例口径，目标是冻结字段名、单位和缺失值写法。
 
@@ -28,18 +28,32 @@
   "roe_3y_mean": 17.2,
   "roe_3y_cv": 0.18,
   "dupont_driver": "margin_turnover",
+  "asset_turnover": 0.74,
+  "equity_multiplier": 2.18,
   "gross_margin": 37.1,
+  "gross_margin_trend": "stable_to_up",
   "net_margin": 11.2,
   "revenue_growth": 21.3,
   "net_profit_growth": 33.8,
+  "overseas_revenue_share": null,
   "debt_to_asset": 42.5,
   "current_ratio": 1.68,
   "operating_cashflow_to_profit": 1.12,
   "operating_cashflow_to_profit_history": [1.12, 1.04, 0.96],
   "accounts_receivable_growth": 8.4,
   "inventory_growth": 10.1,
+  "price_war_pressure": null,
   "interest_bearing_debt_growth": 5.3,
   "operating_cashflow_growth": 18.7,
+  "free_cashflow_yield": null,
+  "capex_to_operating_cashflow": null,
+  "unit_cost_position": null,
+  "reserve_life_index": null,
+  "commodity_price_sensitivity": null,
+  "period_type": "annual",
+  "industry": "platform_internet",
+  "notes": null,
+  "raw_payload_ref": null,
   "guidance_attainment": "meet"
 }
 ```
@@ -69,18 +83,28 @@
 - `roe_3y_mean`: 近 3 年平均 ROE
 - `roe_3y_cv`: 近 3 年 ROE 变异系数
 - `dupont_driver`: DuPont 驱动类型
+- `asset_turnover`: 资产周转率
+- `equity_multiplier`: 权益乘数
 - `gross_margin`: 毛利率，百分比口径
+- `gross_margin_trend`: 毛利率趋势标签
 - `net_margin`: 净利率，百分比口径
 - `revenue_growth`: 营收同比增速，百分比口径
 - `net_profit_growth`: 净利润同比增速，百分比口径
+- `overseas_revenue_share`: 海外收入占比，百分比口径
 - `debt_to_asset`: 资产负债率，百分比口径
 - `current_ratio`: 流动比率，倍数口径
 - `operating_cashflow_to_profit`: 经营现金流 / 净利润，倍数口径
 - `operating_cashflow_to_profit_history`: 最近多期经营现金流 / 净利润
 - `accounts_receivable_growth`: 应收同比增速，百分比口径
 - `inventory_growth`: 存货同比增速，百分比口径
+- `price_war_pressure`: 价格战压力标签
 - `interest_bearing_debt_growth`: 有息负债同比增速，百分比口径
 - `operating_cashflow_growth`: 经营现金流同比增速，百分比口径
+- `free_cashflow_yield`: 自由现金流收益率，百分比口径
+- `capex_to_operating_cashflow`: 资本开支 / 经营现金流，倍数口径
+- `unit_cost_position`: 单位成本位置，区间或相对分位口径
+- `reserve_life_index`: 储量寿命指数
+- `commodity_price_sensitivity`: 商品价格敏感度
 - `guidance_attainment`: 指引兑现度，例如 `beat`、`meet`、`miss`
 
 ## 3. 缺失值写法
@@ -155,6 +179,8 @@
 - 银行：`core_tier1_ratio`、`npl_ratio`、`provision_coverage_ratio`、`loan_deposit_growth_gap`、`net_interest_margin`
 - 保险：`solvency_adequacy_ratio`、`combined_ratio`、`investment_return`、`embedded_value_growth`、`new_business_value_growth`
 - 券商：`net_capital_ratio`
+- 汽车制造：`gross_margin_trend`、`overseas_revenue_share`、`price_war_pressure`
+- 能源资源：`free_cashflow_yield`、`capex_to_operating_cashflow`、`unit_cost_position`、`reserve_life_index`、`commodity_price_sensitivity`
 
 这些字段不必出现在所有样例里，但它们已经属于统一快照模型的一部分。
 

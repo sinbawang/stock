@@ -54,16 +54,22 @@
 - [docs/fundamental-industry-layering.md](docs/fundamental-industry-layering.md): 再看行业怎么分层，哪些行业共用主模型
 - [docs/fundamental-tech-submodels.md](docs/fundamental-tech-submodels.md): 再看科技行业子模型的业务规则差异
 - [docs/fundamental-data-source.md](docs/fundamental-data-source.md): 然后看标准快照如何从港股 / A 股公开数据源进入公共层
-- [docs/fundamental-python-model-draft.md](docs/fundamental-python-model-draft.md): 然后看领域模型如何落到 Python 对象
-- [docs/fundamental-tech-config-draft.md](docs/fundamental-tech-config-draft.md): 再看子模型配置对象如何表达评分与解释规则
-- [docs/fundamental-code-layout-draft.md](docs/fundamental-code-layout-draft.md): 最后看代码目录怎么落地到 `src/fundamental/`
+- [docs/fundamental-python-model.md](docs/fundamental-python-model.md): 然后看领域模型当前如何落到 Python 对象
+- [docs/fundamental-submodel-config.md](docs/fundamental-submodel-config.md): 再看子模型配置对象当前如何表达评分与解释规则
+- [docs/fundamental-code-layout.md](docs/fundamental-code-layout.md): 最后看代码目录当前如何落地到 `src/fundamental/`
 
 补充文档：
 
 - [docs/fundamental-roadmap.md](docs/fundamental-roadmap.md): 基本面模块落地路线图
 - [docs/fundamental-snapshot-example.md](docs/fundamental-snapshot-example.md): 基本面标准输入样例
+- [docs/fundamental-interim-scoring-design.md](docs/fundamental-interim-scoring-design.md): 年报锚定 + 季报刷新评分设计
+- [docs/fundamental-interim-scoring-interface.md](docs/fundamental-interim-scoring-interface.md): 跨报告期评分对象与服务接口说明
+- [docs/hk-financial-second-source-plan.md](docs/hk-financial-second-source-plan.md): 港股金融第二数据源与 fallback 方案
 - [docs/combined-analysis-output-spec.md](docs/combined-analysis-output-spec.md): 当前 `plus_60m` 联合文本与微信发送产物规格
 - [docs/combined-analysis-service-interface.md](docs/combined-analysis-service-interface.md): 联合分析链路的公共服务接口说明
+- [docs/miniapp-cloud-publish-schema.md](docs/miniapp-cloud-publish-schema.md): 小程序云存储发布层协议
+- [docs/miniapp-native-agent-prompt.md](docs/miniapp-native-agent-prompt.md): 小程序原生页生成提示词
+- [docs/miniapp-native-agent-prompt-compact.md](docs/miniapp-native-agent-prompt-compact.md): 小程序原生页精简提示词
 - [.github/agents/chanlun-python.agent.md](.github/agents/chanlun-python.agent.md): 项目专用 agent 定义
 
 ## 当前公共入口
@@ -73,10 +79,17 @@
 - 港股分钟线: `chanlun.data.hk_minute_fetcher.fetch_hk_minute_with_policy(...)`
 - 港股基本面快照: `fundamental.data.fetch_hk_fundamental_snapshot(...)`
 - A 股基本面快照: `fundamental.data.fetch_cn_fundamental_snapshot(...)`
+- 港股 blended 基本面: `fundamental.services.fetch_and_analyze_hk_blended_fundamentals(...)`
+- A 股 blended 基本面: `fundamental.services.fetch_and_analyze_cn_blended_fundamentals(...)`
 - 港股抓取并分析: `fundamental.services.fetch_and_analyze_hk_snapshot(...)`
 - A 股抓取并分析: `fundamental.services.fetch_and_analyze_cn_snapshot(...)`
+- A 股资金面抓取并分析: `capital_flow.services.fetch_and_analyze_cn_flow(...)`
+- 港股资金面抓取并分析: `capital_flow.services.fetch_and_analyze_hk_flow(...)`
 - 基本面简报落盘: `fundamental.reporting.save_fundamental_brief(...)`
+- blended 基本面简报落盘: `fundamental.reporting.save_blended_fundamental_brief(...)`
 - 纯文本评分卡落盘: `fundamental.reporting.save_scorecard_text(...)`
+- blended 纯文本评分卡落盘: `fundamental.reporting.save_blended_scorecard_text(...)`
+- 资金面文本评分卡落盘: `capital_flow.reporting.save_capital_flow_text(...)`
 
 对应的数据源约定见：
 
@@ -327,18 +340,53 @@ chanlun-stock/
 │       └── services/           # 基本面分析入口
 │           ├── __init__.py
 │           ├── analyze_snapshot.py
+│           ├── fetch_and_analyze_cn_blended.py
 │           ├── fetch_and_analyze_hk_snapshot.py
-│           └── fetch_and_analyze_cn_snapshot.py
+│           ├── fetch_and_analyze_cn_snapshot.py
+│           ├── fetch_and_analyze_hk_blended.py
+│           └── manual_supplement_loader.py
+│   └── capital_flow/
+│       ├── __init__.py         # 资金面包导出入口
+│       ├── data/               # 资金面数据抓取与标准化
+│       │   ├── __init__.py
+│       │   ├── cn_flow_fetcher.py
+│       │   └── hk_flow_fetcher.py
+│       ├── models/             # 资金面输入输出模型
+│       │   ├── __init__.py
+│       │   ├── common.py
+│       │   ├── scorecard.py
+│       │   └── snapshot.py
+│       ├── scoring/            # 资金面评分规则
+│       │   ├── __init__.py
+│       │   ├── flow_engine.py
+│       │   └── rules.py
+│       ├── reporting/          # 资金面文本报告渲染与保存
+│       │   ├── __init__.py
+│       │   └── text_report.py
+│       └── services/           # 资金面分析入口
+│           ├── __init__.py
+│           ├── analyze_snapshot.py
+│           ├── fetch_and_analyze_cn_flow.py
+│           └── fetch_and_analyze_hk_flow.py
 ├── tests/
 │   ├── conftest.py
-│   ├── test_normalize.py
-│   ├── test_fractal.py
 │   ├── test_bi.py
-│   ├── test_zhongshu.py
-│   ├── test_hk_minute_fetcher.py
+│   ├── test_build_miniapp_publish_bundle.py
+│   ├── test_capital_flow.py
+│   ├── test_combined_a_share_overview.py
+│   ├── test_fractal.py
 │   ├── test_fundamental.py
 │   ├── test_fundamental_data_source.py
+│   ├── test_generate_a_share_single_mixed_report.py
+│   ├── test_generate_h_share_single_compact_report.py
+│   ├── test_generate_h_share_single_mixed_report.py
+│   ├── test_hk_minute_fetcher.py
+│   ├── test_h_share_combined_overview.py
+│   ├── test_h_share_daily_overview.py
+│   ├── test_housekeep_generated_reports.py
 │   ├── test_integration.py
+│   ├── test_normalize.py
+│   ├── test_storage_layout.py
 │   └── test_wechat.py
 ├── docs/
 │   ├── chanlun-rule-spec.md         # 缠论规则规格
@@ -350,10 +398,19 @@ chanlun-stock/
 │   ├── fundamental-snapshot-example.md  # 基本面标准输入样例
 │   ├── fundamental-v1-minimum-fields.md # 基本面第一版最小字段集
 │   ├── fundamental-industry-layering.md # 基本面行业分层规则
+│   ├── fundamental-interim-scoring-design.md # 季报刷新评分设计
+│   ├── fundamental-interim-scoring-interface.md # 季报刷新接口草案
 │   ├── fundamental-tech-submodels.md    # 科技行业子模型
-│   ├── fundamental-tech-config-draft.md # 科技子模型代码配置草案
-│   ├── fundamental-python-model-draft.md # 基本面 Python 数据模型草案
-│   └── fundamental-code-layout-draft.md # 基本面代码目录草案
+│   ├── fundamental-submodel-config.md # 子模型代码配置说明
+│   ├── fundamental-python-model.md # 基本面 Python 数据模型说明
+│   ├── fundamental-code-layout.md   # 基本面代码目录说明
+│   ├── hk-financial-second-source-plan.md # 港股金融 fallback 方案
+│   ├── capital-flow-module-spec.md   # 资金面模块规格
+│   ├── combined-analysis-output-spec.md # 联合分析输出规格
+│   ├── combined-analysis-service-interface.md # 联合分析服务接口
+│   ├── miniapp-cloud-publish-schema.md # 小程序发布协议
+│   ├── miniapp-native-agent-prompt.md # 小程序原生提示词
+│   └── miniapp-native-agent-prompt-compact.md # 小程序精简提示词
 ├── pyproject.toml
 ├── requirements.txt
 └── README.md
