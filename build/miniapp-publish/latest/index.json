@@ -1,15 +1,15 @@
 {
   "schema_version": "v1",
-  "generated_at": "2026-05-31T01:44:07",
+  "generated_at": "2026-05-31T23:49:09",
   "source_root": "data/reports",
   "markets": [
     "CN",
     "HK"
   ],
   "counts": {
-    "stocks": 15,
+    "stocks": 16,
     "cn": 6,
-    "hk": 9
+    "hk": 10
   },
   "groups": {
     "portfolio": "groups/portfolio.json",
@@ -207,6 +207,20 @@
       "summary": "stocks/03690/summary.json",
       "detail": "stocks/03690/detail.json",
       "cover_chart": "stocks/03690/charts/60m.jpg",
+      "tags": [
+        "cautious",
+        "P5",
+        "暂停加仓"
+      ]
+    },
+    {
+      "symbol": "06088",
+      "name": "鸿腾精密",
+      "market": "HK",
+      "updated_at": "2026-05-31T23:28:58",
+      "summary": "stocks/06088/summary.json",
+      "detail": "stocks/06088/detail.json",
+      "cover_chart": "stocks/06088/charts/60m.jpg",
       "tags": [
         "cautious",
         "P5",

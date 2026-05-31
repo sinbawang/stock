@@ -3,7 +3,7 @@
   "group": "portfolio",
   "generated_at": "2026-05-30T20:05:52",
   "counts": {
-    "items": 14
+    "items": 15
   },
   "sections": [
     {
@@ -163,6 +163,17 @@
           "technical": "偏弱，先观望。",
           "capital_flow": "52.5/C/mixed(net_buy+holding.cache)",
           "comment": "谨慎：基本面偏弱；60M 技术节奏偏弱；资金面已有覆盖，但尚未形成强确认"
+        },
+        {
+          "priority": "P5",
+          "action": "暂停加仓",
+          "symbol": "06088",
+          "name": "鸿腾精密",
+          "bucket": "cautious",
+          "fundamental": "46.5/C",
+          "technical": "信号一般，保持耐心。",
+          "capital_flow": "61.5/C/eastmoney.hk_connect_components+eastmoney.southbound_net_buy",
+          "comment": "谨慎：基本面偏弱；资金面已有覆盖，但尚未形成强确认"
         }
       ]
     }
