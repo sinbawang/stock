@@ -1,0 +1,218 @@
+{
+  "report_type": "fundamental",
+  "symbol": "06088",
+  "name": "鸿腾精密",
+  "generated_at": "2026-05-31T23:28:46",
+  "summary": {
+    "score": 46.47,
+    "rating": "C",
+    "submodel": "semiconductor_hardtech_v1",
+    "freshness_label": "annual_only",
+    "comment": "当前仍仅使用 2025-12-31 年报锚定分，尚未纳入更新的中间报告期刷新层。"
+  },
+  "blended": {
+    "symbol": "06088",
+    "name": "鸿腾精密",
+    "market": "HK",
+    "submodel_id": "semiconductor_hardtech_v1",
+    "annual_anchor": {
+      "snapshot": {
+        "symbol": "06088",
+        "name": "鸿腾精密",
+        "market": "HK",
+        "report_period": "2025-12-31",
+        "currency": "HKD",
+        "source": "eastmoney+akshare",
+        "updated_at": "2026-05-31T23:28:46.004332",
+        "market_cap": null,
+        "pe_ttm": 53.524914668081,
+        "pe_percentile_5y": 116.0,
+        "pb": 3.121856431835,
+        "ps_ttm": 1.669675602035,
+        "peg": 35.3458,
+        "dividend_yield": null,
+        "roe": 6.061863166432,
+        "roe_3y_mean": 5.9074,
+        "roe_3y_cv": 0.0628,
+        "dupont_driver": "mixed",
+        "asset_turnover": 0.8803,
+        "equity_multiplier": 2.2076,
+        "gross_margin": 18.902453,
+        "gross_margin_trend": "weakening",
+        "net_margin": 3.1194,
+        "revenue_growth": 12.3853474811,
+        "net_profit_growth": 1.5143236281,
+        "overseas_revenue_share": null,
+        "debt_to_asset": 54.7012491575,
+        "current_ratio": 1.368766058619,
+        "operating_cashflow_to_profit": 1.711,
+        "operating_cashflow_to_profit_history": [
+          1.711,
+          1.6452,
+          4.4478
+        ],
+        "accounts_receivable_growth": 0.00889023,
+        "inventory_growth": 0.12613822,
+        "price_war_pressure": null,
+        "interest_bearing_debt_growth": 14.5518,
+        "operating_cashflow_growth": 3.229,
+        "free_cashflow_yield": null,
+        "capex_to_operating_cashflow": 1.5743,
+        "unit_cost_position": null,
+        "reserve_life_index": null,
+        "commodity_price_sensitivity": null,
+        "capital_adequacy_ratio": null,
+        "core_tier1_ratio": null,
+        "npl_ratio": null,
+        "provision_coverage_ratio": null,
+        "loan_deposit_growth_gap": null,
+        "net_interest_margin": null,
+        "solvency_adequacy_ratio": null,
+        "combined_ratio": null,
+        "investment_return": null,
+        "embedded_value_growth": null,
+        "new_business_value_growth": null,
+        "net_capital_ratio": null,
+        "guidance_attainment": null,
+        "period_type": "annual",
+        "industry": null,
+        "notes": null,
+        "raw_payload_ref": "eastmoney-hk:06088:2025-12-31"
+      },
+      "scorecard": {
+        "symbol": "06088",
+        "name": "鸿腾精密",
+        "market": "HK",
+        "report_period": "2025-12-31",
+        "industry_bucket": "technology",
+        "submodel_id": "semiconductor_hardtech_v1",
+        "submodel_version": "v1",
+        "total_score": 46.47,
+        "rating": "C",
+        "red_flag": false,
+        "dimension_scores": [
+          {
+            "dimension": "growth_and_cycle",
+            "score": 8.37,
+            "weight": 25,
+            "max_score": 25.0,
+            "score_basis": "已计分2/2项[营收增速 12.39->61.9, 净利增速 1.51->5.0]; 平均=33.5; ×25/100=8.37",
+            "used_metrics": [
+              "revenue_growth",
+              "net_profit_growth"
+            ],
+            "missing_metrics": [
+              "order_backlog_growth"
+            ],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Growth should be interpreted with order and cycle signals.",
+              "Missing metrics: order_backlog_growth"
+            ]
+          },
+          {
+            "dimension": "profit_quality",
+            "score": 13.0,
+            "weight": 25,
+            "max_score": 25.0,
+            "score_basis": "已计分5/5项[ROE 6.06->0.0, ROE波动CV 0.06->100.0, 经营现金流/利润 1.71->100.0, 杜邦驱动 混合驱动->60.0, 毛利率趋势 承压->0.0]; 平均=52.0; ×25/100=13.00",
+            "used_metrics": [
+              "roe",
+              "roe_3y_cv",
+              "operating_cashflow_to_profit",
+              "gross_margin",
+              "dupont_driver"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Use common quality rules with margin explanation."
+            ]
+          },
+          {
+            "dimension": "operating_and_inventory_cycle",
+            "score": 25.1,
+            "weight": 30,
+            "max_score": 30.0,
+            "score_basis": "已计分3/3项[应收压力差 -12.38->100.0, 库存压力差 -12.26->100.0, 资产负债率 54.70->51.0]; 平均=83.7; ×30/100=25.10",
+            "used_metrics": [
+              "inventory_growth",
+              "accounts_receivable_growth",
+              "revenue_growth"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "First version uses relative operating-pressure scoring."
+            ]
+          },
+          {
+            "dimension": "valuation_fit",
+            "score": 0.0,
+            "weight": 20,
+            "max_score": 20.0,
+            "score_basis": "已计分2/2项[PE分位 116.00->0.0, PEG 35.35->0.0]; 平均=0.0; ×20/100=0.00",
+            "used_metrics": [
+              "pe_percentile_5y",
+              "peg"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "PEG is optional in the first version."
+            ]
+          }
+        ],
+        "strengths": [
+          "库存与应收压力可控，经营质量暂未出现明显失真。"
+        ],
+        "risks": [
+          "景气与成长支撑偏弱，当前增长仍需更多周期信号确认。",
+          "估值匹配偏弱，当前估值分位对景气持续性要求较高。"
+        ],
+        "warnings": [],
+        "focus_questions": [
+          "收入增长是否伴随库存和应收同步失真",
+          "周期位置是否支持当前估值分位",
+          "利润改善是否已经被现金流验证"
+        ],
+        "missing_metrics": [
+          "order_backlog_growth",
+          "capacity_utilization",
+          "capex_growth",
+          "wafer_price_trend",
+          "inventory_growth_history",
+          "accounts_receivable_growth_history",
+          "order_backlog_history"
+        ],
+        "triggered_rules": [],
+        "combined_comment": "当前综合评级为 C，硬科技基本面仍需结合周期继续跟踪。当前最需要跟踪的是景气与成长支撑偏弱，当前增长仍需更多周期信号确认。主要亮点是库存与应收压力可控，经营质量暂未出现明显失真。"
+      },
+      "assumptions": [
+        "pe_percentile_5y uses Eastmoney valuation comparison TTM PE percentile as a proxy.",
+        "operating_cashflow_to_profit is computed as Eastmoney operating cashflow / holder profit.",
+        "gross_margin_trend is derived from Eastmoney HK annual gross profit ratio history.",
+        "Eastmoney HK dividend payout rows are available, but the latest plan text does not expose an explicit dividend yield percentage."
+      ],
+      "warnings": []
+    },
+    "interim_overlay": null,
+    "annual_weight": 1.0,
+    "interim_weight": 0.0,
+    "blended_total_score": 46.47,
+    "blended_rating": "C",
+    "freshness_label": "annual_only",
+    "warnings": [],
+    "assumptions": [
+      "pe_percentile_5y uses Eastmoney valuation comparison TTM PE percentile as a proxy.",
+      "operating_cashflow_to_profit is computed as Eastmoney operating cashflow / holder profit.",
+      "gross_margin_trend is derived from Eastmoney HK annual gross profit ratio history.",
+      "Eastmoney HK dividend payout rows are available, but the latest plan text does not expose an explicit dividend yield percentage."
+    ],
+    "combined_comment": "当前仍仅使用 2025-12-31 年报锚定分，尚未纳入更新的中间报告期刷新层。"
+  }
+}

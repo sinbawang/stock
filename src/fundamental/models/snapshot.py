@@ -75,6 +75,7 @@ class FundamentalSnapshot(BaseModel):
     guidance_attainment: Optional[GuidanceAttainment] = None
 
     period_type: Optional[str] = None
+    period_label: Optional[str] = None
     industry: Optional[str] = None
     notes: Optional[str] = None
     raw_payload_ref: Optional[str] = None

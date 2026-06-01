@@ -279,6 +279,16 @@ def _select_hk_analysis_rows(
     raise ValueError(f"Unsupported HK report_period_preference: {report_period_preference}")
 
 
+def _hk_period_label(date_type_code: object) -> str:
+    code = str(date_type_code or "").strip()
+    return {
+        "001": "年报",
+        "002": "中报",
+        "003": "一季报",
+        "004": "三季报",
+    }.get(code, "中间报告期")
+
+
 def _fetch_geely_latest_annual_report_pdf_url() -> str:
     _clear_proxy_env()
     session = requests.Session()
@@ -1022,6 +1032,7 @@ def fetch_hk_fundamental_snapshot(
         accounts_receivable_growth=_build_balance_metric_growth(balance_df, "004002003"),
         inventory_growth=_build_balance_metric_growth(balance_df, "004002001"),
         period_type=period_type,
+        period_label=_hk_period_label(latest.get("DATE_TYPE_CODE")),
         raw_payload_ref=f"eastmoney-hk:{code}:{pd.Timestamp(latest['REPORT_DATE']).date().isoformat()}",
     )
 

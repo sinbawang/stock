@@ -386,6 +386,13 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def copy_optional_json_asset(source_path: Path, target_path: Path) -> None:
+    if not source_path.exists():
+        return
+    payload = read_json(source_path)
+    write_json(target_path, payload)
+
+
 def copy_chart_assets(chart_specs: list[dict[str, str]], stock_target_dir: Path) -> None:
     for chart in chart_specs:
         source_path = Path(chart["source_path"])
@@ -467,11 +474,13 @@ def generate_bundle(holdings_path: Path, reports_root: Path, publish_root: Path,
         stock_dir = reports_root / holding.symbol
         if not stock_dir.exists():
             continue
+        base_source_path = stock_dir / "base.json"
         summary_payload = build_summary_payload(holding, stock_dir, group_item_map.get(holding.symbol))
         detail_payload, chart_specs = build_detail_payload(holding, stock_dir, group_item_map.get(holding.symbol))
         summary_payloads.append(summary_payload)
         for target in targets:
             stock_target_dir = target / "stocks" / holding.symbol
+            copy_optional_json_asset(base_source_path, stock_target_dir / "base.json")
             write_json(stock_target_dir / "summary.json", summary_payload)
             write_json(stock_target_dir / "detail.json", detail_payload)
             copy_chart_assets(chart_specs, stock_target_dir)

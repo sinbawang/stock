@@ -1,0 +1,612 @@
+{
+  "report_type": "fundamental",
+  "symbol": "03690",
+  "name": "美团",
+  "generated_at": "2026-06-02T00:58:29",
+  "summary": {
+    "score": 23.18,
+    "rating": "D",
+    "submodel": "platform_internet_v1",
+    "freshness_label": "q1_refresh",
+    "comment": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+  },
+  "blended": {
+    "symbol": "03690",
+    "name": "美团",
+    "market": "HK",
+    "submodel_id": "platform_internet_v1",
+    "annual_anchor": {
+      "snapshot": {
+        "symbol": "03690",
+        "name": "美团",
+        "market": "HK",
+        "report_period": "2025-12-31",
+        "currency": "HKD",
+        "source": "eastmoney+akshare",
+        "updated_at": "2026-06-02T00:58:28.907014",
+        "market_cap": null,
+        "pe_ttm": -10.860589468118,
+        "pe_percentile_5y": 47.0,
+        "pb": 2.845208407814,
+        "ps_ttm": 1.168073849267,
+        "peg": null,
+        "dividend_yield": null,
+        "roe": -14.429641537815,
+        "roe_3y_mean": 3.8138,
+        "roe_3y_cv": 4.7836,
+        "dupont_driver": null,
+        "asset_turnover": null,
+        "equity_multiplier": 2.2976,
+        "gross_margin": 30.42543,
+        "gross_margin_trend": "weakening",
+        "net_margin": -6.4012,
+        "revenue_growth": 8.0757850427,
+        "net_profit_growth": -165.2243925722,
+        "overseas_revenue_share": null,
+        "debt_to_asset": 56.4763972979,
+        "current_ratio": 1.821710666589,
+        "operating_cashflow_to_profit": 0.5915,
+        "operating_cashflow_to_profit_history": [
+          0.5915,
+          1.596
+        ],
+        "accounts_receivable_growth": 0.2524208,
+        "inventory_growth": 0.73721833,
+        "price_war_pressure": null,
+        "interest_bearing_debt_growth": 312.4228,
+        "operating_cashflow_growth": -124.1746,
+        "free_cashflow_yield": null,
+        "capex_to_operating_cashflow": 0.9676,
+        "unit_cost_position": null,
+        "reserve_life_index": null,
+        "commodity_price_sensitivity": null,
+        "capital_adequacy_ratio": null,
+        "core_tier1_ratio": null,
+        "npl_ratio": null,
+        "provision_coverage_ratio": null,
+        "loan_deposit_growth_gap": null,
+        "net_interest_margin": null,
+        "solvency_adequacy_ratio": null,
+        "combined_ratio": null,
+        "investment_return": null,
+        "embedded_value_growth": null,
+        "new_business_value_growth": null,
+        "net_capital_ratio": null,
+        "guidance_attainment": null,
+        "period_type": "annual",
+        "period_label": "年报",
+        "industry": null,
+        "notes": null,
+        "raw_payload_ref": "eastmoney-hk:03690:2025-12-31"
+      },
+      "scorecard": {
+        "symbol": "03690",
+        "name": "美团",
+        "market": "HK",
+        "report_period": "2025-12-31",
+        "industry_bucket": "technology",
+        "submodel_id": "platform_internet_v1",
+        "submodel_version": "v1",
+        "total_score": 19.77,
+        "rating": "D",
+        "red_flag": false,
+        "dimension_scores": [
+          {
+            "dimension": "profit_quality",
+            "score": 0.0,
+            "weight": 35,
+            "max_score": 35.0,
+            "score_basis": "已计分4/5项[ROE -14.43->0.0, ROE波动CV 4.78->0.0, 经营现金流/利润 0.59->0.0, 毛利率趋势 承压->0.0]; 平均=0.0; 缺失[杜邦驱动 NA]; ×35/100=0.00",
+            "used_metrics": [
+              "roe",
+              "roe_3y_cv",
+              "operating_cashflow_to_profit"
+            ],
+            "missing_metrics": [
+              "dupont_driver"
+            ],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Use common quality rules.",
+              "Missing metrics: dupont_driver"
+            ]
+          },
+          {
+            "dimension": "growth_delivery",
+            "score": 5.05,
+            "weight": 25,
+            "max_score": 25.0,
+            "score_basis": "已计分2/3项[营收增速 8.08->40.4, 净利增速 -165.22->0.0]; 平均=20.2; 缺失[指引兑现 NA]; ×25/100=5.05",
+            "used_metrics": [
+              "revenue_growth",
+              "net_profit_growth"
+            ],
+            "missing_metrics": [
+              "guidance_attainment"
+            ],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Use common growth rules with higher weight.",
+              "Missing metrics: guidance_attainment"
+            ]
+          },
+          {
+            "dimension": "cashflow_and_operating_efficiency",
+            "score": 0.0,
+            "weight": 20,
+            "max_score": 20.0,
+            "score_basis": "已计分1/1项[经营现金流/利润 0.59->0.0]; 平均=0.0; ×20/100=0.00",
+            "used_metrics": [
+              "operating_cashflow_to_profit"
+            ],
+            "missing_metrics": [
+              "deferred_revenue_growth",
+              "user_growth",
+              "arpu_growth",
+              "marketing_expense_ratio"
+            ],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "First version relies mainly on cashflow conversion.",
+              "Missing metrics: deferred_revenue_growth, user_growth, arpu_growth, marketing_expense_ratio"
+            ]
+          },
+          {
+            "dimension": "valuation_fit",
+            "score": 14.72,
+            "weight": 20,
+            "max_score": 20.0,
+            "score_basis": "已计分1/2项[PE分位 47.00->73.6]; 平均=73.6; 缺失[PEG NA]; ×20/100=14.72",
+            "used_metrics": [
+              "pe_percentile_5y"
+            ],
+            "missing_metrics": [
+              "peg"
+            ],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Use common valuation rules.",
+              "Missing metrics: peg"
+            ]
+          }
+        ],
+        "strengths": [],
+        "risks": [
+          "平台盈利质量偏弱，利润稳定性或现金流兑现存在压力。",
+          "平台增长兑现偏弱，营收扩张尚未充分转化为利润。",
+          "平台现金流兑现偏弱，经营效率仍需进一步验证。"
+        ],
+        "warnings": [],
+        "focus_questions": [
+          "增长有没有兑现成利润",
+          "利润有没有兑现成现金流",
+          "当前估值是否仍要求高增长持续"
+        ],
+        "missing_metrics": [
+          "dupont_driver",
+          "guidance_attainment",
+          "deferred_revenue_growth",
+          "user_growth",
+          "arpu_growth",
+          "marketing_expense_ratio",
+          "peg"
+        ],
+        "triggered_rules": [],
+        "combined_comment": "当前综合评级为 D，平台基本面整体处于可跟踪区间。主要亮点是平台经营质量与增长兑现暂时保持在可跟踪区间。当前最需要跟踪的是平台盈利质量偏弱，利润稳定性或现金流兑现存在压力。"
+      },
+      "assumptions": [
+        "pe_percentile_5y uses Eastmoney valuation comparison TTM PE percentile as a proxy.",
+        "operating_cashflow_to_profit is computed as Eastmoney operating cashflow / holder profit.",
+        "PEG is omitted because current TTM PE or net profit growth is non-positive or unavailable.",
+        "gross_margin_trend is derived from Eastmoney HK annual gross profit ratio history.",
+        "HK dividend payout supplement fetch failed: 'NoneType' object has no attribute 'get'.",
+        "Runtime relaxation: PEG is treated as optional because current TTM PE makes PEG unavailable."
+      ],
+      "warnings": []
+    },
+    "interim_overlay": {
+      "snapshot": {
+        "symbol": "03690",
+        "name": "美团",
+        "market": "HK",
+        "report_period": "2026-03-31",
+        "currency": "HKD",
+        "source": "eastmoney+akshare",
+        "updated_at": "2026-06-02T00:58:29.630226",
+        "market_cap": null,
+        "pe_ttm": -10.860589468118,
+        "pe_percentile_5y": 47.0,
+        "pb": 2.845208407814,
+        "ps_ttm": 1.168073849267,
+        "peg": null,
+        "dividend_yield": null,
+        "roe": -4.536705062537,
+        "roe_3y_mean": -1.1757,
+        "roe_3y_cv": 4.2196,
+        "dupont_driver": null,
+        "asset_turnover": null,
+        "equity_multiplier": 2.4479,
+        "gross_margin": 28.526345,
+        "gross_margin_trend": "weakening",
+        "net_margin": -7.4994,
+        "revenue_growth": 5.6060516336,
+        "net_profit_growth": -167.8883508685,
+        "overseas_revenue_share": null,
+        "debt_to_asset": 59.1478257533,
+        "current_ratio": 1.996751022859,
+        "operating_cashflow_to_profit": 1.0274,
+        "operating_cashflow_to_profit_history": [
+          1.0274,
+          null,
+          1.4302
+        ],
+        "accounts_receivable_growth": 0.08812875,
+        "inventory_growth": 0.13572119,
+        "price_war_pressure": null,
+        "interest_bearing_debt_growth": 557.3549,
+        "operating_cashflow_growth": -147.0618,
+        "free_cashflow_yield": null,
+        "capex_to_operating_cashflow": 0.8052,
+        "unit_cost_position": null,
+        "reserve_life_index": null,
+        "commodity_price_sensitivity": null,
+        "capital_adequacy_ratio": null,
+        "core_tier1_ratio": null,
+        "npl_ratio": null,
+        "provision_coverage_ratio": null,
+        "loan_deposit_growth_gap": null,
+        "net_interest_margin": null,
+        "solvency_adequacy_ratio": null,
+        "combined_ratio": null,
+        "investment_return": null,
+        "embedded_value_growth": null,
+        "new_business_value_growth": null,
+        "net_capital_ratio": null,
+        "guidance_attainment": null,
+        "period_type": "report",
+        "period_label": "一季报",
+        "industry": null,
+        "notes": null,
+        "raw_payload_ref": "eastmoney-hk:03690:2026-03-31"
+      },
+      "components": [
+        {
+          "component": "growth_refresh",
+          "score": 14.0151,
+          "weight": 0.4,
+          "covered_metrics": [
+            "revenue_growth",
+            "net_profit_growth"
+          ],
+          "missing_metrics": [],
+          "note": "平台业务季报刷新先看收入与利润兑现。"
+        },
+        {
+          "component": "cashflow_refresh",
+          "score": 89.152,
+          "weight": 0.35,
+          "covered_metrics": [
+            "operating_cashflow_to_profit"
+          ],
+          "missing_metrics": [],
+          "note": "为降低中间报告期噪音，优先用经营现金流/利润历史均值确认变现质量。"
+        },
+        {
+          "component": "profit_quality_refresh",
+          "score": 0.0,
+          "weight": 0.25,
+          "covered_metrics": [
+            "roe"
+          ],
+          "missing_metrics": [],
+          "note": "为降低中间报告期失真，优先用年化 ROE 近似维持平台盈利质量刷新。"
+        }
+      ],
+      "overlay_score": 36.81,
+      "rating_hint": "D",
+      "covered_metrics": [
+        "revenue_growth",
+        "net_profit_growth",
+        "operating_cashflow_to_profit",
+        "roe"
+      ],
+      "missing_metrics": [],
+      "drivers_positive": [
+        "cashflow_refresh"
+      ],
+      "drivers_negative": [
+        "growth_refresh",
+        "profit_quality_refresh"
+      ],
+      "assumptions": [],
+      "warnings": []
+    },
+    "annual_weight": 0.8,
+    "interim_weight": 0.2,
+    "blended_total_score": 23.18,
+    "blended_rating": "D",
+    "freshness_label": "q1_refresh",
+    "warnings": [
+      "当前基本面评分基于 2026-03-31 的一季报口径，不要直接与年报口径标的横向比较。"
+    ],
+    "assumptions": [
+      "pe_percentile_5y uses Eastmoney valuation comparison TTM PE percentile as a proxy.",
+      "operating_cashflow_to_profit is computed as Eastmoney operating cashflow / holder profit.",
+      "PEG is omitted because current TTM PE or net profit growth is non-positive or unavailable.",
+      "gross_margin_trend is derived from Eastmoney HK annual gross profit ratio history.",
+      "HK dividend payout supplement fetch failed: 'NoneType' object has no attribute 'get'.",
+      "Runtime relaxation: PEG is treated as optional because current TTM PE makes PEG unavailable.",
+      "pe_percentile_5y uses Eastmoney valuation comparison TTM PE percentile as a proxy.",
+      "operating_cashflow_to_profit is computed as Eastmoney operating cashflow / holder profit.",
+      "HK interim snapshot selects the latest non-annual report period 2026-03-31 when available.",
+      "PEG is omitted because current TTM PE or net profit growth is non-positive or unavailable.",
+      "gross_margin_trend is derived from Eastmoney HK interim gross profit ratio history.",
+      "HK dividend payout supplement fetch failed: 'NoneType' object has no attribute 'get'."
+    ],
+    "combined_comment": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+  },
+  "presentation": {
+    "periods": {
+      "annual": "2025-12-31",
+      "annual_label": "年报",
+      "interim": "2026-03-31",
+      "interim_label": "一季报"
+    },
+    "summary": {
+      "score": 23.18,
+      "rating": "D",
+      "red_flag": false,
+      "annual_anchor_score": 19.77,
+      "annual_anchor_rating": "D",
+      "annual_anchor_label": "年报",
+      "interim_overlay_score": 36.81,
+      "interim_overlay_rating": "D",
+      "interim_overlay_label": "一季报",
+      "annual_weight": 0.8,
+      "interim_weight": 0.2,
+      "freshness_label": "q1_refresh",
+      "comment": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+    },
+    "red_flag": {
+      "triggered": false,
+      "rules": []
+    },
+    "current_missing_fields": [
+      "dupont_driver",
+      "guidance_attainment",
+      "deferred_revenue_growth",
+      "user_growth",
+      "arpu_growth",
+      "marketing_expense_ratio",
+      "peg"
+    ],
+    "annual_dimensions": [
+      {
+        "dimension": "profit_quality",
+        "title": "盈利质量",
+        "score": 0.0,
+        "weight": 35,
+        "max_score": 35.0,
+        "red_flag": false,
+        "formula": "已计分4/5项[ROE -14.43->0.0, ROE波动CV 4.78->0.0, 经营现金流/利润 0.59->0.0, 毛利率趋势 承压->0.0]; 平均=0.0; 不适用[杜邦驱动: ROE或净利率为负]; ×35/100=0.00",
+        "covered_metrics": [
+          {
+            "name": "roe",
+            "label": "ROE",
+            "value": -14.429641537815
+          },
+          {
+            "name": "roe_3y_cv",
+            "label": "ROE波动CV",
+            "value": 4.7836
+          },
+          {
+            "name": "operating_cashflow_to_profit",
+            "label": "经营现金流/利润",
+            "value": 0.5915
+          }
+        ],
+        "missing_metrics": [
+          {
+            "name": "dupont_driver",
+            "label": "杜邦驱动",
+            "value": null
+          }
+        ],
+        "passed_rules": [],
+        "failed_rules": [],
+        "notes": [
+          "Use common quality rules.",
+          "Missing metrics: dupont_driver"
+        ]
+      },
+      {
+        "dimension": "growth_delivery",
+        "title": "成长兑现",
+        "score": 5.05,
+        "weight": 25,
+        "max_score": 25.0,
+        "red_flag": false,
+        "formula": "已计分2/3项[营收增速 8.08->40.4, 净利增速 -165.22->0.0]; 平均=20.2; 缺失[指引兑现 NA]; ×25/100=5.05",
+        "covered_metrics": [
+          {
+            "name": "revenue_growth",
+            "label": "营收增速",
+            "value": 8.0757850427
+          },
+          {
+            "name": "net_profit_growth",
+            "label": "净利增速",
+            "value": -165.2243925722
+          }
+        ],
+        "missing_metrics": [
+          {
+            "name": "guidance_attainment",
+            "label": "指引兑现",
+            "value": null
+          }
+        ],
+        "passed_rules": [],
+        "failed_rules": [],
+        "notes": [
+          "Use common growth rules with higher weight.",
+          "Missing metrics: guidance_attainment"
+        ]
+      },
+      {
+        "dimension": "cashflow_and_operating_efficiency",
+        "title": "现金流与运营效率",
+        "score": 0.0,
+        "weight": 20,
+        "max_score": 20.0,
+        "red_flag": false,
+        "formula": "已计分1/1项[经营现金流/利润 0.59->0.0]; 平均=0.0; ×20/100=0.00",
+        "covered_metrics": [
+          {
+            "name": "operating_cashflow_to_profit",
+            "label": "经营现金流/利润",
+            "value": 0.5915
+          }
+        ],
+        "missing_metrics": [
+          {
+            "name": "deferred_revenue_growth",
+            "label": "递延收入增长",
+            "value": null
+          },
+          {
+            "name": "user_growth",
+            "label": "用户增长",
+            "value": null
+          },
+          {
+            "name": "arpu_growth",
+            "label": "ARPU增长",
+            "value": null
+          },
+          {
+            "name": "marketing_expense_ratio",
+            "label": "营销费用率",
+            "value": null
+          }
+        ],
+        "passed_rules": [],
+        "failed_rules": [],
+        "notes": [
+          "First version relies mainly on cashflow conversion.",
+          "Missing metrics: deferred_revenue_growth, user_growth, arpu_growth, marketing_expense_ratio"
+        ]
+      },
+      {
+        "dimension": "valuation_fit",
+        "title": "估值匹配",
+        "score": 14.72,
+        "weight": 20,
+        "max_score": 20.0,
+        "red_flag": false,
+        "formula": "已计分1/2项[PE分位 47.00->73.6]; 平均=73.6; 不适用[PEG: PE或净利增速为负]; ×20/100=14.72",
+        "covered_metrics": [
+          {
+            "name": "pe_percentile_5y",
+            "label": "5年PE分位",
+            "value": 47.0
+          }
+        ],
+        "missing_metrics": [
+          {
+            "name": "peg",
+            "label": "PEG",
+            "value": null
+          }
+        ],
+        "passed_rules": [],
+        "failed_rules": [],
+        "notes": [
+          "Use common valuation rules.",
+          "Missing metrics: peg"
+        ]
+      }
+    ],
+    "interim_components": [
+      {
+        "component": "growth_refresh",
+        "title": "成长刷新",
+        "score": 14.0151,
+        "weight": 0.4,
+        "weighted_score": 5.606,
+        "formula": "覆盖指标均值刷新",
+        "covered_metrics": [
+          {
+            "name": "revenue_growth",
+            "label": "营收增速",
+            "value": 5.6060516336
+          },
+          {
+            "name": "net_profit_growth",
+            "label": "净利增速",
+            "value": -167.8883508685
+          }
+        ],
+        "missing_metrics": [],
+        "note": "平台业务季报刷新先看收入与利润兑现。"
+      },
+      {
+        "component": "cashflow_refresh",
+        "title": "现金流刷新",
+        "score": 89.152,
+        "weight": 0.35,
+        "weighted_score": 31.2032,
+        "formula": "单指标刷新",
+        "covered_metrics": [
+          {
+            "name": "operating_cashflow_to_profit",
+            "label": "经营现金流/利润",
+            "value": 1.0274
+          }
+        ],
+        "missing_metrics": [],
+        "note": "为降低中间报告期噪音，优先用经营现金流/利润历史均值确认变现质量。"
+      },
+      {
+        "component": "profit_quality_refresh",
+        "title": "盈利质量刷新",
+        "score": 0.0,
+        "weight": 0.25,
+        "weighted_score": 0.0,
+        "formula": "单指标刷新",
+        "covered_metrics": [
+          {
+            "name": "roe",
+            "label": "ROE",
+            "value": -4.536705062537
+          }
+        ],
+        "missing_metrics": [],
+        "note": "为降低中间报告期失真，优先用年化 ROE 近似维持平台盈利质量刷新。"
+      }
+    ],
+    "warnings": [
+      "当前基本面评分基于 2026-03-31 的一季报口径，不要直接与年报口径标的横向比较。"
+    ],
+    "assumptions": [
+      "pe_percentile_5y uses Eastmoney valuation comparison TTM PE percentile as a proxy.",
+      "operating_cashflow_to_profit is computed as Eastmoney operating cashflow / holder profit.",
+      "PEG is omitted because current TTM PE or net profit growth is non-positive or unavailable.",
+      "gross_margin_trend is derived from Eastmoney HK annual gross profit ratio history.",
+      "HK dividend payout supplement fetch failed: 'NoneType' object has no attribute 'get'.",
+      "Runtime relaxation: PEG is treated as optional because current TTM PE makes PEG unavailable.",
+      "pe_percentile_5y uses Eastmoney valuation comparison TTM PE percentile as a proxy.",
+      "operating_cashflow_to_profit is computed as Eastmoney operating cashflow / holder profit.",
+      "HK interim snapshot selects the latest non-annual report period 2026-03-31 when available.",
+      "PEG is omitted because current TTM PE or net profit growth is non-positive or unavailable.",
+      "gross_margin_trend is derived from Eastmoney HK interim gross profit ratio history.",
+      "HK dividend payout supplement fetch failed: 'NoneType' object has no attribute 'get'."
+    ],
+    "base_text_path": "C:\\sandbox\\sinba\\stock\\data\\reports\\03690\\base.txt"
+  }
+}

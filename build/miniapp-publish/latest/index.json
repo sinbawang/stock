@@ -1,6 +1,6 @@
 {
   "schema_version": "v1",
-  "generated_at": "2026-06-01T23:30:18",
+  "generated_at": "2026-06-02T00:58:46",
   "source_root": "data/reports",
   "markets": [
     "CN",
@@ -21,7 +21,7 @@
       "symbol": "03690",
       "name": "美团",
       "market": "HK",
-      "updated_at": "2026-06-01T23:30:18",
+      "updated_at": "2026-06-02T00:58:46",
       "summary": "stocks/03690/summary.json",
       "detail": "stocks/03690/detail.json",
       "cover_chart": "stocks/03690/charts/60m.jpg",
@@ -41,7 +41,7 @@
       "symbol": "09988",
       "name": "阿里巴巴",
       "market": "HK",
-      "updated_at": "2026-06-01T23:27:04",
+      "updated_at": "2026-06-02T00:12:38.065816",
       "summary": "stocks/09988/summary.json",
       "detail": "stocks/09988/detail.json",
       "cover_chart": "stocks/09988/charts/60m.jpg",

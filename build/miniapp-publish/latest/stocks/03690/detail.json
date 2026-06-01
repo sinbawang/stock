@@ -3,7 +3,7 @@
   "symbol": "03690",
   "name": "美团",
   "market": "HK",
-  "updated_at": "2026-06-01T23:30:18",
+  "updated_at": "2026-06-02T00:58:46",
   "headline": {
     "title": "美团 03690",
     "subtitle": "三轴综合观察",
@@ -73,7 +73,7 @@
       "title": "资金面",
       "rating": "C",
       "score": 52.5,
-      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover",
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
       "trade_date": "2026-05-28",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [

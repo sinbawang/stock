@@ -40,6 +40,20 @@ class BlendedHkFundamentalAnalysis:
     warnings: tuple[str, ...] = ()
 
 
+def _compose_hk_blended_comment(
+    annual_anchor: AnnualAnchorScore,
+    interim_overlay: Optional[InterimOverlayScore],
+    annual_weight: float,
+    interim_weight: float,
+) -> str:
+    if interim_overlay is None:
+        return (
+            f"当前仍仅使用 {annual_anchor.snapshot.report_period.isoformat()} 年报锚定分，"
+            "尚未纳入最近季报刷新层。"
+        )
+    return _compose_blended_comment(annual_anchor, interim_overlay, annual_weight, interim_weight)
+
+
 def _analyze_hk_fetched_snapshot(
     fetched,
     *,
@@ -143,7 +157,7 @@ def fetch_and_analyze_hk_blended_fundamentals(
         freshness_label=freshness_label,
         warnings=combined_warnings,
         assumptions=combined_assumptions,
-        combined_comment=_compose_blended_comment(annual_anchor, interim_overlay, annual_weight, interim_weight),
+        combined_comment=_compose_hk_blended_comment(annual_anchor, interim_overlay, annual_weight, interim_weight),
     )
 
     return BlendedHkFundamentalAnalysis(

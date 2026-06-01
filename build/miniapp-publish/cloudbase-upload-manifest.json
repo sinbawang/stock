@@ -4,8 +4,8 @@
   "region": "ap-shanghai",
   "source_dir": "C:\\sandbox\\sinba\\stock\\build\\miniapp-publish\\latest",
   "cloud_prefix": "miniapp-publish/latest",
-  "uploaded_at": "2026-06-01T15:30:22Z",
-  "file_count": 11,
+  "uploaded_at": "2026-06-01T16:58:51Z",
+  "file_count": 14,
   "index": {
     "relative_path": "index.json",
     "cloud_path": "miniapp-publish/latest/index.json",
@@ -23,8 +23,15 @@
       "relative_path": "index.json",
       "cloud_path": "miniapp-publish/latest/index.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/index.json",
-      "size": 1278,
-      "sha256": "6061b106c068902ef2688ba1b207c4d27c93e6afb18be14b79c9cf0a3797d7b1"
+      "size": 1285,
+      "sha256": "b52e4fd5170caaa8c61083cbf6938de9419a6e9068137a0e8ae5987d7b233334"
+    },
+    {
+      "relative_path": "stocks/03690/base.json",
+      "cloud_path": "miniapp-publish/latest/stocks/03690/base.json",
+      "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/03690/base.json",
+      "size": 22230,
+      "sha256": "d0777ce5ca8cc18e5c202b9e880e130b1a832b070ffef2c824802159e6402e5a"
     },
     {
       "relative_path": "stocks/03690/charts/60m.jpg",
@@ -37,15 +44,22 @@
       "relative_path": "stocks/03690/detail.json",
       "cloud_path": "miniapp-publish/latest/stocks/03690/detail.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/03690/detail.json",
-      "size": 3626,
-      "sha256": "edc5295fc4cf99242d2a6eb278027885b735a465535b060974718d78fd5e36d5"
+      "size": 3632,
+      "sha256": "2cd85b4ac4f021e0194aeffc013277461262e7fb61c537a1af1830ad48c95e6c"
     },
     {
       "relative_path": "stocks/03690/summary.json",
       "cloud_path": "miniapp-publish/latest/stocks/03690/summary.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/03690/summary.json",
-      "size": 1037,
-      "sha256": "6bd145e4f4b96a6bcb81db983961ef679f4354a62a59d5e3d0162a3c3fa73339"
+      "size": 1043,
+      "sha256": "d9fc613bd0f9be2d59441c317d87f143846de5cd9fa46fd9e2acb2a33eb83778"
+    },
+    {
+      "relative_path": "stocks/06088/base.json",
+      "cloud_path": "miniapp-publish/latest/stocks/06088/base.json",
+      "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/06088/base.json",
+      "size": 8504,
+      "sha256": "9fb608bc8449555703dada44e62db4068b0cd0588503488289b97122e00ae17a"
     },
     {
       "relative_path": "stocks/06088/charts/60m.jpg",
@@ -69,6 +83,13 @@
       "sha256": "dbb571ec3671f8df5fab801032d2177682ee7257730d8487b5965485eb0c938d"
     },
     {
+      "relative_path": "stocks/09988/base.json",
+      "cloud_path": "miniapp-publish/latest/stocks/09988/base.json",
+      "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/09988/base.json",
+      "size": 15043,
+      "sha256": "e7f13f7720c124ffa7de3dc56a25a28f0638e259b38459da47bcc312a297e0d7"
+    },
+    {
       "relative_path": "stocks/09988/charts/60m.jpg",
       "cloud_path": "miniapp-publish/latest/stocks/09988/charts/60m.jpg",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/09988/charts/60m.jpg",
@@ -79,15 +100,15 @@
       "relative_path": "stocks/09988/detail.json",
       "cloud_path": "miniapp-publish/latest/stocks/09988/detail.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/09988/detail.json",
-      "size": 3681,
-      "sha256": "42b1aa957bb99226b8d8a9deb78caf9fd7c5fc1405772a651e58a71833750e29"
+      "size": 3570,
+      "sha256": "7ee94fc68cce7c8d7925b2d6ad4fb41b49074fd1f8cd614f7a488b51c98ae378"
     },
     {
       "relative_path": "stocks/09988/summary.json",
       "cloud_path": "miniapp-publish/latest/stocks/09988/summary.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/09988/summary.json",
-      "size": 1055,
-      "sha256": "69022718481f3156c78ac7c61cc2a566aa9ffd938ea28b6b8707974c9b2da4cb"
+      "size": 1145,
+      "sha256": "36faddac86e949df5096bbdee79095a6df67e4ba2a83eeedd7e836a73b00ed38"
     }
   ]
 }

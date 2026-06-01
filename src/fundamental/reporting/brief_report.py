@@ -418,6 +418,10 @@ def _format_component_name(name: str) -> str:
     return INTERIM_COMPONENT_LABELS.get(name, name.replace("_", " ").title())
 
 
+def _snapshot_period_label(snapshot: FundamentalSnapshot, fallback: str) -> str:
+    return str(snapshot.period_label or fallback)
+
+
 def _build_interim_calculation_lines(
     components: Sequence[OverlayComponent],
     snapshot: FundamentalSnapshot,
@@ -556,6 +560,12 @@ def render_blended_fundamental_brief(
     annual_anchor = blended.annual_anchor
     interim_overlay = blended.interim_overlay
     annual_scorecard = annual_anchor.scorecard
+    annual_label = _snapshot_period_label(annual_anchor.snapshot, "年报")
+    interim_label = (
+        _snapshot_period_label(interim_overlay.snapshot, "中间报告期")
+        if interim_overlay is not None
+        else "中间报告期"
+    )
     strengths = _normalize_items(annual_scorecard.strengths)
     risks = _normalize_items(annual_scorecard.risks)
     warnings = _normalize_items(list(blended.warnings))
@@ -569,43 +579,43 @@ def render_blended_fundamental_brief(
         f"时间: {generated.strftime('%Y-%m-%d %H:%M')}",
         f"标的: {blended.name}({blended.symbol})",
         "报告期:",
-        f"- 年报: {annual_anchor.snapshot.report_period.isoformat()}",
+        f"- {annual_label}: {annual_anchor.snapshot.report_period.isoformat()}",
         (
-            f"- 季报: {interim_overlay.snapshot.report_period.isoformat()}"
+            f"- {interim_label}: {interim_overlay.snapshot.report_period.isoformat()}"
             if interim_overlay is not None
-            else "- 季报: 暂无"
+            else f"- {interim_label}: 暂无"
         ),
         "评分概览:",
         f"- 评级: {blended.blended_rating}",
         f"- 总分: {blended.blended_total_score:.2f}",
     ]
-    lines.append(f"- 年报锚定分: {annual_scorecard.total_score:.2f} ({annual_scorecard.rating})。")
+    lines.append(f"- {annual_label}锚定分: {annual_scorecard.total_score:.2f} ({annual_scorecard.rating})。")
     if interim_overlay is None:
-        lines.append("- 季报刷新层: 暂无更新的中间报告期。")
+        lines.append(f"- {interim_label}刷新层: 暂无更新的中间报告期。")
     else:
         lines.append(
-            f"- 季报刷新层: {interim_overlay.overlay_score:.2f} ({interim_overlay.rating_hint or 'NA'})。"
+            f"- {interim_label}刷新层: {interim_overlay.overlay_score:.2f} ({interim_overlay.rating_hint or 'NA'})。"
         )
     lines.extend(
         [
-            f"- 年报权重: {blended.annual_weight:.0%}",
-            f"- 季报权重: {blended.interim_weight:.0%}",
+            f"- {annual_label}权重: {blended.annual_weight:.0%}",
+            f"- {interim_label}权重: {blended.interim_weight:.0%}",
             f"- 子模型: {blended.submodel_id}",
             f"- 刷新标签: {blended.freshness_label}",
         ]
     )
 
-    lines.extend(["", "年报维度结论:"])
+    lines.extend(["", f"{annual_label}维度结论:"])
     lines.extend(
         f"- {_format_dimension_name(dimension.dimension)} {dimension.score:.2f}/{dimension.weight:.2f}。"
         for dimension in annual_scorecard.dimension_scores
     )
     annual_calculation_lines = _build_dimension_calculation_lines(annual_scorecard, annual_anchor.snapshot)
     if annual_calculation_lines:
-        lines.extend(["", "年报维度分计算:", *annual_calculation_lines])
+        lines.extend(["", f"{annual_label}维度分计算:", *annual_calculation_lines])
 
     if interim_overlay is not None:
-        lines.extend(["", "季报刷新层拆解:"])
+        lines.extend(["", f"{interim_label}刷新层拆解:"])
         lines.extend(_build_overlay_coverage_lines(interim_overlay, blended.submodel_id))
         for component in interim_overlay.components:
             lines.append(_render_interim_breakdown_line(component))
@@ -614,7 +624,7 @@ def render_blended_fundamental_brief(
             interim_overlay.snapshot,
         )
         if interim_calculation_lines:
-            lines.extend(["", "季报维度分计算:", *interim_calculation_lines])
+            lines.extend(["", f"{interim_label}维度分计算:", *interim_calculation_lines])
 
     if strengths:
         lines.extend(["", "亮点:"])
@@ -640,7 +650,7 @@ def render_blended_fundamental_brief(
     )
     dupont_lines = _dupont_summary_block_lines(annual_anchor.snapshot, excluded_metrics=covered_metrics)
     if supplemental_lines or dupont_lines:
-        lines.extend(["", "年报补充指标:"])
+        lines.extend(["", f"{annual_label}补充指标:"])
         lines.extend(supplemental_lines)
         lines.extend(dupont_lines)
 
