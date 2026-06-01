@@ -3,7 +3,7 @@
   "symbol": "06088",
   "name": "鸿腾精密",
   "market": "HK",
-  "updated_at": "2026-05-31T23:28:58",
+  "updated_at": "2026-06-02T02:02:48",
   "headline": {
     "title": "鸿腾精密 06088",
     "subtitle": "三轴综合观察",
@@ -12,10 +12,10 @@
     "bucket": null
   },
   "overview": {
-    "summary": "信号一般，保持耐心。",
+    "summary": "当前综合评级为 C，硬科技基本面仍需结合周期继续跟踪。当前最需要跟踪的是景气与成长支撑偏弱，当前增长仍需更多周期信号确认。主要亮点是库存与应收压力可控，经营质量暂未出现明显失真。",
     "bullets": [
       "基本面 46.47/C",
-      "60M 技术面 信号一般，保持耐心。",
+      "60M 技术面 missing",
       "资金面 61.5/C"
     ]
   },
@@ -46,32 +46,35 @@
       "key": "technical",
       "title": "技术面",
       "timeframe": "60m",
-      "source": "akshare",
-      "conclusion": "信号一般，保持耐心。",
-      "suggestion": "只做跟踪，不做主观重仓下注。",
+      "source": "xueqiu",
+      "conclusion": null,
+      "suggestion": null,
       "overview": [
-        "时间区间：2026-04-28 10:30 到 2026-05-29 16:00",
-        "K线数量：共 132 根 60M K线",
-        "中枢数量：当前识别到 0 个中枢"
+        "时间区间：2026-01-22 14:00 到 2026-06-01 16:00",
+        "K线数量：共 504 根 60M K线",
+        "中枢数量：当前识别到 3 个中枢",
+        "最新中枢：6.78-7.58，覆盖 03-23 16:00 到 05-11 14:00"
       ],
       "structure": [
-        "最新确认向上笔：04-29 10:30 到 05-11 13:30，高点 10.18",
-        "最新确认向下笔：05-11 13:30 到 05-20 14:30，低点 8.36"
+        "最新确认向上笔：05-20 15:00 到 05-29 10:30，高点 9.53",
+        "未确认向下笔：05-29 10:30 到 05-29 16:00，低点 8.89"
       ],
       "signals": [
         "顶背驰：无",
         "底背驰：无",
-        "买点：当前无确认一二三类买点",
+        "买点：buy_3",
         "卖点：当前无确认一二三类卖点"
       ],
-      "focus": []
+      "focus": [
+        "观察重点：是否重新站回中枢 6.78-7.58，以及后续一笔是否形成有效突破"
+      ]
     },
     {
       "key": "capital_flow",
       "title": "资金面",
       "rating": "C",
       "score": 61.5,
-      "source": "eastmoney.hk_connect_components+eastmoney.southbound_net_buy",
+      "source": "eastmoney.hk_connect_components.cache+eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
       "trade_date": "2026-05-29",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [
@@ -89,6 +92,10 @@
         {
           "label": "南向净买入",
           "value": "-361876350.0"
+        },
+        {
+          "label": "沽空比例",
+          "value": "13.233279581512852"
         }
       ]
     }

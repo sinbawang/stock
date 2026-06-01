@@ -1,0 +1,338 @@
+{
+  "report_type": "fundamental",
+  "symbol": "000591",
+  "name": "太阳能",
+  "generated_at": "2026-06-02T01:50:35",
+  "summary": {
+    "score": 46.24,
+    "rating": "C",
+    "submodel": "utility_operator_v1",
+    "freshness_label": "q1_refresh",
+    "comment": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+  },
+  "blended": {
+    "symbol": "000591",
+    "name": "太阳能",
+    "market": "CN",
+    "submodel_id": "utility_operator_v1",
+    "annual_anchor": {
+      "snapshot": {
+        "symbol": "000591",
+        "name": "太阳能",
+        "market": "CN",
+        "report_period": "2025-12-31",
+        "currency": "CNY",
+        "source": "ths+baidu",
+        "updated_at": "2026-06-02T01:50:32.576899",
+        "market_cap": 231.17,
+        "pe_ttm": 32.23,
+        "pe_percentile_5y": 99.6714,
+        "pb": 0.96,
+        "ps_ttm": null,
+        "peg": null,
+        "dividend_yield": 2.0441,
+        "roe": 3.47,
+        "roe_3y_mean": 5.27,
+        "roe_3y_cv": 0.2789,
+        "dupont_driver": "mixed",
+        "asset_turnover": 0.0964,
+        "equity_multiplier": 2.1687,
+        "gross_margin": 46.58,
+        "gross_margin_trend": "improving",
+        "net_margin": 16.6028,
+        "revenue_growth": -17.91,
+        "net_profit_growth": -32.87,
+        "overseas_revenue_share": null,
+        "debt_to_asset": 53.89,
+        "current_ratio": 1.95,
+        "operating_cashflow_to_profit": 5.0246,
+        "operating_cashflow_to_profit_history": [
+          5.0246,
+          1.5422,
+          1.506
+        ],
+        "accounts_receivable_growth": -0.07651491,
+        "inventory_growth": -0.40589513,
+        "price_war_pressure": null,
+        "interest_bearing_debt_growth": 7.987,
+        "operating_cashflow_growth": 118.722,
+        "free_cashflow_yield": 1.1953,
+        "capex_to_operating_cashflow": 0.9332,
+        "unit_cost_position": null,
+        "reserve_life_index": null,
+        "commodity_price_sensitivity": null,
+        "capital_adequacy_ratio": null,
+        "core_tier1_ratio": null,
+        "npl_ratio": null,
+        "provision_coverage_ratio": null,
+        "loan_deposit_growth_gap": null,
+        "net_interest_margin": null,
+        "solvency_adequacy_ratio": null,
+        "combined_ratio": null,
+        "investment_return": null,
+        "embedded_value_growth": null,
+        "new_business_value_growth": null,
+        "net_capital_ratio": null,
+        "guidance_attainment": null,
+        "period_type": "annual",
+        "period_label": null,
+        "industry": null,
+        "notes": null,
+        "raw_payload_ref": "ths-cn:000591:2025-12-31"
+      },
+      "scorecard": {
+        "symbol": "000591",
+        "name": "太阳能",
+        "market": "CN",
+        "report_period": "2025-12-31",
+        "industry_bucket": "utility",
+        "submodel_id": "utility_operator_v1",
+        "submodel_version": "v1",
+        "total_score": 44.95,
+        "rating": "D",
+        "red_flag": false,
+        "dimension_scores": [
+          {
+            "dimension": "profit_quality",
+            "score": 13.0,
+            "weight": 25,
+            "max_score": 25.0,
+            "score_basis": "已计分5/5项[ROE 3.47->0.0, ROE波动CV 0.28->0.0, 经营现金流/利润 5.02->100.0, 杜邦驱动 混合驱动->60.0, 毛利率趋势 改善->100.0]; 平均=52.0; ×25/100=13.00",
+            "used_metrics": [
+              "roe",
+              "roe_3y_cv",
+              "operating_cashflow_to_profit"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Utilities should first be read through profitability stability and cashflow conversion."
+            ]
+          },
+          {
+            "dimension": "cashflow_and_operating_efficiency",
+            "score": 25.0,
+            "weight": 25,
+            "max_score": 25.0,
+            "score_basis": "已计分1/1项[经营现金流/利润 5.02->100.0]; 平均=100.0; ×25/100=25.00",
+            "used_metrics": [
+              "operating_cashflow_to_profit",
+              "operating_cashflow_to_profit_history"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Cashflow conversion and payout sustainability are the main v1 anchors."
+            ]
+          },
+          {
+            "dimension": "growth_delivery",
+            "score": 0.0,
+            "weight": 20,
+            "max_score": 20.0,
+            "score_basis": "已计分2/2项[营收增速 -17.91->0.0, 净利增速 -32.87->0.0]; 平均=0.0; ×20/100=0.00",
+            "used_metrics": [
+              "revenue_growth",
+              "net_profit_growth",
+              "debt_to_asset"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Utilities still need modest growth support, but it is secondary to cashflow and payout quality."
+            ]
+          },
+          {
+            "dimension": "yield_and_valuation",
+            "score": 6.95,
+            "weight": 30,
+            "max_score": 30.0,
+            "score_basis": "已计分2/2项[股息率 2.04->46.1, PE分位 99.67->0.3]; 平均=23.2; ×30/100=6.95",
+            "used_metrics": [
+              "dividend_yield",
+              "pe_percentile_5y"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Dividend yield plus PE percentile is more informative than the financial PB rubric for mature power assets."
+            ]
+          }
+        ],
+        "strengths": [
+          "公用事业现金流兑现较好，分红与经营效率具备一定支撑。"
+        ],
+        "risks": [
+          "公用事业增长兑现偏弱，稳健经营之外的增量支撑仍需确认。",
+          "股息率与估值分位保护偏弱，当前防御型安全边际并不充分。"
+        ],
+        "warnings": [],
+        "focus_questions": [
+          "现金流与分红能力能否继续支撑当前估值",
+          "负债表韧性是否足以穿越电价或来水波动",
+          "公用事业属性之外是否还有稳定增长支撑"
+        ],
+        "missing_metrics": [
+          "notes"
+        ],
+        "triggered_rules": [],
+        "combined_comment": "当前综合评级为 D，公用事业与新能源运营基本面仍应围绕现金流、分红与负债表持续跟踪。当前最需要跟踪的是公用事业增长兑现偏弱，稳健经营之外的增量支撑仍需确认。主要亮点是公用事业现金流兑现较好，分红与经营效率具备一定支撑。"
+      },
+      "assumptions": [
+        "pe_percentile_5y uses Baidu valuation history percentile over the recent five-year window.",
+        "A-share snapshot uses THS financial abstract/debt/cash tables as the primary public source.",
+        "A-share snapshot prefers the latest annual report period across abstract and detailed statements when annual rows are available.",
+        "gross_margin_trend is derived from THS A-share abstract gross margin history.",
+        "PEG is omitted because current TTM PE or net profit growth is non-positive or unavailable.",
+        "A-share daily price fetch for dividend_yield fallback failed: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response')).",
+        "A-share dividend_yield is derived from CNInfo cash dividend records over the trailing 12 months and a current price proxy when Eastmoney analysis indicators omit the field."
+      ],
+      "warnings": []
+    },
+    "interim_overlay": {
+      "snapshot": {
+        "symbol": "000591",
+        "name": "太阳能",
+        "market": "CN",
+        "report_period": "2026-03-31",
+        "currency": "CNY",
+        "source": "ths+baidu",
+        "updated_at": "2026-06-02T01:50:34.998406",
+        "market_cap": 231.17,
+        "pe_ttm": 32.23,
+        "pe_percentile_5y": 99.6714,
+        "pb": 0.96,
+        "ps_ttm": null,
+        "peg": null,
+        "dividend_yield": 2.0274,
+        "roe": 0.77,
+        "roe_3y_mean": 2.98,
+        "roe_3y_cv": 0.5508,
+        "dupont_driver": "mixed",
+        "asset_turnover": 0.0195,
+        "equity_multiplier": 2.2894,
+        "gross_margin": 42.91,
+        "gross_margin_trend": "weakening",
+        "net_margin": 17.2479,
+        "revenue_growth": -18.4,
+        "net_profit_growth": -36.51,
+        "overseas_revenue_share": null,
+        "debt_to_asset": 56.32,
+        "current_ratio": 1.88,
+        "operating_cashflow_to_profit": 0.1304,
+        "operating_cashflow_to_profit_history": [
+          0.1304,
+          5.0246,
+          2.7351
+        ],
+        "accounts_receivable_growth": -0.07651491,
+        "inventory_growth": -0.40589513,
+        "price_war_pressure": null,
+        "interest_bearing_debt_growth": 6.563,
+        "operating_cashflow_growth": -99.4213,
+        "free_cashflow_yield": -2.5312,
+        "capex_to_operating_cashflow": 25.4607,
+        "unit_cost_position": null,
+        "reserve_life_index": null,
+        "commodity_price_sensitivity": null,
+        "capital_adequacy_ratio": null,
+        "core_tier1_ratio": null,
+        "npl_ratio": null,
+        "provision_coverage_ratio": null,
+        "loan_deposit_growth_gap": null,
+        "net_interest_margin": null,
+        "solvency_adequacy_ratio": null,
+        "combined_ratio": null,
+        "investment_return": null,
+        "embedded_value_growth": null,
+        "new_business_value_growth": null,
+        "net_capital_ratio": null,
+        "guidance_attainment": null,
+        "period_type": "report",
+        "period_label": null,
+        "industry": null,
+        "notes": null,
+        "raw_payload_ref": "ths-cn:000591:2026-03-31"
+      },
+      "components": [
+        {
+          "component": "growth_refresh",
+          "score": 0.0,
+          "weight": 0.35,
+          "covered_metrics": [
+            "revenue_growth",
+            "net_profit_growth"
+          ],
+          "missing_metrics": [],
+          "note": null
+        },
+        {
+          "component": "cashflow_refresh",
+          "score": 100.0,
+          "weight": 0.4,
+          "covered_metrics": [
+            "operating_cashflow_to_profit"
+          ],
+          "missing_metrics": [],
+          "note": "为降低 Q1 季节性噪音，优先用经营现金流/利润历史均值做刷新。"
+        },
+        {
+          "component": "resilience_refresh",
+          "score": 45.6,
+          "weight": 0.25,
+          "covered_metrics": [
+            "debt_to_asset"
+          ],
+          "missing_metrics": [],
+          "note": null
+        }
+      ],
+      "overlay_score": 51.4,
+      "rating_hint": "C",
+      "covered_metrics": [
+        "revenue_growth",
+        "net_profit_growth",
+        "operating_cashflow_to_profit",
+        "debt_to_asset"
+      ],
+      "missing_metrics": [],
+      "drivers_positive": [
+        "cashflow_refresh"
+      ],
+      "drivers_negative": [
+        "growth_refresh"
+      ],
+      "assumptions": [],
+      "warnings": []
+    },
+    "annual_weight": 0.8,
+    "interim_weight": 0.2,
+    "blended_total_score": 46.24,
+    "blended_rating": "C",
+    "freshness_label": "q1_refresh",
+    "warnings": [
+      "当前基本面评分基于 2026-03-31 的一季报口径，不要直接与年报口径标的横向比较。"
+    ],
+    "assumptions": [
+      "pe_percentile_5y uses Baidu valuation history percentile over the recent five-year window.",
+      "A-share snapshot uses THS financial abstract/debt/cash tables as the primary public source.",
+      "A-share snapshot prefers the latest annual report period across abstract and detailed statements when annual rows are available.",
+      "gross_margin_trend is derived from THS A-share abstract gross margin history.",
+      "PEG is omitted because current TTM PE or net profit growth is non-positive or unavailable.",
+      "A-share daily price fetch for dividend_yield fallback failed: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response')).",
+      "A-share dividend_yield is derived from CNInfo cash dividend records over the trailing 12 months and a current price proxy when Eastmoney analysis indicators omit the field.",
+      "pe_percentile_5y uses Baidu valuation history percentile over the recent five-year window.",
+      "A-share snapshot uses THS financial abstract/debt/cash tables as the primary public source.",
+      "A-share interim snapshot selects the latest non-annual report period when available.",
+      "gross_margin_trend is derived from THS A-share abstract gross margin history.",
+      "PEG is omitted because current TTM PE or net profit growth is non-positive or unavailable.",
+      "A-share daily price fetch for dividend_yield fallback failed: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response')).",
+      "A-share dividend_yield is derived from CNInfo cash dividend records over the trailing 12 months and a current price proxy when Eastmoney analysis indicators omit the field."
+    ],
+    "combined_comment": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+  }
+}

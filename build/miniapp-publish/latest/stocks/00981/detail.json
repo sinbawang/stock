@@ -1,0 +1,103 @@
+{
+  "schema_version": "v1",
+  "symbol": "00981",
+  "name": "中芯国际",
+  "market": "HK",
+  "updated_at": "2026-06-02T01:53:01",
+  "headline": {
+    "title": "中芯国际 00981",
+    "subtitle": "三轴综合观察",
+    "priority": null,
+    "action": null,
+    "bucket": null
+  },
+  "overview": {
+    "summary": "当前综合评级为 A，硬科技基本面仍需结合周期继续跟踪。当前最需要跟踪的是后续库存、应收与景气节奏能否继续匹配当前评分。主要亮点是景气与成长匹配较好，当前增长没有明显脱离周期支撑。",
+    "bullets": [
+      "基本面 80.7/A",
+      "60M 技术面 missing",
+      "资金面 69.5/B"
+    ]
+  },
+  "sections": [
+    {
+      "key": "fundamental",
+      "title": "基本面",
+      "rating": "A",
+      "score": 80.7,
+      "submodel": "semiconductor_hardtech_v1",
+      "report_period": "2025-12-31",
+      "summary": "当前综合评级为 A，硬科技基本面仍需结合周期继续跟踪。当前最需要跟踪的是后续库存、应收与景气节奏能否继续匹配当前评分。主要亮点是景气与成长匹配较好，当前增长没有明显脱离周期支撑。",
+      "highlights": [
+        "景气与成长匹配较好，当前增长没有明显脱离周期支撑。",
+        "库存与应收压力可控，经营质量暂未出现明显失真。"
+      ],
+      "risks": [],
+      "follow_ups": [
+        "收入增长是否伴随库存和应收同步失真",
+        "周期位置是否支持当前估值分位",
+        "利润改善是否已经被现金流验证"
+      ],
+      "warnings": []
+    },
+    {
+      "key": "technical",
+      "title": "技术面",
+      "timeframe": "60m",
+      "source": "xueqiu",
+      "conclusion": null,
+      "suggestion": null,
+      "overview": [
+        "时间区间：2026-01-22 14:00 到 2026-06-01 16:00",
+        "K线数量：共 504 根 60M K线",
+        "中枢数量：当前识别到 2 个中枢",
+        "最新中枢：52.80-52.90，覆盖 03-23 15:00 到 04-20 11:30"
+      ],
+      "structure": [
+        "最新确认向上笔：04-29 10:30 到 05-06 10:30，高点 79.40",
+        "最新确认向下笔：05-06 10:30 到 05-19 11:30，低点 65.20"
+      ],
+      "signals": [
+        "顶背驰：无",
+        "底背驰：无",
+        "买点：buy_3",
+        "卖点：当前无确认一二三类卖点"
+      ],
+      "focus": [
+        "观察重点：是否重新站回中枢 52.80-52.90，以及后续一笔是否形成有效突破"
+      ]
+    },
+    {
+      "key": "capital_flow",
+      "title": "资金面",
+      "rating": "B",
+      "score": 69.5,
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
+      "trade_date": "2026-06-01",
+      "summary": "资金面信号中性，暂不构成强确认。",
+      "strengths": [
+        "关键资金指标出现净流入",
+        "多日窗口资金净流入",
+        "5日与10日资金方向一致为正"
+      ],
+      "risks": [],
+      "warnings": [
+        "资金面部分指标缺失，评分只反映已取得字段"
+      ],
+      "metrics": [
+        {
+          "label": "南向净买入",
+          "value": "96044050.0"
+        }
+      ]
+    }
+  ],
+  "charts": [
+    {
+      "timeframe": "60m",
+      "path": "stocks/00981/charts/60m.jpg",
+      "label": "60M 结构图"
+    }
+  ],
+  "disclaimer": "本页面仅用于持仓跟踪与研究，不构成投资建议。"
+}

@@ -2,7 +2,7 @@
   "report_type": "fundamental",
   "symbol": "09988",
   "name": "阿里巴巴",
-  "generated_at": "2026-06-02T00:12:38.065816",
+  "generated_at": "2026-06-02T02:02:50",
   "summary": {
     "score": 44.99,
     "rating": "D",
@@ -23,7 +23,7 @@
         "report_period": "2026-03-31",
         "currency": "HKD",
         "source": "eastmoney+akshare",
-        "updated_at": "2026-06-02T00:12:38.065816",
+        "updated_at": "2026-06-02T02:02:49.807232",
         "market_cap": null,
         "pe_ttm": 20.088742473519,
         "pe_percentile_5y": 25.0,

@@ -1,0 +1,37 @@
+{
+  "schema_version": "v1",
+  "symbol": "00728",
+  "name": "中国电信",
+  "market": "HK",
+  "updated_at": "2026-06-02T01:53:18",
+  "priority": null,
+  "action": null,
+  "bucket": null,
+  "comment": "资金面存在风险信号，技术面结论需要降低确认度。",
+  "cards": {
+    "fundamental": {
+      "score": 71.51,
+      "rating": "B",
+      "summary": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+    },
+    "technical": {
+      "timeframe": "60m",
+      "conclusion": null,
+      "suggestion": null
+    },
+    "capital_flow": {
+      "score": 52.5,
+      "rating": "C",
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
+      "summary": "资金面存在风险信号，技术面结论需要降低确认度。"
+    }
+  },
+  "cover_chart": {
+    "timeframe": "60m",
+    "path": "stocks/00728/charts/60m.jpg"
+  },
+  "jump": {
+    "detail": "stocks/00728/detail.json"
+  },
+  "tags": []
+}

@@ -1,0 +1,37 @@
+{
+  "schema_version": "v1",
+  "symbol": "00981",
+  "name": "中芯国际",
+  "market": "HK",
+  "updated_at": "2026-06-02T01:53:01",
+  "priority": null,
+  "action": null,
+  "bucket": null,
+  "comment": "资金面信号中性，暂不构成强确认。",
+  "cards": {
+    "fundamental": {
+      "score": 80.7,
+      "rating": "A",
+      "summary": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+    },
+    "technical": {
+      "timeframe": "60m",
+      "conclusion": null,
+      "suggestion": null
+    },
+    "capital_flow": {
+      "score": 69.5,
+      "rating": "B",
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
+      "summary": "资金面信号中性，暂不构成强确认。"
+    }
+  },
+  "cover_chart": {
+    "timeframe": "60m",
+    "path": "stocks/00981/charts/60m.jpg"
+  },
+  "jump": {
+    "detail": "stocks/00981/detail.json"
+  },
+  "tags": []
+}

@@ -1,0 +1,345 @@
+{
+  "report_type": "fundamental",
+  "symbol": "601328",
+  "name": "交通银行",
+  "generated_at": "2026-06-02T01:49:16",
+  "summary": {
+    "score": 65.3,
+    "rating": "B",
+    "submodel": "bank_v1",
+    "freshness_label": "q1_refresh",
+    "comment": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+  },
+  "blended": {
+    "symbol": "601328",
+    "name": "交通银行",
+    "market": "CN",
+    "submodel_id": "bank_v1",
+    "annual_anchor": {
+      "snapshot": {
+        "symbol": "601328",
+        "name": "交通银行",
+        "market": "CN",
+        "report_period": "2025-12-31",
+        "currency": "CNY",
+        "source": "ths+baidu",
+        "updated_at": "2026-06-02T01:49:13.471214",
+        "market_cap": 5999.9,
+        "pe_ttm": 6.22,
+        "pe_percentile_5y": 83.4611,
+        "pb": 0.52,
+        "ps_ttm": null,
+        "peg": 2.8532,
+        "dividend_yield": 2.3246,
+        "roe": 8.38,
+        "roe_3y_mean": 9.0467,
+        "roe_3y_cv": 0.0587,
+        "dupont_driver": "leverage",
+        "asset_turnover": 0.0191,
+        "equity_multiplier": 12.1507,
+        "gross_margin": 36.41,
+        "gross_margin_trend": "improving",
+        "net_margin": 36.0741,
+        "revenue_growth": 2.02,
+        "net_profit_growth": 2.18,
+        "overseas_revenue_share": null,
+        "debt_to_asset": 91.77,
+        "current_ratio": 0.0,
+        "operating_cashflow_to_profit": 1.385,
+        "operating_cashflow_to_profit_history": [
+          1.385,
+          -0.6128,
+          1.4809
+        ],
+        "accounts_receivable_growth": null,
+        "inventory_growth": null,
+        "price_war_pressure": null,
+        "interest_bearing_debt_growth": null,
+        "operating_cashflow_growth": 330.9427,
+        "free_cashflow_yield": 14.8742,
+        "capex_to_operating_cashflow": 0.3262,
+        "unit_cost_position": null,
+        "reserve_life_index": null,
+        "commodity_price_sensitivity": null,
+        "capital_adequacy_ratio": 15.96,
+        "core_tier1_ratio": 11.43,
+        "npl_ratio": 1.28,
+        "provision_coverage_ratio": 208.38,
+        "loan_deposit_growth_gap": -0.5398,
+        "net_interest_margin": 1.2,
+        "solvency_adequacy_ratio": null,
+        "combined_ratio": null,
+        "investment_return": null,
+        "embedded_value_growth": null,
+        "new_business_value_growth": null,
+        "net_capital_ratio": null,
+        "guidance_attainment": null,
+        "period_type": "annual",
+        "period_label": null,
+        "industry": null,
+        "notes": null,
+        "raw_payload_ref": "ths-cn:601328:2025-12-31"
+      },
+      "scorecard": {
+        "symbol": "601328",
+        "name": "交通银行",
+        "market": "CN",
+        "report_period": "2025-12-31",
+        "industry_bucket": "financial",
+        "submodel_id": "bank_v1",
+        "submodel_version": "v1",
+        "total_score": 64.08,
+        "rating": "C",
+        "red_flag": false,
+        "dimension_scores": [
+          {
+            "dimension": "capital_safety_and_asset_quality",
+            "score": 30.27,
+            "weight": 35,
+            "max_score": 35.0,
+            "score_basis": "已计分3/6项[核心一级资本充足率 11.43->100.0, 不良率 1.28->83.2, 拨备覆盖率 208.38->76.2]; 平均=86.5; 缺失[综合偿付能力充足率 NA, 综合成本率 NA, 净资本比率 NA]; ×35/100=30.27",
+            "used_metrics": [
+              "core_tier1_ratio",
+              "npl_ratio",
+              "provision_coverage_ratio"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Capital safety and asset quality are the first-order anchors for banks."
+            ]
+          },
+          {
+            "dimension": "profitability_and_stability",
+            "score": 8.8,
+            "weight": 25,
+            "max_score": 25.0,
+            "score_basis": "已计分3/4项[ROE 8.38->5.5, ROE波动CV 0.06->100.0, 净息差 1.20->0.0]; 平均=35.2; 缺失[投资收益率 NA]; ×25/100=8.80",
+            "used_metrics": [
+              "roe",
+              "roe_3y_cv",
+              "net_interest_margin",
+              "roe_3y_mean"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Bank profitability should be read with stability and NIM together."
+            ]
+          },
+          {
+            "dimension": "business_growth_and_quality",
+            "score": 5.87,
+            "weight": 15,
+            "max_score": 15.0,
+            "score_basis": "已计分3/5项[存贷增速缺口 -0.54->100.0, 营收增速 2.02->10.1, 净利增速 2.18->7.3]; 平均=39.1; 缺失[内含价值增速 NA, 新业务价值增速 NA]; ×15/100=5.87",
+            "used_metrics": [
+              "loan_deposit_growth_gap",
+              "net_profit_growth"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Growth matters, but it should not outrun funding quality."
+            ]
+          },
+          {
+            "dimension": "shareholder_return_and_valuation",
+            "score": 19.14,
+            "weight": 25,
+            "max_score": 25.0,
+            "score_basis": "已计分2/2项[PB 0.52->100.0, 股息率 2.32->53.1]; 平均=76.6; ×25/100=19.14",
+            "used_metrics": [
+              "pb",
+              "dividend_yield"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "PB and dividend yield are more informative than PEG for banks."
+            ]
+          }
+        ],
+        "strengths": [
+          "资本充足与资产质量较稳，银行安全边际处于可跟踪区间。",
+          "当前 PB 与股息率组合较有吸引力，股东回报保护较好。"
+        ],
+        "risks": [
+          "银行盈利稳定性偏弱，ROE 或息差韧性仍需验证。",
+          "信贷扩张与负债来源匹配度偏弱，业务质量存在压力。"
+        ],
+        "warnings": [],
+        "focus_questions": [
+          "资本充足和资产质量是否仍在安全区间",
+          "息差与 ROE 能否维持当前盈利韧性",
+          "当前 PB 和股息率是否已经提供安全边际"
+        ],
+        "missing_metrics": [
+          "notes"
+        ],
+        "triggered_rules": [],
+        "combined_comment": "当前综合评级为 C，银行基本面仍应以资本安全和估值边际为主线跟踪。当前最需要跟踪的是银行盈利稳定性偏弱，ROE 或息差韧性仍需验证。主要亮点是资本充足与资产质量较稳，银行安全边际处于可跟踪区间。"
+      },
+      "assumptions": [
+        "pe_percentile_5y uses Baidu valuation history percentile over the recent five-year window.",
+        "A-share snapshot uses THS financial abstract/debt/cash tables as the primary public source.",
+        "A-share snapshot prefers the latest annual report period across abstract and detailed statements when annual rows are available.",
+        "gross_margin_trend is derived from THS A-share abstract gross margin history.",
+        "Financial-sector fields are supplemented from Eastmoney A-share main indicator data when available.",
+        "A-share daily price fetch for dividend_yield fallback failed: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response')).",
+        "A-share dividend_yield is derived from CNInfo cash dividend records over the trailing 12 months and a current price proxy when Eastmoney analysis indicators omit the field."
+      ],
+      "warnings": []
+    },
+    "interim_overlay": {
+      "snapshot": {
+        "symbol": "601328",
+        "name": "交通银行",
+        "market": "CN",
+        "report_period": "2026-03-31",
+        "currency": "CNY",
+        "source": "ths+baidu",
+        "updated_at": "2026-06-02T01:49:15.677028",
+        "market_cap": 5999.9,
+        "pe_ttm": 6.22,
+        "pe_percentile_5y": 83.4611,
+        "pb": 0.52,
+        "ps_ttm": null,
+        "peg": 2.0,
+        "dividend_yield": 2.2806,
+        "roe": 2.27,
+        "roe_3y_mean": 5.67,
+        "roe_3y_cv": 0.4483,
+        "dupont_driver": "leverage",
+        "asset_turnover": 0.0048,
+        "equity_multiplier": 12.5,
+        "gross_margin": 37.9,
+        "gross_margin_trend": "improving",
+        "net_margin": 37.5794,
+        "revenue_growth": 4.89,
+        "net_profit_growth": 3.11,
+        "overseas_revenue_share": null,
+        "debt_to_asset": 92.0,
+        "current_ratio": 0.0,
+        "operating_cashflow_to_profit": 4.5564,
+        "operating_cashflow_to_profit_history": [
+          4.5564,
+          1.385,
+          1.8781
+        ],
+        "accounts_receivable_growth": null,
+        "inventory_growth": null,
+        "price_war_pressure": null,
+        "interest_bearing_debt_growth": null,
+        "operating_cashflow_growth": -9.9939,
+        "free_cashflow_yield": 18.1468,
+        "capex_to_operating_cashflow": 0.0866,
+        "unit_cost_position": null,
+        "reserve_life_index": null,
+        "commodity_price_sensitivity": null,
+        "capital_adequacy_ratio": 15.61,
+        "core_tier1_ratio": 11.25,
+        "npl_ratio": 1.3,
+        "provision_coverage_ratio": 202.8,
+        "loan_deposit_growth_gap": -0.5398,
+        "net_interest_margin": 1.23,
+        "solvency_adequacy_ratio": null,
+        "combined_ratio": null,
+        "investment_return": null,
+        "embedded_value_growth": null,
+        "new_business_value_growth": null,
+        "net_capital_ratio": null,
+        "guidance_attainment": null,
+        "period_type": "report",
+        "period_label": null,
+        "industry": null,
+        "notes": null,
+        "raw_payload_ref": "ths-cn:601328:2026-03-31"
+      },
+      "components": [
+        {
+          "component": "capital_refresh",
+          "score": 85.0095,
+          "weight": 0.45,
+          "covered_metrics": [
+            "core_tier1_ratio",
+            "npl_ratio",
+            "provision_coverage_ratio"
+          ],
+          "missing_metrics": [],
+          "note": null
+        },
+        {
+          "component": "profitability_refresh",
+          "score": 7.7872,
+          "weight": 0.25,
+          "covered_metrics": [
+            "roe",
+            "net_interest_margin"
+          ],
+          "missing_metrics": [],
+          "note": "银行盈利刷新优先使用年化 ROE 代理值，并与净息差按银行语义组合。"
+        },
+        {
+          "component": "business_quality_refresh",
+          "score": 100.0,
+          "weight": 0.3,
+          "covered_metrics": [
+            "loan_deposit_growth_gap"
+          ],
+          "missing_metrics": [],
+          "note": null
+        }
+      ],
+      "overlay_score": 70.2,
+      "rating_hint": "B",
+      "covered_metrics": [
+        "core_tier1_ratio",
+        "npl_ratio",
+        "provision_coverage_ratio",
+        "roe",
+        "net_interest_margin",
+        "loan_deposit_growth_gap"
+      ],
+      "missing_metrics": [],
+      "drivers_positive": [
+        "capital_refresh",
+        "business_quality_refresh"
+      ],
+      "drivers_negative": [
+        "profitability_refresh"
+      ],
+      "assumptions": [],
+      "warnings": []
+    },
+    "annual_weight": 0.8,
+    "interim_weight": 0.2,
+    "blended_total_score": 65.3,
+    "blended_rating": "B",
+    "freshness_label": "q1_refresh",
+    "warnings": [
+      "当前基本面评分基于 2026-03-31 的一季报口径，不要直接与年报口径标的横向比较。"
+    ],
+    "assumptions": [
+      "pe_percentile_5y uses Baidu valuation history percentile over the recent five-year window.",
+      "A-share snapshot uses THS financial abstract/debt/cash tables as the primary public source.",
+      "A-share snapshot prefers the latest annual report period across abstract and detailed statements when annual rows are available.",
+      "gross_margin_trend is derived from THS A-share abstract gross margin history.",
+      "Financial-sector fields are supplemented from Eastmoney A-share main indicator data when available.",
+      "A-share daily price fetch for dividend_yield fallback failed: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response')).",
+      "A-share dividend_yield is derived from CNInfo cash dividend records over the trailing 12 months and a current price proxy when Eastmoney analysis indicators omit the field.",
+      "pe_percentile_5y uses Baidu valuation history percentile over the recent five-year window.",
+      "A-share snapshot uses THS financial abstract/debt/cash tables as the primary public source.",
+      "A-share interim snapshot selects the latest non-annual report period when available.",
+      "gross_margin_trend is derived from THS A-share abstract gross margin history.",
+      "Financial-sector fields are supplemented from Eastmoney A-share main indicator data when available.",
+      "A-share daily price fetch for dividend_yield fallback failed: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response')).",
+      "A-share dividend_yield is derived from CNInfo cash dividend records over the trailing 12 months and a current price proxy when Eastmoney analysis indicators omit the field."
+    ],
+    "combined_comment": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+  }
+}

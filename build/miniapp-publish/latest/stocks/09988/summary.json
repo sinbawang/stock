@@ -3,7 +3,7 @@
   "symbol": "09988",
   "name": "阿里巴巴",
   "market": "HK",
-  "updated_at": "2026-06-02T00:12:38.065816",
+  "updated_at": "2026-06-02T02:03:04",
   "priority": null,
   "action": null,
   "bucket": null,
@@ -16,8 +16,8 @@
     },
     "technical": {
       "timeframe": "60m",
-      "conclusion": "偏弱，先观望。",
-      "suggestion": "等待重新站回 126.70-132.80 再考虑参与，未站回前不追。"
+      "conclusion": null,
+      "suggestion": null
     },
     "capital_flow": {
       "score": 52.5,

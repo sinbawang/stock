@@ -1,0 +1,564 @@
+{
+  "report_type": "fundamental",
+  "symbol": "00728",
+  "name": "中国电信",
+  "generated_at": "2026-06-02T01:53:04",
+  "summary": {
+    "score": 71.51,
+    "rating": "B",
+    "submodel": "digital_infra_v1",
+    "freshness_label": "q1_refresh",
+    "comment": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+  },
+  "blended": {
+    "symbol": "00728",
+    "name": "中国电信",
+    "market": "HK",
+    "submodel_id": "digital_infra_v1",
+    "annual_anchor": {
+      "snapshot": {
+        "symbol": "00728",
+        "name": "中国电信",
+        "market": "HK",
+        "report_period": "2025-12-31",
+        "currency": "HKD",
+        "source": "eastmoney+akshare",
+        "updated_at": "2026-06-02T01:53:03.527787",
+        "market_cap": 479497406783.0,
+        "pe_ttm": 13.522242476759,
+        "pe_percentile_5y": 7.0,
+        "pb": 0.904007950238,
+        "ps_ttm": 0.814178619405,
+        "peg": 25.8033,
+        "dividend_yield": 6.05,
+        "roe": 7.267706067993,
+        "roe_3y_mean": 7.321,
+        "roe_3y_cv": 0.0073,
+        "dupont_driver": "mixed",
+        "asset_turnover": 0.6238,
+        "equity_multiplier": 1.8593,
+        "gross_margin": 69.398311,
+        "gross_margin_trend": "improving",
+        "net_margin": 6.2665,
+        "revenue_growth": 0.026821957,
+        "net_profit_growth": 0.5240518599,
+        "overseas_revenue_share": null,
+        "debt_to_asset": 46.2168234089,
+        "current_ratio": 0.636783199933,
+        "operating_cashflow_to_profit": 3.7688,
+        "operating_cashflow_to_profit_history": [
+          3.7688,
+          4.3938
+        ],
+        "accounts_receivable_growth": 0.23978818,
+        "inventory_growth": 0.05019896,
+        "price_war_pressure": null,
+        "interest_bearing_debt_growth": -18.817,
+        "operating_cashflow_growth": -13.7747,
+        "free_cashflow_yield": 26.0763,
+        "capex_to_operating_cashflow": 0.0003,
+        "unit_cost_position": null,
+        "reserve_life_index": null,
+        "commodity_price_sensitivity": null,
+        "capital_adequacy_ratio": null,
+        "core_tier1_ratio": null,
+        "npl_ratio": null,
+        "provision_coverage_ratio": null,
+        "loan_deposit_growth_gap": null,
+        "net_interest_margin": null,
+        "solvency_adequacy_ratio": null,
+        "combined_ratio": null,
+        "investment_return": null,
+        "embedded_value_growth": null,
+        "new_business_value_growth": null,
+        "net_capital_ratio": null,
+        "guidance_attainment": null,
+        "period_type": "annual",
+        "period_label": "年报",
+        "industry": null,
+        "notes": null,
+        "raw_payload_ref": "eastmoney-hk:00728:2025-12-31"
+      },
+      "scorecard": {
+        "symbol": "00728",
+        "name": "中国电信",
+        "market": "HK",
+        "report_period": "2025-12-31",
+        "industry_bucket": "digital_infrastructure",
+        "submodel_id": "digital_infra_v1",
+        "submodel_version": "v1",
+        "total_score": 71.15,
+        "rating": "B",
+        "red_flag": false,
+        "dimension_scores": [
+          {
+            "dimension": "profit_quality",
+            "score": 18.0,
+            "weight": 25,
+            "max_score": 25.0,
+            "score_basis": "已计分5/5项[ROE 7.27->0.0, ROE波动CV 0.01->100.0, 经营现金流/利润 3.77->100.0, 杜邦驱动 混合驱动->60.0, 毛利率趋势 改善->100.0]; 平均=72.0; ×25/100=18.00",
+            "used_metrics": [
+              "roe",
+              "operating_cashflow_to_profit",
+              "roe_3y_cv"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Digital infrastructure should be judged by service economics and cashflow quality."
+            ]
+          },
+          {
+            "dimension": "growth_delivery",
+            "score": 0.19,
+            "weight": 20,
+            "max_score": 20.0,
+            "score_basis": "已计分2/2项[营收增速 0.03->0.1, 净利增速 0.52->1.7]; 平均=0.9; ×20/100=0.19",
+            "used_metrics": [
+              "revenue_growth",
+              "net_profit_growth"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Growth is secondary to payout and infrastructure monetization quality."
+            ]
+          },
+          {
+            "dimension": "cashflow_and_operating_efficiency",
+            "score": 25.0,
+            "weight": 25,
+            "max_score": 25.0,
+            "score_basis": "已计分1/1项[经营现金流/利润 3.77->100.0]; 平均=100.0; ×25/100=25.00",
+            "used_metrics": [
+              "operating_cashflow_to_profit",
+              "operating_cashflow_to_profit_history"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Cashflow conversion is the main automated red-flag anchor in v1."
+            ]
+          },
+          {
+            "dimension": "shareholder_return_and_valuation",
+            "score": 27.96,
+            "weight": 30,
+            "max_score": 30.0,
+            "score_basis": "已计分2/2项[PB 0.90->86.4, 股息率 6.05->100.0]; 平均=93.2; ×30/100=27.96",
+            "used_metrics": [
+              "pb",
+              "dividend_yield"
+            ],
+            "missing_metrics": [],
+            "passed_rules": [],
+            "failed_rules": [],
+            "notes": [
+              "Telecom operators are better framed through payout and balance-sheet-backed valuation."
+            ]
+          }
+        ],
+        "strengths": [
+          "数字基础设施现金流兑现较好，网络资产经营效率保持稳定。",
+          "当前 PB 与股息率组合较有吸引力，防御与回报特征兼具。"
+        ],
+        "risks": [
+          "数字基础设施增长兑现偏弱，新业务对利润拉动仍不充分。"
+        ],
+        "warnings": [],
+        "focus_questions": [
+          "云网与基础通信业务能否继续兑现成稳定现金流",
+          "高股息分配是否仍有经营现金流支撑",
+          "数字基础设施投入能否带来可持续回报"
+        ],
+        "missing_metrics": [
+          "notes"
+        ],
+        "triggered_rules": [],
+        "combined_comment": "当前综合评级为 B，数字基础设施基本面仍应围绕现金流、分红与云网回报持续跟踪。当前最需要跟踪的是数字基础设施增长兑现偏弱，新业务对利润拉动仍不充分。主要亮点是数字基础设施现金流兑现较好，网络资产经营效率保持稳定。"
+      },
+      "assumptions": [
+        "pe_percentile_5y uses Eastmoney valuation comparison TTM PE percentile as a proxy.",
+        "operating_cashflow_to_profit is computed as Eastmoney operating cashflow / holder profit.",
+        "gross_margin_trend is derived from Eastmoney HK annual gross profit ratio history.",
+        "Eastmoney HK dividend payout rows are available, but the latest plan text does not expose an explicit dividend yield percentage.",
+        "Xueqiu quote overlay supplemented missing fields: market_cap, dividend_yield."
+      ],
+      "warnings": []
+    },
+    "interim_overlay": {
+      "snapshot": {
+        "symbol": "00728",
+        "name": "中国电信",
+        "market": "HK",
+        "report_period": "2026-03-31",
+        "currency": "HKD",
+        "source": "eastmoney+akshare",
+        "updated_at": "2026-06-02T01:53:04.315871",
+        "market_cap": 479497406783.0,
+        "pe_ttm": 13.522242476759,
+        "pe_percentile_5y": 7.0,
+        "pb": 0.904007950238,
+        "ps_ttm": 0.814178619405,
+        "peg": null,
+        "dividend_yield": 6.05,
+        "roe": 1.582080942274,
+        "roe_3y_mean": 4.4498,
+        "roe_3y_cv": 0.4832,
+        "dupont_driver": "mixed",
+        "asset_turnover": 0.1538,
+        "equity_multiplier": 1.8473,
+        "gross_margin": 70.206188,
+        "gross_margin_trend": "weakening",
+        "net_margin": 5.5696,
+        "revenue_growth": -2.6059425231,
+        "net_profit_growth": -17.0803249097,
+        "overseas_revenue_share": null,
+        "debt_to_asset": 45.8665262166,
+        "current_ratio": 0.678425746366,
+        "operating_cashflow_to_profit": 3.137,
+        "operating_cashflow_to_profit_history": [
+          3.137,
+          2.8408,
+          2.0553
+        ],
+        "accounts_receivable_growth": -0.00937926,
+        "inventory_growth": -0.07390015,
+        "price_war_pressure": null,
+        "interest_bearing_debt_growth": -13.6595,
+        "operating_cashflow_growth": -73.6253,
+        "free_cashflow_yield": 4.808,
+        "capex_to_operating_cashflow": 0.0001,
+        "unit_cost_position": null,
+        "reserve_life_index": null,
+        "commodity_price_sensitivity": null,
+        "capital_adequacy_ratio": null,
+        "core_tier1_ratio": null,
+        "npl_ratio": null,
+        "provision_coverage_ratio": null,
+        "loan_deposit_growth_gap": null,
+        "net_interest_margin": null,
+        "solvency_adequacy_ratio": null,
+        "combined_ratio": null,
+        "investment_return": null,
+        "embedded_value_growth": null,
+        "new_business_value_growth": null,
+        "net_capital_ratio": null,
+        "guidance_attainment": null,
+        "period_type": "report",
+        "period_label": "一季报",
+        "industry": null,
+        "notes": null,
+        "raw_payload_ref": "eastmoney-hk:00728:2026-03-31"
+      },
+      "components": [
+        {
+          "component": "growth_refresh",
+          "score": 0.0,
+          "weight": 0.25,
+          "covered_metrics": [
+            "revenue_growth",
+            "net_profit_growth"
+          ],
+          "missing_metrics": [],
+          "note": "数字基础设施季报刷新先看主业收入与利润兑现，但权重低于现金流与股东回报。"
+        },
+        {
+          "component": "cashflow_refresh",
+          "score": 100.0,
+          "weight": 0.45,
+          "covered_metrics": [
+            "operating_cashflow_to_profit"
+          ],
+          "missing_metrics": [],
+          "note": "为降低中间报告期噪音，优先用经营现金流/利润历史均值确认通信主业现金回笼质量。"
+        },
+        {
+          "component": "shareholder_return_refresh",
+          "score": 93.1997,
+          "weight": 0.3,
+          "covered_metrics": [
+            "pb",
+            "dividend_yield"
+          ],
+          "missing_metrics": [],
+          "note": "数字基础设施继续用 PB 与股息率近似刻画股东回报与防御性估值锚。"
+        }
+      ],
+      "overlay_score": 72.96,
+      "rating_hint": "B",
+      "covered_metrics": [
+        "revenue_growth",
+        "net_profit_growth",
+        "operating_cashflow_to_profit",
+        "pb",
+        "dividend_yield"
+      ],
+      "missing_metrics": [],
+      "drivers_positive": [
+        "cashflow_refresh",
+        "shareholder_return_refresh"
+      ],
+      "drivers_negative": [
+        "growth_refresh"
+      ],
+      "assumptions": [],
+      "warnings": []
+    },
+    "annual_weight": 0.8,
+    "interim_weight": 0.2,
+    "blended_total_score": 71.51,
+    "blended_rating": "B",
+    "freshness_label": "q1_refresh",
+    "warnings": [
+      "当前基本面评分基于 2026-03-31 的一季报口径，不要直接与年报口径标的横向比较。"
+    ],
+    "assumptions": [
+      "pe_percentile_5y uses Eastmoney valuation comparison TTM PE percentile as a proxy.",
+      "operating_cashflow_to_profit is computed as Eastmoney operating cashflow / holder profit.",
+      "gross_margin_trend is derived from Eastmoney HK annual gross profit ratio history.",
+      "Eastmoney HK dividend payout rows are available, but the latest plan text does not expose an explicit dividend yield percentage.",
+      "Xueqiu quote overlay supplemented missing fields: market_cap, dividend_yield.",
+      "pe_percentile_5y uses Eastmoney valuation comparison TTM PE percentile as a proxy.",
+      "operating_cashflow_to_profit is computed as Eastmoney operating cashflow / holder profit.",
+      "HK interim snapshot selects the latest non-annual report period 2026-03-31 when available.",
+      "PEG is omitted because current TTM PE or net profit growth is non-positive or unavailable.",
+      "gross_margin_trend is derived from Eastmoney HK interim gross profit ratio history.",
+      "Eastmoney HK dividend payout rows are available, but the latest plan text does not expose an explicit dividend yield percentage.",
+      "Xueqiu quote overlay supplemented missing fields: market_cap, dividend_yield."
+    ],
+    "combined_comment": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+  },
+  "presentation": {
+    "periods": {
+      "annual": "2025-12-31",
+      "annual_label": "年报",
+      "interim": "2026-03-31",
+      "interim_label": "一季报"
+    },
+    "summary": {
+      "score": 71.51,
+      "rating": "B",
+      "red_flag": false,
+      "annual_anchor_score": 71.15,
+      "annual_anchor_rating": "B",
+      "annual_anchor_label": "年报",
+      "interim_overlay_score": 72.96,
+      "interim_overlay_rating": "B",
+      "interim_overlay_label": "一季报",
+      "annual_weight": 0.8,
+      "interim_weight": 0.2,
+      "freshness_label": "q1_refresh",
+      "comment": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
+    },
+    "red_flag": {
+      "triggered": false,
+      "rules": []
+    },
+    "current_missing_fields": [
+      "notes"
+    ],
+    "annual_dimensions": [
+      {
+        "dimension": "profit_quality",
+        "title": "盈利质量",
+        "score": 18.0,
+        "weight": 25,
+        "max_score": 25.0,
+        "red_flag": false,
+        "formula": "已计分5/5项[ROE 7.27->0.0, ROE波动CV 0.01->100.0, 经营现金流/利润 3.77->100.0, 杜邦驱动 混合驱动->60.0, 毛利率趋势 改善->100.0]; 平均=72.0; ×25/100=18.00",
+        "covered_metrics": [
+          {
+            "name": "roe",
+            "label": "ROE",
+            "value": 7.267706067993
+          },
+          {
+            "name": "operating_cashflow_to_profit",
+            "label": "经营现金流/利润",
+            "value": 3.7688
+          },
+          {
+            "name": "roe_3y_cv",
+            "label": "ROE波动CV",
+            "value": 0.0073
+          }
+        ],
+        "missing_metrics": [],
+        "passed_rules": [],
+        "failed_rules": [],
+        "notes": [
+          "Digital infrastructure should be judged by service economics and cashflow quality."
+        ]
+      },
+      {
+        "dimension": "growth_delivery",
+        "title": "成长兑现",
+        "score": 0.19,
+        "weight": 20,
+        "max_score": 20.0,
+        "red_flag": false,
+        "formula": "已计分2/2项[营收增速 0.03->0.1, 净利增速 0.52->1.7]; 平均=0.9; ×20/100=0.19",
+        "covered_metrics": [
+          {
+            "name": "revenue_growth",
+            "label": "营收增速",
+            "value": 0.026821957
+          },
+          {
+            "name": "net_profit_growth",
+            "label": "净利增速",
+            "value": 0.5240518599
+          }
+        ],
+        "missing_metrics": [],
+        "passed_rules": [],
+        "failed_rules": [],
+        "notes": [
+          "Growth is secondary to payout and infrastructure monetization quality."
+        ]
+      },
+      {
+        "dimension": "cashflow_and_operating_efficiency",
+        "title": "现金流与运营效率",
+        "score": 25.0,
+        "weight": 25,
+        "max_score": 25.0,
+        "red_flag": false,
+        "formula": "已计分1/1项[经营现金流/利润 3.77->100.0]; 平均=100.0; ×25/100=25.00",
+        "covered_metrics": [
+          {
+            "name": "operating_cashflow_to_profit",
+            "label": "经营现金流/利润",
+            "value": 3.7688
+          },
+          {
+            "name": "operating_cashflow_to_profit_history",
+            "label": "经营现金流/利润历史",
+            "value": [
+              3.7688,
+              4.3938
+            ]
+          }
+        ],
+        "missing_metrics": [],
+        "passed_rules": [],
+        "failed_rules": [],
+        "notes": [
+          "Cashflow conversion is the main automated red-flag anchor in v1."
+        ]
+      },
+      {
+        "dimension": "shareholder_return_and_valuation",
+        "title": "估值与股东回报",
+        "score": 27.96,
+        "weight": 30,
+        "max_score": 30.0,
+        "red_flag": false,
+        "formula": "已计分2/2项[PB 0.90->86.4, 股息率 6.05->100.0]; 平均=93.2; ×30/100=27.96",
+        "covered_metrics": [
+          {
+            "name": "pb",
+            "label": "PB",
+            "value": 0.904007950238
+          },
+          {
+            "name": "dividend_yield",
+            "label": "股息率",
+            "value": 6.05
+          }
+        ],
+        "missing_metrics": [],
+        "passed_rules": [],
+        "failed_rules": [],
+        "notes": [
+          "Telecom operators are better framed through payout and balance-sheet-backed valuation."
+        ]
+      }
+    ],
+    "interim_components": [
+      {
+        "component": "growth_refresh",
+        "title": "成长刷新",
+        "score": 0.0,
+        "weight": 0.25,
+        "weighted_score": 0.0,
+        "formula": "覆盖指标均值刷新",
+        "covered_metrics": [
+          {
+            "name": "revenue_growth",
+            "label": "营收增速",
+            "value": -2.6059425231
+          },
+          {
+            "name": "net_profit_growth",
+            "label": "净利增速",
+            "value": -17.0803249097
+          }
+        ],
+        "missing_metrics": [],
+        "note": "数字基础设施季报刷新先看主业收入与利润兑现，但权重低于现金流与股东回报。"
+      },
+      {
+        "component": "cashflow_refresh",
+        "title": "现金流刷新",
+        "score": 100.0,
+        "weight": 0.45,
+        "weighted_score": 45.0,
+        "formula": "单指标刷新",
+        "covered_metrics": [
+          {
+            "name": "operating_cashflow_to_profit",
+            "label": "经营现金流/利润",
+            "value": 3.137
+          }
+        ],
+        "missing_metrics": [],
+        "note": "为降低中间报告期噪音，优先用经营现金流/利润历史均值确认通信主业现金回笼质量。"
+      },
+      {
+        "component": "shareholder_return_refresh",
+        "title": "股东回报刷新",
+        "score": 93.1997,
+        "weight": 0.3,
+        "weighted_score": 27.9599,
+        "formula": "覆盖指标均值刷新",
+        "covered_metrics": [
+          {
+            "name": "pb",
+            "label": "PB",
+            "value": 0.904007950238
+          },
+          {
+            "name": "dividend_yield",
+            "label": "股息率",
+            "value": 6.05
+          }
+        ],
+        "missing_metrics": [],
+        "note": "数字基础设施继续用 PB 与股息率近似刻画股东回报与防御性估值锚。"
+      }
+    ],
+    "warnings": [
+      "当前基本面评分基于 2026-03-31 的一季报口径，不要直接与年报口径标的横向比较。"
+    ],
+    "assumptions": [
+      "pe_percentile_5y uses Eastmoney valuation comparison TTM PE percentile as a proxy.",
+      "operating_cashflow_to_profit is computed as Eastmoney operating cashflow / holder profit.",
+      "gross_margin_trend is derived from Eastmoney HK annual gross profit ratio history.",
+      "Eastmoney HK dividend payout rows are available, but the latest plan text does not expose an explicit dividend yield percentage.",
+      "Xueqiu quote overlay supplemented missing fields: market_cap, dividend_yield.",
+      "pe_percentile_5y uses Eastmoney valuation comparison TTM PE percentile as a proxy.",
+      "operating_cashflow_to_profit is computed as Eastmoney operating cashflow / holder profit.",
+      "HK interim snapshot selects the latest non-annual report period 2026-03-31 when available.",
+      "PEG is omitted because current TTM PE or net profit growth is non-positive or unavailable.",
+      "gross_margin_trend is derived from Eastmoney HK interim gross profit ratio history.",
+      "Eastmoney HK dividend payout rows are available, but the latest plan text does not expose an explicit dividend yield percentage.",
+      "Xueqiu quote overlay supplemented missing fields: market_cap, dividend_yield."
+    ],
+    "base_text_path": "C:\\sandbox\\sinba\\stock\\data\\reports\\00728\\base.txt"
+  }
+}
