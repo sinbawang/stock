@@ -22,7 +22,9 @@ CLI:
 from __future__ import annotations
 
 import csv
+import multiprocessing as mp
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Sequence
@@ -35,6 +37,13 @@ _ALLOWED_PERIODS = {"1", "5", "15", "30", "60"}
 _ALLOWED_ADJUSTS = {"", "qfq", "hfq"}
 _ALLOWED_SOURCES = {"xueqiu", "akshare"}
 _DEFAULT_PRIMARY_SOURCE = "xueqiu"
+_SOURCE_FETCH_TIMEOUT_SECONDS = 45
+ROOT = Path(__file__).resolve().parents[3]
+_DEFAULT_COOKIE_FILE_CANDIDATES = (
+    ROOT / "data" / "_meta" / "xueqiu_cookie.env",
+    ROOT / "data" / "_meta" / "xueqiu_cookie.ps1",
+    ROOT / "data" / "_meta" / "xueqiu_cookie.txt",
+)
 
 
 class XueqiuCookieError(RuntimeError):
@@ -84,6 +93,39 @@ def _parse_cookie_string(cookie_text: str) -> dict[str, str]:
         key, value = part.split("=", 1)
         cookies[key.strip()] = value.strip()
     return cookies
+
+
+def _extract_cookie_text_from_file(file_path: Path) -> str:
+    text = file_path.read_text(encoding="utf-8").lstrip("\ufeff").strip()
+    if not text:
+        raise RuntimeError(f"雪球 cookie 文件为空: {file_path}")
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("XUEQIU_COOKIE="):
+            return line.split("=", 1)[1].strip().strip('"\'')
+        match = re.match(r"^\$env:XUEQIU_COOKIE\s*=\s*(['\"])(.*)\1$", line)
+        if match:
+            return match.group(2).strip()
+        return line
+
+    raise RuntimeError(f"雪球 cookie 文件未包含有效内容: {file_path}")
+
+
+def _resolve_xueqiu_cookie_file() -> tuple[dict[str, str], str] | None:
+    explicit_path = os.getenv("XUEQIU_COOKIE_FILE", "").strip()
+    candidates = [Path(explicit_path)] if explicit_path else []
+    candidates.extend(_DEFAULT_COOKIE_FILE_CANDIDATES)
+
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        cookie_text = _extract_cookie_text_from_file(candidate)
+        return _parse_cookie_string(cookie_text), f"file:{candidate}"
+
+    return None
 
 
 def _normalize_source_sequence(
@@ -157,6 +199,10 @@ def _resolve_xueqiu_cookies() -> tuple[dict[str, str], str]:
     if cookie_text:
         return _parse_cookie_string(cookie_text), "env"
 
+    resolved_from_file = _resolve_xueqiu_cookie_file()
+    if resolved_from_file is not None:
+        return resolved_from_file
+
     cookies = _extract_xueqiu_cookie_from_browser()
     return cookies, "browser"
 
@@ -184,7 +230,10 @@ def _build_xueqiu_session(symbol: str) -> tuple[requests.Session, str]:
     cookies, cookie_source = _resolve_xueqiu_cookies()
     session.cookies.update(cookies)
 
-    session.get(f"https://xueqiu.com/S/HK{symbol}", timeout=15)
+    # Only browser-derived cookies still need the HTML preflight.
+    # Env/file cookie sources should go straight to the JSON API.
+    if cookie_source == "browser":
+        session.get(f"https://xueqiu.com/S/HK{symbol}", timeout=15)
     return session, cookie_source
 
 
@@ -358,6 +407,57 @@ def _fetch_hk_minute_akshare(
     return rows
 
 
+def _fetch_hk_minute_worker(
+    queue: mp.Queue,
+    source: str,
+    symbol: str,
+    period: str,
+    start: Optional[str],
+    end: Optional[str],
+    adjust: str,
+) -> None:
+    try:
+        if source == "xueqiu":
+            payload = _fetch_hk_minute_xueqiu(symbol, period, start, end, adjust)
+        elif source == "akshare":
+            payload = _fetch_hk_minute_akshare(symbol, period, start, end, adjust)
+        else:
+            raise ValueError(f"source 必须是 {_ALLOWED_SOURCES} 之一，收到: {source}")
+        queue.put(("ok", payload))
+    except Exception as exc:  # noqa: BLE001
+        queue.put(("error", f"{type(exc).__name__}: {exc}"))
+
+
+def _fetch_hk_minute_with_timeout(
+    source: str,
+    symbol: str,
+    period: str,
+    start: Optional[str],
+    end: Optional[str],
+    adjust: str,
+) -> list[dict]:
+    ctx = mp.get_context("spawn")
+    queue: mp.Queue = ctx.Queue()
+    process = ctx.Process(
+        target=_fetch_hk_minute_worker,
+        args=(queue, source, symbol, period, start, end, adjust),
+    )
+    process.start()
+    process.join(_SOURCE_FETCH_TIMEOUT_SECONDS)
+    if process.is_alive():
+        process.terminate()
+        process.join(2)
+        raise TimeoutError(f"{source} 港股分钟线抓取超过 {_SOURCE_FETCH_TIMEOUT_SECONDS} 秒")
+    if queue.empty():
+        raise RuntimeError(f"{source} 港股分钟线抓取无返回")
+    status, payload = queue.get()
+    if status == "ok":
+        return payload
+    if source == "xueqiu" and payload.startswith("XueqiuCookieError:"):
+        raise XueqiuCookieError(payload.split(":", 1)[1].strip(), "unknown")
+    raise RuntimeError(payload)
+
+
 def fetch_hk_minute(
     symbol: str,
     period: str = "60",
@@ -398,7 +498,7 @@ def fetch_hk_minute(
                 f"3) 改用 source='akshare'。原始错误: {exc}"
             ) from exc
 
-    return _fetch_hk_minute_akshare(symbol, period, start, end, adjust)
+    return _fetch_hk_minute_with_timeout(source, symbol, period, start, end, adjust)
 
 
 def fetch_hk_minute_with_policy(

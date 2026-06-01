@@ -3,19 +3,19 @@
   "symbol": "03690",
   "name": "美团",
   "market": "HK",
-  "updated_at": "2026-05-30T20:37:47",
+  "updated_at": "2026-06-01T23:30:18",
   "headline": {
     "title": "美团 03690",
     "subtitle": "三轴综合观察",
-    "priority": "P5",
-    "action": "暂停加仓",
-    "bucket": "cautious"
+    "priority": null,
+    "action": null,
+    "bucket": null
   },
   "overview": {
-    "summary": "谨慎：基本面偏弱；60M 技术节奏偏弱；资金面已有覆盖，但尚未形成强确认",
+    "summary": "当前综合评级为 D，平台基本面整体处于可跟踪区间。主要亮点是平台经营质量与增长兑现暂时保持在可跟踪区间。当前最需要跟踪的是平台盈利质量偏弱，利润稳定性或现金流兑现存在压力。",
     "bullets": [
-      "基本面 20.25/D",
-      "60M 技术面 偏弱，先观望。",
+      "基本面 23.18/D",
+      "60M 技术面 missing",
       "资金面 52.5/C"
     ]
   },
@@ -24,7 +24,7 @@
       "key": "fundamental",
       "title": "基本面",
       "rating": "D",
-      "score": 20.25,
+      "score": 23.18,
       "submodel": "platform_internet_v1",
       "report_period": "2025-12-31",
       "summary": "当前综合评级为 D，平台基本面整体处于可跟踪区间。主要亮点是平台经营质量与增长兑现暂时保持在可跟踪区间。当前最需要跟踪的是平台盈利质量偏弱，利润稳定性或现金流兑现存在压力。",
@@ -46,10 +46,10 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "xueqiu",
-      "conclusion": "偏弱，先观望。",
-      "suggestion": "等待重新站回 84.35-87.10 再考虑参与，未站回前不追。",
+      "conclusion": null,
+      "suggestion": null,
       "overview": [
-        "时间区间：2026-01-21 14:00 到 2026-05-29 16:00",
+        "时间区间：2026-01-22 14:00 到 2026-06-01 16:00",
         "K线数量：共 504 根 60M K线",
         "中枢数量：当前识别到 3 个中枢",
         "最新中枢：84.35-87.10，覆盖 04-14 14:00 到 05-28 14:00"
@@ -73,7 +73,7 @@
       "title": "资金面",
       "rating": "C",
       "score": 52.5,
-      "source": "eastmoney.southbound_net_buy+eastmoney.southbound_holding.cache",
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover",
       "trade_date": "2026-05-28",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [
@@ -90,10 +90,6 @@
         {
           "label": "南向净买入",
           "value": "672887446.0"
-        },
-        {
-          "label": "南向持股变化",
-          "value": "-1146792248.5"
         }
       ]
     }
@@ -103,16 +99,6 @@
       "timeframe": "60m",
       "path": "stocks/03690/charts/60m.jpg",
       "label": "60M 结构图"
-    },
-    {
-      "timeframe": "15m",
-      "path": "stocks/03690/charts/15m.jpg",
-      "label": "15M 结构图"
-    },
-    {
-      "timeframe": "day",
-      "path": "stocks/03690/charts/day.jpg",
-      "label": "DAY 结构图"
     }
   ],
   "disclaimer": "本页面仅用于持仓跟踪与研究，不构成投资建议。"

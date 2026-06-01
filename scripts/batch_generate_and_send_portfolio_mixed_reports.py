@@ -71,7 +71,16 @@ def load_holdings(path: Path, market_filter: str = "ALL") -> list[Holding]:
 
 
 def _run_command(command: list[str]) -> str:
-    completed = subprocess.run(command, capture_output=True, text=True, check=True)
+    completed = subprocess.run(command, capture_output=True, text=True)
+    if completed.returncode != 0:
+        details: list[str] = [f"Command failed with exit code {completed.returncode}: {command!r}"]
+        if completed.stdout.strip():
+            details.append("stdout:")
+            details.append(completed.stdout.strip())
+        if completed.stderr.strip():
+            details.append("stderr:")
+            details.append(completed.stderr.strip())
+        raise RuntimeError("\n".join(details))
     return completed.stdout
 
 

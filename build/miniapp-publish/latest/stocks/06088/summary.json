@@ -4,10 +4,10 @@
   "name": "鸿腾精密",
   "market": "HK",
   "updated_at": "2026-05-31T23:28:58",
-  "priority": "P5",
-  "action": "暂停加仓",
-  "bucket": "cautious",
-  "comment": "谨慎：基本面偏弱；资金面已有覆盖，但尚未形成强确认",
+  "priority": null,
+  "action": null,
+  "bucket": null,
+  "comment": "资金面存在风险信号，技术面结论需要降低确认度。",
   "cards": {
     "fundamental": {
       "score": 46.47,
@@ -33,9 +33,5 @@
   "jump": {
     "detail": "stocks/06088/detail.json"
   },
-  "tags": [
-    "cautious",
-    "P5",
-    "暂停加仓"
-  ]
+  "tags": []
 }

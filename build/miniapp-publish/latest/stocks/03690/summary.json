@@ -3,26 +3,26 @@
   "symbol": "03690",
   "name": "美团",
   "market": "HK",
-  "updated_at": "2026-05-30T20:37:47",
-  "priority": "P5",
-  "action": "暂停加仓",
-  "bucket": "cautious",
-  "comment": "谨慎：基本面偏弱；60M 技术节奏偏弱；资金面已有覆盖，但尚未形成强确认",
+  "updated_at": "2026-06-01T23:30:18",
+  "priority": null,
+  "action": null,
+  "bucket": null,
+  "comment": "资金面存在风险信号，技术面结论需要降低确认度。",
   "cards": {
     "fundamental": {
-      "score": 20.25,
+      "score": 23.18,
       "rating": "D",
-      "summary": "当前仍仅使用 2025-12-31 年报锚定分，尚未纳入更新的中间报告期刷新层。"
+      "summary": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
     },
     "technical": {
       "timeframe": "60m",
-      "conclusion": "偏弱，先观望。",
-      "suggestion": "等待重新站回 84.35-87.10 再考虑参与，未站回前不追。"
+      "conclusion": null,
+      "suggestion": null
     },
     "capital_flow": {
       "score": 52.5,
       "rating": "C",
-      "source": "eastmoney.southbound_net_buy+eastmoney.southbound_holding.cache",
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。"
     }
   },
@@ -33,9 +33,5 @@
   "jump": {
     "detail": "stocks/03690/detail.json"
   },
-  "tags": [
-    "cautious",
-    "P5",
-    "暂停加仓"
-  ]
+  "tags": []
 }

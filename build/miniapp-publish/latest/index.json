@@ -1,15 +1,15 @@
 {
   "schema_version": "v1",
-  "generated_at": "2026-05-31T23:49:09",
+  "generated_at": "2026-06-01T23:30:18",
   "source_root": "data/reports",
   "markets": [
     "CN",
     "HK"
   ],
   "counts": {
-    "stocks": 16,
-    "cn": 6,
-    "hk": 10
+    "stocks": 3,
+    "cn": 0,
+    "hk": 3
   },
   "groups": {
     "portfolio": "groups/portfolio.json",
@@ -18,200 +18,14 @@
   },
   "stocks": [
     {
-      "symbol": "00981",
-      "name": "中芯国际",
-      "market": "HK",
-      "updated_at": "2026-05-30T20:37:37",
-      "summary": "stocks/00981/summary.json",
-      "detail": "stocks/00981/detail.json",
-      "cover_chart": "stocks/00981/charts/60m.jpg",
-      "tags": [
-        "confirming",
-        "P1",
-        "跟踪试仓"
-      ]
-    },
-    {
-      "symbol": "000651",
-      "name": "格力电器",
-      "market": "CN",
-      "updated_at": "2026-05-30T20:35:15",
-      "summary": "stocks/000651/summary.json",
-      "detail": "stocks/000651/detail.json",
-      "cover_chart": "stocks/000651/charts/60m.jpg",
-      "tags": [
-        "watch",
-        "P2",
-        "等待触发"
-      ]
-    },
-    {
-      "symbol": "601328",
-      "name": "交通银行",
-      "market": "CN",
-      "updated_at": "2026-05-30T20:36:45",
-      "summary": "stocks/601328/summary.json",
-      "detail": "stocks/601328/detail.json",
-      "cover_chart": "stocks/601328/charts/60m.jpg",
-      "tags": [
-        "watch",
-        "P2",
-        "等待触发"
-      ]
-    },
-    {
-      "symbol": "00728",
-      "name": "中国电信",
-      "market": "HK",
-      "updated_at": "2026-05-30T20:37:34",
-      "summary": "stocks/00728/summary.json",
-      "detail": "stocks/00728/detail.json",
-      "cover_chart": "stocks/00728/charts/60m.jpg",
-      "tags": [
-        "watch",
-        "P2",
-        "等待触发"
-      ]
-    },
-    {
-      "symbol": "000591",
-      "name": "太阳能",
-      "market": "CN",
-      "updated_at": "2026-05-30T20:32:52",
-      "summary": "stocks/000591/summary.json",
-      "detail": "stocks/000591/detail.json",
-      "cover_chart": "stocks/000591/charts/60m.jpg",
-      "tags": [
-        "mixed",
-        "P3",
-        "等待冲突缓解"
-      ]
-    },
-    {
-      "symbol": "300124",
-      "name": "汇川技术",
-      "market": "CN",
-      "updated_at": "2026-05-30T20:35:58",
-      "summary": "stocks/300124/summary.json",
-      "detail": "stocks/300124/detail.json",
-      "cover_chart": "stocks/300124/charts/60m.jpg",
-      "tags": [
-        "mixed",
-        "P3",
-        "等待冲突缓解"
-      ]
-    },
-    {
-      "symbol": "600900",
-      "name": "长江电力",
-      "market": "CN",
-      "updated_at": "2026-05-30T20:36:21",
-      "summary": "stocks/600900/summary.json",
-      "detail": "stocks/600900/detail.json",
-      "cover_chart": "stocks/600900/charts/60m.jpg",
-      "tags": [
-        "mixed",
-        "P3",
-        "等待冲突缓解"
-      ]
-    },
-    {
-      "symbol": "00175",
-      "name": "吉利汽车",
-      "market": "HK",
-      "updated_at": "2026-05-31T01:37:16",
-      "summary": "stocks/00175/summary.json",
-      "detail": "stocks/00175/detail.json",
-      "cover_chart": "stocks/00175/charts/60m.jpg",
-      "tags": [
-        "mixed",
-        "P3",
-        "等待冲突缓解"
-      ]
-    },
-    {
-      "symbol": "00700",
-      "name": "腾讯",
-      "market": "HK",
-      "updated_at": "2026-05-30T20:37:30",
-      "summary": "stocks/00700/summary.json",
-      "detail": "stocks/00700/detail.json",
-      "cover_chart": "stocks/00700/charts/60m.jpg",
-      "tags": [
-        "mixed",
-        "P3",
-        "等待冲突缓解"
-      ]
-    },
-    {
-      "symbol": "01024",
-      "name": "快手",
-      "market": "HK",
-      "updated_at": "2026-05-30T20:37:40",
-      "summary": "stocks/01024/summary.json",
-      "detail": "stocks/01024/detail.json",
-      "cover_chart": "stocks/01024/charts/60m.jpg",
-      "tags": [
-        "mixed",
-        "P3",
-        "等待冲突缓解"
-      ]
-    },
-    {
-      "symbol": "02357",
-      "name": "中航科工",
-      "market": "HK",
-      "updated_at": "2026-05-30T20:37:43",
-      "summary": "stocks/02357/summary.json",
-      "detail": "stocks/02357/detail.json",
-      "cover_chart": "stocks/02357/charts/60m.jpg",
-      "tags": [
-        "mixed",
-        "P3",
-        "等待冲突缓解"
-      ]
-    },
-    {
-      "symbol": "002555",
-      "name": "三七互娱",
-      "market": "CN",
-      "updated_at": "2026-05-30T20:35:36",
-      "summary": "stocks/002555/summary.json",
-      "detail": "stocks/002555/detail.json",
-      "cover_chart": "stocks/002555/charts/60m.jpg",
-      "tags": [
-        "cautious",
-        "P5",
-        "暂停加仓"
-      ]
-    },
-    {
-      "symbol": "01339",
-      "name": "中国人保",
-      "market": "HK",
-      "updated_at": "2026-05-30T20:30:25",
-      "summary": "stocks/01339/summary.json",
-      "detail": "stocks/01339/detail.json",
-      "cover_chart": "stocks/01339/charts/60m.jpg",
-      "tags": [
-        "cautious",
-        "P5",
-        "暂停加仓"
-      ]
-    },
-    {
       "symbol": "03690",
       "name": "美团",
       "market": "HK",
-      "updated_at": "2026-05-30T20:37:47",
+      "updated_at": "2026-06-01T23:30:18",
       "summary": "stocks/03690/summary.json",
       "detail": "stocks/03690/detail.json",
       "cover_chart": "stocks/03690/charts/60m.jpg",
-      "tags": [
-        "cautious",
-        "P5",
-        "暂停加仓"
-      ]
+      "tags": []
     },
     {
       "symbol": "06088",
@@ -221,17 +35,13 @@
       "summary": "stocks/06088/summary.json",
       "detail": "stocks/06088/detail.json",
       "cover_chart": "stocks/06088/charts/60m.jpg",
-      "tags": [
-        "cautious",
-        "P5",
-        "暂停加仓"
-      ]
+      "tags": []
     },
     {
       "symbol": "09988",
       "name": "阿里巴巴",
       "market": "HK",
-      "updated_at": "2026-05-31T01:44:06",
+      "updated_at": "2026-06-01T23:27:04",
       "summary": "stocks/09988/summary.json",
       "detail": "stocks/09988/detail.json",
       "cover_chart": "stocks/09988/charts/60m.jpg",
