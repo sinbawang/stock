@@ -3,11 +3,11 @@
   "symbol": "600900",
   "name": "长江电力",
   "market": "CN",
-  "updated_at": "2026-06-02T01:52:19",
+  "updated_at": "2026-06-04T21:53:50",
   "priority": null,
   "action": null,
   "bucket": null,
-  "comment": "资金面信号中性，暂不构成强确认。",
+  "comment": "资金面存在风险信号，技术面结论需要降低确认度。",
   "cards": {
     "fundamental": {
       "score": 75.75,
@@ -16,14 +16,14 @@
     },
     "technical": {
       "timeframe": "60m",
-      "conclusion": null,
-      "suggestion": null
+      "conclusion": "偏空，优先减仓或兑现。",
+      "suggestion": "反抽不过 27.41 以减仓为主，不逆势加仓。"
     },
     "capital_flow": {
-      "score": 59.07,
-      "rating": "C",
+      "score": 47.17,
+      "rating": "D",
       "source": "ths.fund_flow.fallback",
-      "summary": "资金面信号中性，暂不构成强确认。"
+      "summary": "资金面存在风险信号，技术面结论需要降低确认度。"
     }
   },
   "cover_chart": {

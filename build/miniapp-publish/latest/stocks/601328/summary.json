@@ -3,27 +3,27 @@
   "symbol": "601328",
   "name": "交通银行",
   "market": "CN",
-  "updated_at": "2026-06-02T01:50:27",
+  "updated_at": "2026-06-04T21:54:53",
   "priority": null,
   "action": null,
   "bucket": null,
-  "comment": "资金面信号中性，暂不构成强确认。",
+  "comment": "资金面存在风险信号，技术面结论需要降低确认度。",
   "cards": {
     "fundamental": {
-      "score": 65.3,
+      "score": 65.42,
       "rating": "B",
       "summary": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
     },
     "technical": {
       "timeframe": "60m",
-      "conclusion": null,
-      "suggestion": null
+      "conclusion": "偏弱，先观望。",
+      "suggestion": "等待重新站回 6.60-6.81 再考虑参与，未站回前不追。"
     },
     "capital_flow": {
-      "score": 59.07,
+      "score": 52.27,
       "rating": "C",
       "source": "ths.fund_flow.fallback",
-      "summary": "资金面信号中性，暂不构成强确认。"
+      "summary": "资金面存在风险信号，技术面结论需要降低确认度。"
     }
   },
   "cover_chart": {

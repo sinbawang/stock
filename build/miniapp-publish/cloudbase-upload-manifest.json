@@ -4,7 +4,7 @@
   "region": "ap-shanghai",
   "source_dir": "C:\\sandbox\\sinba\\stock\\build\\miniapp-publish\\latest",
   "cloud_prefix": "miniapp-publish/latest",
-  "uploaded_at": "2026-06-01T18:03:24Z",
+  "uploaded_at": "2026-06-04T13:58:37Z",
   "file_count": 66,
   "index": {
     "relative_path": "index.json",
@@ -24,14 +24,14 @@
       "cloud_path": "miniapp-publish/latest/index.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/index.json",
       "size": 5215,
-      "sha256": "77d4e59ed671f539212a94a8ed02a97880d969a90dfdbe306b78ab06db720f1b"
+      "sha256": "909decd4001976b6cfdebaee6d41085d272fd276016cda7a6af663dd386755b5"
     },
     {
       "relative_path": "stocks/000591/base.json",
       "cloud_path": "miniapp-publish/latest/stocks/000591/base.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/000591/base.json",
-      "size": 13782,
-      "sha256": "c62913423dc4a587ae9ce81d17f8929085ed73a2714d89395edb15d22364969b"
+      "size": 22200,
+      "sha256": "3ae8f667a0d68939aa0ff739fc0970fa42f6e6efa758b861fcd88ec5b84a3bbb"
     },
     {
       "relative_path": "stocks/000591/charts/60m.jpg",
@@ -44,22 +44,22 @@
       "relative_path": "stocks/000591/detail.json",
       "cloud_path": "miniapp-publish/latest/stocks/000591/detail.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/000591/detail.json",
-      "size": 4049,
-      "sha256": "61c12d7b3c7d9112a1fa64595c98f6bdc9b4c4d9ca65ab4c183a32f622f5af90"
+      "size": 3767,
+      "sha256": "2eb610f18ed28718de72ac2b6bd57ffded14fb7b9d1ca077d581fea923810e16"
     },
     {
       "relative_path": "stocks/000591/summary.json",
       "cloud_path": "miniapp-publish/latest/stocks/000591/summary.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/000591/summary.json",
-      "size": 1010,
-      "sha256": "2bef37cf0cddd935f7c7431289ad06249aed14ebc1ba27cdb8dd9094bd3d0bef"
+      "size": 1081,
+      "sha256": "860794ff3ed05afd638bb05ab78ef3134793939f3a6adb220f7fd9bbf6e273f3"
     },
     {
       "relative_path": "stocks/000651/base.json",
       "cloud_path": "miniapp-publish/latest/stocks/000651/base.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/000651/base.json",
-      "size": 13764,
-      "sha256": "140f3e7962ece9c029667f494ccd421dd937a076e4f7ec5c78ad882055ee92e0"
+      "size": 22214,
+      "sha256": "6d2a368cf4c6376c2cdfa57d5149c898f4ef8f28e809e550a675758c3a17e0e4"
     },
     {
       "relative_path": "stocks/000651/charts/60m.jpg",
@@ -72,15 +72,15 @@
       "relative_path": "stocks/000651/detail.json",
       "cloud_path": "miniapp-publish/latest/stocks/000651/detail.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/000651/detail.json",
-      "size": 3995,
-      "sha256": "fea60d7ef8560d180bf6f2f81961ca94c25b3f95bc3db0caf8dd64c03c8490c3"
+      "size": 3832,
+      "sha256": "808ad5ab17a8ecd572186fb87fc03df940ab6c8d20c50adb18efd61c5d0a8158"
     },
     {
       "relative_path": "stocks/000651/summary.json",
       "cloud_path": "miniapp-publish/latest/stocks/000651/summary.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/000651/summary.json",
-      "size": 1013,
-      "sha256": "7eee8a2b61423004b354ad994a994cc89bfcb4bd2d01403cb4c82c285d13c40d"
+      "size": 1100,
+      "sha256": "9815dac595d369deea3d3abab5a4624f8d94f85cf1a1ed5b3e448843d7f95ad6"
     },
     {
       "relative_path": "stocks/00175/base.json",
@@ -114,8 +114,8 @@
       "relative_path": "stocks/002555/base.json",
       "cloud_path": "miniapp-publish/latest/stocks/002555/base.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/002555/base.json",
-      "size": 13565,
-      "sha256": "1a776ee481672ab0af796f418a2029b8e5eb7e0943e956c77fa4d5e9c149bf38"
+      "size": 22004,
+      "sha256": "18230267f26a364efb584594a8028134f0d66d444a62691d2c758e7017128a94"
     },
     {
       "relative_path": "stocks/002555/charts/60m.jpg",
@@ -128,15 +128,15 @@
       "relative_path": "stocks/002555/detail.json",
       "cloud_path": "miniapp-publish/latest/stocks/002555/detail.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/002555/detail.json",
-      "size": 3883,
-      "sha256": "fd84d4b3e8630c4d53859b18adafe152af0185f7f608f642c9d39ad58688bfd3"
+      "size": 3857,
+      "sha256": "848d2722da93beb1c3b13ab412fe6b31f4c1ae14e71b08758fcf51cfd570e4fc"
     },
     {
       "relative_path": "stocks/002555/summary.json",
       "cloud_path": "miniapp-publish/latest/stocks/002555/summary.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/002555/summary.json",
-      "size": 971,
-      "sha256": "4a9f59050acc8853de3f1ad30cd0b15934e8433fb6afbe7ebff91a04282f54c3"
+      "size": 1097,
+      "sha256": "6c7a2da770b1dee25c9a30423c71339d08b87636e02483596a9f1f57d53d6d83"
     },
     {
       "relative_path": "stocks/00700/base.json",
@@ -394,8 +394,8 @@
       "relative_path": "stocks/300124/base.json",
       "cloud_path": "miniapp-publish/latest/stocks/300124/base.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/300124/base.json",
-      "size": 14083,
-      "sha256": "efe192617407ade280e3a8ebf7778a4d14138dab5acd144522058db341dbd883"
+      "size": 22881,
+      "sha256": "829a3b6935ab37de52c7f537b5d68a94c1ea01f9681e3965d9e595f46c417b2a"
     },
     {
       "relative_path": "stocks/300124/charts/60m.jpg",
@@ -408,22 +408,22 @@
       "relative_path": "stocks/300124/detail.json",
       "cloud_path": "miniapp-publish/latest/stocks/300124/detail.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/300124/detail.json",
-      "size": 3978,
-      "sha256": "98e347f1332e6fc048e0b6bf3c0dbf4e7037d05a86145992e1a97934a1045a9b"
+      "size": 3818,
+      "sha256": "b9927e704190a5176dcdce735c645193b34c59dc86ea36aa04729096d1b9a521"
     },
     {
       "relative_path": "stocks/300124/summary.json",
       "cloud_path": "miniapp-publish/latest/stocks/300124/summary.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/300124/summary.json",
-      "size": 1013,
-      "sha256": "f6a2957607f2bbc531c473750f67b93edf85a88e3c16d22a1235ec484f88fbf8"
+      "size": 1085,
+      "sha256": "8396020352cc440a7d4937d60d0271afa1c9ea006334ed045908daefebff627c"
     },
     {
       "relative_path": "stocks/600900/base.json",
       "cloud_path": "miniapp-publish/latest/stocks/600900/base.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/600900/base.json",
-      "size": 13580,
-      "sha256": "73521d9bfdd7dd42997a0fbf1609f7eadd928ea07aaf9de354fe86726485560e"
+      "size": 21810,
+      "sha256": "fbf6fe7f55c9dc9f220ab1694eedccf43e12660a953d44da1d7e7239b7bb37bd"
     },
     {
       "relative_path": "stocks/600900/charts/60m.jpg",
@@ -436,22 +436,22 @@
       "relative_path": "stocks/600900/detail.json",
       "cloud_path": "miniapp-publish/latest/stocks/600900/detail.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/600900/detail.json",
-      "size": 4103,
-      "sha256": "775239af157d1dc3221587348fe67ae84e81b7f569169acf1cbc0a7b3cb649ff"
+      "size": 4001,
+      "sha256": "feadc2815ff921e77197bb7baa6fdb590e4f5c70684b65b591695d8929d7c13a"
     },
     {
       "relative_path": "stocks/600900/summary.json",
       "cloud_path": "miniapp-publish/latest/stocks/600900/summary.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/600900/summary.json",
-      "size": 971,
-      "sha256": "028a8b95e885dc45d04a48b8a0dacef937da4bca342d15eb9334cd7de224347c"
+      "size": 1097,
+      "sha256": "e5f1f37c0fea85acf3f08c6ea4abed23483fbab8f2f3b90b59835fccc5761476"
     },
     {
       "relative_path": "stocks/601328/base.json",
       "cloud_path": "miniapp-publish/latest/stocks/601328/base.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/601328/base.json",
-      "size": 14032,
-      "sha256": "58d0491e9c3b5dc8072984ad26104f853e70b7035052d21268875b9f47f4cd08"
+      "size": 22882,
+      "sha256": "340efba795f20be079ef5f9ce0948c804d96a6ad7f18c4801a56fb9f8b47ca9c"
     },
     {
       "relative_path": "stocks/601328/charts/60m.jpg",
@@ -464,15 +464,15 @@
       "relative_path": "stocks/601328/detail.json",
       "cloud_path": "miniapp-publish/latest/stocks/601328/detail.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/601328/detail.json",
-      "size": 3958,
-      "sha256": "8c20e40c30fb7acf24bf990bae10c27b90ddb8ab13be9309ca85f2550eb0195d"
+      "size": 3859,
+      "sha256": "57f797dee0ae882371fcff1dd0927cc6d68b24f24ad8deafeb4cca2d07b9fc59"
     },
     {
       "relative_path": "stocks/601328/summary.json",
       "cloud_path": "miniapp-publish/latest/stocks/601328/summary.json",
       "file_id": "cloud://cloudbase-d9gplq92zc1d88ee6.636c-cloudbase-d9gplq92zc1d88ee6-1438497582/miniapp-publish/latest/stocks/601328/summary.json",
-      "size": 970,
-      "sha256": "6387075621476b49520dcf11aeee0dcdbafa2d9d38266922d2e05a7e17857213"
+      "size": 1098,
+      "sha256": "266c190e7645f5bf71d200f357471e97ac8451016ec29b970de48376c1a11bee"
     }
   ]
 }

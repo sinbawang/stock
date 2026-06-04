@@ -26,7 +26,7 @@ from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.normalize import normalize_bars
 from chanlun.zhongshu import identify_zhongshu
 from export_structures_with_boxes import calculate_macd
-from fundamental.reporting import save_blended_fundamental_brief
+from fundamental.reporting.presentation import build_fundamental_presentation, write_base_text
 from fundamental.services import fetch_and_analyze_cn_blended_fundamentals
 from report_retention import prune_older_outputs
 from generate_a_share_combined_overview import (
@@ -221,6 +221,7 @@ def main() -> None:
         normalized_symbol,
         name=args.name,
     )
+    base_text_path = write_base_text(fundamental_result.blended, output_dir)
     fundamental_path = write_json(
         stock_base_report_path(normalized_symbol) if output_dir == stock_report_dir(normalized_symbol) else output_dir / "base.json",
         {
@@ -236,6 +237,7 @@ def main() -> None:
                 "comment": getattr(fundamental_result.blended, "combined_comment", None),
             },
             "blended": fundamental_result.blended,
+            "presentation": build_fundamental_presentation(fundamental_result.blended, base_text_path),
         },
     )
     fundamental_ref = FundamentalBriefRef(

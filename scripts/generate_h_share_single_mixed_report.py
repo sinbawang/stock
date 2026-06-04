@@ -26,9 +26,7 @@ from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.normalize import normalize_bars
 from chanlun.zhongshu import identify_zhongshu
 from export_structures_with_boxes import calculate_macd
-from fundamental.reporting import render_blended_fundamental_brief
-from fundamental.reporting.brief_report import _format_component_name, _format_dimension_name, _format_metric_name
-from fundamental.reporting.text_report import _display_metric_name, _format_score_basis_for_display
+from fundamental.reporting.presentation import build_fundamental_presentation, write_base_text
 from fundamental.services import fetch_and_analyze_hk_blended_fundamentals
 from report_retention import prune_older_outputs
 from generate_h_share_combined_overview import (
@@ -99,105 +97,6 @@ def _resolve_minute_fallback_sources(primary_source: str, fallback_sources: tupl
     if primary_source == DEFAULT_HK_MINUTE_SOURCE:
         return DEFAULT_HK_MINUTE_FALLBACK_SOURCES
     return None
-
-
-def _metric_detail(snapshot, metric_name: str) -> dict[str, object]:
-    return {
-        "name": metric_name,
-        "label": _format_metric_name(metric_name),
-        "value": getattr(snapshot, metric_name, None),
-    }
-
-
-def _annual_dimension_presentation(blended) -> list[dict[str, object]]:
-    snapshot = blended.annual_anchor.snapshot
-    scorecard = blended.annual_anchor.scorecard
-    payloads: list[dict[str, object]] = []
-    for dimension in scorecard.dimension_scores:
-        payloads.append(
-            {
-                "dimension": dimension.dimension,
-                "title": _format_dimension_name(dimension.dimension),
-                "score": dimension.score,
-                "weight": dimension.weight,
-                "max_score": dimension.max_score,
-                "red_flag": scorecard.red_flag,
-                "formula": _format_score_basis_for_display(dimension.score_basis, snapshot),
-                "covered_metrics": [_metric_detail(snapshot, metric_name) for metric_name in dimension.used_metrics if metric_name],
-                "missing_metrics": [_metric_detail(snapshot, metric_name) for metric_name in dimension.missing_metrics if metric_name],
-                "passed_rules": list(dimension.passed_rules),
-                "failed_rules": list(dimension.failed_rules),
-                "notes": list(dimension.notes),
-            }
-        )
-    return payloads
-
-
-def _interim_component_presentation(blended) -> list[dict[str, object]]:
-    overlay = blended.interim_overlay
-    if overlay is None:
-        return []
-    snapshot = overlay.snapshot
-    payloads: list[dict[str, object]] = []
-    for component in overlay.components:
-        payloads.append(
-            {
-                "component": component.component,
-                "title": _format_component_name(component.component),
-                "score": component.score,
-                "weight": component.weight,
-                "weighted_score": round(component.score * component.weight, 4),
-                "formula": "单指标刷新" if len(component.covered_metrics) <= 1 else "覆盖指标均值刷新",
-                "covered_metrics": [_metric_detail(snapshot, metric_name) for metric_name in component.covered_metrics if metric_name],
-                "missing_metrics": [_metric_detail(snapshot, metric_name) for metric_name in component.missing_metrics if metric_name],
-                "note": component.note,
-            }
-        )
-    return payloads
-
-
-def _build_fundamental_presentation(blended, base_text_path: Path) -> dict[str, object]:
-    annual_scorecard = blended.annual_anchor.scorecard
-    interim_overlay = blended.interim_overlay
-    return {
-        "periods": {
-            "annual": blended.annual_anchor.snapshot.report_period.isoformat(),
-            "annual_label": blended.annual_anchor.snapshot.period_label or "年报",
-            "interim": interim_overlay.snapshot.report_period.isoformat() if interim_overlay is not None else None,
-            "interim_label": (interim_overlay.snapshot.period_label or "中间报告期") if interim_overlay is not None else None,
-        },
-        "summary": {
-            "score": blended.blended_total_score,
-            "rating": blended.blended_rating,
-            "red_flag": annual_scorecard.red_flag,
-            "annual_anchor_score": annual_scorecard.total_score,
-            "annual_anchor_rating": annual_scorecard.rating,
-            "annual_anchor_label": blended.annual_anchor.snapshot.period_label or "年报",
-            "interim_overlay_score": interim_overlay.overlay_score if interim_overlay is not None else None,
-            "interim_overlay_rating": interim_overlay.rating_hint if interim_overlay is not None else None,
-            "interim_overlay_label": (interim_overlay.snapshot.period_label or "中间报告期") if interim_overlay is not None else None,
-            "annual_weight": blended.annual_weight,
-            "interim_weight": blended.interim_weight,
-            "freshness_label": blended.freshness_label,
-            "comment": blended.combined_comment,
-        },
-        "red_flag": {
-            "triggered": annual_scorecard.red_flag,
-            "rules": list(annual_scorecard.triggered_rules),
-        },
-        "current_missing_fields": list(annual_scorecard.missing_metrics),
-        "annual_dimensions": _annual_dimension_presentation(blended),
-        "interim_components": _interim_component_presentation(blended),
-        "warnings": list(blended.warnings),
-        "assumptions": list(blended.assumptions),
-        "base_text_path": str(base_text_path),
-    }
-
-
-def _write_base_text(blended, output_dir: Path) -> Path:
-    output_path = output_dir / "base.txt"
-    output_path.write_text(render_blended_fundamental_brief(blended=blended), encoding="utf-8")
-    return output_path
 
 
 def _save_technical_report(
@@ -316,7 +215,7 @@ def main() -> None:
         quote_overlay_source=args.quote_overlay_source,
         manual_supplement_path=manual_supplement_path,
     )
-    base_text_path = _write_base_text(fundamental_result.blended, output_dir)
+    base_text_path = write_base_text(fundamental_result.blended, output_dir)
     fundamental_path = write_json(
         stock_base_report_path(args.symbol.zfill(5)) if output_dir == stock_report_dir(args.symbol.zfill(5)) else output_dir / "base.json",
         {
@@ -332,7 +231,7 @@ def main() -> None:
                 "comment": getattr(fundamental_result.blended, "combined_comment", None),
             },
             "blended": fundamental_result.blended,
-            "presentation": _build_fundamental_presentation(fundamental_result.blended, base_text_path),
+            "presentation": build_fundamental_presentation(fundamental_result.blended, base_text_path),
         },
     )
     fundamental_ref = FundamentalBriefRef(

@@ -3,27 +3,27 @@
   "symbol": "002555",
   "name": "三七互娱",
   "market": "CN",
-  "updated_at": "2026-06-02T01:52:46",
+  "updated_at": "2026-06-04T21:52:46",
   "priority": null,
   "action": null,
   "bucket": null,
-  "comment": "资金面信号中性，暂不构成强确认。",
+  "comment": "资金面存在风险信号，技术面结论需要降低确认度。",
   "cards": {
     "fundamental": {
-      "score": 65.62,
+      "score": 66.44,
       "rating": "B",
       "summary": "当前总分由年报锚定分与 2026-03-31 中间报告刷新层共同构成，当前权重为年报 80% / 季报 20%。"
     },
     "technical": {
       "timeframe": "60m",
-      "conclusion": null,
-      "suggestion": null
+      "conclusion": "偏空，优先减仓或兑现。",
+      "suggestion": "反抽不过 20.00 以减仓为主，不逆势加仓。"
     },
     "capital_flow": {
-      "score": 55.67,
-      "rating": "C",
+      "score": 37.82,
+      "rating": "D",
       "source": "ths.fund_flow.fallback",
-      "summary": "资金面信号中性，暂不构成强确认。"
+      "summary": "资金面存在风险信号，技术面结论需要降低确认度。"
     }
   },
   "cover_chart": {
