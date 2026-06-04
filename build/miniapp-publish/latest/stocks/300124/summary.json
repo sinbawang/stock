@@ -3,7 +3,7 @@
   "symbol": "300124",
   "name": "汇川技术",
   "market": "CN",
-  "updated_at": "2026-06-04T21:53:17",
+  "updated_at": "2026-06-04T22:53:31",
   "priority": null,
   "action": null,
   "bucket": null,
@@ -16,13 +16,13 @@
     },
     "technical": {
       "timeframe": "60m",
-      "conclusion": "偏多，允许轻仓试错。",
-      "suggestion": "分批试仓，跌破 73.00 则严格止损。"
+      "conclusion": null,
+      "suggestion": null
     },
     "capital_flow": {
-      "score": 37.82,
+      "score": 38.0,
       "rating": "D",
-      "source": "ths.fund_flow.fallback",
+      "source": "akshare.eastmoney",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。"
     }
   },

@@ -3,7 +3,7 @@
   "symbol": "03690",
   "name": "美团",
   "market": "HK",
-  "updated_at": "2026-06-02T02:02:31",
+  "updated_at": "2026-06-04T22:54:27",
   "priority": null,
   "action": null,
   "bucket": null,
@@ -20,9 +20,9 @@
       "suggestion": null
     },
     "capital_flow": {
-      "score": 52.5,
-      "rating": "C",
-      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
+      "score": 44.5,
+      "rating": "D",
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。"
     }
   },

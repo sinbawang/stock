@@ -3,7 +3,7 @@
   "symbol": "03690",
   "name": "美团",
   "market": "HK",
-  "updated_at": "2026-06-02T02:02:31",
+  "updated_at": "2026-06-04T22:54:27",
   "headline": {
     "title": "美团 03690",
     "subtitle": "三轴综合观察",
@@ -16,7 +16,7 @@
     "bullets": [
       "基本面 23.18/D",
       "60M 技术面 missing",
-      "资金面 52.5/C"
+      "资金面 44.5/D"
     ]
   },
   "sections": [
@@ -49,7 +49,7 @@
       "conclusion": null,
       "suggestion": null,
       "overview": [
-        "时间区间：2026-01-22 14:00 到 2026-06-01 16:00",
+        "时间区间：2026-01-27 14:00 到 2026-06-04 16:00",
         "K线数量：共 504 根 60M K线",
         "中枢数量：当前识别到 3 个中枢",
         "最新中枢：84.35-87.10，覆盖 04-14 14:00 到 05-28 14:00"
@@ -71,16 +71,16 @@
     {
       "key": "capital_flow",
       "title": "资金面",
-      "rating": "C",
-      "score": 52.5,
-      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
-      "trade_date": "2026-05-28",
+      "rating": "D",
+      "score": 44.5,
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover",
+      "trade_date": "2026-06-04",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [
-        "关键资金指标出现净流入",
         "未见明显过热信号"
       ],
       "risks": [
+        "关键资金指标出现净流出",
         "5日与10日资金持续净流出"
       ],
       "warnings": [
@@ -89,7 +89,7 @@
       "metrics": [
         {
           "label": "南向净买入",
-          "value": "672887446.0"
+          "value": "-471625691.0"
         }
       ]
     }

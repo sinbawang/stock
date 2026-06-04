@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +17,7 @@ if str(SRC) not in sys.path:
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+from fundamental.data import fetch_cn_available_report_periods, fetch_hk_available_report_periods
 from send_wechat_current_chat_text import send_current_chat_text
 from send_wechat_native import _split_message_chunks
 from storage_layout import holdings_file
@@ -43,12 +46,26 @@ class GeneratedBundle:
     chart_jpg: Path | None = None
 
 
+@dataclass(frozen=True)
+class ExistingBasePeriods:
+    annual: date
+    interim: date | None = None
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate latest mixed reports and 60M charts for all holdings, then send the three raw briefs as text to the current WeChat chat.")
     parser.add_argument("--holdings-file", default=str(DEFAULT_HOLDINGS_FILE), help="Combined holdings JSON file")
     parser.add_argument("--text-chunk-chars", type=int, default=DEFAULT_TEXT_CHUNK_CHARS, help="Max chars per text chunk before adding the message label")
     parser.add_argument("--limit", type=int, default=None, help="Optional max holding count for validation")
     parser.add_argument("--market", choices=["ALL", "CN", "HK"], default="ALL", help="Optional market filter")
+    parser.add_argument(
+        "--skip-gen-base",
+        "--skipGenBase",
+        dest="skip_gen_base",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Reuse an existing base.json instead of regenerating the fundamental report when possible. Use --no-skip-gen-base to force refresh.",
+    )
     return parser.parse_args()
 
 
@@ -99,7 +116,46 @@ def _extract_optional_colon_value(stdout_text: str, prefix: str) -> Path | None:
     return None
 
 
-def generate_bundle(holding: Holding) -> GeneratedBundle:
+def _existing_base_path(holding: Holding) -> Path:
+    symbol = holding.symbol.zfill(5) if holding.market == "HK" else holding.symbol
+    return ROOT / "data" / "reports" / symbol / "base.json"
+
+
+def _load_existing_base_periods(base_path: Path) -> ExistingBasePeriods | None:
+    if not base_path.exists():
+        return None
+    payload = json.loads(base_path.read_text(encoding="utf-8"))
+    blended = payload.get("blended") or {}
+    annual_snapshot = ((blended.get("annual_anchor") or {}).get("snapshot") or {})
+    interim_snapshot = ((blended.get("interim_overlay") or {}).get("snapshot") or {})
+    annual_text = annual_snapshot.get("report_period")
+    if not annual_text:
+        return None
+    annual = date.fromisoformat(str(annual_text))
+    interim_text = interim_snapshot.get("report_period")
+    interim = date.fromisoformat(str(interim_text)) if interim_text else None
+    return ExistingBasePeriods(annual=annual, interim=interim)
+
+
+def _should_reuse_existing_base(holding: Holding, skip_gen_base: bool) -> bool:
+    if not skip_gen_base:
+        return False
+
+    base_path = _existing_base_path(holding)
+    existing = _load_existing_base_periods(base_path)
+    if existing is None:
+        return False
+
+    latest = (
+        fetch_cn_available_report_periods(holding.symbol)
+        if holding.market == "CN"
+        else fetch_hk_available_report_periods(holding.symbol)
+    )
+    return existing.annual == latest.annual and existing.interim == latest.interim
+
+
+def generate_bundle(holding: Holding, *, skip_gen_base: bool = True) -> GeneratedBundle:
+    reuse_existing_base = _should_reuse_existing_base(holding, skip_gen_base)
     if holding.market == "CN":
         mixed_stdout = _run_command(
             [
@@ -108,6 +164,7 @@ def generate_bundle(holding: Holding) -> GeneratedBundle:
                 holding.symbol,
                 "--name",
                 holding.name,
+                f"--{'skip-gen-base' if reuse_existing_base else 'no-skip-gen-base'}",
             ]
         )
         chart_stdout = _run_command(
@@ -133,6 +190,7 @@ def generate_bundle(holding: Holding) -> GeneratedBundle:
                 "xueqiu",
                 "--fallback-source",
                 "akshare",
+                f"--{'skip-gen-base' if reuse_existing_base else 'no-skip-gen-base'}",
             ]
         )
         chart_stdout = _run_command(
@@ -212,7 +270,7 @@ def main() -> None:
     print(f"holdings={len(holdings)}")
     for index, holding in enumerate(holdings, start=1):
         print(f"generating {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name}", flush=True)
-        bundle = generate_bundle(holding)
+        bundle = generate_bundle(holding, skip_gen_base=args.skip_gen_base)
         print(
             f"generated {holding.symbol} bucket={bundle.combined_bucket} chart_svg={bundle.chart_svg} chart_jpg={bundle.chart_jpg}",
             flush=True,

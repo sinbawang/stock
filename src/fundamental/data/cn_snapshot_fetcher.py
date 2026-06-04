@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 import os
 from typing import Optional
 
@@ -26,6 +26,12 @@ from fundamental.models.snapshot import FundamentalSnapshot
 class CnPeriodSnapshotsFetchResult:
     annual: FundamentalSnapshotFetchResult
     interim: Optional[FundamentalSnapshotFetchResult] = None
+
+
+@dataclass(frozen=True)
+class CnAvailableReportPeriods:
+    annual: date
+    interim: Optional[date] = None
 
 
 def _clear_proxy_env() -> None:
@@ -913,6 +919,24 @@ def fetch_cn_period_snapshots(
         interim = None
 
     return CnPeriodSnapshotsFetchResult(annual=annual, interim=interim)
+
+
+def fetch_cn_available_report_periods(symbol: str) -> CnAvailableReportPeriods:
+    code = _normalize_cn_symbol(symbol)
+    abstract_df = _fetch_cn_financial_abstract_df(code)
+    annual_row = _latest_abstract_row(abstract_df)
+    annual_period = pd.Timestamp(_abstract_series_value(annual_row, "report_period")).date()
+
+    try:
+        interim_row = _latest_non_annual_abstract_row(abstract_df)
+    except RuntimeError:
+        interim_period = None
+    else:
+        interim_period = pd.Timestamp(_abstract_series_value(interim_row, "report_period")).date()
+        if interim_period <= annual_period:
+            interim_period = None
+
+    return CnAvailableReportPeriods(annual=annual_period, interim=interim_period)
 
 
 def _fetch_cn_financial_benefit_df(symbol: str) -> pd.DataFrame:

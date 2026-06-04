@@ -3,7 +3,7 @@
   "symbol": "000651",
   "name": "格力电器",
   "market": "CN",
-  "updated_at": "2026-06-04T21:51:36",
+  "updated_at": "2026-06-04T22:53:31",
   "priority": null,
   "action": null,
   "bucket": null,
@@ -16,13 +16,13 @@
     },
     "technical": {
       "timeframe": "60m",
-      "conclusion": "偏强，持有为主。",
-      "suggestion": "已有仓位可继续持有，回踩不破 37.86 再考虑加仓。"
+      "conclusion": null,
+      "suggestion": null
     },
     "capital_flow": {
-      "score": 43.77,
-      "rating": "D",
-      "source": "ths.fund_flow.fallback",
+      "score": 56.5,
+      "rating": "C",
+      "source": "akshare.eastmoney",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。"
     }
   },

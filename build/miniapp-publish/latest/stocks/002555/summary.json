@@ -3,7 +3,7 @@
   "symbol": "002555",
   "name": "三七互娱",
   "market": "CN",
-  "updated_at": "2026-06-04T21:52:46",
+  "updated_at": "2026-06-04T22:53:52",
   "priority": null,
   "action": null,
   "bucket": null,
@@ -16,8 +16,8 @@
     },
     "technical": {
       "timeframe": "60m",
-      "conclusion": "偏空，优先减仓或兑现。",
-      "suggestion": "反抽不过 20.00 以减仓为主，不逆势加仓。"
+      "conclusion": null,
+      "suggestion": null
     },
     "capital_flow": {
       "score": 37.82,

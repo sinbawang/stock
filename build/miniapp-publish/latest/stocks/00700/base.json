@@ -2,9 +2,9 @@
   "report_type": "fundamental",
   "symbol": "00700",
   "name": "腾讯",
-  "generated_at": "2026-06-02T01:53:46",
+  "generated_at": "2026-06-04T22:04:52",
   "summary": {
-    "score": 86.4,
+    "score": 85.79,
     "rating": "A",
     "submodel": "platform_internet_v1",
     "freshness_label": "q1_refresh",
@@ -23,13 +23,13 @@
         "report_period": "2025-12-31",
         "currency": "HKD",
         "source": "eastmoney+akshare",
-        "updated_at": "2026-06-02T01:53:45.827520",
+        "updated_at": "2026-06-04T22:04:51.949672",
         "market_cap": null,
-        "pe_ttm": 15.121169126871,
-        "pe_percentile_5y": 30.0,
-        "pb": 3.112793594746,
-        "ps_ttm": 4.624027311117,
-        "peg": 0.9538,
+        "pe_ttm": 15.918942663042,
+        "pe_percentile_5y": 34.0,
+        "pb": 3.277020602103,
+        "ps_ttm": 4.867985075784,
+        "peg": 1.0041,
         "dividend_yield": null,
         "roe": 21.134746439818,
         "roe_3y_mean": 21.4573,
@@ -87,7 +87,7 @@
         "industry_bucket": "technology",
         "submodel_id": "platform_internet_v1",
         "submodel_version": "v1",
-        "total_score": 87.14,
+        "total_score": 86.37,
         "rating": "A",
         "red_flag": false,
         "dimension_scores": [
@@ -154,10 +154,10 @@
           },
           {
             "dimension": "valuation_fit",
-            "score": 18.52,
+            "score": 17.75,
             "weight": 20,
             "max_score": 20.0,
-            "score_basis": "已计分2/2项[PE分位 30.00->94.0, PEG 0.95->91.2]; 平均=92.6; ×20/100=18.52",
+            "score_basis": "已计分2/2项[PE分位 34.00->89.2, PEG 1.00->88.3]; 平均=88.8; ×20/100=17.75",
             "used_metrics": [
               "pe_percentile_5y",
               "peg"
@@ -208,13 +208,13 @@
         "report_period": "2026-03-31",
         "currency": "HKD",
         "source": "eastmoney+akshare",
-        "updated_at": "2026-06-02T01:53:46.609251",
+        "updated_at": "2026-06-04T22:04:52.728534",
         "market_cap": null,
-        "pe_ttm": 15.121169126871,
-        "pe_percentile_5y": 30.0,
-        "pb": 3.112793594746,
-        "ps_ttm": 4.624027311117,
-        "peg": 0.704,
+        "pe_ttm": 15.918942663042,
+        "pe_percentile_5y": 34.0,
+        "pb": 3.277020602103,
+        "ps_ttm": 4.867985075784,
+        "peg": 0.7411,
         "dividend_yield": null,
         "roe": 5.091848379615,
         "roe_3y_mean": 10.1758,
@@ -317,7 +317,7 @@
     },
     "annual_weight": 0.8,
     "interim_weight": 0.2,
-    "blended_total_score": 86.4,
+    "blended_total_score": 85.79,
     "blended_rating": "A",
     "freshness_label": "q1_refresh",
     "warnings": [
@@ -344,10 +344,10 @@
       "interim_label": "一季报"
     },
     "summary": {
-      "score": 86.4,
+      "score": 85.79,
       "rating": "A",
       "red_flag": false,
-      "annual_anchor_score": 87.14,
+      "annual_anchor_score": 86.37,
       "annual_anchor_rating": "A",
       "annual_anchor_label": "年报",
       "interim_overlay_score": 83.45,
@@ -488,21 +488,21 @@
       {
         "dimension": "valuation_fit",
         "title": "估值匹配",
-        "score": 18.52,
+        "score": 17.75,
         "weight": 20,
         "max_score": 20.0,
         "red_flag": false,
-        "formula": "已计分2/2项[PE分位 30.00->94.0, PEG 0.95->91.2]; 平均=92.6; ×20/100=18.52",
+        "formula": "已计分2/2项[PE分位 34.00->89.2, PEG 1.00->88.3]; 平均=88.8; ×20/100=17.75",
         "covered_metrics": [
           {
             "name": "pe_percentile_5y",
             "label": "5年PE分位",
-            "value": 30.0
+            "value": 34.0
           },
           {
             "name": "peg",
             "label": "PEG",
-            "value": 0.9538
+            "value": 1.0041
           }
         ],
         "missing_metrics": [],

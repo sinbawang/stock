@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import shlex
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -45,6 +47,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-regenerate", action="store_true", help="Skip regenerating holdings reports and charts")
     parser.add_argument("--skip-build", action="store_true", help="Skip rebuilding the publish bundle")
     parser.add_argument("--skip-upload", action="store_true", help="Skip CloudBase upload")
+    parser.add_argument(
+        "--skip-gen-base",
+        "--skipGenBase",
+        dest="skip_gen_base",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Reuse an existing base.json instead of regenerating the fundamental report when possible. Use --no-skip-gen-base to force refresh.",
+    )
+    parser.add_argument(
+        "--parallelism",
+        type=int,
+        default=min(4, max(1, os.cpu_count() or 1)),
+        help="How many holdings to generate in parallel during regeneration.",
+    )
     parser.add_argument("--cloud-prefix", default="miniapp-publish/latest", help="Cloud storage prefix for upload")
     parser.add_argument("--env-id", default=None, help="CloudBase env id forwarded to uploader")
     parser.add_argument("--region", default=None, help="CloudBase region forwarded to uploader")
@@ -82,18 +98,40 @@ def regenerate_holdings(args: argparse.Namespace) -> None:
     if not holdings:
         raise RuntimeError("No holdings found for regeneration")
 
+    worker_count = max(1, min(args.parallelism, len(holdings)))
+    print(f"regenerate_holdings={len(holdings)} parallelism={worker_count} skip_gen_base={args.skip_gen_base}", flush=True)
+
     failures: list[str] = []
-    for index, holding in enumerate(holdings, start=1):
-        try:
-            bundle = generate_report_bundle(holding)
-            print(
-                f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
-                f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg}",
-                flush=True,
-            )
-        except Exception as exc:  # pragma: no cover - operational batch script
-            failures.append(f"{holding.market} {holding.symbol} {holding.name}: {exc}")
-            print(f"failed {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name}: {exc}", flush=True)
+    if worker_count == 1:
+        for index, holding in enumerate(holdings, start=1):
+            try:
+                bundle = generate_report_bundle(holding, skip_gen_base=args.skip_gen_base)
+                print(
+                    f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
+                    f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg}",
+                    flush=True,
+                )
+            except Exception as exc:  # pragma: no cover - operational batch script
+                failures.append(f"{holding.market} {holding.symbol} {holding.name}: {exc}")
+                print(f"failed {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name}: {exc}", flush=True)
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            future_map = {
+                executor.submit(generate_report_bundle, holding, skip_gen_base=args.skip_gen_base): (index, holding)
+                for index, holding in enumerate(holdings, start=1)
+            }
+            for future in as_completed(future_map):
+                index, holding = future_map[future]
+                try:
+                    bundle = future.result()
+                    print(
+                        f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
+                        f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg}",
+                        flush=True,
+                    )
+                except Exception as exc:  # pragma: no cover - operational batch script
+                    failures.append(f"{holding.market} {holding.symbol} {holding.name}: {exc}")
+                    print(f"failed {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name}: {exc}", flush=True)
     if failures:
         raise RuntimeError("Failed holdings:\n" + "\n".join(failures))
 

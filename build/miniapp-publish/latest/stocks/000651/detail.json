@@ -3,7 +3,7 @@
   "symbol": "000651",
   "name": "格力电器",
   "market": "CN",
-  "updated_at": "2026-06-04T21:51:36",
+  "updated_at": "2026-06-04T22:53:31",
   "headline": {
     "title": "格力电器 000651",
     "subtitle": "三轴综合观察",
@@ -12,11 +12,11 @@
     "bucket": null
   },
   "overview": {
-    "summary": "偏强，持有为主。",
+    "summary": "当前综合评级为 C，家电消费制造基本面仍应围绕渠道健康、现金流与股东回报持续跟踪。当前最需要跟踪的是家电增长兑现偏弱，收入扩张对利润拉动仍不充分。主要亮点是家电盈利质量较好，利润与现金流匹配度仍处于较稳区间。",
     "bullets": [
       "基本面 54.86/C",
-      "60M 技术面 偏强，持有为主。",
-      "资金面 43.77/D"
+      "60M 技术面 missing",
+      "资金面 56.5/C"
     ]
   },
   "sections": [
@@ -47,8 +47,8 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "akshare.eastmoney",
-      "conclusion": "偏强，持有为主。",
-      "suggestion": "已有仓位可继续持有，回踩不破 37.86 再考虑加仓。",
+      "conclusion": null,
+      "suggestion": null,
       "overview": [
         "时间区间：2026-01-30 10:30 到 2026-06-04 15:00",
         "K线数量：共 320 根 60M K线",
@@ -72,30 +72,31 @@
     {
       "key": "capital_flow",
       "title": "资金面",
-      "rating": "D",
-      "score": 43.77,
-      "source": "ths.fund_flow.fallback",
+      "rating": "C",
+      "score": 56.5,
+      "source": "akshare.eastmoney",
       "trade_date": "2026-06-04",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [
-        "多日窗口资金净流入"
+        "关键资金指标出现净流入",
+        "多日窗口资金净流入",
+        "5日与10日资金方向一致为正"
       ],
       "risks": [
         "关键资金指标出现净流出"
       ],
       "warnings": [
         "存在龙虎榜或大宗交易等事件扰动",
-        "低置信度资金流来源，评分按 85% 保守折减",
         "资金面部分指标缺失，评分只反映已取得字段"
       ],
       "metrics": [
         {
           "label": "主力净流入",
-          "value": "-97773600.0"
+          "value": "-143692091.0"
         },
         {
           "label": "5日主力净流入",
-          "value": "51583400.0"
+          "value": "654391974.0"
         }
       ]
     }

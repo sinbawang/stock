@@ -30,6 +30,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Only regenerate holdings missing base.json, fund.json, or overview.txt",
     )
+    parser.add_argument(
+        "--skip-gen-base",
+        "--skipGenBase",
+        dest="skip_gen_base",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Reuse an existing base.json instead of regenerating the fundamental report when possible. Use --no-skip-gen-base to force refresh.",
+    )
     return parser.parse_args()
 
 
@@ -57,7 +65,7 @@ def main() -> None:
     failures: list[str] = []
     for index, holding in enumerate(holdings, start=1):
         try:
-            bundle = generate_bundle(holding)
+            bundle = generate_bundle(holding, skip_gen_base=args.skip_gen_base)
             print(
                 f"ok {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
                 f"base={bundle.fundamental_brief} fund={bundle.capital_flow_report} overview={bundle.combined_report}",

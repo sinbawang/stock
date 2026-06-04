@@ -39,6 +39,12 @@ class HkPeriodSnapshotsFetchResult:
     interim: Optional[FundamentalSnapshotFetchResult] = None
 
 
+@dataclass(frozen=True)
+class HkAvailableReportPeriods:
+    annual: date
+    interim: Optional[date] = None
+
+
 def _clear_proxy_env() -> None:
     for var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
         os.environ.pop(var, None)
@@ -1212,3 +1218,27 @@ def fetch_hk_period_snapshots(
         interim = None
 
     return HkPeriodSnapshotsFetchResult(annual=annual, interim=interim)
+
+
+def fetch_hk_available_report_periods(symbol: str) -> HkAvailableReportPeriods:
+    code = _normalize_hk_symbol(symbol)
+    analysis_df = _fetch_hk_analysis_indicator_df(code)
+    annual_df, _annual_period_type, _annual_assumptions, _annual_label = _select_hk_analysis_rows(
+        analysis_df,
+        report_period_preference="annual_preferred",
+    )
+    annual_period = pd.Timestamp(annual_df.iloc[0]["REPORT_DATE"]).date()
+
+    try:
+        interim_df, _interim_period_type, _interim_assumptions, _interim_label = _select_hk_analysis_rows(
+            analysis_df,
+            report_period_preference="latest_interim",
+        )
+    except RuntimeError:
+        interim_period = None
+    else:
+        interim_period = pd.Timestamp(interim_df.iloc[0]["REPORT_DATE"]).date()
+        if interim_period <= annual_period:
+            interim_period = None
+
+    return HkAvailableReportPeriods(annual=annual_period, interim=interim_period)

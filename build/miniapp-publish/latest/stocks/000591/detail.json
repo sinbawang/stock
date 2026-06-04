@@ -3,7 +3,7 @@
   "symbol": "000591",
   "name": "太阳能",
   "market": "CN",
-  "updated_at": "2026-06-04T21:50:31",
+  "updated_at": "2026-06-04T22:53:31",
   "headline": {
     "title": "太阳能 000591",
     "subtitle": "三轴综合观察",
@@ -12,11 +12,11 @@
     "bucket": null
   },
   "overview": {
-    "summary": "偏多，允许轻仓试错。",
+    "summary": "当前综合评级为 C，公用事业与新能源运营基本面仍应围绕现金流、分红与负债表持续跟踪。当前最需要跟踪的是公用事业增长兑现偏弱，稳健经营之外的增量支撑仍需确认。主要亮点是公用事业现金流兑现较好，分红与经营效率具备一定支撑。",
     "bullets": [
       "基本面 46.73/C",
-      "60M 技术面 偏多，允许轻仓试错。",
-      "资金面 44.62/D"
+      "60M 技术面 missing",
+      "资金面 45.5/D"
     ]
   },
   "sections": [
@@ -47,8 +47,8 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "akshare.eastmoney",
-      "conclusion": "偏多，允许轻仓试错。",
-      "suggestion": "分批试仓，跌破 5.50 则严格止损。",
+      "conclusion": null,
+      "suggestion": null,
       "overview": [
         "时间区间：2026-01-30 10:30 到 2026-06-04 15:00",
         "K线数量：共 320 根 60M K线",
@@ -73,8 +73,8 @@
       "key": "capital_flow",
       "title": "资金面",
       "rating": "D",
-      "score": 44.62,
-      "source": "ths.fund_flow.fallback",
+      "score": 45.5,
+      "source": "akshare.eastmoney",
       "trade_date": "2026-06-04",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [
@@ -82,20 +82,20 @@
         "未见明显过热信号"
       ],
       "risks": [
+        "关键资金指标出现净流出",
         "5日与10日资金持续净流出"
       ],
       "warnings": [
-        "低置信度资金流来源，评分按 85% 保守折减",
         "资金面部分指标缺失，评分只反映已取得字段"
       ],
       "metrics": [
         {
           "label": "主力净流入",
-          "value": "14829900.0"
+          "value": "-1178947.0"
         },
         {
           "label": "5日主力净流入",
-          "value": "-482000000.0"
+          "value": "-330774026.0"
         }
       ]
     }

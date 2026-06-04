@@ -3,7 +3,7 @@
   "symbol": "300124",
   "name": "汇川技术",
   "market": "CN",
-  "updated_at": "2026-06-04T21:53:17",
+  "updated_at": "2026-06-04T22:53:31",
   "headline": {
     "title": "汇川技术 300124",
     "subtitle": "三轴综合观察",
@@ -12,11 +12,11 @@
     "bucket": null
   },
   "overview": {
-    "summary": "偏多，允许轻仓试错。",
+    "summary": "当前综合评级为 B，工业自动化基本面仍需围绕订单与营运质量持续跟踪。当前最需要跟踪的是估值匹配偏弱，当前价格对制造升级兑现要求偏高。主要亮点是工业自动化盈利质量较好，利润改善已得到一定现金流验证。",
     "bullets": [
       "基本面 73.66/B",
-      "60M 技术面 偏多，允许轻仓试错。",
-      "资金面 37.82/D"
+      "60M 技术面 missing",
+      "资金面 38.0/D"
     ]
   },
   "sections": [
@@ -48,8 +48,8 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "akshare.eastmoney",
-      "conclusion": "偏多，允许轻仓试错。",
-      "suggestion": "分批试仓，跌破 73.00 则严格止损。",
+      "conclusion": null,
+      "suggestion": null,
       "overview": [
         "时间区间：2026-01-30 10:30 到 2026-06-04 15:00",
         "K线数量：共 320 根 60M K线",
@@ -74,8 +74,8 @@
       "key": "capital_flow",
       "title": "资金面",
       "rating": "D",
-      "score": 37.82,
-      "source": "ths.fund_flow.fallback",
+      "score": 38.0,
+      "source": "akshare.eastmoney",
       "trade_date": "2026-06-04",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [
@@ -86,17 +86,16 @@
         "5日与10日资金持续净流出"
       ],
       "warnings": [
-        "低置信度资金流来源，评分按 85% 保守折减",
         "资金面部分指标缺失，评分只反映已取得字段"
       ],
       "metrics": [
         {
           "label": "主力净流入",
-          "value": "-165000000.0"
+          "value": "-174569968.0"
         },
         {
           "label": "5日主力净流入",
-          "value": "-364000000.0"
+          "value": "-360573968.0"
         }
       ]
     }

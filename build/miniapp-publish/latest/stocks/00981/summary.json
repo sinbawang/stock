@@ -3,7 +3,7 @@
   "symbol": "00981",
   "name": "中芯国际",
   "market": "HK",
-  "updated_at": "2026-06-02T01:53:01",
+  "updated_at": "2026-06-04T22:53:47",
   "priority": null,
   "action": null,
   "bucket": null,
@@ -22,7 +22,7 @@
     "capital_flow": {
       "score": 69.5,
       "rating": "B",
-      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover",
       "summary": "资金面信号中性，暂不构成强确认。"
     }
   },

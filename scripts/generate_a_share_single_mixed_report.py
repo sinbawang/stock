@@ -60,6 +60,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Output directory")
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help="Capital-flow cache directory")
     parser.add_argument("--max-cache-age-days", type=int, default=7, help="Maximum accepted cache age in days")
+    parser.add_argument(
+        "--skip-gen-base",
+        "--skipGenBase",
+        dest="skip_gen_base",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Reuse an existing base.json instead of regenerating the fundamental report when possible. Use --no-skip-gen-base to force refresh.",
+    )
     parser.add_argument("--send-wechat", action="store_true", help="Send the combined mixed report to the current WeChat chat")
     parser.add_argument("--disable-dedupe", action="store_true", help="Disable short-window duplicate-send protection")
     parser.add_argument("--duplicate-send-window-seconds", type=float, default=300.0, help="Skip duplicate sends within this many seconds; set to 0 to disable")
@@ -88,6 +96,24 @@ def _compact_capital_flow(capital_flow: CapitalFlowRef) -> str:
     if capital_flow.source:
         text += f"/{capital_flow.source}"
     return text
+
+
+def _load_existing_fundamental_ref(base_path: Path) -> FundamentalBriefRef | None:
+    if not base_path.exists():
+        return None
+    payload = json.loads(base_path.read_text(encoding="utf-8"))
+    summary = payload.get("summary") or {}
+    score = summary.get("score")
+    rating = summary.get("rating")
+    submodel = summary.get("submodel")
+    if score is None or not rating or not submodel:
+        return None
+    return FundamentalBriefRef(
+        score=float(score),
+        rating=str(rating),
+        submodel=str(submodel),
+        path=base_path,
+    )
 
 
 def _save_technical_report(
@@ -217,35 +243,41 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     normalized_symbol = _normalize_symbol(args.symbol)
-    fundamental_result = fetch_and_analyze_cn_blended_fundamentals(
-        normalized_symbol,
-        name=args.name,
-    )
-    base_text_path = write_base_text(fundamental_result.blended, output_dir)
-    fundamental_path = write_json(
-        stock_base_report_path(normalized_symbol) if output_dir == stock_report_dir(normalized_symbol) else output_dir / "base.json",
-        {
-            "report_type": "fundamental",
-            "symbol": normalized_symbol,
-            "name": args.name,
-            "generated_at": datetime.now().isoformat(timespec="seconds"),
-            "summary": {
-                "score": fundamental_result.blended.blended_total_score,
-                "rating": fundamental_result.blended.blended_rating,
-                "submodel": fundamental_result.blended.submodel_id,
-                "freshness_label": getattr(fundamental_result.blended, "freshness_label", None),
-                "comment": getattr(fundamental_result.blended, "combined_comment", None),
+    base_path = stock_base_report_path(normalized_symbol) if output_dir == stock_report_dir(normalized_symbol) else output_dir / "base.json"
+    fundamental_ref = _load_existing_fundamental_ref(base_path) if args.skip_gen_base else None
+    fundamental_path = base_path
+    if fundamental_ref is None:
+        fundamental_result = fetch_and_analyze_cn_blended_fundamentals(
+            normalized_symbol,
+            name=args.name,
+        )
+        base_text_path = write_base_text(fundamental_result.blended, output_dir)
+        fundamental_path = write_json(
+            base_path,
+            {
+                "report_type": "fundamental",
+                "symbol": normalized_symbol,
+                "name": args.name,
+                "generated_at": datetime.now().isoformat(timespec="seconds"),
+                "summary": {
+                    "score": fundamental_result.blended.blended_total_score,
+                    "rating": fundamental_result.blended.blended_rating,
+                    "submodel": fundamental_result.blended.submodel_id,
+                    "freshness_label": getattr(fundamental_result.blended, "freshness_label", None),
+                    "comment": getattr(fundamental_result.blended, "combined_comment", None),
+                },
+                "blended": fundamental_result.blended,
+                "presentation": build_fundamental_presentation(fundamental_result.blended, base_text_path),
             },
-            "blended": fundamental_result.blended,
-            "presentation": build_fundamental_presentation(fundamental_result.blended, base_text_path),
-        },
-    )
-    fundamental_ref = FundamentalBriefRef(
-        score=fundamental_result.blended.blended_total_score,
-        rating=fundamental_result.blended.blended_rating,
-        submodel=fundamental_result.blended.submodel_id,
-        path=fundamental_path,
-    )
+        )
+        fundamental_ref = FundamentalBriefRef(
+            score=fundamental_result.blended.blended_total_score,
+            rating=fundamental_result.blended.blended_rating,
+            submodel=fundamental_result.blended.submodel_id,
+            path=fundamental_path,
+        )
+    else:
+        print(f"fundamental_reused= {fundamental_path}")
 
     technical_ref, technical_path = _save_technical_report(
         symbol=normalized_symbol,
