@@ -316,6 +316,24 @@ def calculate_macd(raw_bars: list[Bar], short_period: int = 12, long_period: int
     return points
 
 
+def calculate_simple_moving_average(raw_bars: list[Bar], window: int) -> list[float | None]:
+    if window <= 0:
+        raise ValueError("window must be positive")
+
+    values: list[float | None] = []
+    rolling_sum = 0.0
+    closes = [bar.close for bar in raw_bars]
+    for index, close in enumerate(closes):
+        rolling_sum += close
+        if index >= window:
+            rolling_sum -= closes[index - window]
+        if index + 1 >= window:
+            values.append(rolling_sum / window)
+        else:
+            values.append(None)
+    return values
+
+
 def export_macd(path: Path, macd_points: list[MacdPoint]) -> None:
     rows = [
         {
@@ -372,6 +390,8 @@ def write_svg_with_inclusion_boxes(
     dea_color = "#ff8c00"
     macd_pos = "#e84040"
     macd_neg = "#26a69a"
+    ma5_color = "#60a5fa"
+    ma10_color = "#fbbf24"
 
     width = 1800
     height = 1120
@@ -393,6 +413,8 @@ def write_svg_with_inclusion_boxes(
 
     slot_width = plot_width / max(len(raw_bars), 1)
     candle_width = max(3.0, slot_width * 0.58)
+    ma5_values = calculate_simple_moving_average(raw_bars, 5)
+    ma10_values = calculate_simple_moving_average(raw_bars, 10)
 
     def x_for(index: int) -> float:
         return left_margin + slot_width * (index + 0.5)
@@ -483,6 +505,25 @@ def write_svg_with_inclusion_boxes(
         )
         svg_parts.append(
             f'<rect x="{x_value - candle_width / 2:.2f}" y="{body_top:.2f}" width="{candle_width:.2f}" height="{body_height:.2f}" fill="{color}" stroke="{color}" stroke-width="0.8" fill-opacity="0.9"/>'
+        )
+
+    ma5_path: list[str] = []
+    ma10_path: list[str] = []
+    for index, value in enumerate(ma5_values):
+        if value is None:
+            continue
+        ma5_path.append(f'{"M" if not ma5_path else "L"}{x_for(index):.2f},{price_y(value):.2f}')
+    for index, value in enumerate(ma10_values):
+        if value is None:
+            continue
+        ma10_path.append(f'{"M" if not ma10_path else "L"}{x_for(index):.2f},{price_y(value):.2f}')
+    if ma5_path:
+        svg_parts.append(
+            f'<path d="{" ".join(ma5_path)}" fill="none" stroke="{ma5_color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>'
+        )
+    if ma10_path:
+        svg_parts.append(
+            f'<path d="{" ".join(ma10_path)}" fill="none" stroke="{ma10_color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>'
         )
 
     zero_y = macd_y(0.0)
@@ -580,22 +621,26 @@ def write_svg_with_inclusion_boxes(
 
     legend_x = width - 280
     legend_y = 74
-    svg_parts.append(f'<rect x="{legend_x}" y="{legend_y}" width="240" height="146" rx="8" fill="#18181b" stroke="#3f3f46"/>')
-    svg_parts.append(f'<rect x="{legend_x + 12}" y="{legend_y + 14}" width="22" height="12" fill="#94a3b8" fill-opacity="0.08" stroke="#64748b" stroke-dasharray="6 4"/>')
-    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 24}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">Inclusion box</text>')
-    svg_parts.append(f'<rect x="{legend_x + 12}" y="{legend_y + 34}" width="22" height="12" fill="{zs_fill}" fill-opacity="0.20" stroke="{zs_stroke}" stroke-dasharray="6 4"/>')
-    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 44}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">Bi zhongshu</text>')
-    svg_parts.append(f'<line x1="{legend_x + 12}" y1="{legend_y + 62}" x2="{legend_x + 34}" y2="{legend_y + 62}" stroke="{bi_color}" stroke-width="2.0"/>')
-    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 66}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">Confirmed bi</text>')
-    svg_parts.append(f'<line x1="{legend_x + 12}" y1="{legend_y + 80}" x2="{legend_x + 34}" y2="{legend_y + 80}" stroke="{bi_color}" stroke-width="2.0" stroke-dasharray="5 5"/>')
-    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 84}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">Unconfirmed bi</text>')
-    svg_parts.append(f'<rect x="{legend_x + 12}" y="{legend_y + 96}" width="22" height="12" fill="{macd_pos}" fill-opacity="0.72"/>')
-    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 106}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">MACD histogram+</text>')
-    svg_parts.append(f'<rect x="{legend_x + 12}" y="{legend_y + 114}" width="22" height="12" fill="{macd_neg}" fill-opacity="0.72"/>')
-    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 124}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">MACD histogram-</text>')
-    svg_parts.append(f'<line x1="{legend_x + 12}" y1="{legend_y + 138}" x2="{legend_x + 22}" y2="{legend_y + 138}" stroke="{dif_color}" stroke-width="1.8"/>')
-    svg_parts.append(f'<line x1="{legend_x + 24}" y1="{legend_y + 138}" x2="{legend_x + 34}" y2="{legend_y + 138}" stroke="{dea_color}" stroke-width="1.8"/>')
-    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 142}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">DIF / DEA</text>')
+    svg_parts.append(f'<rect x="{legend_x}" y="{legend_y}" width="240" height="184" rx="8" fill="#18181b" stroke="#3f3f46"/>')
+    svg_parts.append(f'<line x1="{legend_x + 12}" y1="{legend_y + 16}" x2="{legend_x + 34}" y2="{legend_y + 16}" stroke="{ma5_color}" stroke-width="1.6"/>')
+    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 20}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">MA5</text>')
+    svg_parts.append(f'<line x1="{legend_x + 12}" y1="{legend_y + 34}" x2="{legend_x + 34}" y2="{legend_y + 34}" stroke="{ma10_color}" stroke-width="1.6"/>')
+    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 38}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">MA10</text>')
+    svg_parts.append(f'<rect x="{legend_x + 12}" y="{legend_y + 50}" width="22" height="12" fill="#94a3b8" fill-opacity="0.08" stroke="#64748b" stroke-dasharray="6 4"/>')
+    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 60}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">Inclusion box</text>')
+    svg_parts.append(f'<rect x="{legend_x + 12}" y="{legend_y + 68}" width="22" height="12" fill="{zs_fill}" fill-opacity="0.20" stroke="{zs_stroke}" stroke-dasharray="6 4"/>')
+    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 78}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">Bi zhongshu</text>')
+    svg_parts.append(f'<line x1="{legend_x + 12}" y1="{legend_y + 96}" x2="{legend_x + 34}" y2="{legend_y + 96}" stroke="{bi_color}" stroke-width="2.0"/>')
+    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 100}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">Confirmed bi</text>')
+    svg_parts.append(f'<line x1="{legend_x + 12}" y1="{legend_y + 114}" x2="{legend_x + 34}" y2="{legend_y + 114}" stroke="{bi_color}" stroke-width="2.0" stroke-dasharray="5 5"/>')
+    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 118}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">Unconfirmed bi</text>')
+    svg_parts.append(f'<rect x="{legend_x + 12}" y="{legend_y + 130}" width="22" height="12" fill="{macd_pos}" fill-opacity="0.72"/>')
+    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 140}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">MACD histogram+</text>')
+    svg_parts.append(f'<rect x="{legend_x + 12}" y="{legend_y + 148}" width="22" height="12" fill="{macd_neg}" fill-opacity="0.72"/>')
+    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 158}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">MACD histogram-</text>')
+    svg_parts.append(f'<line x1="{legend_x + 12}" y1="{legend_y + 172}" x2="{legend_x + 22}" y2="{legend_y + 172}" stroke="{dif_color}" stroke-width="1.8"/>')
+    svg_parts.append(f'<line x1="{legend_x + 24}" y1="{legend_y + 172}" x2="{legend_x + 34}" y2="{legend_y + 172}" stroke="{dea_color}" stroke-width="1.8"/>')
+    svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 176}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">DIF / DEA</text>')
 
     svg_parts.append('</svg>')
     output_svg.parent.mkdir(parents=True, exist_ok=True)
