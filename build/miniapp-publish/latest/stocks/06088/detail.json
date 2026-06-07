@@ -3,7 +3,7 @@
   "symbol": "06088",
   "name": "鸿腾精密",
   "market": "HK",
-  "updated_at": "2026-06-04T22:54:34",
+  "updated_at": "2026-06-07T21:46:34",
   "headline": {
     "title": "鸿腾精密 06088",
     "subtitle": "三轴综合观察",
@@ -47,23 +47,28 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "xueqiu",
+      "operation_level": null,
       "conclusion": null,
       "suggestion": null,
+      "buy_points": [],
+      "sell_points": [],
+      "signal_points": [],
+      "signal_catalog": [],
       "overview": [
-        "时间区间：2026-01-27 14:00 到 2026-06-04 16:00",
+        "时间区间：2026-01-28 14:00 到 2026-06-05 16:00",
         "K线数量：共 504 根 60M K线",
         "中枢数量：当前识别到 3 个中枢",
         "最新中枢：6.78-7.58，覆盖 03-23 16:00 到 05-11 14:00"
       ],
       "structure": [
-        "最新确认向上笔：05-20 15:00 到 05-29 10:30，高点 9.53",
-        "最新确认向下笔：05-29 10:30 到 06-02 10:30，低点 8.56"
+        "最新确认向上笔：06-02 10:30 到 06-03 11:30，高点 10.22",
+        "未确认向下笔：06-03 11:30 到 06-05 10:30，低点 8.69"
       ],
       "signals": [
-        "顶背驰：无",
+        "顶背驰：有",
         "底背驰：无",
         "买点：buy_3",
-        "卖点：当前无确认一二三类卖点"
+        "卖点：sell_1"
       ],
       "focus": [
         "观察重点：是否重新站回中枢 6.78-7.58，以及后续一笔是否形成有效突破"
@@ -74,7 +79,7 @@
       "title": "资金面",
       "rating": "C",
       "score": 61.5,
-      "source": "eastmoney.hk_connect_components.cache+eastmoney.southbound_net_buy+hkex.short_selling_turnover",
+      "source": "eastmoney.hk_connect_components.cache+eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
       "trade_date": "2026-05-29",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [

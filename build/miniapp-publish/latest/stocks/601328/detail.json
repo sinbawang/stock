@@ -3,7 +3,7 @@
   "symbol": "601328",
   "name": "交通银行",
   "market": "CN",
-  "updated_at": "2026-06-04T22:53:41",
+  "updated_at": "2026-06-07T21:45:25",
   "headline": {
     "title": "交通银行 601328",
     "subtitle": "三轴综合观察",
@@ -16,7 +16,7 @@
     "bullets": [
       "基本面 65.42/B",
       "60M 技术面 missing",
-      "资金面 62.5/C"
+      "资金面 70.5/B"
     ]
   },
   "sections": [
@@ -48,17 +48,22 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "akshare.eastmoney",
+      "operation_level": null,
       "conclusion": null,
       "suggestion": null,
+      "buy_points": [],
+      "sell_points": [],
+      "signal_points": [],
+      "signal_catalog": [],
       "overview": [
-        "时间区间：2026-01-30 10:30 到 2026-06-04 15:00",
+        "时间区间：2026-02-02 10:30 到 2026-06-05 15:00",
         "K线数量：共 320 根 60M K线",
         "中枢数量：当前识别到 1 个中枢",
-        "最新中枢：6.60-6.81，覆盖 02-11 15:00 到 04-21 10:30"
+        "最新中枢：6.60-6.81，覆盖 03-02 10:30 到 04-21 10:30"
       ],
       "structure": [
-        "最新确认向上笔：04-28 10:30 到 04-29 10:30，高点 6.99",
-        "最新确认向下笔：04-29 10:30 到 05-21 10:30，低点 6.55"
+        "最新确认向上笔：05-21 10:30 到 06-02 15:00，高点 6.86",
+        "未确认向下笔：06-02 15:00 到 06-04 15:00，低点 6.71"
       ],
       "signals": [
         "顶背驰：无",
@@ -73,9 +78,9 @@
     {
       "key": "capital_flow",
       "title": "资金面",
-      "rating": "C",
-      "score": 62.5,
-      "source": "akshare.eastmoney",
+      "rating": "B",
+      "score": 70.5,
+      "source": "akshare.eastmoney.cache",
       "trade_date": "2026-06-04",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [

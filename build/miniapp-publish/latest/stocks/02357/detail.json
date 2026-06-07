@@ -3,7 +3,7 @@
   "symbol": "02357",
   "name": "中航科工",
   "market": "HK",
-  "updated_at": "2026-06-04T22:54:19",
+  "updated_at": "2026-06-07T21:46:10",
   "headline": {
     "title": "中航科工 02357",
     "subtitle": "三轴综合观察",
@@ -47,13 +47,18 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "xueqiu",
+      "operation_level": null,
       "conclusion": null,
       "suggestion": null,
+      "buy_points": [],
+      "sell_points": [],
+      "signal_points": [],
+      "signal_catalog": [],
       "overview": [
-        "时间区间：2026-01-27 14:00 到 2026-06-04 16:00",
+        "时间区间：2026-01-28 14:00 到 2026-06-05 16:00",
         "K线数量：共 504 根 60M K线",
         "中枢数量：当前识别到 2 个中枢",
-        "最新中枢：3.41-3.54，覆盖 03-23 15:00 到 05-26 10:30"
+        "最新中枢：3.42-3.54，覆盖 03-26 10:30 到 05-26 10:30"
       ],
       "structure": [
         "最新确认向上笔：05-28 14:00 到 06-01 14:00，高点 3.23",
@@ -66,7 +71,7 @@
         "卖点：sell_3"
       ],
       "focus": [
-        "观察重点：是否重新站回中枢 3.41-3.54，以及后续一笔是否形成有效突破"
+        "观察重点：是否重新站回中枢 3.42-3.54，以及后续一笔是否形成有效突破"
       ]
     },
     {
@@ -74,7 +79,7 @@
       "title": "资金面",
       "rating": "B",
       "score": 69.5,
-      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover",
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
       "trade_date": "2021-08-09",
       "summary": "资金面信号中性，暂不构成强确认。",
       "strengths": [

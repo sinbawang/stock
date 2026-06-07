@@ -3,7 +3,7 @@
   "symbol": "00700",
   "name": "腾讯",
   "market": "HK",
-  "updated_at": "2026-06-04T22:54:09",
+  "updated_at": "2026-06-07T21:45:56",
   "headline": {
     "title": "腾讯 00700",
     "subtitle": "三轴综合观察",
@@ -16,7 +16,7 @@
     "bullets": [
       "基本面 85.79/A",
       "60M 技术面 missing",
-      "资金面 57.5/C"
+      "资金面 65.5/B"
     ]
   },
   "sections": [
@@ -46,10 +46,15 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "xueqiu",
+      "operation_level": null,
       "conclusion": null,
       "suggestion": null,
+      "buy_points": [],
+      "sell_points": [],
+      "signal_points": [],
+      "signal_catalog": [],
       "overview": [
-        "时间区间：2026-01-27 14:00 到 2026-06-04 16:00",
+        "时间区间：2026-01-28 14:00 到 2026-06-05 16:00",
         "K线数量：共 504 根 60M K线",
         "中枢数量：当前识别到 3 个中枢",
         "最新中枢：456.60-479.60，覆盖 05-07 11:30 到 06-02 16:00"
@@ -71,25 +76,24 @@
     {
       "key": "capital_flow",
       "title": "资金面",
-      "rating": "C",
-      "score": 57.5,
-      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover",
+      "rating": "B",
+      "score": 65.5,
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
       "trade_date": "2026-06-04",
-      "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
+      "summary": "资金面信号中性，暂不构成强确认。",
       "strengths": [
+        "关键资金指标出现净流入",
         "多日窗口资金净流入",
         "未见明显过热信号"
       ],
-      "risks": [
-        "关键资金指标出现净流出"
-      ],
+      "risks": [],
       "warnings": [
         "资金面部分指标缺失，评分只反映已取得字段"
       ],
       "metrics": [
         {
           "label": "南向净买入",
-          "value": "-521980330.0"
+          "value": "1686621233.0"
         }
       ]
     }

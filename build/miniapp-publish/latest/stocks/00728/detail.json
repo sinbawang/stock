@@ -3,7 +3,7 @@
   "symbol": "00728",
   "name": "中国电信",
   "market": "HK",
-  "updated_at": "2026-06-04T22:53:58",
+  "updated_at": "2026-06-07T21:45:40",
   "headline": {
     "title": "中国电信 00728",
     "subtitle": "三轴综合观察",
@@ -47,10 +47,15 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "xueqiu",
+      "operation_level": null,
       "conclusion": null,
       "suggestion": null,
+      "buy_points": [],
+      "sell_points": [],
+      "signal_points": [],
+      "signal_catalog": [],
       "overview": [
-        "时间区间：2026-01-27 14:00 到 2026-06-04 16:00",
+        "时间区间：2026-01-28 14:00 到 2026-06-05 16:00",
         "K线数量：共 504 根 60M K线",
         "中枢数量：当前识别到 2 个中枢",
         "最新中枢：5.23-5.61，覆盖 05-06 16:00 到 06-01 15:00"
@@ -74,7 +79,7 @@
       "title": "资金面",
       "rating": "C",
       "score": 52.5,
-      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover",
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
       "trade_date": "2024-08-26",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [

@@ -3,7 +3,7 @@
   "symbol": "000591",
   "name": "太阳能",
   "market": "CN",
-  "updated_at": "2026-06-04T22:53:31",
+  "updated_at": "2026-06-07T21:45:21",
   "headline": {
     "title": "太阳能 000591",
     "subtitle": "三轴综合观察",
@@ -47,10 +47,15 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "akshare.eastmoney",
+      "operation_level": null,
       "conclusion": null,
       "suggestion": null,
+      "buy_points": [],
+      "sell_points": [],
+      "signal_points": [],
+      "signal_catalog": [],
       "overview": [
-        "时间区间：2026-01-30 10:30 到 2026-06-04 15:00",
+        "时间区间：2026-02-02 10:30 到 2026-06-05 15:00",
         "K线数量：共 320 根 60M K线",
         "中枢数量：当前识别到 2 个中枢",
         "最新中枢：5.25-5.41，覆盖 04-14 10:30 到 05-13 10:30"
@@ -74,7 +79,7 @@
       "title": "资金面",
       "rating": "D",
       "score": 45.5,
-      "source": "akshare.eastmoney",
+      "source": "akshare.eastmoney.cache",
       "trade_date": "2026-06-04",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [

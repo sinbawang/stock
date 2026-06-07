@@ -3,7 +3,7 @@
   "symbol": "00175",
   "name": "吉利汽车",
   "market": "HK",
-  "updated_at": "2026-06-04T22:54:05",
+  "updated_at": "2026-06-07T21:45:49",
   "headline": {
     "title": "吉利汽车 00175",
     "subtitle": "三轴综合观察",
@@ -45,10 +45,15 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "xueqiu",
+      "operation_level": null,
       "conclusion": null,
       "suggestion": null,
+      "buy_points": [],
+      "sell_points": [],
+      "signal_points": [],
+      "signal_catalog": [],
       "overview": [
-        "时间区间：2026-01-27 14:00 到 2026-06-04 16:00",
+        "时间区间：2026-01-28 14:00 到 2026-06-05 16:00",
         "K线数量：共 504 根 60M K线",
         "中枢数量：当前识别到 3 个中枢",
         "最新中枢：20.88-22.00，覆盖 05-12 10:30 到 05-21 15:00"
@@ -72,7 +77,7 @@
       "title": "资金面",
       "rating": "D",
       "score": 44.5,
-      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover",
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
       "trade_date": "2026-04-24",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [

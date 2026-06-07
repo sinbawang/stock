@@ -235,9 +235,22 @@ def _compact_technical_payload(payload: dict) -> list[str]:
         return ["结论: missing"]
     analysis_text = payload.get("analysis_text") or ""
     lines = [
+        f"操作级别: {summary.get('operation_level') or payload.get('timeframe') or 'missing'}",
         f"结论: {summary.get('conclusion') or 'missing'}",
         f"建议: {summary.get('suggestion') or 'missing'}",
     ]
+    signal_points = summary.get("signal_catalog") or summary.get("signal_points") or []
+    if signal_points:
+        formatted_points = []
+        for item in signal_points[:6]:
+            point = item.get("point") or "unknown"
+            active = item.get("active")
+            time_text = item.get("time") or "missing"
+            price = item.get("price")
+            price_text = f"{price:.2f}" if isinstance(price, (int, float)) else "missing"
+            status = "active" if active is not False else "inactive"
+            formatted_points.append(f"{point}({status})@{time_text}/{price_text}")
+        lines.append("买卖点: " + "；".join(formatted_points))
     overview = _limit_lines(_extract_section_lines(analysis_text, "概览："), 3)
     structure = _limit_lines(_extract_section_lines(analysis_text, "结构："), 3)
     signals = _limit_lines(_extract_section_lines(analysis_text, "信号："), 4)

@@ -214,6 +214,63 @@ def extract_signals(bis, zhongshus, macd_points) -> dict[str, object]:
     }
 
 
+def _format_signal_point_name(point: str) -> str:
+    return point.replace("_", "")
+
+
+def _format_signal_point_time(bi) -> str | None:
+    if bi is None or getattr(bi, "end_ts", None) is None:
+        return None
+    return bi.end_ts.isoformat(timespec="seconds")
+
+
+def _build_signal_point_detail(point: str, signal_bi, price: float | None) -> dict[str, object]:
+    return {
+        "point": _format_signal_point_name(point),
+        "time": _format_signal_point_time(signal_bi),
+        "price": round(float(price), 2) if price is not None else None,
+    }
+
+
+def build_technical_summary(timeframe_label: str, signals: dict[str, object], advice_text: str) -> dict[str, object]:
+    latest_up = signals.get("latest_confirmed_up")
+    latest_down = signals.get("latest_down")
+    buy_points = [str(point) for point in signals.get("buy_points", [])]
+    sell_points = [str(point) for point in signals.get("sell_points", [])]
+    signal_point_details: list[dict[str, object]] = []
+    signal_catalog: list[dict[str, object]] = []
+    active_points = set(buy_points + sell_points)
+
+    for point in buy_points:
+        signal_point_details.append(_build_signal_point_detail(point, latest_down, getattr(latest_down, "low", None)))
+    for point in sell_points:
+        signal_point_details.append(_build_signal_point_detail(point, latest_up, getattr(latest_up, "high", None)))
+    for point in ("buy_1", "buy_2", "buy_3"):
+        signal_catalog.append(
+            {
+                **_build_signal_point_detail(point, latest_down, getattr(latest_down, "low", None) if point in active_points else None),
+                "active": point in active_points,
+            }
+        )
+    for point in ("sell_1", "sell_2", "sell_3"):
+        signal_catalog.append(
+            {
+                **_build_signal_point_detail(point, latest_up, getattr(latest_up, "high", None) if point in active_points else None),
+                "active": point in active_points,
+            }
+        )
+
+    return {
+        "operation_level": timeframe_label,
+        "conclusion": _extract_prefixed_value_from_text(advice_text, "结论：") or None,
+        "suggestion": _extract_prefixed_value_from_text(advice_text, "建议：") or None,
+        "buy_points": [_format_signal_point_name(point) for point in buy_points],
+        "sell_points": [_format_signal_point_name(point) for point in sell_points],
+        "signal_points": signal_point_details,
+        "signal_catalog": signal_catalog,
+    }
+
+
 def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, object]) -> str:
     current_zs = signals["current_zs"]
     latest_up = signals["latest_confirmed_up"]
@@ -361,6 +418,7 @@ def export_case(security: Security, timeframe: str, rows: list[dict], title: str
         timeframe_label = "60M"
     signals = extract_signals(bis, zhongshus, macd_points)
     advice_text = build_advice(security.name, timeframe_label, raw_bars, signals)
+    summary_payload = build_technical_summary(timeframe_label, signals, advice_text)
     report_text = analysis_text + "\n\n" + advice_text + "\n"
 
     analysis_path.write_text(analysis_text + "\n", encoding="utf-8")
@@ -374,10 +432,7 @@ def export_case(security: Security, timeframe: str, rows: list[dict], title: str
             "name": security.name,
             "timeframe": timeframe,
             "generated_at": datetime.now().isoformat(timespec="seconds"),
-            "summary": {
-                "conclusion": _extract_summary_line(advice_path, "结论：") or None,
-                "suggestion": _extract_summary_line(advice_path, "建议：") or None,
-            },
+            "summary": summary_payload,
             "analysis_text": analysis_text,
             "advice_text": advice_text,
             "artifacts": {
@@ -416,6 +471,14 @@ def build_send_text(security: Security, day_report: Path, m60_report: Path) -> s
 
 def build_send_text_60m_only(security: Security, m60_report: Path) -> str:
     return f"【{security.name} {security.symbol} 60M】\n\n{m60_report.read_text(encoding='utf-8').strip()}"
+
+
+def _extract_prefixed_value_from_text(text: str, prefix: str) -> str:
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line.startswith(prefix):
+            return line.removeprefix(prefix).strip()
+    return ""
 
 
 def _extract_summary_line(advice_path: Path, prefix: str) -> str:

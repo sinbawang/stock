@@ -15,7 +15,7 @@ if str(SRC) not in sys.path:
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from batch_prepare_chanlun_reports import build_advice, extract_signals
+from batch_prepare_chanlun_reports import build_advice, build_technical_summary, extract_signals
 from capital_flow.reporting import save_capital_flow_text
 from capital_flow.services import fetch_and_analyze_cn_flow
 from chanlun.bi import identify_bis
@@ -160,9 +160,11 @@ def _save_technical_report(
     macd_points = calculate_macd(raw_bars)
 
     analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points)
-    advice_text = build_advice(name, "60M", raw_bars, extract_signals(bis, zhongshus, macd_points))
-    conclusion = _extract_prefixed_value(advice_text, "结论：") or "missing"
-    suggestion = _extract_prefixed_value(advice_text, "建议：") or "等待更多技术面确认。"
+    signals = extract_signals(bis, zhongshus, macd_points)
+    advice_text = build_advice(name, "60M", raw_bars, signals)
+    summary_payload = build_technical_summary("60M", signals, advice_text)
+    conclusion = summary_payload.get("conclusion") or "missing"
+    suggestion = summary_payload.get("suggestion") or "等待更多技术面确认。"
 
     output_path = paths["base_dir"] / "tech.json"
     write_json(
@@ -174,7 +176,7 @@ def _save_technical_report(
             "timeframe": "60m",
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "source": "akshare.eastmoney",
-            "summary": {"conclusion": conclusion, "suggestion": suggestion},
+            "summary": summary_payload,
             "analysis_text": analysis_text,
             "advice_text": advice_text,
             "artifacts": {

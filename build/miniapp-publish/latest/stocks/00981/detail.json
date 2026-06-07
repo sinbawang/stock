@@ -3,7 +3,7 @@
   "symbol": "00981",
   "name": "中芯国际",
   "market": "HK",
-  "updated_at": "2026-06-04T22:53:47",
+  "updated_at": "2026-06-07T21:45:35",
   "headline": {
     "title": "中芯国际 00981",
     "subtitle": "三轴综合观察",
@@ -16,7 +16,7 @@
     "bullets": [
       "基本面 80.7/A",
       "60M 技术面 missing",
-      "资金面 69.5/B"
+      "资金面 61.5/C"
     ]
   },
   "sections": [
@@ -45,10 +45,15 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "xueqiu",
+      "operation_level": null,
       "conclusion": null,
       "suggestion": null,
+      "buy_points": [],
+      "sell_points": [],
+      "signal_points": [],
+      "signal_catalog": [],
       "overview": [
-        "时间区间：2026-01-27 14:00 到 2026-06-04 16:00",
+        "时间区间：2026-01-28 14:00 到 2026-06-05 16:00",
         "K线数量：共 504 根 60M K线",
         "中枢数量：当前识别到 3 个中枢",
         "最新中枢：65.20-69.95，覆盖 04-27 12:00 到 05-26 10:30"
@@ -70,24 +75,26 @@
     {
       "key": "capital_flow",
       "title": "资金面",
-      "rating": "B",
-      "score": 69.5,
-      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover",
-      "trade_date": "2026-06-04",
-      "summary": "资金面信号中性，暂不构成强确认。",
+      "rating": "C",
+      "score": 61.5,
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
+      "trade_date": "2026-06-05",
+      "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [
-        "关键资金指标出现净流入",
         "多日窗口资金净流入",
-        "5日与10日资金方向一致为正"
+        "5日与10日资金方向一致为正",
+        "未见明显过热信号"
       ],
-      "risks": [],
+      "risks": [
+        "关键资金指标出现净流出"
+      ],
       "warnings": [
         "资金面部分指标缺失，评分只反映已取得字段"
       ],
       "metrics": [
         {
           "label": "南向净买入",
-          "value": "184957863.0"
+          "value": "-2783474284.0"
         }
       ]
     }

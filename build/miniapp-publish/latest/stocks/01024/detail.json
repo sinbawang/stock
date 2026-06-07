@@ -3,7 +3,7 @@
   "symbol": "01024",
   "name": "快手",
   "market": "HK",
-  "updated_at": "2026-06-04T22:54:17",
+  "updated_at": "2026-06-07T21:46:03",
   "headline": {
     "title": "快手 01024",
     "subtitle": "三轴综合观察",
@@ -46,10 +46,15 @@
       "title": "技术面",
       "timeframe": "60m",
       "source": "xueqiu",
+      "operation_level": null,
       "conclusion": null,
       "suggestion": null,
+      "buy_points": [],
+      "sell_points": [],
+      "signal_points": [],
+      "signal_catalog": [],
       "overview": [
-        "时间区间：2026-01-27 14:00 到 2026-06-04 16:00",
+        "时间区间：2026-01-28 14:00 到 2026-06-05 16:00",
         "K线数量：共 504 根 60M K线",
         "中枢数量：当前识别到 2 个中枢",
         "最新中枢：44.60-46.98，覆盖 03-30 11:30 到 05-12 10:30"
@@ -73,7 +78,7 @@
       "title": "资金面",
       "rating": "C",
       "score": 61.5,
-      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover",
+      "source": "eastmoney.southbound_net_buy+hkex.short_selling_turnover.cache",
       "trade_date": "2026-05-12",
       "summary": "资金面存在风险信号，技术面结论需要降低确认度。",
       "strengths": [
