@@ -8,9 +8,14 @@ set "PYTHON_BIN=%ROOT_DIR%\venv\Scripts\python.exe"
 if not exist "%PYTHON_BIN%" set "PYTHON_BIN=%ROOT_DIR%\.venv\Scripts\python.exe"
 if not exist "%PYTHON_BIN%" set "PYTHON_BIN=python"
 
+set "INSTALL_HINT=%PYTHON_BIN% -m pip install --pre -r requirements.txt"
+
 if /I "%~1"=="help" goto :usage
 if /I "%~1"=="/?" goto :usage
 if /I "%~1"=="checkxq" goto :checkxq
+
+call :ensure_runtime_deps pandas numpy pydantic matplotlib mplfinance typer requests akshare browser_cookie3 pypdf
+if errorlevel 1 exit /b 1
 
 pushd "%ROOT_DIR%" >nul
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\refresh_holdings_publish_to_cloudbase.py" --latest-only %*
@@ -20,11 +25,30 @@ popd >nul
 exit /b %EXIT_CODE%
 
 :checkxq
+call :ensure_runtime_deps requests browser_cookie3
+if errorlevel 1 exit /b 1
 pushd "%ROOT_DIR%" >nul
 "%PYTHON_BIN%" "%ROOT_DIR%\scripts\diagnose_xueqiu_cookie.py"
 set "EXIT_CODE=%ERRORLEVEL%"
 popd >nul
 exit /b %EXIT_CODE%
+
+:ensure_runtime_deps
+setlocal EnableExtensions
+set "MODULE_LIST=%*"
+pushd "%ROOT_DIR%" >nul
+"%PYTHON_BIN%" -c "import importlib.util, sys; missing = [name for name in sys.argv[1:] if importlib.util.find_spec(name) is None]; sys.exit(0 if not missing else 1)" %*
+set "CHECK_EXIT=%ERRORLEVEL%"
+popd >nul
+if not "%CHECK_EXIT%"=="0" (
+	echo Missing Python dependencies for %~n0.
+	echo Required modules: %MODULE_LIST%
+	echo.
+	echo Install them with:
+	echo   %INSTALL_HINT%
+	exit /b 1
+)
+endlocal & exit /b 0
 
 :usage
 echo Usage: %~n0 [refresh_holdings_publish_to_cloudbase args]

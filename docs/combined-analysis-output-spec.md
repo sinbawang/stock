@@ -108,6 +108,90 @@
 - 上游还会保留原始 CSV、标准化 CSV、SVG、PNG、中枢/笔/MACD 导出等中间文件
 - 技术面图片和 `tech.json` 当前通常落在各标的自己的 `data/reports/<symbol>/<timeframe>/` 目录，分析 CSV 在其下的 `analyze/` 子目录
 
+### 3.3 `tech.json` 当前字段协议
+
+`tech.json` 当前是技术面产物的主 JSON 载体，但不同入口生成的字段并不完全一致。
+
+因此当前应区分两层：
+
+- 当前必备字段：各常用入口都应尽量保持一致，允许下游直接依赖
+- 当前可选字段：只在部分入口存在，下游读取时必须按 optional 处理
+
+当前建议视为必备的顶层字段：
+
+- `report_type`: 固定为 `technical`
+- `symbol`
+- `name`
+- `timeframe`
+- `generated_at`
+- `summary`
+- `analysis_text`
+- `advice_text`
+
+当前常见但不能假定所有入口都存在的字段：
+
+- `source`
+- `artifacts`
+- `stats`
+
+其中 `summary` 当前至少可能包含：
+
+- `conclusion`
+- `suggestion`
+
+在较完整的生成入口中，`summary` 还可能包含：
+
+- `operation_level`
+- `buy_points`
+- `sell_points`
+- `signal_points`
+- `signal_catalog`
+
+因此当前读取规则应是：
+
+- 联合文本和小程序发布层可以稳定依赖 `summary.conclusion`、`summary.suggestion`、`analysis_text`、`advice_text`
+- 对 `source`、`artifacts`、`stats` 与更细的 `summary` 字段，必须按“有则用、无则降级”处理
+
+### 3.4 `tech.json` 建议新增的走势结构状态字段
+
+根据 [chanlun-rule-spec.md](chanlun-rule-spec.md) 中新增的走势类型口径，后续 `tech.json` 建议补一组结构化字段，用来表达“上一个已完成走势类型”和“当前正在进行走势类型”。
+
+这组字段当前还不是已落地事实，因此本节只定义推荐协议，不应在文档或代码里假装它已经普遍存在。
+
+建议新增：
+
+- `structure_state.last_completed`
+- `structure_state.current_ongoing`
+- `structure_state.relationship`
+
+建议 `structure_state.last_completed` 至少包含：
+
+- `type`: `up`、`down`、`range`
+- `zs_count`: 已完成走势类型包含的中枢数量
+- `start_ts`
+- `end_ts`
+- `confirmation_basis`: 例如 `confirmed_by_same_level_completion`
+
+建议 `structure_state.current_ongoing` 至少包含：
+
+- `type`: `up`、`down`、`range`、`unknown`
+- `status`: `ongoing`、`extending`、`candidate_completion`
+- `start_ts`
+- `latest_ts`
+- `zs_count_so_far`
+- `confirmation_basis`: 例如 `still_inside_last_zs_extension`、`forming_next_same_level_zs`
+
+建议 `structure_state.relationship` 至少包含：
+
+- `kind`: `same_type_extension`、`completed_then_new_type_ongoing`、`undetermined`
+- `note`: 面向解释层的短句说明
+
+兼容性要求：
+
+- 这组新增字段只能做增量扩展，不能替代现有 `analysis_text`
+- 现有依赖 `analysis_text` 分段抽取的下游入口，必须继续可用
+- 在所有主入口统一补齐前，不要把这些字段提升为“读取必需项”
+
 ## 4. 文本结构规格
 
 当前联合文本按下面顺序组织：
@@ -185,6 +269,12 @@
 - 信号
 - 观察重点
 
+其中“结构”段在后续应向 [chanlun-rule-spec.md](chanlun-rule-spec.md) 的走势类型输出要求对齐，至少逐步补齐：
+
+- 上一个已经完成的同级别走势类型
+- 当前正在进行的同级别走势类型
+- 当前结构更接近“同一走势类型内部延伸”还是“前一走势完成后的新类型进行中”
+
 当前实盘结构示例：
 
 ```text
@@ -205,6 +295,22 @@
 - 买点：当前无确认一二三类买点
 - 卖点：当前无确认一二三类卖点
 ```
+
+上述示例代表当前已落地文本，不代表目标上限。后续推荐把“结构”段扩成类似：
+
+```text
+结构：
+- 上一个已完成走势类型：下跌，含 2 个同级别中枢，结束于 05-29 16:00
+- 当前正在进行走势类型：盘整进行中，当前仍围绕最新中枢延伸
+- 当前阶段判断：更接近同一走势类型内部扩展，尚未确认新趋势完成
+- 最新确认向上笔：...
+- 未确认向下笔：...
+```
+
+这样做的目的不是增加术语密度，而是让文本和结构图能明确回答两个问题：
+
+- 已完成的同级别走势类型到底是哪一段
+- 当前用户面对的，到底是“已完成结构后的新连接”，还是“原走势尚未完成的延续”
 
 当前技术面文本强调的是“结构观察”，不是“强制买卖指令”。
 
@@ -239,6 +345,7 @@
 - 不要在联合层重新计算基本面总分
 - 不要在联合层重新发明技术面信号命名
 - 联合层负责的是“组织、解释、提示冲突”，不是重做下层分析
+- 在技术面 JSON 还未统一补齐结构状态字段前，不要让联合层自行猜测“已完成走势类型 / 正在进行走势类型”
 
 ## 6. 当前口径要求
 

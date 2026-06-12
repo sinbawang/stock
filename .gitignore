@@ -1,8 +1,8 @@
-venv/
+.venv/*
 data/*
 !data/chanzhongshuochan_lessons/
 !data/chanzhongshuochan_lessons/**
-build/wechat/
 wechat_*.png
 tmp/
 _tmp_*
+build/
