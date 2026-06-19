@@ -27,6 +27,7 @@ from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, save_to_
 from chanlun.data.kline_fetcher import fetch_kline, save_to_csv as save_kline_csv
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.normalize import normalize_bars
+from chanlun.segment import identify_segments
 from chanlun.zhongshu import identify_zhongshu
 
 from export_structures_with_boxes import (
@@ -35,6 +36,7 @@ from export_structures_with_boxes import (
     export_confirmed_fractals,
     export_fractals,
     export_macd,
+    export_segments,
     export_zhongshus,
 )
 from report_json import write_json
@@ -66,6 +68,8 @@ SECURITIES = [
 ]
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
+INTRADAY_SOURCE_PROBE_ROWS = 600
+BAR_COUNT_POLICY = "feasible_maximum"
 
 
 def _data_fetch_payload(source: str, rows: list[dict], requested_min_rows: int | None) -> dict[str, object]:
@@ -75,6 +79,8 @@ def _data_fetch_payload(source: str, rows: list[dict], requested_min_rows: int |
         "actual_bar_count": actual_bar_count,
         "requested_min_rows": requested_min_rows,
         "fulfilled_min_rows": actual_bar_count >= requested_min_rows if requested_min_rows is not None else None,
+        "bar_count_policy": BAR_COUNT_POLICY,
+        "source_probe_min_rows": INTRADAY_SOURCE_PROBE_ROWS if requested_min_rows is None else requested_min_rows,
     }
 
 
@@ -92,6 +98,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--send-only", action="store_true", help="只发送已生成的最新报告和图片，不重新生成")
     parser.add_argument("--disable-dedupe", action="store_true", help="关闭短时间重复发送保护，用于立即重发")
     parser.add_argument("--target-label", default="888", help="仅用于日志展示的目标名称")
+    parser.add_argument(
+        "--pending-reverse-mode",
+        choices=("any", "effective_only", "tail_mixed"),
+        default="any",
+        help="笔尾部反向分型占位口径：any=当前保守口径，effective_only=全局仅允许满足间隔的反向分型占位，tail_mixed=仅对最后未确认尾笔链路启用 effective_only。",
+    )
     return parser.parse_args()
 
 
@@ -138,9 +150,9 @@ def load_securities(holdings_file: Path | None = None) -> list[Security]:
 def fetch_day_rows(security: Security, start: str) -> tuple[list[dict], dict[str, object]]:
     if security.market == "HK":
         rows = fetch_hk_daily(security.symbol, start=start)
-        return rows, _data_fetch_payload("tencent.hk_daily", rows, 600)
+        return rows, _data_fetch_payload("tencent.hk_daily", rows, None)
     rows = fetch_kline(security.symbol, start=start, interval="day")
-    return rows, _data_fetch_payload("tencent.day", rows, 600)
+    return rows, _data_fetch_payload("tencent.day", rows, None)
 
 
 def fetch_m60_rows(security: Security, start: str) -> tuple[list[dict], dict[str, object]]:
@@ -152,11 +164,11 @@ def fetch_m60_rows(security: Security, start: str) -> tuple[list[dict], dict[str
             adjust="qfq",
             primary_source="xueqiu",
             fallback_sources=("akshare",),
-            min_rows=600,
+            min_rows=INTRADAY_SOURCE_PROBE_ROWS,
         )
-        return rows, _data_fetch_payload("xueqiu->akshare", rows, 600)
-    rows = fetch_kline(security.symbol, start=start, interval="m60", min_rows=600)
-    return rows, _data_fetch_payload("fetch_kline.a_share_intraday", rows, 600)
+        return rows, _data_fetch_payload("xueqiu->akshare", rows, None)
+    rows = fetch_kline(security.symbol, start=start, interval="m60", min_rows=INTRADAY_SOURCE_PROBE_ROWS)
+    return rows, _data_fetch_payload("fetch_kline.a_share_intraday", rows, None)
 
 
 def fetch_m15_rows(security: Security, start: str) -> tuple[list[dict], dict[str, object]]:
@@ -168,11 +180,11 @@ def fetch_m15_rows(security: Security, start: str) -> tuple[list[dict], dict[str
             adjust="qfq",
             primary_source="xueqiu",
             fallback_sources=("akshare",),
-            min_rows=600,
+            min_rows=INTRADAY_SOURCE_PROBE_ROWS,
         )
-        return rows, _data_fetch_payload("xueqiu->akshare", rows, 600)
-    rows = fetch_kline(security.symbol, start=start, interval="m15", min_rows=600)
-    return rows, _data_fetch_payload("fetch_kline.a_share_intraday", rows, 600)
+        return rows, _data_fetch_payload("xueqiu->akshare", rows, None)
+    rows = fetch_kline(security.symbol, start=start, interval="m15", min_rows=INTRADAY_SOURCE_PROBE_ROWS)
+    return rows, _data_fetch_payload("fetch_kline.a_share_intraday", rows, None)
 
 
 def save_rows(security: Security, timeframe: str, rows: list[dict], path: Path) -> None:
@@ -379,6 +391,7 @@ def export_case(
     rows: list[dict],
     title: str,
     data_fetch: dict[str, object] | None = None,
+    pending_reverse_mode: str = "any",
 ) -> dict[str, Path]:
     layout = timeframe_report_paths(security.symbol, timeframe, rows)
     raw_csv = layout.raw_csv
@@ -396,7 +409,12 @@ def export_case(
     normalized_bars = normalize_bars(raw_bars)
     write_normalized_csv(normalized_csv, normalized_bars)
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
-    bis = identify_bis(fractals, normalized_bars)
+    bis = identify_bis(
+        fractals,
+        normalized_bars,
+        pending_reverse_mode=pending_reverse_mode,
+    )
+    segments = identify_segments(bis)
     confirmed_bis = [bi for bi in bis if bi.is_confirmed]
     zhongshus = identify_zhongshu(confirmed_bis)
     macd_points = calculate_macd(raw_bars)
@@ -411,6 +429,7 @@ def export_case(
     export_fractals(layout.fractals_csv, normalized_bars, fractals, confirmed_fx_ids, unconfirmed_end_fx_ids)
     export_confirmed_fractals(layout.confirmed_fractals_csv, normalized_bars, fractals, confirmed_fx_ids)
     export_bis(layout.bis_csv, bis)
+    export_segments(layout.segments_csv, segments)
     export_zhongshus(layout.zhongshu_csv, zhongshus)
     export_macd(layout.macd_csv, macd_points)
     save_structure_charts(
@@ -452,6 +471,7 @@ def export_case(
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "source": (data_fetch or {}).get("source"),
             "data_fetch": data_fetch,
+            "pending_reverse_mode": pending_reverse_mode,
             "summary": summary_payload,
             "analysis_text": analysis_text,
             "advice_text": advice_text,
@@ -461,6 +481,7 @@ def export_case(
                 "fractals_csv": layout.fractals_csv,
                 "confirmed_fractals_csv": layout.confirmed_fractals_csv,
                 "bis_csv": layout.bis_csv,
+                "segments_csv": layout.segments_csv,
                 "zhongshu_csv": layout.zhongshu_csv,
                 "macd_csv": layout.macd_csv,
                 "structure_svg": svg,
@@ -619,9 +640,30 @@ def main() -> None:
             m60_rows, m60_fetch = fetch_m60_rows(security, args.m60_start)
             m15_rows, m15_fetch = fetch_m15_rows(security, args.m15_start)
 
-            day_case = export_case(security, "day", day_rows, f"{security.symbol} {security.name} day", data_fetch=day_fetch)
-            m60_case = export_case(security, "60m", m60_rows, f"{security.symbol} {security.name} 60m", data_fetch=m60_fetch)
-            export_case(security, "15m", m15_rows, f"{security.symbol} {security.name} 15m", data_fetch=m15_fetch)
+            day_case = export_case(
+                security,
+                "day",
+                day_rows,
+                f"{security.symbol} {security.name} day",
+                data_fetch=day_fetch,
+                pending_reverse_mode=args.pending_reverse_mode,
+            )
+            m60_case = export_case(
+                security,
+                "60m",
+                m60_rows,
+                f"{security.symbol} {security.name} 60m",
+                data_fetch=m60_fetch,
+                pending_reverse_mode=args.pending_reverse_mode,
+            )
+            export_case(
+                security,
+                "15m",
+                m15_rows,
+                f"{security.symbol} {security.name} 15m",
+                data_fetch=m15_fetch,
+                pending_reverse_mode=args.pending_reverse_mode,
+            )
             bundle.append((security, day_case, m60_case))
             print(f"Prepared {security.name}")
 

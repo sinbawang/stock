@@ -54,6 +54,8 @@ DEFAULT_CACHE_DIR = CAPITAL_FLOW_CACHE_DIR
 DEFAULT_MANUAL_SUPPLEMENT_DIR = ROOT / "data" / "_meta" / "manual_supplements"
 DEFAULT_HK_MINUTE_SOURCE = "xueqiu"
 DEFAULT_HK_MINUTE_FALLBACK_SOURCES = ("akshare",)
+INTRADAY_SOURCE_PROBE_ROWS = 600
+BAR_COUNT_POLICY = "feasible_maximum"
 
 
 def parse_args() -> argparse.Namespace:
@@ -145,7 +147,7 @@ def _save_technical_report(
         adjust="qfq",
         primary_source=primary_source,
         fallback_sources=fallback_sources,
-        min_rows=600,
+        min_rows=INTRADAY_SOURCE_PROBE_ROWS,
     )
     if not rows:
         raise RuntimeError("未抓到任何60M数据")
@@ -225,8 +227,10 @@ def _save_technical_report(
             "data_fetch": {
                 "source": used_source,
                 "actual_bar_count": len(raw_bars),
-                "requested_min_rows": 600,
-                "fulfilled_min_rows": len(raw_bars) >= 600,
+                "requested_min_rows": None,
+                "fulfilled_min_rows": None,
+                "bar_count_policy": BAR_COUNT_POLICY,
+                "source_probe_min_rows": INTRADAY_SOURCE_PROBE_ROWS,
             },
             "summary": summary_payload,
             "analysis_text": analysis_text,

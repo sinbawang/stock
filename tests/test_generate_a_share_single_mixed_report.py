@@ -91,5 +91,7 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     assert Path(artifacts["macd_csv"]).name.endswith("_normalized_macd.csv")
     assert data_fetch["source"] == "fetch_kline.a_share_intraday"
     assert data_fetch["actual_bar_count"] == len(raw_bars)
-    assert data_fetch["requested_min_rows"] == 600
-    assert data_fetch["fulfilled_min_rows"] is False
+    assert data_fetch["requested_min_rows"] is None
+    assert data_fetch["fulfilled_min_rows"] is None
+    assert data_fetch["bar_count_policy"] == "feasible_maximum"
+    assert data_fetch["source_probe_min_rows"] == 600

@@ -50,6 +50,7 @@ class TimeframeReportPaths:
     fractals_csv: Path
     confirmed_fractals_csv: Path
     bis_csv: Path
+    segments_csv: Path
     zhongshu_csv: Path
     macd_csv: Path
     chart_svg: Path
@@ -88,6 +89,7 @@ def timeframe_report_paths(
         fractals_csv=analyze_dir / f"{stem}_normalized_fractals.csv",
         confirmed_fractals_csv=analyze_dir / f"{stem}_normalized_confirmed_fractals.csv",
         bis_csv=analyze_dir / f"{stem}_normalized_bis.csv",
+        segments_csv=analyze_dir / f"{stem}_normalized_segments.csv",
         zhongshu_csv=analyze_dir / f"{stem}_normalized_zhongshu.csv",
         macd_csv=analyze_dir / f"{stem}_normalized_macd.csv",
         chart_svg=chart_svg,

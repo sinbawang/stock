@@ -1,10 +1,12 @@
-"""
-笔识别（从一个分型到下一个反向分型）。
+"""笔识别。
 
-基于已经过滤的分型列表识别笔。
+基于已经过滤的分型列表识别笔，并支持三种尾部反向确认口径：
+- any: 当前保守默认口径
+- effective_only: 仅允许满足最小间隔的反向分型占位
+- tail_mixed: 只对最后未确认尾笔链路启用 effective_only
 """
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 from .models import Fractal, Bi, FractalType, BiDirection, NormalizedBar
 
 
@@ -12,6 +14,10 @@ from .models import Fractal, Bi, FractalType, BiDirection, NormalizedBar
 # - 未提供 normalized_bars 时，按历史约定允许 >=3（三K窗口不重叠）
 # - 提供 normalized_bars 时，默认 >=4，或在原始K线映射上满足独立K补偿
 MIN_CENTER_GAP = 4
+PENDING_REVERSE_MODE_ANY = "any"
+PENDING_REVERSE_MODE_EFFECTIVE_ONLY = "effective_only"
+PENDING_REVERSE_MODE_TAIL_MIXED = "tail_mixed"
+PendingReverseMode = Literal["any", "effective_only", "tail_mixed"]
 
 
 def _is_more_extreme(base: Fractal, candidate: Fractal) -> bool:
@@ -125,6 +131,7 @@ def _extend_until_reversal(
     fractals: List[Fractal],
     end_idx: int,
     normalized_bars: Optional[List[NormalizedBar]],
+    pending_reverse_mode: PendingReverseMode,
 ) -> tuple[int, bool]:
     """
     从候选终点 end_idx 开始，向后寻找：
@@ -150,6 +157,14 @@ def _extend_until_reversal(
             k += 1
             continue
 
+        reverse_has_gap = _has_enough_pen_gap(best_fx, fx, normalized_bars)
+        if (
+            pending_reverse_mode == PENDING_REVERSE_MODE_EFFECTIVE_ONLY
+            and not reverse_has_gap
+        ):
+            k += 1
+            continue
+
         if pending_reverse is None or _is_more_extreme(pending_reverse, fx):
             pending_reverse = fx
 
@@ -164,24 +179,11 @@ def _extend_until_reversal(
     return best_idx, False
 
 
-def identify_bis(
+def _identify_bis_core(
     fractals: List[Fractal],
-    normalized_bars: Optional[List[NormalizedBar]] = None,
+    normalized_bars: Optional[List[NormalizedBar]],
+    pending_reverse_mode: Literal["any", "effective_only"],
 ) -> List[Bi]:
-    """
-    识别笔。
-    
-    规格文档 5.1-5.4:
-    - 笔由类型相反的两个相邻分型构成
-    - 成笔条件：至少间隔 1 根标准化 K 线
-    - 笔末端可能被更强同类分型替代，直到反向分型出现后确认
-    
-    Args:
-        fractals: 已去重的分型列表
-    
-    Returns:
-        识别到的笔列表
-    """
     if len(fractals) < 2:
         return []
 
@@ -206,7 +208,12 @@ def identify_bis(
             i += 1
             continue
 
-        end_idx, is_confirmed = _extend_until_reversal(fractals, end_idx, normalized_bars)
+        end_idx, is_confirmed = _extend_until_reversal(
+            fractals,
+            end_idx,
+            normalized_bars,
+            pending_reverse_mode,
+        )
         end_fx = fractals[end_idx]
 
         if bi_id == 0 and not is_confirmed and end_idx < len(fractals) - 1:
@@ -231,12 +238,82 @@ def identify_bis(
         bis.append(bi)
         bi_id += 1
 
-        # 一旦尾部候选笔尚未被有效反向结构确认，就不能再从更后的分型重新起笔；
-        # 否则会生成与前一笔不共端点的断链结果。
         if not is_confirmed:
             break
 
-        # 进入下一笔
         i = end_idx
 
     return bis
+
+
+def _tail_mixed_bis(
+    fractals: List[Fractal],
+    normalized_bars: Optional[List[NormalizedBar]],
+) -> List[Bi]:
+    base_bis = _identify_bis_core(
+        fractals,
+        normalized_bars,
+        PENDING_REVERSE_MODE_ANY,
+    )
+    if not base_bis or base_bis[-1].is_confirmed:
+        return base_bis
+
+    tail_start_fx_id = base_bis[-1].start_fx_id
+    tail_start_idx = next(
+        (idx for idx, fractal in enumerate(fractals) if fractal.fx_id == tail_start_fx_id),
+        None,
+    )
+    if tail_start_idx is None:
+        return base_bis
+
+    suffix_bis = _identify_bis_core(
+        fractals[tail_start_idx:],
+        normalized_bars,
+        PENDING_REVERSE_MODE_EFFECTIVE_ONLY,
+    )
+    if not suffix_bis:
+        return base_bis
+
+    prefix_bis = base_bis[:-1]
+    for offset, bi in enumerate(suffix_bis, start=len(prefix_bis)):
+        bi.bi_id = offset
+    return prefix_bis + suffix_bis
+
+
+def identify_bis(
+    fractals: List[Fractal],
+    normalized_bars: Optional[List[NormalizedBar]] = None,
+    pending_reverse_mode: PendingReverseMode = PENDING_REVERSE_MODE_ANY,
+) -> List[Bi]:
+    """
+    识别笔。
+    
+    规格文档 5.1-5.6:
+    - 笔由类型相反的两个相邻分型构成
+    - 成笔条件：默认要求两个分型三K窗口在标准化后留出独立K，或在原始K映射上满足补偿
+    - 笔末端可能被更强同类分型替代，直到反向分型出现后确认
+    - 反向确认支持 any / effective_only / tail_mixed 三种模式
+    
+    Args:
+        fractals: 已去重的分型列表
+        normalized_bars: 标准化K线序列，用于更严格的成笔间隔判定
+        pending_reverse_mode: 尾部反向确认模式
+    
+    Returns:
+        识别到的笔列表
+    """
+    if pending_reverse_mode not in {
+        PENDING_REVERSE_MODE_ANY,
+        PENDING_REVERSE_MODE_EFFECTIVE_ONLY,
+        PENDING_REVERSE_MODE_TAIL_MIXED,
+    }:
+        raise ValueError(f"Unsupported pending_reverse_mode: {pending_reverse_mode}")
+
+    if pending_reverse_mode == PENDING_REVERSE_MODE_TAIL_MIXED:
+        return _tail_mixed_bis(fractals, normalized_bars)
+
+    return _identify_bis_core(
+        fractals,
+        normalized_bars,
+        pending_reverse_mode,
+    )

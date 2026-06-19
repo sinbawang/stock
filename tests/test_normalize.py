@@ -5,6 +5,8 @@
 import pytest
 from datetime import datetime
 from chanlun.models import Bar
+from chanlun.fractal import identify_fractals
+from chanlun.models import FractalType
 from chanlun.normalize import has_inclusion, merge_bars, normalize_bars
 
 
@@ -84,3 +86,26 @@ class TestNormalizeBars:
         result = normalize_bars(sample_bars_with_inclusion)
         # 第 2、3 根有包含，应该合并
         assert len(result) <= len(sample_bars_with_inclusion)
+
+    def test_inclusion_inherits_prior_direction_for_bottom_fractal(self):
+        """下行过程中遇到包含时应继承前序方向，避免抬高底分型。"""
+        bars = [
+            Bar(ts=datetime(2024, 1, 1, 10, 30), open=0, high=6.64, low=6.58, close=0),
+            Bar(ts=datetime(2024, 1, 1, 11, 30), open=0, high=6.61, low=6.55, close=0),
+            Bar(ts=datetime(2024, 1, 1, 14, 0), open=0, high=6.57, low=6.52, close=0),
+            Bar(ts=datetime(2024, 1, 1, 15, 0), open=0, high=6.54, low=6.52, close=0),
+            Bar(ts=datetime(2024, 1, 2, 10, 30), open=0, high=6.58, low=6.50, close=0),
+            Bar(ts=datetime(2024, 1, 2, 11, 30), open=0, high=6.58, low=6.55, close=0),
+        ]
+
+        normalized = normalize_bars(bars)
+
+        assert normalized[3].high == 6.54
+        assert normalized[3].low == 6.50
+        assert normalized[3].direction == "down"
+
+        fractals = identify_fractals(normalized)
+        assert any(
+            fx.fx_type == FractalType.BOTTOM and fx.center_bar_idx == 3 and fx.price == 6.50
+            for fx in fractals
+        )

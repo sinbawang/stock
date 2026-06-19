@@ -31,6 +31,7 @@ def test_timeframe_report_paths_uses_reports_symbol_timeframe_layout() -> None:
     assert paths.analyze_dir == REPORTS_DIR / "601328" / "60m" / "analyze"
     assert paths.raw_csv == paths.analyze_dir / "601328_60m_20260501_to_20260529.csv"
     assert paths.normalized_csv == paths.analyze_dir / "601328_60m_20260501_to_20260529_normalized.csv"
+    assert paths.segments_csv == paths.analyze_dir / "601328_60m_20260501_to_20260529_normalized_segments.csv"
     assert paths.chart_svg == paths.root_dir / "structure.svg"
     assert paths.technical_report_json == paths.root_dir / "tech.json"
 
@@ -45,6 +46,7 @@ def test_cn_build_paths_routes_analysis_outputs_under_analyze_dir() -> None:
     assert paths["base_dir"] == REPORTS_DIR / "601328" / "60m"
     assert paths["raw_csv"].parent == REPORTS_DIR / "601328" / "60m" / "analyze"
     assert paths["fractals_csv"].parent == REPORTS_DIR / "601328" / "60m" / "analyze"
+    assert paths["segments_csv"].parent == REPORTS_DIR / "601328" / "60m" / "analyze"
     assert paths["svg"] == REPORTS_DIR / "601328" / "60m" / "structure.svg"
 
 
@@ -54,4 +56,5 @@ def test_hk_build_paths_routes_analysis_outputs_under_analyze_dir() -> None:
     assert paths["base_dir"] == REPORTS_DIR / "00700" / "60m"
     assert paths["raw_csv"].parent == REPORTS_DIR / "00700" / "60m" / "analyze"
     assert paths["macd_csv"].parent == REPORTS_DIR / "00700" / "60m" / "analyze"
+    assert paths["segments_csv"].parent == REPORTS_DIR / "00700" / "60m" / "analyze"
     assert paths["jpg"] == REPORTS_DIR / "00700" / "60m" / "structure.jpg"

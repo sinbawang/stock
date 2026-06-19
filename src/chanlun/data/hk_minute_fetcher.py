@@ -515,15 +515,18 @@ def fetch_hk_minute_with_policy(
     按统一策略抓取港股分钟线。
 
     默认只使用雪球；只有显式传入 fallback_sources 时才会回退到其它源。
-    当提供 min_rows 时，若当前源返回行数不足，则继续尝试后续回退源。
+    若允许多个来源，则返回“可行范围内 K 线数量最多”的成功结果。
+    当提供 min_rows 时，它只作为继续探测后续来源的软阈值，不再作为最终失败门槛。
 
     Returns:
         (rows, used_source)
     """
     source_order = _normalize_source_sequence(primary_source, fallback_sources)
     failures: list[str] = []
+    best_rows: list[dict] = []
+    best_source: str | None = None
 
-    for index, source in enumerate(source_order):
+    for source in source_order:
         try:
             rows = fetch_hk_minute(
                 symbol=symbol,
@@ -537,14 +540,21 @@ def fetch_hk_minute_with_policy(
             failures.append(f"{source}: {exc}")
             continue
 
-        if min_rows is not None and len(rows) < min_rows and index < len(source_order) - 1:
+        if len(rows) > len(best_rows):
+            best_rows = rows
+            best_source = source
+
+        if min_rows is not None and len(rows) < min_rows:
             failures.append(f"{source}: insufficient_rows={len(rows)} < {min_rows}")
+            if rows:
+                continue
+
+        if not rows:
+            failures.append(f"{source}: empty")
             continue
 
-        if rows or index == len(source_order) - 1:
-            return rows, source
-
-        failures.append(f"{source}: empty")
+    if best_source is not None:
+        return best_rows, best_source
 
     attempted = " -> ".join(source_order)
     raise RuntimeError(

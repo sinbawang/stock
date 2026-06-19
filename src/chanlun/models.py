@@ -139,6 +139,10 @@ class Segment:
     norm_bar_range: tuple
     bi_ids: List[int] = field(default_factory=list)
     is_confirmed: bool = False
+    last_same_extreme: Optional[float] = None
+    last_reverse_extreme: Optional[float] = None
+    break_bi_id: Optional[int] = None
+    stop_reason: Optional[str] = None
 
     def is_up(self) -> bool:
         return self.direction == BiDirection.UP

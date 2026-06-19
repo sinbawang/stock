@@ -25,6 +25,12 @@ def save_structure_charts(
     """Render the unified structure chart to svg/png/jpg artifacts."""
     plotter = Plotter(figsize=(16, 10))
     segments = identify_segments(bis)
+    confirmed_fractal_ids = {
+        fractal_id
+        for bi in bis
+        if bi.is_confirmed
+        for fractal_id in (bi.start_fx_id, bi.end_fx_id)
+    }
     fig = plotter.plot_structure(
         bars,
         fractals,
@@ -32,6 +38,7 @@ def save_structure_charts(
         segments,
         zhongshus,
         normalized_bars=normalized_bars,
+        confirmed_fractal_ids=confirmed_fractal_ids,
         title=title,
     )
     try:

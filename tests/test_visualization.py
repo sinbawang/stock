@@ -56,3 +56,34 @@ def test_plot_structure_overlays_all_layers():
     assert len(ax.patches) >= len(bars) + 1
     assert len(ax.lines) >= 3
     assert len(macd_ax.lines) >= 3
+
+
+def test_plot_structure_uses_smaller_markers_for_unconfirmed_fractals():
+    bars = _bars()
+    normalized_bars = _normalized(bars)
+    fractals = [
+        Fractal(0, FractalType.BOTTOM, bars[1].ts, 9.0, 0, 11.2, 9.0),
+        Fractal(1, FractalType.TOP, bars[4].ts, 12.0, 2, 12.0, 9.4),
+        Fractal(2, FractalType.BOTTOM, bars[5].ts, 9.5, 3, 12.2, 9.5),
+    ]
+    bis = [
+        Bi(0, BiDirection.UP, 0, 1, bars[1].ts, bars[4].ts, 12.0, 9.0, (0, 2), True),
+    ]
+
+    fig = Plotter().plot_structure(
+        bars,
+        fractals,
+        bis,
+        [],
+        [],
+        normalized_bars=normalized_bars,
+        confirmed_fractal_ids={0, 1},
+    )
+
+    texts_by_marker = {text.get_text(): [] for text in fig.axes[0].texts}
+    for text in fig.axes[0].texts:
+        texts_by_marker.setdefault(text.get_text(), []).append((text.get_fontsize(), text.get_alpha()))
+
+    assert (12, 1.0) in texts_by_marker['▲']
+    assert (6, 0.55) in texts_by_marker['▲']
+    assert (12, 1.0) in texts_by_marker['▼']

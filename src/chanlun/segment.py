@@ -24,7 +24,18 @@ def _forms_initial_segment(window: List[Bi]) -> bool:
     return same_dir_bi.low < lead_bi.low
 
 
-def _build_segment(segment_id: int, bis: List[Bi], start_idx: int, end_idx: int, is_confirmed: bool) -> Segment:
+def _build_segment(
+    segment_id: int,
+    bis: List[Bi],
+    start_idx: int,
+    end_idx: int,
+    is_confirmed: bool,
+    *,
+    last_same_extreme: float,
+    last_reverse_extreme: float,
+    break_bi_id: Optional[int],
+    stop_reason: str,
+) -> Segment:
     window = bis[start_idx:end_idx + 1]
     start_bi = window[0]
     end_bi = window[-1]
@@ -44,10 +55,17 @@ def _build_segment(segment_id: int, bis: List[Bi], start_idx: int, end_idx: int,
         norm_bar_range=(start_bi.norm_bar_range[0], end_bi.norm_bar_range[1]),
         bi_ids=[bi.bi_id for bi in window],
         is_confirmed=is_confirmed,
+        last_same_extreme=last_same_extreme,
+        last_reverse_extreme=last_reverse_extreme,
+        break_bi_id=break_bi_id,
+        stop_reason=stop_reason,
     )
 
 
-def _extend_segment(bis: List[Bi], start_idx: int) -> Optional[Tuple[int, bool, Optional[int]]]:
+def _extend_segment(
+    bis: List[Bi],
+    start_idx: int,
+) -> Optional[Tuple[int, bool, Optional[int], str, float, float, Optional[int]]]:
     if start_idx + 2 >= len(bis):
         return None
 
@@ -71,33 +89,47 @@ def _extend_segment(bis: List[Bi], start_idx: int) -> Optional[Tuple[int, bool, 
     while cursor < len(bis):
         reverse_bi = bis[cursor]
         if reverse_bi.direction == direction:
+            break_bi_id = reverse_bi.bi_id
+            stop_reason = "unexpected_same_direction"
             break
 
         if direction == BiDirection.UP:
             if reverse_bi.low <= last_reverse_extreme:
                 break_idx = cursor
                 is_confirmed = True
+                break_bi_id = reverse_bi.bi_id
+                stop_reason = "reverse_break"
                 break
         else:
             if reverse_bi.high >= last_reverse_extreme:
                 break_idx = cursor
                 is_confirmed = True
+                break_bi_id = reverse_bi.bi_id
+                stop_reason = "reverse_break"
                 break
 
         if cursor + 1 >= len(bis):
+            break_bi_id = reverse_bi.bi_id
+            stop_reason = "no_followup_same_direction"
             break
 
         same_dir_bi = bis[cursor + 1]
         if same_dir_bi.direction != direction:
+            break_bi_id = same_dir_bi.bi_id
+            stop_reason = "same_direction_slot_not_filled"
             break
 
         if direction == BiDirection.UP:
             if same_dir_bi.high <= last_same_extreme:
+                break_bi_id = same_dir_bi.bi_id
+                stop_reason = "same_direction_not_extending"
                 break
             last_reverse_extreme = reverse_bi.low
             last_same_extreme = same_dir_bi.high
         else:
             if same_dir_bi.low >= last_same_extreme:
+                break_bi_id = same_dir_bi.bi_id
+                stop_reason = "same_direction_not_extending"
                 break
             last_reverse_extreme = reverse_bi.high
             last_same_extreme = same_dir_bi.low
@@ -105,7 +137,11 @@ def _extend_segment(bis: List[Bi], start_idx: int) -> Optional[Tuple[int, bool, 
         end_idx = cursor + 1
         cursor += 2
 
-    return end_idx, is_confirmed, break_idx
+    else:
+        break_bi_id = None
+        stop_reason = "exhausted_confirmed_bis"
+
+    return end_idx, is_confirmed, break_idx, stop_reason, last_same_extreme, last_reverse_extreme, break_bi_id
 
 
 def identify_segments(bis: List[Bi]) -> List[Segment]:
@@ -134,8 +170,20 @@ def identify_segments(bis: List[Bi]) -> List[Segment]:
             index += 1
             continue
 
-        end_idx, is_confirmed, break_idx = result
-        segments.append(_build_segment(segment_id, bis, index, end_idx, is_confirmed))
+        end_idx, is_confirmed, break_idx, stop_reason, last_same_extreme, last_reverse_extreme, break_bi_id = result
+        segments.append(
+            _build_segment(
+                segment_id,
+                bis,
+                index,
+                end_idx,
+                is_confirmed,
+                last_same_extreme=last_same_extreme,
+                last_reverse_extreme=last_reverse_extreme,
+                break_bi_id=break_bi_id,
+                stop_reason=stop_reason,
+            )
+        )
         segment_id += 1
 
         if break_idx is not None:

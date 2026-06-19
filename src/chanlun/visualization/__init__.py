@@ -107,6 +107,7 @@ class Plotter:
         bars: List[Bar],
         fractals: List[Fractal],
         normalized_bars: Optional[List[NormalizedBar]],
+        confirmed_fractal_ids: Optional[set[int]] = None,
     ) -> None:
         for fractal in fractals:
             bar_index = self._normalized_index_to_bar_index(
@@ -115,10 +116,13 @@ class Plotter:
                 fractal.center_bar_idx,
             )
             bar = bars[bar_index]
+            is_confirmed = confirmed_fractal_ids is None or fractal.fx_id in confirmed_fractal_ids
+            fontsize = 12 if is_confirmed else 6
+            alpha = 1.0 if is_confirmed else 0.55
             if fractal.is_top():
-                ax.text(bar_index, bar.high, '▼', color='#ff6b6b', fontsize=12, ha='center', va='bottom')
+                ax.text(bar_index, bar.high, '▼', color='#ff6b6b', fontsize=fontsize, alpha=alpha, ha='center', va='bottom')
             else:
-                ax.text(bar_index, bar.low, '▲', color='#4ecdc4', fontsize=12, ha='center', va='top')
+                ax.text(bar_index, bar.low, '▲', color='#4ecdc4', fontsize=fontsize, alpha=alpha, ha='center', va='top')
 
     def _draw_bis(
         self,
@@ -240,6 +244,7 @@ class Plotter:
         bars: List[Bar],
         fractals: List[Fractal],
         normalized_bars: Optional[List[NormalizedBar]] = None,
+        confirmed_fractal_ids: Optional[set[int]] = None,
         title: str = "K-line with Fractals"
     ):
         """
@@ -249,7 +254,7 @@ class Plotter:
         fig.patch.set_facecolor(self.background)
 
         self._draw_bars(ax, bars)
-        self._draw_fractals(ax, bars, fractals, normalized_bars)
+        self._draw_fractals(ax, bars, fractals, normalized_bars, confirmed_fractal_ids)
         self._style_axis(ax, show_x=True)
 
         ax.set_title(title)
@@ -315,6 +320,7 @@ class Plotter:
         segments: List[Segment],
         zhongshus: List[Zhongshu],
         normalized_bars: Optional[List[NormalizedBar]] = None,
+        confirmed_fractal_ids: Optional[set[int]] = None,
         title: str = "Chanlun Structure"
     ):
         """
@@ -333,7 +339,7 @@ class Plotter:
         self._draw_zhongshus(price_ax, bars, zhongshus, bis, normalized_bars)
         self._draw_segments(price_ax, bars, segments, normalized_bars)
         self._draw_bis(price_ax, bars, bis, normalized_bars)
-        self._draw_fractals(price_ax, bars, fractals, normalized_bars)
+        self._draw_fractals(price_ax, bars, fractals, normalized_bars, confirmed_fractal_ids)
         self._draw_macd(macd_ax, bars)
 
         self._style_axis(price_ax, show_x=False)

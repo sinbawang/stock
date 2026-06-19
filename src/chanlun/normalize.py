@@ -68,6 +68,17 @@ def _infer_direction(prev_bar: Bar, next_bar: Bar) -> Optional[str]:
     return None
 
 
+def _fallback_direction(
+    normalized: List[NormalizedBar],
+    current_direction: Optional[str],
+) -> Optional[str]:
+    if current_direction is not None:
+        return current_direction
+    if not normalized:
+        return None
+    return normalized[-1].direction
+
+
 def _resolve_pending_chain(pending_bars: List[Bar], direction: Optional[str]) -> tuple[float, float, object, object, object, object, List[int]]:
     first_bar = pending_bars[0]
     if direction is None or len(pending_bars) == 1:
@@ -170,7 +181,9 @@ def normalize_bars(bars: List[Bar]) -> List[NormalizedBar]:
             pending_bars.append(bar)
             src_indices.append(i)
 
-            if current_direction is None:
+            effective_direction = _fallback_direction(normalized, current_direction)
+
+            if effective_direction is None:
                 current_high, current_low = _outer_union(temp_bar, bar)
                 current_ts_end = bar.ts
                 if bar.high >= current_high:
@@ -179,9 +192,9 @@ def normalize_bars(bars: List[Bar]) -> List[NormalizedBar]:
                     current_ts_low = bar.ts
                 continue
 
-            h, l = merge_bars(temp_bar, bar, current_direction)
+            h, l = merge_bars(temp_bar, bar, effective_direction)
 
-            if current_direction == "up":
+            if effective_direction == "up":
                 if bar.high > current_high:
                     current_ts_high = bar.ts
                 if bar.low >= current_low:
@@ -195,6 +208,7 @@ def normalize_bars(bars: List[Bar]) -> List[NormalizedBar]:
             current_high = h
             current_low = l
             current_ts_end = bar.ts
+            current_direction = effective_direction
         else:
             inferred_direction = _infer_direction(temp_bar, bar)
             if current_direction is None and inferred_direction is not None:

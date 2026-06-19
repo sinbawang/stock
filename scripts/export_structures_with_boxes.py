@@ -17,7 +17,7 @@ if str(SRC) not in sys.path:
 
 from chanlun.bi import identify_bis
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
-from chanlun.models import Bar, Fractal, NormalizedBar
+from chanlun.models import Bar, Fractal, NormalizedBar, Segment
 from chanlun.zhongshu import identify_zhongshu
 
 
@@ -233,6 +233,60 @@ def export_bis(path: Path, bis) -> None:
         "low",
         "start_norm_idx",
         "end_norm_idx",
+        "is_confirmed",
+        "status",
+        "note",
+    ]
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def export_segments(path: Path, segments: list[Segment]) -> None:
+    rows = [
+        {
+            "segment_id": segment.segment_id,
+            "direction": segment.direction.value,
+            "start_bi_id": segment.start_bi_id,
+            "end_bi_id": segment.end_bi_id,
+            "start_ts": segment.start_ts.strftime("%Y-%m-%d %H:%M"),
+            "end_ts": segment.end_ts.strftime("%Y-%m-%d %H:%M"),
+            "start_price": segment.start_price,
+            "end_price": segment.end_price,
+            "high": segment.high,
+            "low": segment.low,
+            "start_norm_idx": segment.norm_bar_range[0],
+            "end_norm_idx": segment.norm_bar_range[1],
+            "bi_ids": ",".join(str(bi_id) for bi_id in segment.bi_ids),
+            "last_same_extreme": segment.last_same_extreme,
+            "last_reverse_extreme": segment.last_reverse_extreme,
+            "break_bi_id": segment.break_bi_id,
+            "stop_reason": segment.stop_reason,
+            "is_confirmed": segment.is_confirmed,
+            "status": "confirmed" if segment.is_confirmed else "preprocessing",
+            "note": "auto_generated",
+        }
+        for segment in segments
+    ]
+    fieldnames = list(rows[0].keys()) if rows else [
+        "segment_id",
+        "direction",
+        "start_bi_id",
+        "end_bi_id",
+        "start_ts",
+        "end_ts",
+        "start_price",
+        "end_price",
+        "high",
+        "low",
+        "start_norm_idx",
+        "end_norm_idx",
+        "bi_ids",
+        "last_same_extreme",
+        "last_reverse_extreme",
+        "break_bi_id",
+        "stop_reason",
         "is_confirmed",
         "status",
         "note",

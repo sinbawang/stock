@@ -21,6 +21,7 @@ from chanlun.data.kline_fetcher import fetch_kline, save_to_csv
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.models import Bar, Bi, NormalizedBar, Zhongshu
 from chanlun.normalize import normalize_bars
+from chanlun.segment import identify_segments
 from chanlun.zhongshu import identify_zhongshu
 from chanlun.chart_export import save_structure_charts
 
@@ -30,12 +31,17 @@ from export_structures_with_boxes import (
     export_confirmed_fractals,
     export_fractals,
     export_macd,
+    export_segments,
     export_zhongshus,
 )
 from report_json import write_json
 from send_wechat_current_chat_bundle import send_current_chat_bundle
 from send_wechat_native import send_message
 from storage_layout import timeframe_report_paths
+
+
+INTRADAY_SOURCE_PROBE_ROWS = 600
+BAR_COUNT_POLICY = "feasible_maximum"
 
 
 def parse_args() -> argparse.Namespace:
@@ -98,6 +104,7 @@ def build_paths(symbol: str, name: str, bars: list[dict]) -> dict[str, Path]:
         "fractals_csv": layout.fractals_csv,
         "confirmed_fractals_csv": layout.confirmed_fractals_csv,
         "bis_csv": layout.bis_csv,
+        "segments_csv": layout.segments_csv,
         "zhongshu_csv": layout.zhongshu_csv,
         "macd_csv": layout.macd_csv,
         "svg": layout.chart_svg,
@@ -279,6 +286,8 @@ def write_technical_report_json(
                 "actual_bar_count": actual_bar_count,
                 "requested_min_rows": requested_min_rows,
                 "fulfilled_min_rows": actual_bar_count >= requested_min_rows if requested_min_rows is not None else None,
+                "bar_count_policy": BAR_COUNT_POLICY,
+                "source_probe_min_rows": INTRADAY_SOURCE_PROBE_ROWS,
             },
             "summary": {
                 "conclusion": _extract_prefixed_value(advice_text, "结论："),
@@ -305,7 +314,7 @@ def write_technical_report_json(
 
 def main() -> None:
     args = parse_args()
-    rows = fetch_kline(args.symbol, start=args.start, end=args.end, interval="60m", adjust=args.adjust, limit=5000, min_rows=600)
+    rows = fetch_kline(args.symbol, start=args.start, end=args.end, interval="60m", adjust=args.adjust, limit=5000, min_rows=INTRADAY_SOURCE_PROBE_ROWS)
     if not rows:
         raise RuntimeError("未抓到任何60M数据")
 
@@ -322,6 +331,7 @@ def main() -> None:
 
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
     bis = identify_bis(fractals, normalized_bars)
+    segments = identify_segments(bis)
     confirmed_bis = [bi for bi in bis if bi.is_confirmed]
     zhongshus = identify_zhongshu(confirmed_bis)
     macd_points = calculate_macd(raw_bars)
@@ -336,6 +346,7 @@ def main() -> None:
     export_fractals(paths["fractals_csv"], normalized_bars, fractals, confirmed_fx_ids, unconfirmed_end_fx_ids)
     export_confirmed_fractals(paths["confirmed_fractals_csv"], normalized_bars, fractals, confirmed_fx_ids)
     export_bis(paths["bis_csv"], bis)
+    export_segments(paths["segments_csv"], segments)
     export_zhongshus(paths["zhongshu_csv"], zhongshus)
     export_macd(paths["macd_csv"], macd_points)
     save_structure_charts(
@@ -370,7 +381,7 @@ def main() -> None:
         confirmed_bi_count=len(confirmed_bis),
         zhongshu_count=len(zhongshus),
         actual_bar_count=len(raw_bars),
-        requested_min_rows=600,
+        requested_min_rows=None,
     )
 
     print(f"原始 CSV: {paths['raw_csv']}")

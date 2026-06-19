@@ -229,3 +229,55 @@ class TestIdentifyBis:
         assert result[0].start_fx_id == 3
         assert result[0].end_fx_id == 6
         assert result[0].is_confirmed is True
+
+    def test_effective_only_pending_reverse_allows_later_valid_confirmation(self):
+        """过近反向分型不应长期占住 pending_reverse，后续满足间隔的反向分型可以确认前笔。"""
+        fractals = [
+            Fractal(0, FractalType.TOP, datetime(2024, 1, 1), 10.0, 0, 10.0, 9.0),
+            Fractal(1, FractalType.BOTTOM, datetime(2024, 1, 2), 5.0, 4, 6.0, 5.0),
+            Fractal(2, FractalType.TOP, datetime(2024, 1, 3), 9.0, 6, 9.0, 8.0),
+            Fractal(3, FractalType.BOTTOM, datetime(2024, 1, 4), 6.0, 7, 7.0, 6.0),
+            Fractal(4, FractalType.TOP, datetime(2024, 1, 5), 8.5, 9, 8.5, 7.5),
+            Fractal(5, FractalType.BOTTOM, datetime(2024, 1, 6), 4.0, 12, 5.0, 4.0),
+        ]
+
+        default_result = identify_bis(fractals)
+        effective_only_result = identify_bis(fractals, pending_reverse_mode="effective_only")
+
+        assert len(default_result) == 1
+        assert default_result[0].start_fx_id == 0
+        assert default_result[0].end_fx_id == 5
+        assert default_result[0].is_confirmed is False
+
+        assert [(bi.start_fx_id, bi.end_fx_id, bi.is_confirmed) for bi in effective_only_result] == [
+            (0, 1, True),
+            (1, 4, True),
+            (4, 5, False),
+        ]
+
+    def test_tail_mixed_only_rewrites_last_unconfirmed_suffix(self):
+        """tail_mixed 保留历史已确认前缀，只对最后未确认尾笔起点之后的确认链做重算。"""
+        fractals = [
+            Fractal(0, FractalType.BOTTOM, datetime(2024, 1, 1), 10.0, 0, 11.0, 10.0),
+            Fractal(1, FractalType.TOP, datetime(2024, 1, 2), 15.0, 4, 15.0, 14.0),
+            Fractal(2, FractalType.BOTTOM, datetime(2024, 1, 3), 5.0, 8, 6.0, 5.0),
+            Fractal(3, FractalType.TOP, datetime(2024, 1, 4), 9.0, 10, 9.0, 8.0),
+            Fractal(4, FractalType.BOTTOM, datetime(2024, 1, 5), 6.0, 11, 7.0, 6.0),
+            Fractal(5, FractalType.TOP, datetime(2024, 1, 6), 8.5, 13, 8.5, 7.5),
+            Fractal(6, FractalType.BOTTOM, datetime(2024, 1, 7), 4.0, 16, 5.0, 4.0),
+        ]
+
+        default_result = identify_bis(fractals)
+        mixed_result = identify_bis(fractals, pending_reverse_mode="tail_mixed")
+
+        assert [(bi.start_fx_id, bi.end_fx_id, bi.is_confirmed) for bi in default_result] == [
+            (0, 1, True),
+            (1, 6, False),
+        ]
+        assert [(bi.start_fx_id, bi.end_fx_id, bi.is_confirmed) for bi in mixed_result] == [
+            (0, 1, True),
+            (1, 2, True),
+            (2, 5, True),
+            (5, 6, False),
+        ]
+

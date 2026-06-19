@@ -5,6 +5,7 @@ import os
 import json
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -116,6 +117,37 @@ def _extract_optional_colon_value(stdout_text: str, prefix: str) -> Path | None:
     return None
 
 
+def _single_holding_payload(holding: Holding) -> dict:
+    return {
+        "markets": {
+            "CN": [
+                {"symbol": holding.symbol, "name": holding.name}
+            ] if holding.market == "CN" else [],
+            "HK": [
+                {"symbol": holding.symbol, "name": holding.name}
+            ] if holding.market == "HK" else [],
+        }
+    }
+
+
+def _generate_all_timeframe_charts(holding: Holding) -> None:
+    with tempfile.TemporaryDirectory(prefix="single_holding_", dir=str(ROOT / "data" / "_meta")) as temp_dir:
+        holdings_path = Path(temp_dir) / "holdings.json"
+        holdings_path.write_text(
+            json.dumps(_single_holding_payload(holding), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        _run_command(
+            [
+                sys.executable,
+                str(SCRIPTS / "batch_prepare_chanlun_reports.py"),
+                "--holdings-file",
+                str(holdings_path),
+            ]
+        )
+
+
 def _existing_base_path(holding: Holding) -> Path:
     symbol = holding.symbol.zfill(5) if holding.market == "HK" else holding.symbol
     return ROOT / "data" / "reports" / symbol / "base.json"
@@ -167,17 +199,6 @@ def generate_bundle(holding: Holding, *, skip_gen_base: bool = True) -> Generate
                 f"--{'skip-gen-base' if reuse_existing_base else 'no-skip-gen-base'}",
             ]
         )
-        chart_stdout = _run_command(
-            [
-                sys.executable,
-                str(SCRIPTS / "run_cn_60m_chanlun_to_wechat.py"),
-                "--symbol",
-                holding.symbol,
-                "--name",
-                holding.name,
-                "--render-only",
-            ]
-        )
     else:
         mixed_stdout = _run_command(
             [
@@ -193,21 +214,11 @@ def generate_bundle(holding: Holding, *, skip_gen_base: bool = True) -> Generate
                 f"--{'skip-gen-base' if reuse_existing_base else 'no-skip-gen-base'}",
             ]
         )
-        chart_stdout = _run_command(
-            [
-                sys.executable,
-                str(SCRIPTS / "run_hk_60m_chanlun_to_wechat.py"),
-                "--symbol",
-                holding.symbol,
-                "--name",
-                holding.name,
-                "--source",
-                "xueqiu",
-                "--fallback-source",
-                "akshare",
-                "--render-only",
-            ]
-        )
+
+    _generate_all_timeframe_charts(holding)
+
+    symbol_dir = ROOT / "data" / "reports" / (holding.symbol.zfill(5) if holding.market == "HK" else holding.symbol)
+    m60_dir = symbol_dir / "60m"
 
     return GeneratedBundle(
         holding=holding,
@@ -216,8 +227,8 @@ def generate_bundle(holding: Holding, *, skip_gen_base: bool = True) -> Generate
         capital_flow_report=Path(_extract_value(mixed_stdout, "capital_flow_report=")),
         combined_report=Path(_extract_value(mixed_stdout, "combined_report=")),
         combined_bucket=_extract_value(mixed_stdout, "combined_bucket="),
-        chart_svg=_extract_optional_colon_value(chart_stdout, "结构图 SVG:"),
-        chart_jpg=_extract_optional_colon_value(chart_stdout, "微信 JPG:"),
+        chart_svg=(m60_dir / "structure.svg") if (m60_dir / "structure.svg").exists() else None,
+        chart_jpg=(m60_dir / "structure.jpg") if (m60_dir / "structure.jpg").exists() else None,
     )
 
 
@@ -251,7 +262,7 @@ def _send_labeled_text(label: str, text: str, max_chars: int) -> None:
 def send_bundle(bundle: GeneratedBundle, max_chars: int) -> None:
     header = (
         f"【{bundle.holding.symbol} {bundle.holding.name}】最新 mixed 分组: {bundle.combined_bucket}。"
-        f"60M 缠论图已生成，本次按文本发送基本面、技术面、资金面三份简报。"
+        f"day / 60M / 15M 缠论结构图已生成，本次按文本发送基本面、技术面、资金面三份简报。"
     )
     send_current_chat_text(header, duplicate_send_window_seconds=0, disable_dedupe=True)
     _send_labeled_text(f"{bundle.holding.symbol} {bundle.holding.name} 基本面简报", bundle.fundamental_brief.read_text(encoding="utf-8"), max_chars)

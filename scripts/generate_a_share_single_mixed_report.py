@@ -50,6 +50,8 @@ from storage_layout import CAPITAL_FLOW_CACHE_DIR, stock_base_report_path, stock
 
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "_meta"
 DEFAULT_CACHE_DIR = CAPITAL_FLOW_CACHE_DIR
+INTRADAY_SOURCE_PROBE_ROWS = 600
+BAR_COUNT_POLICY = "feasible_maximum"
 
 
 def parse_args() -> argparse.Namespace:
@@ -127,7 +129,7 @@ def _save_technical_report(
     end: str | None,
     adjust: str,
 ) -> tuple[TechnicalRef, Path]:
-    rows = fetch_kline(symbol, start=start, end=end, interval="60m", adjust=adjust, limit=5000, min_rows=600)
+    rows = fetch_kline(symbol, start=start, end=end, interval="60m", adjust=adjust, limit=5000, min_rows=INTRADAY_SOURCE_PROBE_ROWS)
     if not rows:
         raise RuntimeError("未抓到任何60M数据")
 
@@ -206,8 +208,10 @@ def _save_technical_report(
             "data_fetch": {
                 "source": "fetch_kline.a_share_intraday",
                 "actual_bar_count": len(raw_bars),
-                "requested_min_rows": 600,
-                "fulfilled_min_rows": len(raw_bars) >= 600,
+                "requested_min_rows": None,
+                "fulfilled_min_rows": None,
+                "bar_count_policy": BAR_COUNT_POLICY,
+                "source_probe_min_rows": INTRADAY_SOURCE_PROBE_ROWS,
             },
             "summary": summary_payload,
             "analysis_text": analysis_text,

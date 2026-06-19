@@ -19,6 +19,7 @@ def test_resolve_xueqiu_cookies_prefers_env(monkeypatch):
 
 def test_resolve_xueqiu_cookies_falls_back_to_browser(monkeypatch):
     monkeypatch.delenv("XUEQIU_COOKIE", raising=False)
+    monkeypatch.setattr(module, "_resolve_xueqiu_cookie_file", lambda: None)
     monkeypatch.setattr(module, "_extract_xueqiu_cookie_from_browser", lambda browser=None: {"xq_a_token": "browser"})
 
     cookies, source = module._resolve_xueqiu_cookies()
@@ -144,3 +145,26 @@ def test_fetch_hk_minute_with_policy_tries_fallback_when_primary_returns_empty(m
     assert calls == ["xueqiu", "akshare"]
     assert used_source == "akshare"
     assert rows == [{"ts": "2026-01-01 10:00"}]
+
+
+def test_fetch_hk_minute_with_policy_returns_best_available_rows_when_probe_target_not_met(monkeypatch):
+    calls: list[str] = []
+
+    def fake_fetch(symbol, period="60", start=None, end=None, adjust="qfq", source="xueqiu"):
+        calls.append(source)
+        if source == "xueqiu":
+            return [{"ts": f"2026-01-01 10:{index:02d}"} for index in range(499)]
+        raise RuntimeError("remote disconnected")
+
+    monkeypatch.setattr(module, "fetch_hk_minute", fake_fetch)
+
+    rows, used_source = module.fetch_hk_minute_with_policy(
+        "03690",
+        primary_source="xueqiu",
+        fallback_sources=("akshare",),
+        min_rows=600,
+    )
+
+    assert calls == ["xueqiu", "akshare"]
+    assert used_source == "xueqiu"
+    assert len(rows) == 499
