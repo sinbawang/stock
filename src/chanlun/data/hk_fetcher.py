@@ -55,7 +55,7 @@ def fetch_hk_daily(
     url = (
         "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
         f"?_var={var_name}"
-        f"&param=hk{code},day,{start},{end},500,qfq"
+        f"&param=hk{code},day,{start},{end},1000,qfq"
         f"&r={r_val}"
     )
 

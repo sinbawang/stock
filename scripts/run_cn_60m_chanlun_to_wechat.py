@@ -14,6 +14,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from chanlun.bi import identify_bis
+from chanlun.default_ranges import default_structure_start
 from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
 from chanlun.data.kline_fetcher import fetch_kline, save_to_csv
@@ -21,6 +22,7 @@ from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.models import Bar, Bi, NormalizedBar, Zhongshu
 from chanlun.normalize import normalize_bars
 from chanlun.zhongshu import identify_zhongshu
+from chanlun.chart_export import save_structure_charts
 
 from export_structures_with_boxes import (
     calculate_macd,
@@ -29,9 +31,7 @@ from export_structures_with_boxes import (
     export_fractals,
     export_macd,
     export_zhongshus,
-    write_svg_with_inclusion_boxes,
 )
-from prepare_and_send_wechat_chart import make_sendable_jpg, render_svg
 from report_json import write_json
 from send_wechat_current_chat_bundle import send_current_chat_bundle
 from send_wechat_native import send_message
@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="一键执行 A 股 60M 缠论出图、分析并可选发送到微信")
     parser.add_argument("--symbol", required=True, help="A股代码，如 300124 / sz300124")
     parser.add_argument("--name", required=True, help="标的名称，如 汇川技术")
-    parser.add_argument("--start", default="2026-01-01 09:30", help="起始时间")
+    parser.add_argument("--start", default=default_structure_start("60m"), help="起始时间")
     parser.add_argument("--end", default=None, help="结束时间，默认到当前")
     parser.add_argument("--adjust", default="qfq", choices=["qfq", "hfq", ""], help="复权方式")
     parser.add_argument("--contact", default=None, help="微信联系人")
@@ -262,6 +262,8 @@ def write_technical_report_json(
     bi_count: int,
     confirmed_bi_count: int,
     zhongshu_count: int,
+    actual_bar_count: int,
+    requested_min_rows: int | None,
 ) -> Path:
     return write_json(
         path,
@@ -272,6 +274,12 @@ def write_technical_report_json(
             "timeframe": timeframe,
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "source": source,
+            "data_fetch": {
+                "source": source,
+                "actual_bar_count": actual_bar_count,
+                "requested_min_rows": requested_min_rows,
+                "fulfilled_min_rows": actual_bar_count >= requested_min_rows if requested_min_rows is not None else None,
+            },
             "summary": {
                 "conclusion": _extract_prefixed_value(advice_text, "结论："),
                 "suggestion": _extract_prefixed_value(advice_text, "建议："),
@@ -297,7 +305,7 @@ def write_technical_report_json(
 
 def main() -> None:
     args = parse_args()
-    rows = fetch_kline(args.symbol, start=args.start, end=args.end, interval="60m", adjust=args.adjust, limit=5000)
+    rows = fetch_kline(args.symbol, start=args.start, end=args.end, interval="60m", adjust=args.adjust, limit=5000, min_rows=600)
     if not rows:
         raise RuntimeError("未抓到任何60M数据")
 
@@ -330,45 +338,26 @@ def main() -> None:
     export_bis(paths["bis_csv"], bis)
     export_zhongshus(paths["zhongshu_csv"], zhongshus)
     export_macd(paths["macd_csv"], macd_points)
-    write_svg_with_inclusion_boxes(
-        raw_bars,
-        [
-            type(
-                "NormalizedCsvRowShim",
-                (),
-                {
-                    "idx": bar.idx,
-                    "ts_start": bar.ts_start,
-                    "ts_end": bar.ts_end,
-                    "ts_high": bar.ts_high,
-                    "ts_low": bar.ts_low,
-                    "high": bar.high,
-                    "low": bar.low,
-                    "direction": bar.direction or "",
-                    "src_indices": bar.src_indices,
-                },
-            )()
-            for bar in normalized_bars
-        ],
-        fractals,
-        confirmed_fx_ids,
-        bis,
-        zhongshus,
-        macd_points,
-        paths["svg"],
-        f"{normalized_symbol} {args.name} 60m",
+    save_structure_charts(
+        bars=raw_bars,
+        normalized_bars=normalized_bars,
+        fractals=fractals,
+        bis=bis,
+        zhongshus=zhongshus,
+        svg_path=paths["svg"],
+        png_path=paths["png"],
+        jpg_path=paths["jpg"],
+        title=f"{normalized_symbol} {args.name} 60m",
     )
-
-    render_svg(paths["svg"], paths["png"])
-    make_sendable_jpg(paths["png"], paths["jpg"])
     analysis_text = analyze_current_state(args.name, raw_bars, bis, zhongshus, macd_points)
     advice_text = ""
+    fetch_source = "fetch_kline.a_share_intraday"
     technical_report_path = write_technical_report_json(
         path=paths["base_dir"] / "tech.json",
         symbol=normalized_symbol,
         name=args.name,
         timeframe="60m",
-        source="akshare.eastmoney",
+        source=fetch_source,
         analysis_text=analysis_text,
         advice_text=advice_text,
         raw_csv=paths["raw_csv"],
@@ -380,9 +369,13 @@ def main() -> None:
         bi_count=len(bis),
         confirmed_bi_count=len(confirmed_bis),
         zhongshu_count=len(zhongshus),
+        actual_bar_count=len(raw_bars),
+        requested_min_rows=600,
     )
 
     print(f"原始 CSV: {paths['raw_csv']}")
+    print(f"分钟数据源: {fetch_source}")
+    print(f"实际K线数量: {len(raw_bars)}")
     print(f"标准化 CSV: {paths['normalized_csv']}")
     print(f"结构图 SVG: {paths['svg']}")
     print(f"完整 PNG: {paths['png']}")

@@ -18,10 +18,12 @@ if str(SCRIPTS) not in sys.path:
 from report_retention import prune_older_outputs
 
 from chanlun.bi import identify_bis
+from chanlun.chart_export import save_structure_charts
+from chanlun.default_ranges import default_structure_start
 from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
 from chanlun.data.hk_fetcher import fetch_hk_daily, save_to_csv as save_hk_daily_csv
-from chanlun.data.hk_minute_fetcher import fetch_hk_minute, save_to_csv as save_hk_minute_csv
+from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, save_to_csv as save_hk_minute_csv
 from chanlun.data.kline_fetcher import fetch_kline, save_to_csv as save_kline_csv
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.normalize import normalize_bars
@@ -34,9 +36,7 @@ from export_structures_with_boxes import (
     export_fractals,
     export_macd,
     export_zhongshus,
-    write_svg_with_inclusion_boxes,
 )
-from prepare_and_send_wechat_chart import derive_output_paths, make_sendable_jpg, render_svg
 from report_json import write_json
 from run_hk_60m_chanlun_to_wechat import analyze_current_state, compute_bi_strengths, write_normalized_csv
 from send_wechat_current_chat_files import send_current_chat_files
@@ -68,11 +68,21 @@ SECURITIES = [
 DEFAULT_HOLDINGS_FILE = holdings_file()
 
 
+def _data_fetch_payload(source: str, rows: list[dict], requested_min_rows: int | None) -> dict[str, object]:
+    actual_bar_count = len(rows)
+    return {
+        "source": source,
+        "actual_bar_count": actual_bar_count,
+        "requested_min_rows": requested_min_rows,
+        "fulfilled_min_rows": actual_bar_count >= requested_min_rows if requested_min_rows is not None else None,
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="批量生成最新日线、60M、15M 缠论图、分析文本、操作建议，并可选发送到当前微信会话")
-    parser.add_argument("--day-start", default="2026-01-01", help="日线起始日期")
-    parser.add_argument("--m60-start", default="2026-01-01 09:30", help="60M 起始时间")
-    parser.add_argument("--m15-start", default="2026-04-01 09:30", help="15M 起始时间")
+    parser.add_argument("--day-start", default=default_structure_start("day"), help="日线起始日期")
+    parser.add_argument("--m60-start", default=default_structure_start("60m"), help="60M 起始时间")
+    parser.add_argument("--m15-start", default=default_structure_start("15m"), help="15M 起始时间")
     parser.add_argument(
         "--holdings-file",
         default=str(DEFAULT_HOLDINGS_FILE),
@@ -125,22 +135,44 @@ def load_securities(holdings_file: Path | None = None) -> list[Security]:
     return list(dedup.values()) or SECURITIES
 
 
-def fetch_day_rows(security: Security, start: str) -> list[dict]:
+def fetch_day_rows(security: Security, start: str) -> tuple[list[dict], dict[str, object]]:
     if security.market == "HK":
-        return fetch_hk_daily(security.symbol, start=start)
-    return fetch_kline(security.symbol, start=start, interval="day")
+        rows = fetch_hk_daily(security.symbol, start=start)
+        return rows, _data_fetch_payload("tencent.hk_daily", rows, 600)
+    rows = fetch_kline(security.symbol, start=start, interval="day")
+    return rows, _data_fetch_payload("tencent.day", rows, 600)
 
 
-def fetch_m60_rows(security: Security, start: str) -> list[dict]:
+def fetch_m60_rows(security: Security, start: str) -> tuple[list[dict], dict[str, object]]:
     if security.market == "HK":
-        return fetch_hk_minute(security.symbol, period="60", start=start, adjust="qfq", source="xueqiu")
-    return fetch_kline(security.symbol, start=start, interval="m60")
+        rows, _ = fetch_hk_minute_with_policy(
+            security.symbol,
+            period="60",
+            start=start,
+            adjust="qfq",
+            primary_source="xueqiu",
+            fallback_sources=("akshare",),
+            min_rows=600,
+        )
+        return rows, _data_fetch_payload("xueqiu->akshare", rows, 600)
+    rows = fetch_kline(security.symbol, start=start, interval="m60", min_rows=600)
+    return rows, _data_fetch_payload("fetch_kline.a_share_intraday", rows, 600)
 
 
-def fetch_m15_rows(security: Security, start: str) -> list[dict]:
+def fetch_m15_rows(security: Security, start: str) -> tuple[list[dict], dict[str, object]]:
     if security.market == "HK":
-        return fetch_hk_minute(security.symbol, period="15", start=start, adjust="qfq", source="xueqiu")
-    return fetch_kline(security.symbol, start=start, interval="m15")
+        rows, _ = fetch_hk_minute_with_policy(
+            security.symbol,
+            period="15",
+            start=start,
+            adjust="qfq",
+            primary_source="xueqiu",
+            fallback_sources=("akshare",),
+            min_rows=600,
+        )
+        return rows, _data_fetch_payload("xueqiu->akshare", rows, 600)
+    rows = fetch_kline(security.symbol, start=start, interval="m15", min_rows=600)
+    return rows, _data_fetch_payload("fetch_kline.a_share_intraday", rows, 600)
 
 
 def save_rows(security: Security, timeframe: str, rows: list[dict], path: Path) -> None:
@@ -341,7 +373,13 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
     return "\n".join(lines)
 
 
-def export_case(security: Security, timeframe: str, rows: list[dict], title: str) -> dict[str, Path]:
+def export_case(
+    security: Security,
+    timeframe: str,
+    rows: list[dict],
+    title: str,
+    data_fetch: dict[str, object] | None = None,
+) -> dict[str, Path]:
     layout = timeframe_report_paths(security.symbol, timeframe, rows)
     raw_csv = layout.raw_csv
     normalized_csv = layout.normalized_csv
@@ -375,37 +413,17 @@ def export_case(security: Security, timeframe: str, rows: list[dict], title: str
     export_bis(layout.bis_csv, bis)
     export_zhongshus(layout.zhongshu_csv, zhongshus)
     export_macd(layout.macd_csv, macd_points)
-    normalized_shims = [
-        type(
-            "NormalizedCsvRowShim",
-            (),
-            {
-                "idx": bar.idx,
-                "ts_start": bar.ts_start,
-                "ts_end": bar.ts_end,
-                "ts_high": bar.ts_high,
-                "ts_low": bar.ts_low,
-                "high": bar.high,
-                "low": bar.low,
-                "direction": bar.direction or "",
-                "src_indices": bar.src_indices,
-            },
-        )()
-        for bar in normalized_bars
-    ]
-    write_svg_with_inclusion_boxes(
-        raw_bars,
-        normalized_shims,
-        fractals,
-        confirmed_fx_ids,
-        bis,
-        zhongshus,
-        macd_points,
-        svg,
-        title,
+    save_structure_charts(
+        bars=raw_bars,
+        normalized_bars=normalized_bars,
+        fractals=fractals,
+        bis=bis,
+        zhongshus=zhongshus,
+        svg_path=svg,
+        png_path=png,
+        jpg_path=jpg,
+        title=title,
     )
-    render_svg(svg, png)
-    make_sendable_jpg(png, jpg)
 
     analysis_text = analyze_current_state(security.name, raw_bars, bis, zhongshus, macd_points)
     if timeframe == "day":
@@ -432,6 +450,8 @@ def export_case(security: Security, timeframe: str, rows: list[dict], title: str
             "name": security.name,
             "timeframe": timeframe,
             "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "source": (data_fetch or {}).get("source"),
+            "data_fetch": data_fetch,
             "summary": summary_payload,
             "analysis_text": analysis_text,
             "advice_text": advice_text,
@@ -595,13 +615,13 @@ def main() -> None:
             print(f"Loaded {security.name}")
     else:
         for security in securities:
-            day_rows = fetch_day_rows(security, args.day_start)
-            m60_rows = fetch_m60_rows(security, args.m60_start)
-            m15_rows = fetch_m15_rows(security, args.m15_start)
+            day_rows, day_fetch = fetch_day_rows(security, args.day_start)
+            m60_rows, m60_fetch = fetch_m60_rows(security, args.m60_start)
+            m15_rows, m15_fetch = fetch_m15_rows(security, args.m15_start)
 
-            day_case = export_case(security, "day", day_rows, f"{security.symbol} {security.name} day")
-            m60_case = export_case(security, "60m", m60_rows, f"{security.symbol} {security.name} 60m")
-            export_case(security, "15m", m15_rows, f"{security.symbol} {security.name} 15m")
+            day_case = export_case(security, "day", day_rows, f"{security.symbol} {security.name} day", data_fetch=day_fetch)
+            m60_case = export_case(security, "60m", m60_rows, f"{security.symbol} {security.name} 60m", data_fetch=m60_fetch)
+            export_case(security, "15m", m15_rows, f"{security.symbol} {security.name} 15m", data_fetch=m15_fetch)
             bundle.append((security, day_case, m60_case))
             print(f"Prepared {security.name}")
 

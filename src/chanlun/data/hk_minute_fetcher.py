@@ -509,11 +509,13 @@ def fetch_hk_minute_with_policy(
     adjust: str = "qfq",
     primary_source: str = _DEFAULT_PRIMARY_SOURCE,
     fallback_sources: Optional[Sequence[str]] = None,
+    min_rows: Optional[int] = None,
 ) -> tuple[list[dict], str]:
     """
     按统一策略抓取港股分钟线。
 
     默认只使用雪球；只有显式传入 fallback_sources 时才会回退到其它源。
+    当提供 min_rows 时，若当前源返回行数不足，则继续尝试后续回退源。
 
     Returns:
         (rows, used_source)
@@ -533,6 +535,10 @@ def fetch_hk_minute_with_policy(
             )
         except Exception as exc:  # noqa: BLE001
             failures.append(f"{source}: {exc}")
+            continue
+
+        if min_rows is not None and len(rows) < min_rows and index < len(source_order) - 1:
+            failures.append(f"{source}: insufficient_rows={len(rows)} < {min_rows}")
             continue
 
         if rows or index == len(source_order) - 1:

@@ -19,13 +19,15 @@ from batch_prepare_chanlun_reports import build_advice, build_technical_summary,
 from capital_flow.reporting import save_capital_flow_text
 from capital_flow.services import fetch_and_analyze_hk_flow
 from chanlun.bi import identify_bis
+from chanlun.chart_export import save_structure_charts
+from chanlun.default_ranges import default_structure_start
 from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
 from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, save_to_csv as save_hk_minute_csv
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.normalize import normalize_bars
 from chanlun.zhongshu import identify_zhongshu
-from export_structures_with_boxes import calculate_macd
+from export_structures_with_boxes import calculate_macd, export_bis, export_confirmed_fractals, export_fractals, export_macd, export_zhongshus
 from fundamental.reporting.presentation import build_fundamental_presentation, write_base_text
 from fundamental.services import fetch_and_analyze_hk_blended_fundamentals
 from report_retention import prune_older_outputs
@@ -41,10 +43,10 @@ from generate_h_share_combined_overview import (
     _management_priority,
     _action_label,
 )
-from run_hk_60m_chanlun_to_wechat import analyze_current_state, build_paths
+from run_hk_60m_chanlun_to_wechat import analyze_current_state, build_paths, write_normalized_csv
 from send_wechat_current_chat_text import send_current_chat_text_file
 from report_json import write_json
-from storage_layout import CAPITAL_FLOW_CACHE_DIR, stock_base_report_path, stock_fund_report_path, stock_overview_report_path, stock_report_dir
+from storage_layout import CAPITAL_FLOW_CACHE_DIR, stock_base_report_path, stock_fund_report_path, stock_overview_report_path, stock_report_dir, timeframe_report_paths
 
 
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "_meta"
@@ -58,7 +60,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate a single-stock H-share mixed report and optionally send it to the current WeChat chat.")
     parser.add_argument("symbol", help="HK symbol such as 09988")
     parser.add_argument("--name", required=True, help="Security name")
-    parser.add_argument("--start", default="2026-01-01 09:30", help="60M analysis start time")
+    parser.add_argument("--start", default=default_structure_start("60m"), help="60M analysis start time")
     parser.add_argument("--end", default=None, help="Optional 60M analysis end time")
     parser.add_argument("--source", default=DEFAULT_HK_MINUTE_SOURCE, choices=["xueqiu", "akshare"], help="Primary HK minute source")
     parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="Optional fallback HK minute sources; defaults to akshare when primary source is xueqiu")
@@ -143,20 +145,65 @@ def _save_technical_report(
         adjust="qfq",
         primary_source=primary_source,
         fallback_sources=fallback_sources,
+        min_rows=600,
     )
     if not rows:
         raise RuntimeError("未抓到任何60M数据")
 
-    paths = build_paths(symbol, name, rows)
+    stock_root = None if output_dir == stock_report_dir(symbol.zfill(5)) else output_dir
+    paths = build_paths(symbol, name, rows) if stock_root is None else {
+        "base_dir": timeframe_report_paths(symbol, "60m", rows, stock_root=stock_root).root_dir,
+        "raw_csv": timeframe_report_paths(symbol, "60m", rows, stock_root=stock_root).raw_csv,
+        "normalized_csv": timeframe_report_paths(symbol, "60m", rows, stock_root=stock_root).normalized_csv,
+    }
+    if "svg" not in paths:
+        layout = timeframe_report_paths(symbol, "60m", rows, stock_root=stock_root)
+        paths.update(
+            {
+                "fractals_csv": layout.fractals_csv,
+                "confirmed_fractals_csv": layout.confirmed_fractals_csv,
+                "bis_csv": layout.bis_csv,
+                "zhongshu_csv": layout.zhongshu_csv,
+                "macd_csv": layout.macd_csv,
+                "svg": layout.chart_svg,
+                "png": layout.chart_png,
+                "jpg": layout.chart_jpg,
+            }
+        )
     save_hk_minute_csv(rows, str(paths["raw_csv"]))
 
     raw_bars = clean_bars(read_bars_from_csv(str(paths["raw_csv"])))
     normalized_bars = normalize_bars(raw_bars)
+    write_normalized_csv(paths["normalized_csv"], normalized_bars)
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
     bis = identify_bis(fractals, normalized_bars)
     confirmed_bis = [bi for bi in bis if bi.is_confirmed]
     zhongshus = identify_zhongshu(confirmed_bis)
     macd_points = calculate_macd(raw_bars)
+
+    confirmed_fx_ids: set[int] = set()
+    for bi in bis:
+        if bi.is_confirmed:
+            confirmed_fx_ids.add(bi.start_fx_id)
+            confirmed_fx_ids.add(bi.end_fx_id)
+    unconfirmed_end_fx_ids = {bi.end_fx_id for bi in bis if not bi.is_confirmed}
+
+    export_fractals(paths["fractals_csv"], normalized_bars, fractals, confirmed_fx_ids, unconfirmed_end_fx_ids)
+    export_confirmed_fractals(paths["confirmed_fractals_csv"], normalized_bars, fractals, confirmed_fx_ids)
+    export_bis(paths["bis_csv"], bis)
+    export_zhongshus(paths["zhongshu_csv"], zhongshus)
+    export_macd(paths["macd_csv"], macd_points)
+    save_structure_charts(
+        bars=raw_bars,
+        normalized_bars=normalized_bars,
+        fractals=fractals,
+        bis=bis,
+        zhongshus=zhongshus,
+        svg_path=paths["svg"],
+        png_path=paths["png"],
+        jpg_path=paths["jpg"],
+        title=f"{symbol} {name} 60m",
+    )
 
     analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points)
     signals = extract_signals(bis, zhongshus, macd_points)
@@ -175,9 +222,27 @@ def _save_technical_report(
             "timeframe": "60m",
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "source": used_source,
+            "data_fetch": {
+                "source": used_source,
+                "actual_bar_count": len(raw_bars),
+                "requested_min_rows": 600,
+                "fulfilled_min_rows": len(raw_bars) >= 600,
+            },
             "summary": summary_payload,
             "analysis_text": analysis_text,
             "advice_text": advice_text,
+            "artifacts": {
+                "raw_csv": paths["raw_csv"],
+                "normalized_csv": paths["normalized_csv"],
+                "fractals_csv": paths["fractals_csv"],
+                "confirmed_fractals_csv": paths["confirmed_fractals_csv"],
+                "bis_csv": paths["bis_csv"],
+                "zhongshu_csv": paths["zhongshu_csv"],
+                "macd_csv": paths["macd_csv"],
+                "structure_svg": paths["svg"],
+                "structure_png": paths["png"],
+                "structure_jpg": paths["jpg"],
+            },
         },
     )
     return TechnicalRef(conclusion=conclusion, suggestion=suggestion, path=output_path), output_path

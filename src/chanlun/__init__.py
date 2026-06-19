@@ -16,10 +16,12 @@ from .models import (
     NormalizedBar,
     Fractal,
     Bi,
+    Segment,
     Zhongshu,
     FractalType,
     BiDirection,
 )
+from .segment import identify_segments
 from .wechat import (
     WeChatConfig,
     WeChatMessenger,
@@ -32,9 +34,11 @@ __all__ = [
     "NormalizedBar",
     "Fractal",
     "Bi",
+    "Segment",
     "Zhongshu",
     "FractalType",
     "BiDirection",
+    "identify_segments",
     "WeChatConfig",
     "WeChatMessenger",
     "WeChatDependencyError",

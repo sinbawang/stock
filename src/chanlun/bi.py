@@ -21,22 +21,6 @@ def _is_more_extreme(base: Fractal, candidate: Fractal) -> bool:
     return candidate.price < base.price
 
 
-def _fractal_window_extremes(
-    fractal: Fractal,
-    normalized_bars: Optional[List[NormalizedBar]],
-) -> tuple[float, float]:
-    if not normalized_bars:
-        return fractal.high, fractal.low
-
-    left = max(0, fractal.center_bar_idx - 1)
-    right = min(len(normalized_bars), fractal.center_bar_idx + 2)
-    window = normalized_bars[left:right]
-    if not window:
-        return fractal.high, fractal.low
-
-    return max(bar.high for bar in window), min(bar.low for bar in window)
-
-
 def _window_raw_index_span(
     fractal: Fractal,
     normalized_bars: Optional[List[NormalizedBar]],
@@ -98,14 +82,24 @@ def _is_valid_pen_endpoint(
     end_fx: Fractal,
     normalized_bars: Optional[List[NormalizedBar]],
 ) -> bool:
+    del normalized_bars
     if end_fx.fx_type == start_fx.fx_type:
         return False
 
-    start_window_high, start_window_low = _fractal_window_extremes(start_fx, normalized_bars)
     if start_fx.fx_type == FractalType.BOTTOM:
-        return end_fx.price > start_window_high
+        return end_fx.price > start_fx.price
 
-    return end_fx.price < start_window_low
+    return end_fx.price < start_fx.price
+
+
+def _is_leading_boundary_start(
+    fractal: Fractal,
+    normalized_bars: Optional[List[NormalizedBar]],
+) -> bool:
+    if not normalized_bars:
+        return False
+
+    return fractal.center_bar_idx < MIN_CENTER_GAP
 
 
 def _find_first_opposite(
@@ -121,7 +115,6 @@ def _find_first_opposite(
         if (
             fx.fx_type != start_fx.fx_type
             and _has_enough_pen_gap(start_fx, fx, normalized_bars)
-            and _is_valid_pen_endpoint(start_fx, fx, normalized_bars)
         ):
             return j
         j += 1
@@ -199,13 +192,26 @@ def identify_bis(
 
     while i < len(fractals) - 1:
         start_fx = fractals[i]
+
+        if bi_id == 0 and i > 0 and _is_leading_boundary_start(start_fx, normalized_bars):
+            i += 1
+            continue
+
         end_idx = _find_first_opposite(fractals, i, start_fx, normalized_bars)
         if end_idx < 0:
             i += 1
             continue
 
+        if not _is_valid_pen_endpoint(start_fx, fractals[end_idx], normalized_bars):
+            i += 1
+            continue
+
         end_idx, is_confirmed = _extend_until_reversal(fractals, end_idx, normalized_bars)
         end_fx = fractals[end_idx]
+
+        if bi_id == 0 and not is_confirmed and end_idx < len(fractals) - 1:
+            i += 1
+            continue
 
         direction = BiDirection.UP if start_fx.fx_type == FractalType.BOTTOM else BiDirection.DOWN
 

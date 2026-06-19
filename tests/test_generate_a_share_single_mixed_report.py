@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -37,3 +38,58 @@ def test_save_combined_report_writes_latest_overview_file(tmp_path: Path) -> Non
     assert overview_path.exists()
     assert "600900 长江电力" in overview_path.read_text(encoding="utf-8")
     assert list(tmp_path.glob("*_mixed_overview_*.txt"))
+
+
+def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatch) -> None:
+    rows = [{"ts": "2026-05-01 10:30:00"}, {"ts": "2026-05-29 14:30:00"}]
+    raw_bars = [SimpleNamespace(ts="2026-05-01 10:30:00")]
+    normalized_bars = [SimpleNamespace(idx=0)]
+
+    monkeypatch.setattr(module, "fetch_kline", lambda *args, **kwargs: rows)
+    monkeypatch.setattr(module, "save_cn_kline_csv", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "read_bars_from_csv", lambda *args, **kwargs: raw_bars)
+    monkeypatch.setattr(module, "clean_bars", lambda bars: bars)
+    monkeypatch.setattr(module, "normalize_bars", lambda bars: normalized_bars)
+    monkeypatch.setattr(module, "write_normalized_csv", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "identify_fractals", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "filter_consecutive_fractals", lambda fractals: fractals)
+    monkeypatch.setattr(module, "identify_bis", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "identify_zhongshu", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "calculate_macd", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "export_fractals", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_confirmed_fractals", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_bis", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_zhongshus", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_macd", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "analyze_current_state", lambda *args, **kwargs: "analysis")
+    monkeypatch.setattr(module, "extract_signals", lambda *args, **kwargs: {"bucket": "watch"})
+    monkeypatch.setattr(module, "build_advice", lambda *args, **kwargs: "建议：观察")
+    monkeypatch.setattr(module, "build_technical_summary", lambda *args, **kwargs: {"conclusion": "偏强", "suggestion": "观察"})
+
+    def fake_save_structure_charts(**kwargs):
+        kwargs["svg_path"].write_text("svg", encoding="utf-8")
+        kwargs["png_path"].write_text("png", encoding="utf-8")
+        kwargs["jpg_path"].write_text("jpg", encoding="utf-8")
+
+    monkeypatch.setattr(module, "save_structure_charts", fake_save_structure_charts)
+
+    _, output_path = module._save_technical_report(
+        symbol="600900",
+        name="长江电力",
+        output_dir=tmp_path,
+        start="2026-01-01 09:30",
+        end=None,
+        adjust="qfq",
+    )
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    artifacts = payload["artifacts"]
+    data_fetch = payload["data_fetch"]
+    assert Path(artifacts["structure_svg"]).exists()
+    assert Path(artifacts["structure_png"]).exists()
+    assert Path(artifacts["structure_jpg"]).exists()
+    assert Path(artifacts["macd_csv"]).name.endswith("_normalized_macd.csv")
+    assert data_fetch["source"] == "fetch_kline.a_share_intraday"
+    assert data_fetch["actual_bar_count"] == len(raw_bars)
+    assert data_fetch["requested_min_rows"] == 600
+    assert data_fetch["fulfilled_min_rows"] is False

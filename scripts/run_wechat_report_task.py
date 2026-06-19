@@ -21,6 +21,7 @@ from fundamental.services import (
     fetch_and_analyze_hk_blended_fundamentals,
     fetch_and_analyze_hk_snapshot,
 )
+from chanlun.default_ranges import default_structure_start
 from send_wechat_current_chat_text import send_current_chat_text_file
 from storage_layout import REPORTS_META_DIR
 
@@ -124,7 +125,7 @@ def _build_parser() -> argparse.ArgumentParser:
     hk60m = subparsers.add_parser("hk60m", help="Run the HK 60M Chanlun workflow and optionally send to the current chat")
     hk60m.add_argument("--symbol", required=True, help="HK symbol such as 02208")
     hk60m.add_argument("--name", required=True, help="Security name")
-    hk60m.add_argument("--start", default="2026-01-01 09:30", help="Start time")
+    hk60m.add_argument("--start", default=default_structure_start("60m"), help="Start time")
     hk60m.add_argument("--end", default=None, help="End time")
     hk60m.add_argument("--source", default="xueqiu", choices=["xueqiu", "akshare"], help="HK minute source")
     hk60m.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="Allowed fallback source; repeatable")
@@ -133,7 +134,7 @@ def _build_parser() -> argparse.ArgumentParser:
     cn60m = subparsers.add_parser("cn60m", help="Run the CN 60M Chanlun workflow and optionally send to the current chat")
     cn60m.add_argument("--symbol", required=True, help="CN symbol such as 300124 or sz300124")
     cn60m.add_argument("--name", required=True, help="Security name")
-    cn60m.add_argument("--start", default="2026-01-01 09:30", help="Start time")
+    cn60m.add_argument("--start", default=default_structure_start("60m"), help="Start time")
     cn60m.add_argument("--end", default=None, help="End time")
     cn60m.add_argument("--adjust", default="qfq", choices=["qfq", "hfq", ""], help="Adjustment mode")
     cn60m.add_argument("--generate-only", action="store_true", help="Only generate the outputs; do not send to WeChat")

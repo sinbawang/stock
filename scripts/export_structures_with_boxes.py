@@ -604,7 +604,7 @@ def write_svg_with_inclusion_boxes(
             continue
         color = bi_color
         dash = "" if bi.is_confirmed else ' stroke-dasharray="5 5"'
-        linewidth = 2.0 if bi.is_confirmed else 2.0
+        linewidth = 1.6 if bi.is_confirmed else 1.6
         svg_parts.append(
             f'<line x1="{x_for(start[0]):.2f}" y1="{price_y(start[1]):.2f}" x2="{x_for(end[0]):.2f}" y2="{price_y(end[1]):.2f}" stroke="{color}" stroke-width="{linewidth}"{dash}/>'
         )
@@ -630,9 +630,9 @@ def write_svg_with_inclusion_boxes(
     svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 60}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">Inclusion box</text>')
     svg_parts.append(f'<rect x="{legend_x + 12}" y="{legend_y + 68}" width="22" height="12" fill="{zs_fill}" fill-opacity="0.20" stroke="{zs_stroke}" stroke-dasharray="6 4"/>')
     svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 78}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">Bi zhongshu</text>')
-    svg_parts.append(f'<line x1="{legend_x + 12}" y1="{legend_y + 96}" x2="{legend_x + 34}" y2="{legend_y + 96}" stroke="{bi_color}" stroke-width="2.0"/>')
+    svg_parts.append(f'<line x1="{legend_x + 12}" y1="{legend_y + 96}" x2="{legend_x + 34}" y2="{legend_y + 96}" stroke="{bi_color}" stroke-width="1.6"/>')
     svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 100}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">Confirmed bi</text>')
-    svg_parts.append(f'<line x1="{legend_x + 12}" y1="{legend_y + 114}" x2="{legend_x + 34}" y2="{legend_y + 114}" stroke="{bi_color}" stroke-width="2.0" stroke-dasharray="5 5"/>')
+    svg_parts.append(f'<line x1="{legend_x + 12}" y1="{legend_y + 114}" x2="{legend_x + 34}" y2="{legend_y + 114}" stroke="{bi_color}" stroke-width="1.6" stroke-dasharray="5 5"/>')
     svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 118}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">Unconfirmed bi</text>')
     svg_parts.append(f'<rect x="{legend_x + 12}" y="{legend_y + 130}" width="22" height="12" fill="{macd_pos}" fill-opacity="0.72"/>')
     svg_parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 140}" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="{title_text}">MACD histogram+</text>')

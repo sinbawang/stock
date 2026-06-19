@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -52,6 +53,7 @@ def test_main_passes_default_minute_fallback_to_technical_step(monkeypatch, tmp_
         output_dir=str(tmp_path),
         cache_dir=str(tmp_path / "cache"),
         max_cache_age_days=7,
+        skip_gen_base=True,
         send_wechat=False,
         disable_dedupe=False,
         duplicate_send_window_seconds=300.0,
@@ -69,11 +71,6 @@ def test_main_passes_default_minute_fallback_to_technical_step(monkeypatch, tmp_
         "fetch_and_analyze_hk_blended_fundamentals",
         lambda *args, **kwargs: SimpleNamespace(blended=blended),
     )
-    monkeypatch.setattr(
-        module,
-        "save_blended_fundamental_brief",
-        lambda blended, output_dir: Path(output_dir) / "fundamental.txt",
-    )
 
     captured: dict[str, tuple[str, ...] | None] = {}
     captured_manual: dict[str, str | None] = {}
@@ -83,6 +80,8 @@ def test_main_passes_default_minute_fallback_to_technical_step(monkeypatch, tmp_
         return SimpleNamespace(blended=blended)
 
     monkeypatch.setattr(module, "fetch_and_analyze_hk_blended_fundamentals", fake_fetch_and_analyze_hk_blended_fundamentals)
+    monkeypatch.setattr(module, "write_base_text", lambda blended, output_dir: Path(output_dir) / "base.txt")
+    monkeypatch.setattr(module, "build_fundamental_presentation", lambda blended, base_text_path: {"brief_path": str(base_text_path)})
 
     def fake_save_technical_report(**kwargs):
         captured["fallback_sources"] = kwargs["fallback_sources"]
@@ -136,3 +135,60 @@ def test_save_combined_report_writes_latest_overview_file(tmp_path: Path) -> Non
     assert overview_path.exists()
     assert "00700 腾讯" in overview_path.read_text(encoding="utf-8")
     assert list(tmp_path.glob("*_mixed_overview_*.txt"))
+
+
+def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(tmp_path: Path, monkeypatch) -> None:
+    rows = [{"ts": "2026-05-01 10:30:00"}, {"ts": "2026-05-29 14:30:00"}]
+    raw_bars = [SimpleNamespace(ts="2026-05-01 10:30:00")]
+    normalized_bars = [SimpleNamespace(idx=0)]
+
+    monkeypatch.setattr(module, "fetch_hk_minute_with_policy", lambda *args, **kwargs: (rows, "xueqiu"))
+    monkeypatch.setattr(module, "save_hk_minute_csv", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "read_bars_from_csv", lambda *args, **kwargs: raw_bars)
+    monkeypatch.setattr(module, "clean_bars", lambda bars: bars)
+    monkeypatch.setattr(module, "normalize_bars", lambda bars: normalized_bars)
+    monkeypatch.setattr(module, "write_normalized_csv", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "identify_fractals", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "filter_consecutive_fractals", lambda fractals: fractals)
+    monkeypatch.setattr(module, "identify_bis", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "identify_zhongshu", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "calculate_macd", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "export_fractals", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_confirmed_fractals", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_bis", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_zhongshus", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_macd", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "analyze_current_state", lambda *args, **kwargs: "analysis")
+    monkeypatch.setattr(module, "extract_signals", lambda *args, **kwargs: {"bucket": "watch"})
+    monkeypatch.setattr(module, "build_advice", lambda *args, **kwargs: "建议：观察")
+    monkeypatch.setattr(module, "build_technical_summary", lambda *args, **kwargs: {"conclusion": "偏强", "suggestion": "观察"})
+
+    def fake_save_structure_charts(**kwargs):
+        kwargs["svg_path"].write_text("svg", encoding="utf-8")
+        kwargs["png_path"].write_text("png", encoding="utf-8")
+        kwargs["jpg_path"].write_text("jpg", encoding="utf-8")
+
+    monkeypatch.setattr(module, "save_structure_charts", fake_save_structure_charts)
+
+    _, output_path = module._save_technical_report(
+        symbol="00700",
+        name="腾讯",
+        output_dir=tmp_path,
+        start="2026-01-01 09:30",
+        end=None,
+        primary_source="xueqiu",
+        fallback_sources=("akshare",),
+    )
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    artifacts = payload["artifacts"]
+    data_fetch = payload["data_fetch"]
+    assert output_path == tmp_path / "60m" / "tech.json"
+    assert Path(artifacts["structure_svg"]).exists()
+    assert Path(artifacts["structure_png"]).exists()
+    assert Path(artifacts["structure_jpg"]).exists()
+    assert Path(artifacts["raw_csv"]).parent == tmp_path / "60m" / "analyze"
+    assert data_fetch["source"] == "xueqiu"
+    assert data_fetch["actual_bar_count"] == len(raw_bars)
+    assert data_fetch["requested_min_rows"] == 600
+    assert data_fetch["fulfilled_min_rows"] is False

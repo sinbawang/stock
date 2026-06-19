@@ -24,6 +24,8 @@ from typing import Optional
 from urllib.parse import urlencode
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
+import requests
+
 
 _ALLOWED_INTERVALS = {"day", "week", "month", "m60", "m30", "m15", "m5"}
 
@@ -182,6 +184,196 @@ def _fetch_intraday(opener, symbol: str, interval: str, limit: int) -> list[list
     return code_data.get(interval) or []
 
 
+def _symbol_for_eastmoney(norm_symbol: str) -> str:
+    if norm_symbol.startswith(("sh", "sz", "bj")):
+        return norm_symbol[2:]
+    raise ValueError(f"东方财富分钟线仅支持 A 股代码，收到: {norm_symbol}")
+
+
+def _eastmoney_market_code(norm_symbol: str) -> str:
+    if norm_symbol.startswith("sh"):
+        return "1"
+    return "0"
+
+
+def _symbol_for_xueqiu(norm_symbol: str) -> str:
+    if norm_symbol.startswith("sh"):
+        return f"SH{norm_symbol[2:]}"
+    if norm_symbol.startswith("sz"):
+        return f"SZ{norm_symbol[2:]}"
+    if norm_symbol.startswith("bj"):
+        return f"BJ{norm_symbol[2:]}"
+    raise ValueError(f"雪球分钟线仅支持 A 股代码，收到: {norm_symbol}")
+
+
+def _fetch_intraday_xueqiu(
+    norm_symbol: str,
+    interval: str,
+    start_dt: Optional[datetime],
+    end_dt: Optional[datetime],
+    adjust: str,
+    min_rows: Optional[int] = None,
+) -> list[dict]:
+    if adjust not in {"", "qfq"}:
+        raise ValueError("雪球分钟线当前仅支持不复权或前复权(qfq)")
+
+    from chanlun.data.hk_minute_fetcher import _raise_xueqiu_cookie_error, _resolve_xueqiu_cookies
+
+    xueqiu_symbol = _symbol_for_xueqiu(norm_symbol)
+    for var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
+        os.environ.pop(var, None)
+    os.environ["NO_PROXY"] = "*"
+
+    session = requests.Session()
+    session.trust_env = False
+    session.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Referer": f"https://xueqiu.com/S/{xueqiu_symbol}",
+            "Accept": "application/json, text/plain, */*",
+        }
+    )
+
+    cookies, cookie_source = _resolve_xueqiu_cookies()
+    session.cookies.update(cookies)
+    if cookie_source == "browser":
+        session.get(f"https://xueqiu.com/S/{xueqiu_symbol}", timeout=15)
+
+    actual_start = start_dt or datetime(1990, 1, 1)
+    actual_end = end_dt or datetime.now()
+    rows_by_ts: dict[str, dict] = {}
+    begin_ms = int(actual_end.timestamp() * 1000)
+    period = interval.removeprefix("m") + "m"
+
+    for _ in range(20):
+        response = session.get(
+            "https://stock.xueqiu.com/v5/stock/chart/kline.json",
+            params={
+                "symbol": xueqiu_symbol,
+                "begin": str(begin_ms),
+                "period": period,
+                "type": "before",
+                "count": "-5000",
+                "indicator": "kline",
+            },
+            timeout=20,
+        )
+        if response.status_code >= 400:
+            if response.status_code in {401, 403}:
+                _raise_xueqiu_cookie_error(cookie_source, f"HTTP {response.status_code}")
+            raise RuntimeError(f"雪球接口返回 HTTP {response.status_code}: {response.text[:300]}")
+
+        payload = response.json()
+        if payload.get("error_code") not in (None, 0):
+            error_code = payload.get("error_code")
+            if error_code in {400016, 401, 403}:
+                _raise_xueqiu_cookie_error(cookie_source, f"error_code={error_code}")
+            raise RuntimeError(f"雪球抓取失败: {payload}")
+
+        data = payload.get("data") or {}
+        columns = data.get("column") or []
+        items = data.get("item") or []
+        if not columns or not items:
+            break
+
+        column_map = {name: idx for idx, name in enumerate(columns)}
+        required = ["timestamp", "open", "high", "low", "close", "volume"]
+        missing = [name for name in required if name not in column_map]
+        if missing:
+            raise RuntimeError(f"雪球返回缺少字段: {missing}; 实际列: {columns}")
+
+        oldest_ms: Optional[int] = None
+        added = 0
+        for item in items:
+            ts_ms = int(item[column_map["timestamp"]])
+            ts_dt = datetime.fromtimestamp(ts_ms / 1000)
+            if oldest_ms is None or ts_ms < oldest_ms:
+                oldest_ms = ts_ms
+            if ts_dt < actual_start or ts_dt > actual_end:
+                continue
+            key = ts_dt.strftime("%Y-%m-%d %H:%M")
+            if key in rows_by_ts:
+                continue
+            rows_by_ts[key] = {
+                "ts": key,
+                "open": float(item[column_map["open"]]),
+                "high": float(item[column_map["high"]]),
+                "low": float(item[column_map["low"]]),
+                "close": float(item[column_map["close"]]),
+                "volume": int(float(item[column_map["volume"]]) if item[column_map["volume"]] is not None else 0),
+            }
+            added += 1
+
+        if oldest_ms is None or oldest_ms >= begin_ms or added == 0:
+            break
+        if min_rows is not None and len(rows_by_ts) >= min_rows:
+            break
+        if datetime.fromtimestamp(oldest_ms / 1000) <= actual_start:
+            break
+        begin_ms = oldest_ms - 1
+
+    rows = list(rows_by_ts.values())
+    rows.sort(key=lambda row: row["ts"])
+    return rows
+
+
+def _fetch_intraday_eastmoney(
+    norm_symbol: str,
+    interval: str,
+    start_dt: Optional[datetime],
+    end_dt: Optional[datetime],
+    adjust: str,
+) -> list[dict]:
+    period = interval.removeprefix("m")
+    params = {
+        "fields1": "f1,f2,f3,f4,f5,f6",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+        "ut": "7eea3edcaed734bea9cbfc24409ed989",
+        "klt": period,
+        "fqt": {"": "0", "qfq": "1", "hfq": "2"}.get(adjust, "1"),
+        "secid": f"{_eastmoney_market_code(norm_symbol)}.{_symbol_for_eastmoney(norm_symbol)}",
+        "beg": "0",
+        "end": "20500000",
+    }
+    session = requests.Session()
+    session.trust_env = False
+    response = session.get(
+        "https://push2his.eastmoney.com/api/qt/stock/kline/get",
+        params=params,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0",
+            "Referer": "https://quote.eastmoney.com/",
+        },
+        timeout=20,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    klines = (payload.get("data") or {}).get("klines") or []
+
+    rows = []
+    for item in klines:
+        fields = item.split(",")
+        if len(fields) < 6:
+            continue
+        ts_dt = datetime.strptime(fields[0], "%Y-%m-%d %H:%M")
+        if start_dt and ts_dt < start_dt:
+            continue
+        if end_dt and ts_dt > end_dt:
+            continue
+        rows.append({
+            "ts": ts_dt.strftime("%Y-%m-%d %H:%M"),
+            "open": float(fields[1]),
+            "close": float(fields[2]),
+            "high": float(fields[3]),
+            "low": float(fields[4]),
+            "volume": int(float(fields[5])) if fields[5] else 0,
+        })
+
+    rows.sort(key=lambda row: row["ts"])
+    return rows
+
+
 def fetch_kline(
     symbol: str,
     start: Optional[str] = None,
@@ -189,6 +381,7 @@ def fetch_kline(
     interval: str = "day",
     adjust: str = "qfq",
     limit: int = 1000,
+    min_rows: Optional[int] = None,
 ) -> list[dict]:
     """抓取指定股票、指定时间范围、指定级别 K 线。"""
     norm_symbol = _normalize_symbol(symbol)
@@ -231,6 +424,28 @@ def fetch_kline(
         })
 
     rows.sort(key=lambda r: r["ts"])
+
+    if (
+        min_rows is not None
+        and is_intraday
+        and len(rows) < min_rows
+        and norm_symbol.startswith(("sh", "sz", "bj"))
+    ):
+        best_rows = rows
+        for fallback_fetcher in (_fetch_intraday_xueqiu, _fetch_intraday_eastmoney):
+            try:
+                if fallback_fetcher is _fetch_intraday_xueqiu:
+                    fallback_rows = fallback_fetcher(norm_symbol, norm_interval, start_dt, end_dt, adjust, min_rows)
+                else:
+                    fallback_rows = fallback_fetcher(norm_symbol, norm_interval, start_dt, end_dt, adjust)
+            except Exception:  # noqa: BLE001
+                continue
+            if len(fallback_rows) > len(best_rows):
+                best_rows = fallback_rows
+            if len(best_rows) >= min_rows:
+                return best_rows
+        return best_rows
+
     return rows
 
 

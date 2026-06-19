@@ -9,6 +9,7 @@ from .models import Bar
 from .normalize import normalize_bars
 from .fractal import identify_fractals, filter_consecutive_fractals
 from .bi import identify_bis
+from .segment import identify_segments
 from .zhongshu import identify_zhongshu
 from .data import read_bars_from_csv
 from .data.cleaner import clean_bars
@@ -23,7 +24,7 @@ def analyze(
     output_dir: Optional[str] = typer.Option(None, help="输出目录")
 ):
     """
-    完整分析流程：读取 -> 清洗 -> 去包含 -> 识别分型/笔/中枢 -> 输出结果
+    完整分析流程：读取 -> 清洗 -> 去包含 -> 识别分型/笔/线段/中枢 -> 输出结果
     """
     typer.echo(f"读取 {filepath}...")
     
@@ -58,6 +59,11 @@ def analyze(
     bis = identify_bis(fractals, normalized_bars)
     typer.echo(f"识别 {len(bis)} 笔")
 
+    # 线段识别
+    typer.echo("识别线段...")
+    segments = identify_segments(bis)
+    typer.echo(f"识别 {len(segments)} 线段")
+
     # 中枢识别
     typer.echo("识别中枢...")
     zhongshus = identify_zhongshu(bis)
@@ -73,6 +79,12 @@ def analyze(
     for bi in bis:
         typer.echo(f"  {bi.direction.value} #{bi.bi_id} {bi.start_ts} ~ {bi.end_ts}")
 
+    typer.echo(f"\n线段: {len(segments)}")
+    for segment in segments:
+        typer.echo(
+            f"  {segment.direction.value} #{segment.segment_id} {segment.start_ts} ~ {segment.end_ts}"
+        )
+
     typer.echo(f"\n中枢: {len(zhongshus)}")
     for zs in zhongshus:
         typer.echo(f"  #{zs.zs_id} [{zs.zs_low:.2f}, {zs.zs_high:.2f}] {zs.start_ts} ~ {zs.end_ts}")
@@ -86,14 +98,30 @@ def analyze(
         plotter = Plotter()
 
         # 绘制分型
-        fig = plotter.plot_klines_with_fractals(bars, fractals)
+        fig = plotter.plot_klines_with_fractals(bars, fractals, normalized_bars=normalized_bars)
         fig.savefig(output_path / "fractals.png", dpi=100)
         typer.echo("已保存 fractals.png")
 
         # 绘制笔
-        fig = plotter.plot_bis(bars, bis)
+        fig = plotter.plot_bis(bars, bis, normalized_bars=normalized_bars)
         fig.savefig(output_path / "bis.png", dpi=100)
         typer.echo("已保存 bis.png")
+
+        # 绘制结构总览
+        fig = plotter.plot_structure(
+            bars,
+            fractals,
+            bis,
+            segments,
+            zhongshus,
+            normalized_bars=normalized_bars,
+        )
+        fig.savefig(output_path / "structure.png", dpi=100)
+        fig.savefig(output_path / "structure.svg")
+        fig.savefig(output_path / "structure.jpg", dpi=100)
+        typer.echo("已保存 structure.png")
+        typer.echo("已保存 structure.svg")
+        typer.echo("已保存 structure.jpg")
 
 
 def main():

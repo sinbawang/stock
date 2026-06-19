@@ -1,7 +1,7 @@
 """
 Data structures for Chan theory analysis.
 
-Defines: Bar, NormalizedBar, Fractal, Bi, Zhongshu
+Defines: Bar, NormalizedBar, Fractal, Bi, Segment, Zhongshu
 """
 
 from dataclasses import dataclass, field
@@ -107,6 +107,38 @@ class Bi:
     low: float                   # 笔的最低价
     norm_bar_range: tuple        # (start_idx, end_idx) 标准化 K 线覆盖范围
     is_confirmed: bool = False   # 是否已确认（反向分型出现后）
+
+    def is_up(self) -> bool:
+        return self.direction == BiDirection.UP
+
+    def is_down(self) -> bool:
+        return self.direction == BiDirection.DOWN
+
+
+@dataclass
+class Segment:
+    """
+    线段（由至少 3 笔组成的同向推进结构）。
+
+    第一阶段实现采用工程化简化定义：
+    - 至少由 3 笔构成
+    - 首尾笔方向一致，中间笔方向交替
+    - 同向笔不断创新高/新低，反向笔不能破坏最近关键低/高点
+    - 若被反向笔有效破坏，则该线段确认终结
+    """
+    segment_id: int
+    direction: BiDirection
+    start_bi_id: int
+    end_bi_id: int
+    start_ts: datetime
+    end_ts: datetime
+    start_price: float
+    end_price: float
+    high: float
+    low: float
+    norm_bar_range: tuple
+    bi_ids: List[int] = field(default_factory=list)
+    is_confirmed: bool = False
 
     def is_up(self) -> bool:
         return self.direction == BiDirection.UP
