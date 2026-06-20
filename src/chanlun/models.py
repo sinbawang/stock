@@ -170,6 +170,15 @@ class Zhongshu:
     end_ts: datetime
     bi_ids: List[int] = field(default_factory=list)  # 参与的笔 ID 列表
     is_terminated: bool = False  # 是否已终结
+    entering_bi_id: int | None = None
+    core_bi_ids: List[int] = field(default_factory=list)
+    exit_bi_id: int | None = None
+    zone_mode: str = "fixed_first_three_overlap"
+    render_start_bi_id: int | None = None
+    render_end_bi_id: int | None = None
+    structure_level: str = "bi"
+    recognition_mode: str = "fixed_first_three_overlap"
+    render_mode: str = "core_plus_extension"
 
     @property
     def width(self) -> float:

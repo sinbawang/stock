@@ -44,6 +44,30 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     rows = [{"ts": "2026-05-01 10:30:00"}, {"ts": "2026-05-29 14:30:00"}]
     raw_bars = [SimpleNamespace(ts="2026-05-01 10:30:00")]
     normalized_bars = [SimpleNamespace(idx=0)]
+    zhongshus = [
+        SimpleNamespace(
+            zs_id=1,
+            structure_level="bi",
+            recognition_mode="fixed_first_three_overlap",
+            render_mode="core_plus_extension",
+            entering_bi_id=8,
+            core_bi_ids=[9, 10, 11],
+            bi_ids=[9, 10, 11, 12],
+            exit_bi_id=13,
+            start_bi_id=9,
+            end_bi_id=12,
+            render_start_bi_id=9,
+            render_end_bi_id=12,
+            zone_mode="fixed_first_three_overlap",
+            zs_low=10.1,
+            zs_high=10.8,
+            peak_low=9.9,
+            peak_high=11.0,
+            start_ts=SimpleNamespace(isoformat=lambda timespec=None: "2026-05-01T10:30:00"),
+            end_ts=SimpleNamespace(isoformat=lambda timespec=None: "2026-05-29T14:30:00"),
+            is_terminated=True,
+        )
+    ]
 
     monkeypatch.setattr(module, "fetch_kline", lambda *args, **kwargs: rows)
     monkeypatch.setattr(
@@ -65,7 +89,7 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     monkeypatch.setattr(module, "identify_fractals", lambda *args, **kwargs: [])
     monkeypatch.setattr(module, "filter_consecutive_fractals", lambda fractals: fractals)
     monkeypatch.setattr(module, "identify_bis", lambda *args, **kwargs: [])
-    monkeypatch.setattr(module, "identify_zhongshu", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "identify_zhongshu", lambda *args, **kwargs: zhongshus)
     monkeypatch.setattr(module, "calculate_macd", lambda *args, **kwargs: [])
     monkeypatch.setattr(module, "export_fractals", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "export_confirmed_fractals", lambda *args, **kwargs: None)
@@ -101,6 +125,9 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     assert Path(artifacts["structure_jpg"]).exists()
     assert Path(artifacts["macd_csv"]).name.endswith("_normalized_macd.csv")
     assert payload["source_actual"] == "xueqiu"
+    assert payload["structure"]["latest_zhongshu"]["core_bi_ids"] == [9, 10, 11]
+    assert payload["structure"]["latest_zhongshu"]["bi_ids"] == [9, 10, 11, 12]
+    assert payload["structure"]["zhongshus"][0]["render_end_bi_id"] == 12
     assert data_fetch["source"] == "tushare->tencent->xueqiu->eastmoney"
     assert data_fetch["actual_source"] == "xueqiu"
     assert data_fetch["source_attempts"][0]["source"] == "tushare"

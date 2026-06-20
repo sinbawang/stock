@@ -150,6 +150,30 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     rows = [{"ts": "2026-05-01 10:30:00"}, {"ts": "2026-05-29 14:30:00"}]
     raw_bars = [SimpleNamespace(ts="2026-05-01 10:30:00")]
     normalized_bars = [SimpleNamespace(idx=0)]
+    zhongshus = [
+        SimpleNamespace(
+            zs_id=2,
+            structure_level="bi",
+            recognition_mode="fixed_first_three_overlap",
+            render_mode="core_plus_extension",
+            entering_bi_id=18,
+            core_bi_ids=[19, 20, 21],
+            bi_ids=[19, 20, 21, 22],
+            exit_bi_id=None,
+            start_bi_id=19,
+            end_bi_id=22,
+            render_start_bi_id=19,
+            render_end_bi_id=22,
+            zone_mode="fixed_first_three_overlap",
+            zs_low=5.2,
+            zs_high=5.6,
+            peak_low=5.0,
+            peak_high=5.8,
+            start_ts=SimpleNamespace(isoformat=lambda timespec=None: "2026-05-01T10:30:00"),
+            end_ts=SimpleNamespace(isoformat=lambda timespec=None: "2026-05-29T14:30:00"),
+            is_terminated=False,
+        )
+    ]
 
     monkeypatch.setattr(module, "fetch_hk_minute_with_policy", lambda *args, **kwargs: (rows, "xueqiu"))
     monkeypatch.setattr(
@@ -171,7 +195,7 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     monkeypatch.setattr(module, "identify_fractals", lambda *args, **kwargs: [])
     monkeypatch.setattr(module, "filter_consecutive_fractals", lambda fractals: fractals)
     monkeypatch.setattr(module, "identify_bis", lambda *args, **kwargs: [])
-    monkeypatch.setattr(module, "identify_zhongshu", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "identify_zhongshu", lambda *args, **kwargs: zhongshus)
     monkeypatch.setattr(module, "calculate_macd", lambda *args, **kwargs: [])
     monkeypatch.setattr(module, "export_fractals", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "export_confirmed_fractals", lambda *args, **kwargs: None)
@@ -210,6 +234,8 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     assert Path(artifacts["raw_csv"]).parent == tmp_path / "60m" / "analyze"
     assert data_fetch["source"] == "xueqiu"
     assert payload["source_actual"] == "xueqiu"
+    assert payload["structure"]["latest_zhongshu"]["core_bi_ids"] == [19, 20, 21]
+    assert payload["structure"]["latest_zhongshu"]["bi_ids"] == [19, 20, 21, 22]
     assert data_fetch["actual_source"] == "xueqiu"
     assert data_fetch["source_attempts"][0]["source"] == "xueqiu"
     assert data_fetch["actual_bar_count"] == len(raw_bars)

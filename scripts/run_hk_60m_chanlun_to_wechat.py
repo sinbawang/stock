@@ -30,8 +30,11 @@ from export_structures_with_boxes import (
     export_bis,
     export_confirmed_fractals,
     export_fractals,
+    format_zhongshu_structure_text,
     export_macd,
     export_segments,
+    serialize_zhongshu,
+    serialize_zhongshus,
     export_zhongshus,
 )
 from report_json import write_json
@@ -204,6 +207,8 @@ def analyze_current_state(
         structure_lines.append(
             f"{label}：{latest_down.start_ts.strftime('%m-%d %H:%M')} 到 {latest_down.end_ts.strftime('%m-%d %H:%M')}，低点 {latest_down.low:.2f}"
         )
+    if current_zs:
+        structure_lines.append(f"最新中枢结构：{format_zhongshu_structure_text(current_zs)}")
 
     signal_lines = [
         "顶背驰：有" if top_divergence else "顶背驰：无",
@@ -274,7 +279,9 @@ def write_technical_report_json(
     zhongshu_count: int,
     actual_bar_count: int,
     requested_min_rows: int | None,
+    zhongshus: list[Zhongshu],
 ) -> Path:
+    latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
     return write_json(
         path,
         {
@@ -294,6 +301,10 @@ def write_technical_report_json(
                 "fulfilled_min_rows": actual_bar_count >= requested_min_rows if requested_min_rows is not None else None,
                 "bar_count_policy": BAR_COUNT_POLICY,
                 "source_probe_min_rows": INTRADAY_SOURCE_PROBE_ROWS,
+            },
+            "structure": {
+                "latest_zhongshu": latest_zhongshu,
+                "zhongshus": serialize_zhongshus(zhongshus),
             },
             "summary": {
                 "conclusion": _extract_prefixed_value(advice_text, "结论："),
@@ -401,6 +412,7 @@ def main() -> None:
         zhongshu_count=len(zhongshus),
         actual_bar_count=len(raw_bars),
         requested_min_rows=None,
+        zhongshus=zhongshus,
     )
 
     print(f"原始 CSV: {paths['raw_csv']}")

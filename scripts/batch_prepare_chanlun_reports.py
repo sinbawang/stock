@@ -38,6 +38,9 @@ from export_structures_with_boxes import (
     export_fractals,
     export_macd,
     export_segments,
+    format_zhongshu_structure_text,
+    serialize_zhongshu,
+    serialize_zhongshus,
     export_zhongshus,
 )
 from report_json import write_json
@@ -419,6 +422,9 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
             ]
         )
 
+    if current_zs:
+        lines.append(f"结构说明：{format_zhongshu_structure_text(current_zs)}。")
+
     if bottom_divergence and not buy_points:
         lines.append("补充：已有底背驰迹象，但买点尚未确认，最多列入观察名单。")
     if top_divergence and not sell_points:
@@ -499,6 +505,7 @@ def export_case(
     advice_text = build_advice(security.name, timeframe_label, raw_bars, signals)
     summary_payload = build_technical_summary(timeframe_label, signals, advice_text)
     report_text = analysis_text + "\n\n" + advice_text + "\n"
+    latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
 
     analysis_path.write_text(analysis_text + "\n", encoding="utf-8")
     advice_path.write_text(advice_text + "\n", encoding="utf-8")
@@ -514,6 +521,10 @@ def export_case(
             "source": (data_fetch or {}).get("source"),
             "data_fetch": data_fetch,
             "pending_reverse_mode": pending_reverse_mode,
+            "structure": {
+                "latest_zhongshu": latest_zhongshu,
+                "zhongshus": serialize_zhongshus(zhongshus),
+            },
             "summary": summary_payload,
             "analysis_text": analysis_text,
             "advice_text": advice_text,

@@ -17,7 +17,7 @@ if str(SRC) not in sys.path:
 
 from chanlun.bi import identify_bis
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
-from chanlun.models import Bar, Fractal, NormalizedBar, Segment
+from chanlun.models import Bar, Fractal, NormalizedBar, Segment, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
 
 
@@ -297,12 +297,57 @@ def export_segments(path: Path, segments: list[Segment]) -> None:
         writer.writerows(rows)
 
 
+def serialize_zhongshu(zs: Zhongshu) -> dict[str, object]:
+    return {
+        "zs_id": zs.zs_id,
+        "structure_level": zs.structure_level,
+        "recognition_mode": zs.recognition_mode,
+        "render_mode": zs.render_mode,
+        "entering_bi_id": zs.entering_bi_id,
+        "core_bi_ids": list(zs.core_bi_ids),
+        "bi_ids": list(zs.bi_ids),
+        "exit_bi_id": zs.exit_bi_id,
+        "start_bi_id": zs.start_bi_id,
+        "end_bi_id": zs.end_bi_id,
+        "render_start_bi_id": zs.render_start_bi_id,
+        "render_end_bi_id": zs.render_end_bi_id,
+        "zone_mode": zs.zone_mode,
+        "zs_low": zs.zs_low,
+        "zs_high": zs.zs_high,
+        "peak_low": zs.peak_low,
+        "peak_high": zs.peak_high,
+        "start_ts": zs.start_ts.isoformat(timespec="seconds"),
+        "end_ts": zs.end_ts.isoformat(timespec="seconds"),
+        "is_terminated": zs.is_terminated,
+    }
+
+
+def serialize_zhongshus(zhongshus: list[Zhongshu]) -> list[dict[str, object]]:
+    return [serialize_zhongshu(zs) for zs in zhongshus]
+
+
+def format_zhongshu_structure_text(zs: Zhongshu) -> str:
+    core_bis = ",".join(str(bi_id) for bi_id in zs.core_bi_ids) or "无"
+    all_bis = ",".join(str(bi_id) for bi_id in zs.bi_ids) or "无"
+    entering_bi = str(zs.entering_bi_id) if zs.entering_bi_id is not None else "无"
+    exit_bi = str(zs.exit_bi_id) if zs.exit_bi_id is not None else "未出现"
+    return (
+        f"本体三笔(core_bi_ids)：{core_bis}；"
+        f"扩展参与笔(bi_ids)：{all_bis}；"
+        f"进入笔：{entering_bi}；"
+        f"离开笔：{exit_bi}"
+    )
+
+
 def export_zhongshus(path: Path, zhongshus) -> None:
     rows = [
         {
             "zs_id": zs.zs_id,
             "start_bi_id": zs.start_bi_id,
             "end_bi_id": zs.end_bi_id,
+            "entering_bi_id": zs.entering_bi_id,
+            "core_bi_ids": ",".join(str(bi_id) for bi_id in zs.core_bi_ids),
+            "exit_bi_id": zs.exit_bi_id,
             "zs_low": zs.zs_low,
             "zs_high": zs.zs_high,
             "peak_low": zs.peak_low,
@@ -310,6 +355,12 @@ def export_zhongshus(path: Path, zhongshus) -> None:
             "start_ts": zs.start_ts.strftime("%Y-%m-%d %H:%M"),
             "end_ts": zs.end_ts.strftime("%Y-%m-%d %H:%M"),
             "bi_ids": ",".join(str(bi_id) for bi_id in zs.bi_ids),
+            "zone_mode": zs.zone_mode,
+            "render_start_bi_id": zs.render_start_bi_id,
+            "render_end_bi_id": zs.render_end_bi_id,
+            "structure_level": zs.structure_level,
+            "recognition_mode": zs.recognition_mode,
+            "render_mode": zs.render_mode,
             "is_terminated": zs.is_terminated,
         }
         for zs in zhongshus
@@ -319,6 +370,9 @@ def export_zhongshus(path: Path, zhongshus) -> None:
         "zs_id",
         "start_bi_id",
         "end_bi_id",
+        "entering_bi_id",
+        "core_bi_ids",
+        "exit_bi_id",
         "zs_low",
         "zs_high",
         "peak_low",
@@ -326,6 +380,12 @@ def export_zhongshus(path: Path, zhongshus) -> None:
         "start_ts",
         "end_ts",
         "bi_ids",
+        "zone_mode",
+        "render_start_bi_id",
+        "render_end_bi_id",
+        "structure_level",
+        "recognition_mode",
+        "render_mode",
         "is_terminated",
     ]
     with path.open("w", encoding="utf-8-sig", newline="") as handle:

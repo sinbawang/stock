@@ -28,7 +28,7 @@ from chanlun.data.source_profiles import available_a_share_source_profiles, reso
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.normalize import normalize_bars
 from chanlun.zhongshu import identify_zhongshu
-from export_structures_with_boxes import calculate_macd, export_bis, export_confirmed_fractals, export_fractals, export_macd, export_zhongshus
+from export_structures_with_boxes import calculate_macd, export_bis, export_confirmed_fractals, export_fractals, export_macd, export_zhongshus, serialize_zhongshu, serialize_zhongshus
 from fundamental.reporting.presentation import build_fundamental_presentation, write_base_text
 from fundamental.services import fetch_and_analyze_cn_blended_fundamentals
 from report_retention import prune_older_outputs
@@ -200,6 +200,7 @@ def _save_technical_report(
     summary_payload = build_technical_summary("60M", signals, advice_text)
     conclusion = summary_payload.get("conclusion") or "missing"
     suggestion = summary_payload.get("suggestion") or "等待更多技术面确认。"
+    latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
 
     output_path = paths["base_dir"] / "tech.json"
     write_json(
@@ -221,6 +222,10 @@ def _save_technical_report(
                 "fulfilled_min_rows": None,
                 "bar_count_policy": BAR_COUNT_POLICY,
                 "source_probe_min_rows": INTRADAY_SOURCE_PROBE_ROWS,
+            },
+            "structure": {
+                "latest_zhongshu": latest_zhongshu,
+                "zhongshus": serialize_zhongshus(zhongshus),
             },
             "summary": summary_payload,
             "analysis_text": analysis_text,

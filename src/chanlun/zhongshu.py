@@ -74,7 +74,16 @@ def identify_zhongshu(bis: List[Bi]) -> List[Zhongshu]:
                 start_ts=bi1.start_ts,
                 end_ts=bi3.end_ts,
                 bi_ids=[bi1.bi_id, bi2.bi_id, bi3.bi_id],
-                is_terminated=False
+                is_terminated=False,
+                entering_bi_id=entering_bi.bi_id,
+                core_bi_ids=[bi1.bi_id, bi2.bi_id, bi3.bi_id],
+                exit_bi_id=None,
+                zone_mode="fixed_first_three_overlap",
+                render_start_bi_id=bi1.bi_id,
+                render_end_bi_id=bi3.bi_id,
+                structure_level="bi",
+                recognition_mode="fixed_first_three_overlap",
+                render_mode="core_plus_extension",
             )
 
             # 中枢区间固定为前三笔重叠(ZD/ZG)，后续仅扩展本体参与笔列表
@@ -90,6 +99,7 @@ def identify_zhongshu(bis: List[Bi]) -> List[Zhongshu]:
                     zs.bi_ids.append(cand.bi_id)
                     zs.peak_low = min(zs.peak_low, cand.low)
                     zs.peak_high = max(zs.peak_high, cand.high)
+                    zs.render_end_bi_id = cand.bi_id
                     j += 1
                 else:
                     # 不与区间重叠，检查是否是走出段
@@ -115,6 +125,7 @@ def identify_zhongshu(bis: List[Bi]) -> List[Zhongshu]:
                 )
                 if same_dir and breaks_out:
                     zs.is_terminated = True
+                    zs.exit_bi_id = exit_bi.bi_id
                     zhongshus.append(zs)
                     zs_id += 1
                     # 走出笔可作为下一中枢的进入笔

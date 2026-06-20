@@ -49,6 +49,12 @@ class TestIdentifyZhongshu:
         assert len(result) == 1
         assert result[0].start_bi_id == 1
         assert result[0].end_bi_id == 3
+        assert result[0].entering_bi_id == 0
+        assert result[0].core_bi_ids == [1, 2, 3]
+        assert result[0].render_start_bi_id == 1
+        assert result[0].render_end_bi_id == 3
+        assert result[0].exit_bi_id == 4
+        assert result[0].structure_level == "bi"
         assert result[0].bi_ids == [1, 2, 3]
         assert result[0].zs_low == 102
         assert result[0].zs_high == 103
@@ -81,4 +87,7 @@ class TestIdentifyZhongshu:
 
         assert len(result) == 2
         assert result[0].bi_ids == [1, 2, 3]
-        assert result[1].bi_ids == [5, 6, 7]
+        assert result[1].bi_ids == [5, 6, 7, 8]
+        assert result[0].exit_bi_id == 4
+        assert result[1].entering_bi_id == 4
+        assert result[1].render_end_bi_id == 8
