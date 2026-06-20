@@ -23,8 +23,9 @@ from chanlun.default_ranges import default_structure_start
 from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
 from chanlun.data.hk_fetcher import fetch_hk_daily, save_to_csv as save_hk_daily_csv
-from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, save_to_csv as save_hk_minute_csv
-from chanlun.data.kline_fetcher import fetch_kline, save_to_csv as save_kline_csv
+from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, get_last_fetch_metadata as get_last_hk_fetch_metadata, save_to_csv as save_hk_minute_csv
+from chanlun.data.kline_fetcher import fetch_kline, get_last_fetch_metadata, save_to_csv as save_kline_csv
+from chanlun.data.source_profiles import describe_source_chain, resolve_a_share_intraday_source_label, resolve_hk_minute_source_selection
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.normalize import normalize_bars
 from chanlun.segment import identify_segments
@@ -72,10 +73,19 @@ INTRADAY_SOURCE_PROBE_ROWS = 600
 BAR_COUNT_POLICY = "feasible_maximum"
 
 
-def _data_fetch_payload(source: str, rows: list[dict], requested_min_rows: int | None) -> dict[str, object]:
+def _data_fetch_payload(
+    source: str,
+    rows: list[dict],
+    requested_min_rows: int | None,
+    *,
+    actual_source: str | None = None,
+    source_attempts: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
     actual_bar_count = len(rows)
     return {
         "source": source,
+        "actual_source": actual_source or source,
+        "source_attempts": source_attempts or [],
         "actual_bar_count": actual_bar_count,
         "requested_min_rows": requested_min_rows,
         "fulfilled_min_rows": actual_bar_count >= requested_min_rows if requested_min_rows is not None else None,
@@ -157,34 +167,66 @@ def fetch_day_rows(security: Security, start: str) -> tuple[list[dict], dict[str
 
 def fetch_m60_rows(security: Security, start: str) -> tuple[list[dict], dict[str, object]]:
     if security.market == "HK":
+        primary_source, fallback_sources, _ = resolve_hk_minute_source_selection()
         rows, _ = fetch_hk_minute_with_policy(
             security.symbol,
             period="60",
             start=start,
             adjust="qfq",
-            primary_source="xueqiu",
-            fallback_sources=("akshare",),
+            primary_source=primary_source,
+            fallback_sources=fallback_sources,
             min_rows=INTRADAY_SOURCE_PROBE_ROWS,
         )
-        return rows, _data_fetch_payload("xueqiu->akshare", rows, None)
+        fetch_meta = get_last_hk_fetch_metadata()
+        return rows, _data_fetch_payload(
+            describe_source_chain(primary_source, fallback_sources),
+            rows,
+            None,
+            actual_source=str(fetch_meta.get("actual_source") or primary_source),
+            source_attempts=list(fetch_meta.get("source_attempts") or []),
+        )
+    fetch_source, _ = resolve_a_share_intraday_source_label()
     rows = fetch_kline(security.symbol, start=start, interval="m60", min_rows=INTRADAY_SOURCE_PROBE_ROWS)
-    return rows, _data_fetch_payload("fetch_kline.a_share_intraday", rows, None)
+    fetch_meta = get_last_fetch_metadata()
+    return rows, _data_fetch_payload(
+        fetch_source,
+        rows,
+        None,
+        actual_source=str(fetch_meta.get("actual_source") or fetch_source),
+        source_attempts=list(fetch_meta.get("source_attempts") or []),
+    )
 
 
 def fetch_m15_rows(security: Security, start: str) -> tuple[list[dict], dict[str, object]]:
     if security.market == "HK":
+        primary_source, fallback_sources, _ = resolve_hk_minute_source_selection()
         rows, _ = fetch_hk_minute_with_policy(
             security.symbol,
             period="15",
             start=start,
             adjust="qfq",
-            primary_source="xueqiu",
-            fallback_sources=("akshare",),
+            primary_source=primary_source,
+            fallback_sources=fallback_sources,
             min_rows=INTRADAY_SOURCE_PROBE_ROWS,
         )
-        return rows, _data_fetch_payload("xueqiu->akshare", rows, None)
+        fetch_meta = get_last_hk_fetch_metadata()
+        return rows, _data_fetch_payload(
+            describe_source_chain(primary_source, fallback_sources),
+            rows,
+            None,
+            actual_source=str(fetch_meta.get("actual_source") or primary_source),
+            source_attempts=list(fetch_meta.get("source_attempts") or []),
+        )
+    fetch_source, _ = resolve_a_share_intraday_source_label()
     rows = fetch_kline(security.symbol, start=start, interval="m15", min_rows=INTRADAY_SOURCE_PROBE_ROWS)
-    return rows, _data_fetch_payload("fetch_kline.a_share_intraday", rows, None)
+    fetch_meta = get_last_fetch_metadata()
+    return rows, _data_fetch_payload(
+        fetch_source,
+        rows,
+        None,
+        actual_source=str(fetch_meta.get("actual_source") or fetch_source),
+        source_attempts=list(fetch_meta.get("source_attempts") or []),
+    )
 
 
 def save_rows(security: Security, timeframe: str, rows: list[dict], path: Path) -> None:

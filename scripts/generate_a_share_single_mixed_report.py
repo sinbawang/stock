@@ -23,7 +23,8 @@ from chanlun.chart_export import save_structure_charts
 from chanlun.default_ranges import default_structure_start
 from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
-from chanlun.data.kline_fetcher import fetch_kline, save_to_csv as save_cn_kline_csv
+from chanlun.data.kline_fetcher import fetch_kline, get_last_fetch_metadata, save_to_csv as save_cn_kline_csv
+from chanlun.data.source_profiles import available_a_share_source_profiles, resolve_a_share_intraday_source_label
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.normalize import normalize_bars
 from chanlun.zhongshu import identify_zhongshu
@@ -61,6 +62,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start", default=default_structure_start("60m"), help="60M analysis start time")
     parser.add_argument("--end", default=None, help="Optional 60M analysis end time")
     parser.add_argument("--adjust", default="qfq", choices=["qfq", "hfq", ""], help="Adjustment mode")
+    parser.add_argument("--source-profile", default=None, choices=available_a_share_source_profiles(), help="A股分钟线数据源配置；默认读取 CHANLUN_SOURCE_PROFILE 或 mainland")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Output directory")
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help="Capital-flow cache directory")
     parser.add_argument("--max-cache-age-days", type=int, default=7, help="Maximum accepted cache age in days")
@@ -128,8 +130,12 @@ def _save_technical_report(
     start: str,
     end: str | None,
     adjust: str,
+    source_profile: str | None = None,
 ) -> tuple[TechnicalRef, Path]:
-    rows = fetch_kline(symbol, start=start, end=end, interval="60m", adjust=adjust, limit=5000, min_rows=INTRADAY_SOURCE_PROBE_ROWS)
+    fetch_source, _ = resolve_a_share_intraday_source_label(source_profile)
+    rows = fetch_kline(symbol, start=start, end=end, interval="60m", adjust=adjust, limit=5000, min_rows=INTRADAY_SOURCE_PROBE_ROWS, source_profile=source_profile)
+    fetch_meta = get_last_fetch_metadata()
+    actual_source = str(fetch_meta.get("actual_source") or fetch_source)
     if not rows:
         raise RuntimeError("未抓到任何60M数据")
 
@@ -204,9 +210,12 @@ def _save_technical_report(
             "name": name,
             "timeframe": "60m",
             "generated_at": datetime.now().isoformat(timespec="seconds"),
-            "source": "fetch_kline.a_share_intraday",
+            "source": fetch_source,
+            "source_actual": actual_source,
             "data_fetch": {
-                "source": "fetch_kline.a_share_intraday",
+                "source": fetch_source,
+                "actual_source": actual_source,
+                "source_attempts": fetch_meta.get("source_attempts") or [],
                 "actual_bar_count": len(raw_bars),
                 "requested_min_rows": None,
                 "fulfilled_min_rows": None,
@@ -330,6 +339,7 @@ def main() -> None:
         start=args.start,
         end=args.end,
         adjust=args.adjust,
+        source_profile=getattr(args, "source_profile", None),
     )
 
     capital_flow_result = fetch_and_analyze_cn_flow(

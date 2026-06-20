@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import types
 
 import pytest
@@ -86,6 +87,7 @@ def test_fetch_hk_minute_with_policy_uses_primary_without_fallback(monkeypatch):
 
     assert used_source == "xueqiu"
     assert rows == [{"ts": "2026-01-01 10:00"}]
+    assert module.get_last_fetch_metadata()["actual_source"] == "xueqiu"
 
 
 def test_fetch_hk_minute_with_policy_falls_back_when_allowed(monkeypatch):
@@ -108,6 +110,11 @@ def test_fetch_hk_minute_with_policy_falls_back_when_allowed(monkeypatch):
     assert calls == ["xueqiu", "akshare"]
     assert used_source == "akshare"
     assert rows == [{"ts": "2026-01-01 10:00"}]
+    meta = module.get_last_fetch_metadata()
+    assert meta["source_plan"] == "xueqiu->akshare"
+    assert meta["actual_source"] == "akshare"
+    assert meta["source_attempts"][0]["source"] == "xueqiu"
+    assert meta["source_attempts"][1]["source"] == "akshare"
 
 
 def test_fetch_hk_minute_with_policy_does_not_probe_other_sources_by_default(monkeypatch):
@@ -168,3 +175,55 @@ def test_fetch_hk_minute_with_policy_returns_best_available_rows_when_probe_targ
     assert calls == ["xueqiu", "akshare"]
     assert used_source == "xueqiu"
     assert len(rows) == 499
+
+
+def test_fetch_hk_minute_with_policy_records_error_and_best_source(monkeypatch):
+    def fake_fetch(symbol, period="60", start=None, end=None, adjust="qfq", source="xueqiu"):
+        if source == "xueqiu":
+            raise RuntimeError("cookie expired")
+        return [{"ts": f"2026-01-01 10:{index:02d}"} for index in range(3)]
+
+    monkeypatch.setattr(module, "fetch_hk_minute", fake_fetch)
+
+    rows, used_source = module.fetch_hk_minute_with_policy(
+        "03690",
+        primary_source="xueqiu",
+        fallback_sources=("akshare",),
+    )
+    meta = module.get_last_fetch_metadata()
+
+    assert len(rows) == 3
+    assert used_source == "akshare"
+    assert meta["actual_source"] == "akshare"
+    assert meta["source_attempts"][0]["status"] == "error"
+    assert meta["source_attempts"][0]["error"] == "cookie expired"
+    assert meta["source_attempts"][1]["row_count"] == 3
+
+
+def test_main_prints_source_plan_and_actual_source(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(
+        module,
+        "fetch_hk_minute_with_policy",
+        lambda *args, **kwargs: ([{"ts": "2026-01-01 10:00", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1}], "xueqiu"),
+    )
+    monkeypatch.setattr(
+        module,
+        "get_last_fetch_metadata",
+        lambda: {"source_plan": "xueqiu->akshare", "actual_source": "xueqiu"},
+    )
+    monkeypatch.setattr(module, "save_to_csv", lambda rows, filepath: None)
+    monkeypatch.setattr(sys, "argv", [
+        "hk_minute_fetcher.py",
+        "--symbol",
+        "01339",
+        "--period",
+        "60",
+        "--output",
+        str(tmp_path / "rows.csv"),
+    ])
+
+    module.main()
+
+    output = capsys.readouterr().out
+    assert "抓取链路: xueqiu->akshare" in output
+    assert "实际命中源: xueqiu" in output

@@ -17,7 +17,8 @@ from chanlun.bi import identify_bis
 from chanlun.default_ranges import default_structure_start
 from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
-from chanlun.data.kline_fetcher import fetch_kline, save_to_csv
+from chanlun.data.kline_fetcher import fetch_kline, get_last_fetch_metadata, save_to_csv
+from chanlun.data.source_profiles import available_a_share_source_profiles, resolve_a_share_intraday_source_label
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.models import Bar, Bi, NormalizedBar, Zhongshu
 from chanlun.normalize import normalize_bars
@@ -51,6 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start", default=default_structure_start("60m"), help="起始时间")
     parser.add_argument("--end", default=None, help="结束时间，默认到当前")
     parser.add_argument("--adjust", default="qfq", choices=["qfq", "hfq", ""], help="复权方式")
+    parser.add_argument("--source-profile", default=None, choices=available_a_share_source_profiles(), help="A股分钟线数据源配置；默认读取 CHANLUN_SOURCE_PROFILE 或 mainland")
     parser.add_argument("--contact", default=None, help="微信联系人")
     parser.add_argument("--visible-row-index", type=int, default=None, help="微信当前可见会话第几行")
     parser.add_argument("--current-chat-only", action="store_true", help="只向当前已打开会话发送，不自动切换联系人")
@@ -258,6 +260,8 @@ def write_technical_report_json(
     name: str,
     timeframe: str,
     source: str,
+    actual_source: str,
+    source_attempts: list[dict[str, object]],
     analysis_text: str,
     advice_text: str,
     raw_csv: Path,
@@ -281,8 +285,11 @@ def write_technical_report_json(
             "timeframe": timeframe,
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "source": source,
+            "source_actual": actual_source,
             "data_fetch": {
                 "source": source,
+                "actual_source": actual_source,
+                "source_attempts": source_attempts,
                 "actual_bar_count": actual_bar_count,
                 "requested_min_rows": requested_min_rows,
                 "fulfilled_min_rows": actual_bar_count >= requested_min_rows if requested_min_rows is not None else None,
@@ -314,7 +321,10 @@ def write_technical_report_json(
 
 def main() -> None:
     args = parse_args()
-    rows = fetch_kline(args.symbol, start=args.start, end=args.end, interval="60m", adjust=args.adjust, limit=5000, min_rows=INTRADAY_SOURCE_PROBE_ROWS)
+    fetch_source, _ = resolve_a_share_intraday_source_label(getattr(args, "source_profile", None))
+    rows = fetch_kline(args.symbol, start=args.start, end=args.end, interval="60m", adjust=args.adjust, limit=5000, min_rows=INTRADAY_SOURCE_PROBE_ROWS, source_profile=args.source_profile)
+    fetch_meta = get_last_fetch_metadata()
+    actual_source = str(fetch_meta.get("actual_source") or fetch_source)
     if not rows:
         raise RuntimeError("未抓到任何60M数据")
 
@@ -362,13 +372,14 @@ def main() -> None:
     )
     analysis_text = analyze_current_state(args.name, raw_bars, bis, zhongshus, macd_points)
     advice_text = ""
-    fetch_source = "fetch_kline.a_share_intraday"
     technical_report_path = write_technical_report_json(
         path=paths["base_dir"] / "tech.json",
         symbol=normalized_symbol,
         name=args.name,
         timeframe="60m",
         source=fetch_source,
+        actual_source=actual_source,
+        source_attempts=list(fetch_meta.get("source_attempts") or []),
         analysis_text=analysis_text,
         advice_text=advice_text,
         raw_csv=paths["raw_csv"],

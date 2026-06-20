@@ -46,6 +46,17 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     normalized_bars = [SimpleNamespace(idx=0)]
 
     monkeypatch.setattr(module, "fetch_kline", lambda *args, **kwargs: rows)
+    monkeypatch.setattr(
+        module,
+        "get_last_fetch_metadata",
+        lambda: {
+            "actual_source": "xueqiu",
+            "source_attempts": [
+                {"source": "tushare", "status": "error"},
+                {"source": "xueqiu", "status": "ok", "row_count": 2},
+            ],
+        },
+    )
     monkeypatch.setattr(module, "save_cn_kline_csv", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "read_bars_from_csv", lambda *args, **kwargs: raw_bars)
     monkeypatch.setattr(module, "clean_bars", lambda bars: bars)
@@ -89,7 +100,10 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     assert Path(artifacts["structure_png"]).exists()
     assert Path(artifacts["structure_jpg"]).exists()
     assert Path(artifacts["macd_csv"]).name.endswith("_normalized_macd.csv")
-    assert data_fetch["source"] == "fetch_kline.a_share_intraday"
+    assert payload["source_actual"] == "xueqiu"
+    assert data_fetch["source"] == "tushare->tencent->xueqiu->eastmoney"
+    assert data_fetch["actual_source"] == "xueqiu"
+    assert data_fetch["source_attempts"][0]["source"] == "tushare"
     assert data_fetch["actual_bar_count"] == len(raw_bars)
     assert data_fetch["requested_min_rows"] is None
     assert data_fetch["fulfilled_min_rows"] is None

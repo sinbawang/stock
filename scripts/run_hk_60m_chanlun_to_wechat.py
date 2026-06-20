@@ -16,7 +16,8 @@ from chanlun.bi import identify_bis
 from chanlun.default_ranges import default_structure_start
 from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
-from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, save_to_csv
+from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, get_last_fetch_metadata, save_to_csv
+from chanlun.data.source_profiles import available_source_profiles, resolve_hk_minute_source_selection
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.models import Bar, Bi, Fractal, NormalizedBar, Zhongshu
 from chanlun.normalize import normalize_bars
@@ -38,8 +39,6 @@ from send_wechat_current_chat_bundle import send_current_chat_bundle
 from send_wechat_native import send_message
 from storage_layout import timeframe_report_paths
 
-
-DEFAULT_HK_MINUTE_FALLBACK_SOURCES = ("akshare",)
 INTRADAY_SOURCE_PROBE_ROWS = 600
 BAR_COUNT_POLICY = "feasible_maximum"
 
@@ -50,8 +49,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", required=True, help="标的名称，如 中国人保")
     parser.add_argument("--start", default=default_structure_start("60m"), help="起始时间")
     parser.add_argument("--end", default=None, help="结束时间，默认到当前")
-    parser.add_argument("--source", default="xueqiu", choices=["xueqiu", "akshare"], help="港股分钟数据源")
-    parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="显式允许的回退数据源，可重复指定；默认在数据不足时回退 akshare")
+    parser.add_argument("--source-profile", default=None, choices=available_source_profiles(), help="港股分钟线数据源配置；默认读取 CHANLUN_SOURCE_PROFILE 或 mainland")
+    parser.add_argument("--source", default=None, choices=["xueqiu", "akshare"], help="港股分钟数据源；默认跟随 source profile")
+    parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="显式允许的回退数据源，可重复指定；默认跟随 source profile")
     parser.add_argument("--contact", default=None, help="微信联系人")
     parser.add_argument("--visible-row-index", type=int, default=None, help="微信当前可见会话第几行")
     parser.add_argument("--current-chat-only", action="store_true", help="只向当前已打开会话发送，不自动切换联系人")
@@ -259,6 +259,8 @@ def write_technical_report_json(
     name: str,
     timeframe: str,
     source: str,
+    actual_source: str,
+    source_attempts: list[dict[str, object]],
     analysis_text: str,
     advice_text: str,
     raw_csv: Path,
@@ -282,8 +284,11 @@ def write_technical_report_json(
             "timeframe": timeframe,
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "source": source,
+            "source_actual": actual_source,
             "data_fetch": {
                 "source": source,
+                "actual_source": actual_source,
+                "source_attempts": source_attempts,
                 "actual_bar_count": actual_bar_count,
                 "requested_min_rows": requested_min_rows,
                 "fulfilled_min_rows": actual_bar_count >= requested_min_rows if requested_min_rows is not None else None,
@@ -315,16 +320,23 @@ def write_technical_report_json(
 
 def main() -> None:
     args = parse_args()
+    primary_source, fallback_sources, _ = resolve_hk_minute_source_selection(
+        primary_source=args.source,
+        fallback_sources=tuple(args.fallback_source) if args.fallback_source else None,
+        source_profile=args.source_profile,
+    )
     rows, used_source = fetch_hk_minute_with_policy(
         args.symbol,
         period="60",
         start=args.start,
         end=args.end,
         adjust="qfq",
-        primary_source=args.source,
-        fallback_sources=tuple(args.fallback_source) if args.fallback_source else DEFAULT_HK_MINUTE_FALLBACK_SOURCES,
+        primary_source=primary_source,
+        fallback_sources=fallback_sources,
         min_rows=INTRADAY_SOURCE_PROBE_ROWS,
     )
+    fetch_meta = get_last_fetch_metadata()
+    actual_source = str(fetch_meta.get("actual_source") or used_source)
     if not rows:
         raise RuntimeError("未抓到任何60M数据")
 
@@ -374,6 +386,8 @@ def main() -> None:
         name=args.name,
         timeframe="60m",
         source=used_source,
+        actual_source=actual_source,
+        source_attempts=list(fetch_meta.get("source_attempts") or []),
         analysis_text=analysis_text,
         advice_text=advice_text,
         raw_csv=paths["raw_csv"],

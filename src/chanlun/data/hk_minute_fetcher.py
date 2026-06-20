@@ -38,6 +38,7 @@ _ALLOWED_ADJUSTS = {"", "qfq", "hfq"}
 _ALLOWED_SOURCES = {"xueqiu", "akshare"}
 _DEFAULT_PRIMARY_SOURCE = "xueqiu"
 _SOURCE_FETCH_TIMEOUT_SECONDS = 45
+_LAST_FETCH_METADATA: dict[str, object] = {}
 ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_COOKIE_FILE_CANDIDATES = (
     ROOT / "data" / "_meta" / "xueqiu_cookie.env",
@@ -143,6 +144,15 @@ def _normalize_source_sequence(
         if source not in normalized:
             normalized.append(source)
     return tuple(normalized)
+
+
+def _update_last_fetch_metadata(**kwargs: object) -> None:
+    _LAST_FETCH_METADATA.clear()
+    _LAST_FETCH_METADATA.update(kwargs)
+
+
+def get_last_fetch_metadata() -> dict[str, object]:
+    return dict(_LAST_FETCH_METADATA)
 
 
 def _extract_xueqiu_cookie_from_browser(browser: Optional[str] = None) -> dict[str, str]:
@@ -525,6 +535,16 @@ def fetch_hk_minute_with_policy(
     failures: list[str] = []
     best_rows: list[dict] = []
     best_source: str | None = None
+    source_attempts: list[dict[str, object]] = []
+
+    _update_last_fetch_metadata(
+        symbol=_normalize_symbol(symbol),
+        period=period,
+        source_plan="->".join(source_order),
+        actual_source=None,
+        source_attempts=source_attempts,
+        row_count=0,
+    )
 
     for source in source_order:
         try:
@@ -538,7 +558,10 @@ def fetch_hk_minute_with_policy(
             )
         except Exception as exc:  # noqa: BLE001
             failures.append(f"{source}: {exc}")
+            source_attempts.append({"source": source, "status": "error", "error": str(exc)})
             continue
+
+        source_attempts.append({"source": source, "status": "ok", "row_count": len(rows)})
 
         if len(rows) > len(best_rows):
             best_rows = rows
@@ -554,9 +577,25 @@ def fetch_hk_minute_with_policy(
             continue
 
     if best_source is not None:
+        _update_last_fetch_metadata(
+            symbol=_normalize_symbol(symbol),
+            period=period,
+            source_plan="->".join(source_order),
+            actual_source=best_source,
+            source_attempts=source_attempts,
+            row_count=len(best_rows),
+        )
         return best_rows, best_source
 
     attempted = " -> ".join(source_order)
+    _update_last_fetch_metadata(
+        symbol=_normalize_symbol(symbol),
+        period=period,
+        source_plan="->".join(source_order),
+        actual_source=None,
+        source_attempts=source_attempts,
+        row_count=0,
+    )
     raise RuntimeError(
         "港股分钟线抓取失败。"
         f"尝试顺序: {attempted}。"
@@ -604,7 +643,12 @@ def main():
         primary_source=args.source,
         fallback_sources=args.fallback_source,
     )
+    fetch_meta = get_last_fetch_metadata()
     print(f"获取 {len(rows)} 根 K 线，使用数据源: {used_source}")
+    if fetch_meta.get("source_plan"):
+        print(f"抓取链路: {fetch_meta['source_plan']}")
+    if fetch_meta.get("actual_source"):
+        print(f"实际命中源: {fetch_meta['actual_source']}")
 
     if rows:
         head = rows[0]

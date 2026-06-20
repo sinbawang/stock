@@ -1,8 +1,39 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import chanlun.chart_export as chart_export
 from chanlun.chart_export import save_structure_charts
 from chanlun.models import Bar, Bi, BiDirection, Fractal, FractalType, NormalizedBar, Zhongshu
+
+
+def test_configure_matplotlib_cjk_font_prefers_available_windows_font(monkeypatch) -> None:
+    class FakeFont:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+    original_family = chart_export.plt.rcParams.get("font.family")
+    original_sans = list(chart_export.plt.rcParams.get("font.sans-serif", []))
+    original_unicode_minus = chart_export.plt.rcParams.get("axes.unicode_minus")
+
+    monkeypatch.setattr(
+        chart_export.font_manager.fontManager,
+        "ttflist",
+        [FakeFont("DejaVu Sans"), FakeFont("Microsoft YaHei")],
+        raising=False,
+    )
+    monkeypatch.setattr(chart_export, "_FONT_CONFIGURED", False)
+
+    try:
+        selected = chart_export._configure_matplotlib_cjk_font()
+
+        assert selected == "Microsoft YaHei"
+        assert chart_export.plt.rcParams["font.sans-serif"][0] == "Microsoft YaHei"
+        assert chart_export.plt.rcParams["axes.unicode_minus"] is False
+    finally:
+        chart_export.plt.rcParams["font.family"] = original_family
+        chart_export.plt.rcParams["font.sans-serif"] = original_sans
+        chart_export.plt.rcParams["axes.unicode_minus"] = original_unicode_minus
+        chart_export._FONT_CONFIGURED = False
 
 
 def test_save_structure_charts_writes_all_formats(tmp_path: Path) -> None:

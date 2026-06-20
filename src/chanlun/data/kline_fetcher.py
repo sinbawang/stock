@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import random
 import re
 import ssl
@@ -28,6 +29,7 @@ import requests
 
 
 _ALLOWED_INTERVALS = {"day", "week", "month", "m60", "m30", "m15", "m5"}
+_LAST_FETCH_METADATA: dict[str, object] = {}
 
 
 def _make_opener():
@@ -206,6 +208,61 @@ def _symbol_for_xueqiu(norm_symbol: str) -> str:
     raise ValueError(f"雪球分钟线仅支持 A 股代码，收到: {norm_symbol}")
 
 
+def _symbol_for_tushare(norm_symbol: str) -> str:
+    if norm_symbol.startswith("sh"):
+        return f"{norm_symbol[2:]}.SH"
+    if norm_symbol.startswith("sz"):
+        return f"{norm_symbol[2:]}.SZ"
+    if norm_symbol.startswith("bj"):
+        return f"{norm_symbol[2:]}.BJ"
+    raise ValueError(f"Tushare 分钟线仅支持 A 股代码，收到: {norm_symbol}")
+
+
+def _tushare_freq(interval: str) -> str:
+    mapping = {
+        "m60": "60min",
+        "m30": "30min",
+        "m15": "15min",
+        "m5": "5min",
+    }
+    freq = mapping.get(interval)
+    if not freq:
+        raise ValueError(f"Tushare 分钟线暂不支持级别: {interval}")
+    return freq
+
+
+def _format_tushare_dt(value: Optional[datetime], fallback: datetime) -> str:
+    actual = value or fallback
+    return actual.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _parse_tushare_trade_time(value: object) -> datetime:
+    text = str(value).strip().replace("/", "-")
+    formats = (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y%m%d %H:%M:%S",
+        "%Y%m%d %H:%M",
+        "%Y%m%d%H%M%S",
+        "%Y%m%d%H%M",
+    )
+    for fmt in formats:
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"无法解析 Tushare 时间: {value}")
+
+
+def _raise_tushare_hint(detail: str) -> None:
+    raise RuntimeError(
+        "Tushare A 股分钟线抓取失败。"
+        "常见原因：1) stk_mins 接口频率超限（当前常见为 1 次/分钟）；"
+        "2) 当前账号无分钟线权限；3) TUSHARE_TOKEN 无效。"
+        f"原始提示: {detail}"
+    )
+
+
 def _fetch_intraday_xueqiu(
     norm_symbol: str,
     interval: str,
@@ -318,6 +375,83 @@ def _fetch_intraday_xueqiu(
     return rows
 
 
+def _fetch_intraday_tushare(
+    norm_symbol: str,
+    interval: str,
+    start_dt: Optional[datetime],
+    end_dt: Optional[datetime],
+    adjust: str,
+    target_rows: Optional[int] = None,
+) -> list[dict]:
+    token = os.getenv("TUSHARE_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("未设置 TUSHARE_TOKEN")
+
+    try:
+        import tushare as ts
+    except ImportError as exc:  # pragma: no cover - exercised in runtime only
+        raise RuntimeError("未安装 tushare") from exc
+
+    start_text = _format_tushare_dt(start_dt, datetime(1990, 1, 1))
+    end_text = _format_tushare_dt(end_dt, datetime.now())
+    tushare_symbol = _symbol_for_tushare(norm_symbol)
+    limit = max(target_rows or 0, 5000)
+    adj = adjust or None
+
+    pro = ts.pro_api(token)
+    try:
+        df = ts.pro_bar(
+            ts_code=tushare_symbol,
+            api=pro,
+            start_date=start_text,
+            end_date=end_text,
+            freq=_tushare_freq(interval),
+            asset="E",
+            adj=adj,
+            limit=limit,
+        )
+    except Exception as exc:  # noqa: BLE001
+        message = str(exc)
+        if "stk_mins" in message or "频率超限" in message:
+            _raise_tushare_hint(message)
+        _raise_tushare_hint(message or exc.__class__.__name__)
+    if df is None or df.empty:
+        _raise_tushare_hint("Tushare 未返回任何分钟线数据")
+
+    column_map = {str(name).lower(): name for name in df.columns}
+    ts_col = column_map.get("trade_time") or column_map.get("trade_date") or column_map.get("datetime")
+    open_col = column_map.get("open")
+    high_col = column_map.get("high")
+    low_col = column_map.get("low")
+    close_col = column_map.get("close")
+    volume_col = column_map.get("vol") or column_map.get("volume")
+    required = [ts_col, open_col, high_col, low_col, close_col, volume_col]
+    if any(col is None for col in required):
+        raise RuntimeError(f"Tushare 返回缺少分钟线字段: {list(df.columns)}")
+
+    rows: list[dict] = []
+    for _, record in df.iterrows():
+        ts_value = str(record[ts_col]).strip()
+        ts_dt = _parse_tushare_trade_time(ts_value)
+        if start_dt and ts_dt < start_dt:
+            continue
+        if end_dt and ts_dt > end_dt:
+            continue
+        rows.append(
+            {
+                "ts": ts_dt.strftime("%Y-%m-%d %H:%M"),
+                "open": float(record[open_col]),
+                "high": float(record[high_col]),
+                "low": float(record[low_col]),
+                "close": float(record[close_col]),
+                "volume": int(float(record[volume_col]) if record[volume_col] is not None else 0),
+            }
+        )
+
+    rows.sort(key=lambda row: row["ts"])
+    return rows
+
+
 def _fetch_intraday_eastmoney(
     norm_symbol: str,
     interval: str,
@@ -374,6 +508,54 @@ def _fetch_intraday_eastmoney(
     return rows
 
 
+def _fetch_intraday_tencent_rows(
+    opener,
+    norm_symbol: str,
+    norm_interval: str,
+    start_dt: Optional[datetime],
+    end_dt: Optional[datetime],
+    limit: int,
+) -> list[dict]:
+    raw_rows = _fetch_intraday(opener, norm_symbol, norm_interval, limit)
+    rows = []
+    for bar in raw_rows:
+        if len(bar) < 6:
+            continue
+
+        ts_dt = _parse_bar_ts(bar[0], True)
+        if start_dt and ts_dt < start_dt:
+            continue
+        if end_dt and ts_dt > end_dt:
+            continue
+
+        rows.append({
+            "ts": ts_dt.strftime("%Y-%m-%d %H:%M"),
+            "open": float(bar[1]),
+            "close": float(bar[2]),
+            "high": float(bar[3]),
+            "low": float(bar[4]),
+            "volume": int(float(bar[5])),
+        })
+
+    rows.sort(key=lambda row: row["ts"])
+    return rows
+
+
+def _clip_rows(rows: list[dict], limit: int) -> list[dict]:
+    if limit <= 0 or len(rows) <= limit:
+        return rows
+    return rows[-limit:]
+
+
+def _update_last_fetch_metadata(**kwargs: object) -> None:
+    _LAST_FETCH_METADATA.clear()
+    _LAST_FETCH_METADATA.update(kwargs)
+
+
+def get_last_fetch_metadata() -> dict[str, object]:
+    return dict(_LAST_FETCH_METADATA)
+
+
 def fetch_kline(
     symbol: str,
     start: Optional[str] = None,
@@ -382,6 +564,7 @@ def fetch_kline(
     adjust: str = "qfq",
     limit: int = 1000,
     min_rows: Optional[int] = None,
+    source_profile: Optional[str] = None,
 ) -> list[dict]:
     """抓取指定股票、指定时间范围、指定级别 K 线。"""
     norm_symbol = _normalize_symbol(symbol)
@@ -390,11 +573,102 @@ def fetch_kline(
 
     start_dt = _parse_time(start, is_intraday)
     end_dt = _parse_time(end, is_intraday)
+    target_min_rows = min_rows
+    if is_intraday and target_min_rows is None and limit > 0:
+        target_min_rows = limit
+
+    _update_last_fetch_metadata(
+        symbol=norm_symbol,
+        interval=norm_interval,
+        is_intraday=is_intraday,
+        source_profile=source_profile,
+        source_plan=None,
+        actual_source=None,
+        source_attempts=[],
+        row_count=0,
+    )
 
     if is_intraday and norm_symbol.startswith("hk"):
         raise ValueError("腾讯分钟线接口暂不支持港股代码（如 hk03690），请改用 A 股代码或日/周/月级别")
 
     opener = _make_opener()
+
+    if is_intraday and norm_symbol.startswith(("sh", "sz", "bj")):
+        from chanlun.data.source_profiles import resolve_a_share_intraday_source_order
+
+        source_order, _ = resolve_a_share_intraday_source_order(source_profile)
+        best_rows: list[dict] = []
+        best_source: Optional[str] = None
+        source_attempts: list[dict[str, object]] = []
+
+        _update_last_fetch_metadata(
+            symbol=norm_symbol,
+            interval=norm_interval,
+            is_intraday=is_intraday,
+            source_profile=source_profile,
+            source_plan="->".join(source_order),
+            actual_source=None,
+            source_attempts=source_attempts,
+            row_count=0,
+        )
+
+        for source_name in source_order:
+            try:
+                if source_name == "tencent":
+                    source_rows = _fetch_intraday_tencent_rows(opener, norm_symbol, norm_interval, start_dt, end_dt, limit)
+                elif source_name == "tushare":
+                    source_rows = _fetch_intraday_tushare(norm_symbol, norm_interval, start_dt, end_dt, adjust, target_min_rows)
+                elif source_name == "xueqiu":
+                    source_rows = _fetch_intraday_xueqiu(norm_symbol, norm_interval, start_dt, end_dt, adjust, target_min_rows)
+                elif source_name == "eastmoney":
+                    source_rows = _fetch_intraday_eastmoney(norm_symbol, norm_interval, start_dt, end_dt, adjust)
+                else:
+                    continue
+            except Exception as exc:  # noqa: BLE001
+                source_attempts.append({"source": source_name, "status": "error", "error": str(exc)})
+                continue
+
+            source_rows = _clip_rows(source_rows, limit)
+            source_attempts.append({"source": source_name, "status": "ok", "row_count": len(source_rows)})
+            if len(source_rows) > len(best_rows):
+                best_rows = source_rows
+                best_source = source_name
+            if target_min_rows is not None and len(best_rows) >= target_min_rows:
+                _update_last_fetch_metadata(
+                    symbol=norm_symbol,
+                    interval=norm_interval,
+                    is_intraday=is_intraday,
+                    source_profile=source_profile,
+                    source_plan="->".join(source_order),
+                    actual_source=best_source,
+                    source_attempts=source_attempts,
+                    row_count=len(best_rows),
+                )
+                return best_rows
+            if target_min_rows is None and best_rows:
+                _update_last_fetch_metadata(
+                    symbol=norm_symbol,
+                    interval=norm_interval,
+                    is_intraday=is_intraday,
+                    source_profile=source_profile,
+                    source_plan="->".join(source_order),
+                    actual_source=best_source,
+                    source_attempts=source_attempts,
+                    row_count=len(best_rows),
+                )
+                return best_rows
+
+        _update_last_fetch_metadata(
+            symbol=norm_symbol,
+            interval=norm_interval,
+            is_intraday=is_intraday,
+            source_profile=source_profile,
+            source_plan="->".join(source_order),
+            actual_source=best_source,
+            source_attempts=source_attempts,
+            row_count=len(best_rows),
+        )
+        return best_rows
 
     if is_intraday:
         raw_rows = _fetch_intraday(opener, norm_symbol, norm_interval, limit)
@@ -424,28 +698,69 @@ def fetch_kline(
         })
 
     rows.sort(key=lambda r: r["ts"])
+    rows = _clip_rows(rows, limit)
 
     if (
-        min_rows is not None
+        target_min_rows is not None
         and is_intraday
-        and len(rows) < min_rows
+        and len(rows) < target_min_rows
         and norm_symbol.startswith(("sh", "sz", "bj"))
     ):
         best_rows = rows
+        best_source = "tencent"
         for fallback_fetcher in (_fetch_intraday_xueqiu, _fetch_intraday_eastmoney):
             try:
                 if fallback_fetcher is _fetch_intraday_xueqiu:
-                    fallback_rows = fallback_fetcher(norm_symbol, norm_interval, start_dt, end_dt, adjust, min_rows)
+                    fallback_rows = fallback_fetcher(
+                        norm_symbol,
+                        norm_interval,
+                        start_dt,
+                        end_dt,
+                        adjust,
+                        target_min_rows,
+                    )
                 else:
                     fallback_rows = fallback_fetcher(norm_symbol, norm_interval, start_dt, end_dt, adjust)
             except Exception:  # noqa: BLE001
                 continue
+            fallback_rows = _clip_rows(fallback_rows, limit)
             if len(fallback_rows) > len(best_rows):
                 best_rows = fallback_rows
-            if len(best_rows) >= min_rows:
+                best_source = "xueqiu" if fallback_fetcher is _fetch_intraday_xueqiu else "eastmoney"
+            if len(best_rows) >= target_min_rows:
+                _update_last_fetch_metadata(
+                    symbol=norm_symbol,
+                    interval=norm_interval,
+                    is_intraday=is_intraday,
+                    source_profile=source_profile,
+                    source_plan="tencent->xueqiu->eastmoney",
+                    actual_source=best_source,
+                    source_attempts=[],
+                    row_count=len(best_rows),
+                )
                 return best_rows
+        _update_last_fetch_metadata(
+            symbol=norm_symbol,
+            interval=norm_interval,
+            is_intraday=is_intraday,
+            source_profile=source_profile,
+            source_plan="tencent->xueqiu->eastmoney",
+            actual_source=best_source,
+            source_attempts=[],
+            row_count=len(best_rows),
+        )
         return best_rows
 
+    _update_last_fetch_metadata(
+        symbol=norm_symbol,
+        interval=norm_interval,
+        is_intraday=is_intraday,
+        source_profile=source_profile,
+        source_plan="tencent" if is_intraday else "day_like",
+        actual_source="tencent" if is_intraday else "day_like",
+        source_attempts=[{"source": "tencent" if is_intraday else "day_like", "status": "ok", "row_count": len(rows)}],
+        row_count=len(rows),
+    )
     return rows
 
 

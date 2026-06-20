@@ -27,6 +27,14 @@ def test_resolve_minute_fallback_sources_respects_explicit_sources() -> None:
     assert module._resolve_minute_fallback_sources("akshare", ("xueqiu",)) == ("xueqiu",)
 
 
+def test_resolve_hk_minute_source_selection_uses_mainland_profile_default() -> None:
+    assert module.resolve_hk_minute_source_selection(source_profile="mainland") == (
+        "xueqiu",
+        ("akshare",),
+        "mainland",
+    )
+
+
 def test_resolve_manual_supplement_path_prefers_explicit_path(tmp_path: Path) -> None:
     explicit = tmp_path / "manual.json"
     explicit.write_text("{}", encoding="utf-8")
@@ -46,7 +54,8 @@ def test_main_passes_default_minute_fallback_to_technical_step(monkeypatch, tmp_
         name="腾讯",
         start="2026-01-01 09:30",
         end=None,
-        source="xueqiu",
+        source=None,
+        source_profile="mainland",
         fallback_source=None,
         quote_overlay_source=None,
         manual_supplement_path=None,
@@ -143,6 +152,17 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     normalized_bars = [SimpleNamespace(idx=0)]
 
     monkeypatch.setattr(module, "fetch_hk_minute_with_policy", lambda *args, **kwargs: (rows, "xueqiu"))
+    monkeypatch.setattr(
+        module,
+        "get_last_fetch_metadata",
+        lambda: {
+            "actual_source": "xueqiu",
+            "source_attempts": [
+                {"source": "xueqiu", "status": "ok", "row_count": 2},
+                {"source": "akshare", "status": "error", "error": "RemoteDisconnected"},
+            ],
+        },
+    )
     monkeypatch.setattr(module, "save_hk_minute_csv", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "read_bars_from_csv", lambda *args, **kwargs: raw_bars)
     monkeypatch.setattr(module, "clean_bars", lambda bars: bars)
@@ -189,6 +209,9 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     assert Path(artifacts["structure_jpg"]).exists()
     assert Path(artifacts["raw_csv"]).parent == tmp_path / "60m" / "analyze"
     assert data_fetch["source"] == "xueqiu"
+    assert payload["source_actual"] == "xueqiu"
+    assert data_fetch["actual_source"] == "xueqiu"
+    assert data_fetch["source_attempts"][0]["source"] == "xueqiu"
     assert data_fetch["actual_bar_count"] == len(raw_bars)
     assert data_fetch["requested_min_rows"] is None
     assert data_fetch["fulfilled_min_rows"] is None

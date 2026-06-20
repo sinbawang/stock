@@ -23,7 +23,8 @@ from chanlun.chart_export import save_structure_charts
 from chanlun.default_ranges import default_structure_start
 from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
-from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, save_to_csv as save_hk_minute_csv
+from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, get_last_fetch_metadata, save_to_csv as save_hk_minute_csv
+from chanlun.data.source_profiles import available_source_profiles, resolve_hk_minute_source_selection
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.normalize import normalize_bars
 from chanlun.zhongshu import identify_zhongshu
@@ -52,8 +53,6 @@ from storage_layout import CAPITAL_FLOW_CACHE_DIR, stock_base_report_path, stock
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "_meta"
 DEFAULT_CACHE_DIR = CAPITAL_FLOW_CACHE_DIR
 DEFAULT_MANUAL_SUPPLEMENT_DIR = ROOT / "data" / "_meta" / "manual_supplements"
-DEFAULT_HK_MINUTE_SOURCE = "xueqiu"
-DEFAULT_HK_MINUTE_FALLBACK_SOURCES = ("akshare",)
 INTRADAY_SOURCE_PROBE_ROWS = 600
 BAR_COUNT_POLICY = "feasible_maximum"
 
@@ -64,8 +63,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", required=True, help="Security name")
     parser.add_argument("--start", default=default_structure_start("60m"), help="60M analysis start time")
     parser.add_argument("--end", default=None, help="Optional 60M analysis end time")
-    parser.add_argument("--source", default=DEFAULT_HK_MINUTE_SOURCE, choices=["xueqiu", "akshare"], help="Primary HK minute source")
-    parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="Optional fallback HK minute sources; defaults to akshare when primary source is xueqiu")
+    parser.add_argument("--source-profile", default=None, choices=available_source_profiles(), help="HK minute source profile; defaults to CHANLUN_SOURCE_PROFILE or mainland")
+    parser.add_argument("--source", default=None, choices=["xueqiu", "akshare"], help="Primary HK minute source; defaults to the selected source profile")
+    parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="Optional fallback HK minute sources; defaults to the selected source profile when --source is omitted or matches the profile primary source")
     parser.add_argument("--quote-overlay-source", default=None, help="Optional HK quote overlay source for fundamentals")
     parser.add_argument("--manual-supplement-path", default=None, help="Optional JSON or brief txt supplement file for HK fundamentals")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Output directory")
@@ -103,12 +103,11 @@ def _extract_prefixed_value(text: str, prefix: str) -> str | None:
 
 
 def _resolve_minute_fallback_sources(primary_source: str, fallback_sources: tuple[str, ...] | None) -> tuple[str, ...] | None:
-    if fallback_sources:
-        normalized = tuple(source for source in fallback_sources if source != primary_source)
-        return normalized or None
-    if primary_source == DEFAULT_HK_MINUTE_SOURCE:
-        return DEFAULT_HK_MINUTE_FALLBACK_SOURCES
-    return None
+    _, resolved_fallback_sources, _ = resolve_hk_minute_source_selection(
+        primary_source=primary_source,
+        fallback_sources=fallback_sources,
+    )
+    return resolved_fallback_sources
 
 
 def _load_existing_fundamental_ref(base_path: Path) -> FundamentalBriefRef | None:
@@ -149,6 +148,8 @@ def _save_technical_report(
         fallback_sources=fallback_sources,
         min_rows=INTRADAY_SOURCE_PROBE_ROWS,
     )
+    fetch_meta = get_last_fetch_metadata()
+    actual_source = str(fetch_meta.get("actual_source") or used_source)
     if not rows:
         raise RuntimeError("未抓到任何60M数据")
 
@@ -224,8 +225,11 @@ def _save_technical_report(
             "timeframe": "60m",
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "source": used_source,
+            "source_actual": actual_source,
             "data_fetch": {
                 "source": used_source,
+                "actual_source": actual_source,
+                "source_attempts": fetch_meta.get("source_attempts") or [],
                 "actual_bar_count": len(raw_bars),
                 "requested_min_rows": None,
                 "fulfilled_min_rows": None,
@@ -344,9 +348,10 @@ def main() -> None:
     else:
         print(f"fundamental_reused= {fundamental_path}")
 
-    resolved_fallback_sources = _resolve_minute_fallback_sources(
-        args.source,
-        tuple(args.fallback_source) if args.fallback_source else None,
+    resolved_primary_source, resolved_fallback_sources, _ = resolve_hk_minute_source_selection(
+        primary_source=getattr(args, "source", None),
+        fallback_sources=tuple(args.fallback_source) if args.fallback_source else None,
+        source_profile=getattr(args, "source_profile", None),
     )
 
     technical_ref, technical_path = _save_technical_report(
@@ -355,7 +360,7 @@ def main() -> None:
         output_dir=output_dir,
         start=args.start,
         end=args.end,
-        primary_source=args.source,
+        primary_source=resolved_primary_source,
         fallback_sources=resolved_fallback_sources,
     )
 
