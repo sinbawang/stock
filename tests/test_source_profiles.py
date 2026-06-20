@@ -8,7 +8,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from chanlun.data.source_profiles import available_a_share_source_profiles, describe_source_chain, resolve_a_share_intraday_source_label, resolve_a_share_intraday_source_order, resolve_hk_minute_source_selection, resolve_source_profile_name
+from chanlun.data.source_profiles import available_a_share_source_profiles, describe_source_chain, resolve_a_share_daylike_source_order, resolve_a_share_intraday_source_label, resolve_a_share_intraday_source_order, resolve_hk_minute_source_selection, resolve_source_profile_name
 
 
 def test_resolve_source_profile_name_accepts_env_style_aliases(monkeypatch) -> None:
@@ -52,6 +52,13 @@ def test_resolve_a_share_intraday_source_order_uses_profile_defaults() -> None:
 
     assert source_order == ("xueqiu", "tencent", "eastmoney")
     assert profile == "xueqiu-first"
+
+
+def test_resolve_a_share_daylike_source_order_uses_profile_defaults() -> None:
+    source_order, profile = resolve_a_share_daylike_source_order("mainland")
+
+    assert source_order == ("tushare", "day_like")
+    assert profile == "mainland"
 
 
 def test_available_a_share_source_profiles_lists_configurable_orders() -> None:

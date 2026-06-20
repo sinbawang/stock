@@ -15,6 +15,25 @@ if str(SCRIPTS) not in sys.path:
 import fetch_kline as module
 
 
+def test_parse_args_defaults_limit_to_1000(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "fetch_kline.py",
+            "--symbol",
+            "601328",
+            "--output",
+            str(tmp_path / "rows.csv"),
+        ],
+    )
+
+    args = module.parse_args()
+
+    assert args.limit == 1000
+    assert args.adjust == ""
+
+
 def test_main_passes_source_profile_to_fetch_kline(monkeypatch, tmp_path: Path, capsys) -> None:
     args = argparse.Namespace(
         symbol="sz000001",
@@ -45,3 +64,33 @@ def test_main_passes_source_profile_to_fetch_kline(monkeypatch, tmp_path: Path, 
     output = capsys.readouterr().out
     assert "source_profile=xueqiu-first" in output
     assert "实际命中源: tushare" in output
+
+
+def test_main_prints_fetch_warning(monkeypatch, tmp_path: Path, capsys) -> None:
+    args = argparse.Namespace(
+        symbol="601328",
+        start="2021-01-01",
+        end="2026-06-20",
+        interval="day",
+        adjust="qfq",
+        limit=1000,
+        source_profile=None,
+        output=str(tmp_path / "rows.csv"),
+    )
+    monkeypatch.setattr(module, "parse_args", lambda: args)
+    monkeypatch.setattr(module, "fetch_kline", lambda **kwargs: [{"ts": "2026-06-18", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1}])
+    monkeypatch.setattr(
+        module,
+        "get_last_fetch_metadata",
+        lambda: {
+            "actual_source": "day_like",
+            "warning": "首选源 tushare 在 qfq 模式下抓取失败，已回退到 day_like。请求 1000 根，实际返回 640 根。首个错误: adj_factor rate limit",
+        },
+    )
+    monkeypatch.setattr(module, "save_to_csv", lambda rows, filepath: None)
+
+    module.main()
+
+    output = capsys.readouterr().out
+    assert "实际命中源: day_like" in output
+    assert "警告: 首选源 tushare 在 qfq 模式下抓取失败" in output

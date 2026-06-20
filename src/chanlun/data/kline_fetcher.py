@@ -220,6 +220,9 @@ def _symbol_for_tushare(norm_symbol: str) -> str:
 
 def _tushare_freq(interval: str) -> str:
     mapping = {
+        "day": "D",
+        "week": "W",
+        "month": "M",
         "m60": "60min",
         "m30": "30min",
         "m15": "15min",
@@ -227,7 +230,7 @@ def _tushare_freq(interval: str) -> str:
     }
     freq = mapping.get(interval)
     if not freq:
-        raise ValueError(f"Tushare 分钟线暂不支持级别: {interval}")
+        raise ValueError(f"Tushare 暂不支持级别: {interval}")
     return freq
 
 
@@ -259,6 +262,14 @@ def _raise_tushare_hint(detail: str) -> None:
         "Tushare A 股分钟线抓取失败。"
         "常见原因：1) stk_mins 接口频率超限（当前常见为 1 次/分钟）；"
         "2) 当前账号无分钟线权限；3) TUSHARE_TOKEN 无效。"
+        f"原始提示: {detail}"
+    )
+
+
+def _raise_tushare_daylike_hint(detail: str) -> None:
+    raise RuntimeError(
+        "Tushare A 股日/周/月线抓取失败。"
+        "常见原因：1) 当前账号无对应权限；2) TUSHARE_TOKEN 无效；3) Tushare 临时不可用。"
         f"原始提示: {detail}"
     )
 
@@ -452,6 +463,76 @@ def _fetch_intraday_tushare(
     return rows
 
 
+def _fetch_daylike_tushare(
+    norm_symbol: str,
+    interval: str,
+    start_dt: Optional[datetime],
+    end_dt: Optional[datetime],
+    adjust: str,
+) -> list[dict]:
+    token = os.getenv("TUSHARE_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("未设置 TUSHARE_TOKEN")
+
+    try:
+        import tushare as ts
+    except ImportError as exc:  # pragma: no cover - exercised in runtime only
+        raise RuntimeError("未安装 tushare") from exc
+
+    tushare_symbol = _symbol_for_tushare(norm_symbol)
+    start_text = (start_dt or datetime(1990, 1, 1)).strftime("%Y%m%d")
+    end_text = (end_dt or datetime.now()).strftime("%Y%m%d")
+    adj = adjust or None
+
+    pro = ts.pro_api(token)
+    try:
+        df = ts.pro_bar(
+            ts_code=tushare_symbol,
+            api=pro,
+            start_date=start_text,
+            end_date=end_text,
+            freq=_tushare_freq(interval),
+            asset="E",
+            adj=adj,
+        )
+    except Exception as exc:  # noqa: BLE001
+        _raise_tushare_daylike_hint(str(exc) or exc.__class__.__name__)
+    if df is None or df.empty:
+        _raise_tushare_daylike_hint("Tushare 未返回任何日/周/月线数据")
+
+    column_map = {str(name).lower(): name for name in df.columns}
+    ts_col = column_map.get("trade_date") or column_map.get("datetime")
+    open_col = column_map.get("open")
+    high_col = column_map.get("high")
+    low_col = column_map.get("low")
+    close_col = column_map.get("close")
+    volume_col = column_map.get("vol") or column_map.get("volume")
+    required = [ts_col, open_col, high_col, low_col, close_col, volume_col]
+    if any(col is None for col in required):
+        raise RuntimeError(f"Tushare 返回缺少日/周/月线字段: {list(df.columns)}")
+
+    rows: list[dict] = []
+    for _, record in df.iterrows():
+        ts_dt = datetime.strptime(str(record[ts_col]).strip(), "%Y%m%d")
+        if start_dt and ts_dt < start_dt:
+            continue
+        if end_dt and ts_dt > end_dt:
+            continue
+        rows.append(
+            {
+                "ts": ts_dt.strftime("%Y-%m-%d"),
+                "open": float(record[open_col]),
+                "close": float(record[close_col]),
+                "high": float(record[high_col]),
+                "low": float(record[low_col]),
+                "volume": int(float(record[volume_col]) if record[volume_col] is not None else 0),
+            }
+        )
+
+    rows.sort(key=lambda row: row["ts"])
+    return rows
+
+
 def _fetch_intraday_eastmoney(
     norm_symbol: str,
     interval: str,
@@ -541,6 +622,45 @@ def _fetch_intraday_tencent_rows(
     return rows
 
 
+def _fetch_day_like_rows(
+    opener,
+    norm_symbol: str,
+    norm_interval: str,
+    start_dt: Optional[datetime],
+    end_dt: Optional[datetime],
+    limit: int,
+    adjust: str,
+) -> list[dict]:
+    req_start = (start_dt or datetime(1990, 1, 1)).strftime("%Y-%m-%d")
+    req_end = (end_dt or datetime.today()).strftime("%Y-%m-%d")
+    raw_rows = _fetch_day_like(opener, norm_symbol, norm_interval, req_start, req_end, limit, adjust)
+
+    rows = []
+    for bar in raw_rows:
+        if len(bar) < 6:
+            continue
+
+        ts_dt = _parse_bar_ts(bar[0], False)
+        if start_dt and ts_dt < start_dt:
+            continue
+        if end_dt and ts_dt > end_dt:
+            continue
+
+        rows.append(
+            {
+                "ts": ts_dt.strftime("%Y-%m-%d"),
+                "open": float(bar[1]),
+                "close": float(bar[2]),
+                "high": float(bar[3]),
+                "low": float(bar[4]),
+                "volume": int(float(bar[5])),
+            }
+        )
+
+    rows.sort(key=lambda row: row["ts"])
+    return rows
+
+
 def _clip_rows(rows: list[dict], limit: int) -> list[dict]:
     if limit <= 0 or len(rows) <= limit:
         return rows
@@ -552,6 +672,39 @@ def _update_last_fetch_metadata(**kwargs: object) -> None:
     _LAST_FETCH_METADATA.update(kwargs)
 
 
+def _build_daylike_fallback_warning(
+    *,
+    source_order: tuple[str, ...],
+    best_source: Optional[str],
+    source_attempts: list[dict[str, object]],
+    limit: int,
+    row_count: int,
+    adjust: str,
+) -> Optional[str]:
+    if not source_order or best_source is None or best_source == source_order[0]:
+        return None
+
+    primary_error = next(
+        (
+            str(attempt.get("error"))
+            for attempt in source_attempts
+            if attempt.get("source") == source_order[0] and attempt.get("status") == "error" and attempt.get("error")
+        ),
+        None,
+    )
+    if not primary_error:
+        return None
+
+    requested_adjust = adjust or "raw"
+    requested_rows = f"{limit} 根" if limit > 0 else "全量"
+    actual_rows = f"{row_count} 根"
+    return (
+        f"首选源 {source_order[0]} 在 {requested_adjust} 模式下抓取失败，已回退到 {best_source}。"
+        f"请求 {requested_rows}，实际返回 {actual_rows}。"
+        f"首个错误: {primary_error}"
+    )
+
+
 def get_last_fetch_metadata() -> dict[str, object]:
     return dict(_LAST_FETCH_METADATA)
 
@@ -561,7 +714,7 @@ def fetch_kline(
     start: Optional[str] = None,
     end: Optional[str] = None,
     interval: str = "day",
-    adjust: str = "qfq",
+    adjust: str = "",
     limit: int = 1000,
     min_rows: Optional[int] = None,
     source_profile: Optional[str] = None,
@@ -586,6 +739,7 @@ def fetch_kline(
         actual_source=None,
         source_attempts=[],
         row_count=0,
+        warning=None,
     )
 
     if is_intraday and norm_symbol.startswith("hk"):
@@ -610,6 +764,7 @@ def fetch_kline(
             actual_source=None,
             source_attempts=source_attempts,
             row_count=0,
+            warning=None,
         )
 
         for source_name in source_order:
@@ -643,6 +798,7 @@ def fetch_kline(
                     actual_source=best_source,
                     source_attempts=source_attempts,
                     row_count=len(best_rows),
+                    warning=None,
                 )
                 return best_rows
             if target_min_rows is None and best_rows:
@@ -655,6 +811,7 @@ def fetch_kline(
                     actual_source=best_source,
                     source_attempts=source_attempts,
                     row_count=len(best_rows),
+                    warning=None,
                 )
                 return best_rows
 
@@ -667,15 +824,92 @@ def fetch_kline(
             actual_source=best_source,
             source_attempts=source_attempts,
             row_count=len(best_rows),
+            warning=None,
+        )
+        return best_rows
+
+    if not is_intraday and norm_symbol.startswith(("sh", "sz", "bj")):
+        from chanlun.data.source_profiles import resolve_a_share_daylike_source_order
+
+        source_order, _ = resolve_a_share_daylike_source_order(source_profile)
+        best_rows: list[dict] = []
+        best_source: Optional[str] = None
+        source_attempts: list[dict[str, object]] = []
+
+        _update_last_fetch_metadata(
+            symbol=norm_symbol,
+            interval=norm_interval,
+            is_intraday=is_intraday,
+            source_profile=source_profile,
+            source_plan="->".join(source_order),
+            actual_source=None,
+            source_attempts=source_attempts,
+            row_count=0,
+            warning=None,
+        )
+
+        for source_name in source_order:
+            try:
+                if source_name == "tushare":
+                    source_rows = _fetch_daylike_tushare(norm_symbol, norm_interval, start_dt, end_dt, adjust)
+                elif source_name == "day_like":
+                    source_rows = _fetch_day_like_rows(opener, norm_symbol, norm_interval, start_dt, end_dt, limit, adjust)
+                else:
+                    continue
+            except Exception as exc:  # noqa: BLE001
+                source_attempts.append({"source": source_name, "status": "error", "error": str(exc)})
+                continue
+
+            source_rows = _clip_rows(source_rows, limit)
+            source_attempts.append({"source": source_name, "status": "ok", "row_count": len(source_rows)})
+            if len(source_rows) > len(best_rows):
+                best_rows = source_rows
+                best_source = source_name
+            if best_rows:
+                _update_last_fetch_metadata(
+                    symbol=norm_symbol,
+                    interval=norm_interval,
+                    is_intraday=is_intraday,
+                    source_profile=source_profile,
+                    source_plan="->".join(source_order),
+                    actual_source=best_source,
+                    source_attempts=source_attempts,
+                    row_count=len(best_rows),
+                    warning=_build_daylike_fallback_warning(
+                        source_order=source_order,
+                        best_source=best_source,
+                        source_attempts=source_attempts,
+                        limit=limit,
+                        row_count=len(best_rows),
+                        adjust=adjust,
+                    ),
+                )
+                return best_rows
+
+        _update_last_fetch_metadata(
+            symbol=norm_symbol,
+            interval=norm_interval,
+            is_intraday=is_intraday,
+            source_profile=source_profile,
+            source_plan="->".join(source_order),
+            actual_source=best_source,
+            source_attempts=source_attempts,
+            row_count=len(best_rows),
+            warning=_build_daylike_fallback_warning(
+                source_order=source_order,
+                best_source=best_source,
+                source_attempts=source_attempts,
+                limit=limit,
+                row_count=len(best_rows),
+                adjust=adjust,
+            ),
         )
         return best_rows
 
     if is_intraday:
         raw_rows = _fetch_intraday(opener, norm_symbol, norm_interval, limit)
     else:
-        req_start = (start_dt or datetime(1990, 1, 1)).strftime("%Y-%m-%d")
-        req_end = (end_dt or datetime.today()).strftime("%Y-%m-%d")
-        raw_rows = _fetch_day_like(opener, norm_symbol, norm_interval, req_start, req_end, limit, adjust)
+        raw_rows = _fetch_day_like(opener, norm_symbol, norm_interval, (start_dt or datetime(1990, 1, 1)).strftime("%Y-%m-%d"), (end_dt or datetime.today()).strftime("%Y-%m-%d"), limit, adjust)
 
     rows = []
     for bar in raw_rows:
@@ -737,6 +971,7 @@ def fetch_kline(
                     actual_source=best_source,
                     source_attempts=[],
                     row_count=len(best_rows),
+                    warning=None,
                 )
                 return best_rows
         _update_last_fetch_metadata(
@@ -748,6 +983,7 @@ def fetch_kline(
             actual_source=best_source,
             source_attempts=[],
             row_count=len(best_rows),
+            warning=None,
         )
         return best_rows
 
@@ -760,6 +996,7 @@ def fetch_kline(
         actual_source="tencent" if is_intraday else "day_like",
         source_attempts=[{"source": "tencent" if is_intraday else "day_like", "status": "ok", "row_count": len(rows)}],
         row_count=len(rows),
+        warning=None,
     )
     return rows
 

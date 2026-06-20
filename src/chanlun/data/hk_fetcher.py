@@ -31,16 +31,16 @@ def fetch_hk_daily(
     symbol: str,
     start: str,
     end: Optional[str] = None,
-    adjust: str = "qfq",
+    adjust: str = "",
 ) -> list[dict]:
     """
-    获取港股日 K 数据（腾讯财经前复权）。
+    获取港股日 K 数据（腾讯财经，默认不复权）。
 
     Args:
         symbol: 港股代码，如 "03690"
         start:  开始日期，格式 "YYYY-MM-DD"
         end:    结束日期，格式 "YYYY-MM-DD"，None 表示今日
-        adjust: 复权方式，"qfq"前复权 / ""不复权（腾讯仅支持 qfq）
+        adjust: 复权方式，""不复权 / "qfq"前复权 / "hfq"后复权
 
     Returns:
         OHLCV 字典列表，字段: ts, open, high, low, close, volume
@@ -119,8 +119,8 @@ def main():
     parser.add_argument("--start",  default="2026-03-03", help="开始日期 YYYY-MM-DD")
     parser.add_argument("--end",    default=None, help="结束日期 YYYY-MM-DD，默认今日")
     parser.add_argument("--output", default=None, help="输出 CSV 路径")
-    parser.add_argument("--adjust", default="qfq", choices=["qfq", "hfq", ""],
-                        help="复权方式：qfq前复权 hfq后复权 无复权留空")
+    parser.add_argument("--adjust", default="", choices=["qfq", "hfq", ""],
+                        help="复权方式：默认不复权；可选 qfq/hfq")
     args = parser.parse_args()
 
     print(f"正在获取 {args.symbol} 日 K 数据（{args.start} ~ {args.end or '今日'}）...")

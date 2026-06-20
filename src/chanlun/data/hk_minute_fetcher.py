@@ -473,7 +473,7 @@ def fetch_hk_minute(
     period: str = "60",
     start: Optional[str] = None,
     end: Optional[str] = None,
-    adjust: str = "qfq",
+    adjust: str = "",
     source: str = "xueqiu",
 ) -> list[dict]:
     """
@@ -516,7 +516,7 @@ def fetch_hk_minute_with_policy(
     period: str = "60",
     start: Optional[str] = None,
     end: Optional[str] = None,
-    adjust: str = "qfq",
+    adjust: str = "",
     primary_source: str = _DEFAULT_PRIMARY_SOURCE,
     fallback_sources: Optional[Sequence[str]] = None,
     min_rows: Optional[int] = None,
@@ -623,8 +623,8 @@ def main():
                         help="分钟周期: 1/5/15/30/60")
     parser.add_argument("--start", default=None, help="起始时间 YYYY-MM-DD [HH:MM]")
     parser.add_argument("--end", default=None, help="结束时间 YYYY-MM-DD [HH:MM]")
-    parser.add_argument("--adjust", default="qfq", choices=sorted(_ALLOWED_ADJUSTS),
-                        help="复权: 留空 / qfq / hfq")
+    parser.add_argument("--adjust", default="", choices=sorted(_ALLOWED_ADJUSTS),
+                        help="复权: 默认不复权；可选 qfq / hfq")
     parser.add_argument("--source", default="xueqiu", choices=sorted(_ALLOWED_SOURCES),
                         help="数据源: xueqiu / akshare")
     parser.add_argument("--fallback-source", action="append", choices=sorted(_ALLOWED_SOURCES), default=None,

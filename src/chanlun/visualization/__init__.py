@@ -28,6 +28,10 @@ class Plotter:
         self.dea_color = '#ff8c00'
         self.zero_color = '#808080'
         self.zhongshu_colors = ['#4fc3f7', '#ffb74d', '#81c784', '#e57373']
+        self.confirmed_fractal_fontsize = 6
+        self.unconfirmed_fractal_fontsize = 3
+        self.bi_linewidth = 0.8
+        self.segment_linewidth = 1.7
 
     @staticmethod
     def _build_ts_to_bar_index(bars: List[Bar]) -> Dict:
@@ -117,7 +121,7 @@ class Plotter:
             )
             bar = bars[bar_index]
             is_confirmed = confirmed_fractal_ids is None or fractal.fx_id in confirmed_fractal_ids
-            fontsize = 12 if is_confirmed else 6
+            fontsize = self.confirmed_fractal_fontsize if is_confirmed else self.unconfirmed_fractal_fontsize
             alpha = 1.0 if is_confirmed else 0.55
             if fractal.is_top():
                 ax.text(bar_index, bar.high, '▼', color='#ff6b6b', fontsize=fontsize, alpha=alpha, ha='center', va='bottom')
@@ -145,7 +149,7 @@ class Plotter:
                 [start_idx, end_idx],
                 [start_price, end_price],
                 color=self.bi_color,
-                linewidth=1.6,
+                linewidth=self.bi_linewidth,
                 linestyle=linestyle,
                 zorder=4,
             )
@@ -169,7 +173,7 @@ class Plotter:
                 [start_idx, end_idx],
                 [segment.start_price, segment.end_price],
                 color=self.segment_color,
-                linewidth=3.4,
+                linewidth=self.segment_linewidth,
                 linestyle=linestyle,
                 alpha=0.72,
                 zorder=3,

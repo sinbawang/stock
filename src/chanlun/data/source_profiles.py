@@ -28,6 +28,15 @@ _A_SHARE_INTRADAY_SOURCE_PROFILES: dict[str, tuple[str, ...]] = {
     "tushare-only": ("tushare",),
 }
 
+_A_SHARE_DAYLIKE_SOURCE_PROFILES: dict[str, tuple[str, ...]] = {
+    "mainland": ("tushare", "day_like"),
+    "tencent-only": ("day_like",),
+    "xueqiu-first": ("tushare", "day_like"),
+    "eastmoney-first": ("tushare", "day_like"),
+    "tushare-first": ("tushare", "day_like"),
+    "tushare-only": ("tushare",),
+}
+
 
 def available_source_profiles() -> tuple[str, ...]:
     return tuple(dict.fromkeys((*_HK_MINUTE_SOURCE_PROFILES.keys(), *_A_SHARE_INTRADAY_SOURCE_PROFILES.keys())))
@@ -117,3 +126,11 @@ def resolve_a_share_intraday_source_order(source_profile: str | None = None) -> 
         allowed = ", ".join(available_a_share_source_profiles())
         raise ValueError(f"A股 source_profile 必须是 {allowed} 之一，收到: {source_profile}")
     return _A_SHARE_INTRADAY_SOURCE_PROFILES[resolved_profile], resolved_profile
+
+
+def resolve_a_share_daylike_source_order(source_profile: str | None = None) -> tuple[tuple[str, ...], str]:
+    resolved_profile = resolve_source_profile_name(source_profile)
+    if resolved_profile not in _A_SHARE_DAYLIKE_SOURCE_PROFILES:
+        allowed = ", ".join(available_a_share_source_profiles())
+        raise ValueError(f"A股 source_profile 必须是 {allowed} 之一，收到: {source_profile}")
+    return _A_SHARE_DAYLIKE_SOURCE_PROFILES[resolved_profile], resolved_profile

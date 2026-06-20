@@ -17,6 +17,25 @@ if str(SCRIPTS) not in sys.path:
 import generate_h_share_single_mixed_report as module
 
 
+def test_parse_args_defaults_adjust_to_raw(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate_h_share_single_mixed_report.py",
+            "00700",
+            "--name",
+            "腾讯",
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+
+    args = module.parse_args()
+
+    assert args.adjust == ""
+
+
 def test_resolve_minute_fallback_sources_defaults_to_akshare_for_xueqiu() -> None:
     assert module._resolve_minute_fallback_sources("xueqiu", None) == ("akshare",)
 
@@ -54,6 +73,7 @@ def test_main_passes_default_minute_fallback_to_technical_step(monkeypatch, tmp_
         name="腾讯",
         start="2026-01-01 09:30",
         end=None,
+        adjust="",
         source=None,
         source_profile="mainland",
         fallback_source=None,
@@ -220,6 +240,7 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
         output_dir=tmp_path,
         start="2026-01-01 09:30",
         end=None,
+        adjust="",
         primary_source="xueqiu",
         fallback_sources=("akshare",),
     )

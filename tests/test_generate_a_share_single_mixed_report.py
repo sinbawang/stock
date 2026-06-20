@@ -16,6 +16,25 @@ if str(SCRIPTS) not in sys.path:
 import generate_a_share_single_mixed_report as module
 
 
+def test_parse_args_defaults_adjust_to_raw(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate_a_share_single_mixed_report.py",
+            "300124",
+            "--name",
+            "汇川技术",
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+
+    args = module.parse_args()
+
+    assert args.adjust == ""
+
+
 def test_save_combined_report_writes_latest_overview_file(tmp_path: Path) -> None:
     row = SimpleNamespace(
         target=SimpleNamespace(symbol="600900", name="长江电力"),

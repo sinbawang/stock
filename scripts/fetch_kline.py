@@ -19,13 +19,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start", default=None, help="开始时间，如 2026-03-03 或 2026-04-10 10:30")
     parser.add_argument("--end", default=None, help="结束时间，如 2026-04-12 或 2026-04-10 15:00")
     parser.add_argument("--interval", default="day", help="级别：day/week/month/60m/30m/15m/5m")
-    parser.add_argument("--adjust", default="qfq", help="复权：qfq/hfq/空字符串")
-    parser.add_argument("--limit", default=1000, type=int, help="最多返回条数（分钟线主要依赖此值）")
+    parser.add_argument("--adjust", default="", help="复权：默认不复权；可选 qfq/hfq")
+    parser.add_argument("--limit", default=1000, type=int, help="最多返回条数，默认 1000 根")
     parser.add_argument(
         "--source-profile",
         default=None,
         choices=available_source_profiles(),
-        help="分钟线数据源配置；A股分钟线会按 profile 改变抓取顺序，默认读取 CHANLUN_SOURCE_PROFILE 或 mainland",
+        help="A股日/周/月线与分钟线数据源配置，默认读取 CHANLUN_SOURCE_PROFILE 或 mainland",
     )
     parser.add_argument("--output", required=True, help="输出 CSV 文件路径")
     return parser.parse_args()
@@ -53,6 +53,8 @@ def main() -> None:
     print(f"抓取完成: {len(rows)} 根 K 线")
     if fetch_meta.get("actual_source"):
         print(f"实际命中源: {fetch_meta['actual_source']}")
+    if fetch_meta.get("warning"):
+        print(f"警告: {fetch_meta['warning']}")
     if rows:
         print(f"首条: {rows[0]}")
         print(f"末条: {rows[-1]}")

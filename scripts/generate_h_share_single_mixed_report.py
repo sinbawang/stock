@@ -63,6 +63,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", required=True, help="Security name")
     parser.add_argument("--start", default=default_structure_start("60m"), help="60M analysis start time")
     parser.add_argument("--end", default=None, help="Optional 60M analysis end time")
+    parser.add_argument("--adjust", default="", choices=["qfq", "hfq", ""], help="Adjustment mode; defaults to raw/no adjustment")
     parser.add_argument("--source-profile", default=None, choices=available_source_profiles(), help="HK minute source profile; defaults to CHANLUN_SOURCE_PROFILE or mainland")
     parser.add_argument("--source", default=None, choices=["xueqiu", "akshare"], help="Primary HK minute source; defaults to the selected source profile")
     parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="Optional fallback HK minute sources; defaults to the selected source profile when --source is omitted or matches the profile primary source")
@@ -135,6 +136,7 @@ def _save_technical_report(
     output_dir: Path,
     start: str,
     end: str | None,
+    adjust: str,
     primary_source: str,
     fallback_sources: tuple[str, ...] | None,
 ) -> tuple[TechnicalRef, Path]:
@@ -143,7 +145,7 @@ def _save_technical_report(
         period="60",
         start=start,
         end=end,
-        adjust="qfq",
+        adjust=adjust,
         primary_source=primary_source,
         fallback_sources=fallback_sources,
         min_rows=INTRADAY_SOURCE_PROBE_ROWS,
@@ -365,6 +367,7 @@ def main() -> None:
         output_dir=output_dir,
         start=args.start,
         end=args.end,
+        adjust=args.adjust,
         primary_source=resolved_primary_source,
         fallback_sources=resolved_fallback_sources,
     )

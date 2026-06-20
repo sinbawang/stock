@@ -127,6 +127,7 @@ def _build_parser() -> argparse.ArgumentParser:
     hk60m.add_argument("--name", required=True, help="Security name")
     hk60m.add_argument("--start", default=default_structure_start("60m"), help="Start time")
     hk60m.add_argument("--end", default=None, help="End time")
+    hk60m.add_argument("--adjust", default="", choices=["qfq", "hfq", ""], help="Adjustment mode; defaults to raw/no adjustment")
     hk60m.add_argument("--source", default="xueqiu", choices=["xueqiu", "akshare"], help="HK minute source")
     hk60m.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="Allowed fallback source; repeatable")
     hk60m.add_argument("--generate-only", action="store_true", help="Only generate the outputs; do not send to WeChat")
@@ -136,7 +137,7 @@ def _build_parser() -> argparse.ArgumentParser:
     cn60m.add_argument("--name", required=True, help="Security name")
     cn60m.add_argument("--start", default=default_structure_start("60m"), help="Start time")
     cn60m.add_argument("--end", default=None, help="End time")
-    cn60m.add_argument("--adjust", default="qfq", choices=["qfq", "hfq", ""], help="Adjustment mode")
+    cn60m.add_argument("--adjust", default="", choices=["qfq", "hfq", ""], help="Adjustment mode; defaults to raw/no adjustment")
     cn60m.add_argument("--generate-only", action="store_true", help="Only generate the outputs; do not send to WeChat")
 
     return parser
@@ -263,6 +264,8 @@ def _handle_hk60m(args: argparse.Namespace) -> None:
         args.name,
         "--start",
         args.start,
+        "--adjust",
+        args.adjust,
     ]
     if args.end:
         command.extend(["--end", args.end])

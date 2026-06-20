@@ -61,7 +61,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", required=True, help="Security name")
     parser.add_argument("--start", default=default_structure_start("60m"), help="60M analysis start time")
     parser.add_argument("--end", default=None, help="Optional 60M analysis end time")
-    parser.add_argument("--adjust", default="qfq", choices=["qfq", "hfq", ""], help="Adjustment mode")
+    parser.add_argument("--adjust", default="", choices=["qfq", "hfq", ""], help="Adjustment mode; defaults to raw/no adjustment")
     parser.add_argument("--source-profile", default=None, choices=available_a_share_source_profiles(), help="A股分钟线数据源配置；默认读取 CHANLUN_SOURCE_PROFILE 或 mainland")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Output directory")
     parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help="Capital-flow cache directory")

@@ -52,6 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", required=True, help="标的名称，如 中国人保")
     parser.add_argument("--start", default=default_structure_start("60m"), help="起始时间")
     parser.add_argument("--end", default=None, help="结束时间，默认到当前")
+    parser.add_argument("--adjust", default="", choices=["qfq", "hfq", ""], help="复权方式，默认不复权")
     parser.add_argument("--source-profile", default=None, choices=available_source_profiles(), help="港股分钟线数据源配置；默认读取 CHANLUN_SOURCE_PROFILE 或 mainland")
     parser.add_argument("--source", default=None, choices=["xueqiu", "akshare"], help="港股分钟数据源；默认跟随 source profile")
     parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="显式允许的回退数据源，可重复指定；默认跟随 source profile")
@@ -341,7 +342,7 @@ def main() -> None:
         period="60",
         start=args.start,
         end=args.end,
-        adjust="qfq",
+        adjust=args.adjust,
         primary_source=primary_source,
         fallback_sources=fallback_sources,
         min_rows=INTRADAY_SOURCE_PROBE_ROWS,

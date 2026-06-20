@@ -35,7 +35,7 @@ rows, used_source = fetch_hk_minute_with_policy(
     "03690",
     period="60",
     start="2026-01-01 09:30",
-    adjust="qfq",
+  adjust="",
     primary_source="xueqiu",
     fallback_sources=None,
 )
@@ -48,7 +48,7 @@ rows, used_source = fetch_hk_minute_with_policy(
     "03690",
     period="60",
     start="2026-01-01 09:30",
-    adjust="qfq",
+  adjust="",
     primary_source="xueqiu",
     fallback_sources=("akshare",),
 )
@@ -58,6 +58,7 @@ rows, used_source = fetch_hk_minute_with_policy(
 
 - `fetch_hk_minute(...)` 是单数据源、确定性调用
 - `fetch_hk_minute_with_policy(...)` 才负责主源和可选回退策略
+- 港股分钟线当前默认不复权；只有显式传 `qfq` 或 `hfq` 时才做复权
 
 ## 雪球链路要求
 

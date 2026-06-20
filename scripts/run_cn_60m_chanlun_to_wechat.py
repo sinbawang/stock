@@ -54,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--name", required=True, help="标的名称，如 汇川技术")
     parser.add_argument("--start", default=default_structure_start("60m"), help="起始时间")
     parser.add_argument("--end", default=None, help="结束时间，默认到当前")
-    parser.add_argument("--adjust", default="qfq", choices=["qfq", "hfq", ""], help="复权方式")
+    parser.add_argument("--adjust", default="", choices=["qfq", "hfq", ""], help="复权方式，默认不复权")
     parser.add_argument("--source-profile", default=None, choices=available_a_share_source_profiles(), help="A股分钟线数据源配置；默认读取 CHANLUN_SOURCE_PROFILE 或 mainland")
     parser.add_argument("--contact", default=None, help="微信联系人")
     parser.add_argument("--visible-row-index", type=int, default=None, help="微信当前可见会话第几行")

@@ -1,11 +1,39 @@
 from __future__ import annotations
 
+import argparse
 import sys
 import types
 
 import pytest
 
 from chanlun.data import hk_minute_fetcher as module
+
+
+def test_hk_minute_main_parser_defaults_adjust_to_raw(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "hk_minute_fetcher.py",
+            "--symbol",
+            "03690",
+        ],
+    )
+
+    original_parse_args = argparse.ArgumentParser.parse_args
+    captured = {}
+
+    def fake_parse_args(self, *args, **kwargs):
+        namespace = original_parse_args(self, *args, **kwargs)
+        captured["adjust"] = namespace.adjust
+        raise SystemExit(0)
+
+    monkeypatch.setattr(argparse.ArgumentParser, "parse_args", fake_parse_args)
+
+    with pytest.raises(SystemExit):
+        module.main()
+
+    assert captured["adjust"] == ""
 
 
 def test_resolve_xueqiu_cookies_prefers_env(monkeypatch):

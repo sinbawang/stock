@@ -160,6 +160,93 @@ def test_fetch_kline_intraday_metadata_tracks_fallback_source(monkeypatch) -> No
     assert meta["source_attempts"][2]["row_count"] == 5
 
 
+def test_fetch_kline_daylike_mainland_profile_prefers_tushare(monkeypatch) -> None:
+    monkeypatch.setattr(kline_fetcher, "_normalize_symbol", lambda symbol: "sh601328")
+    monkeypatch.setattr(kline_fetcher, "_normalize_interval", lambda interval: "day")
+    monkeypatch.setattr(kline_fetcher, "_parse_time", lambda value, is_intraday: None)
+    monkeypatch.setattr(kline_fetcher, "_make_opener", lambda: object())
+
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        kline_fetcher,
+        "_fetch_daylike_tushare",
+        lambda *args, **kwargs: calls.append("tushare") or [_bar(f"2026-06-{day:02d}") for day in range(1, 6)],
+    )
+    monkeypatch.setattr(
+        kline_fetcher,
+        "_fetch_day_like_rows",
+        lambda *args, **kwargs: calls.append("day_like") or [_bar("2026-06-01")],
+    )
+
+    rows = kline_fetcher.fetch_kline("601328", interval="day", limit=5, source_profile="mainland")
+
+    assert calls == ["tushare"]
+    assert len(rows) == 5
+    assert kline_fetcher.get_last_fetch_metadata()["actual_source"] == "tushare"
+
+
+def test_fetch_kline_daylike_defaults_to_tushare_first_for_a_share(monkeypatch) -> None:
+    monkeypatch.setattr(kline_fetcher, "_normalize_symbol", lambda symbol: "sh601328")
+    monkeypatch.setattr(kline_fetcher, "_normalize_interval", lambda interval: "day")
+    monkeypatch.setattr(kline_fetcher, "_parse_time", lambda value, is_intraday: None)
+    monkeypatch.setattr(kline_fetcher, "_make_opener", lambda: object())
+
+    calls: list[str] = []
+
+    captured: dict[str, object] = {}
+
+    def fake_daylike_tushare(norm_symbol, interval, start_dt, end_dt, adjust):
+        calls.append("tushare")
+        captured["adjust"] = adjust
+        return [_bar(f"2026-06-{day:02d}") for day in range(1, 1006)]
+
+    monkeypatch.setattr(kline_fetcher, "_fetch_daylike_tushare", fake_daylike_tushare)
+    monkeypatch.setattr(
+        kline_fetcher,
+        "_fetch_day_like_rows",
+        lambda *args, **kwargs: calls.append("day_like") or [_bar("2026-06-01")],
+    )
+
+    rows = kline_fetcher.fetch_kline("601328", interval="day")
+    meta = kline_fetcher.get_last_fetch_metadata()
+
+    assert calls == ["tushare"]
+    assert len(rows) == 1000
+    assert rows[0]["ts"] == "2026-06-06"
+    assert rows[-1]["ts"] == "2026-06-1005"
+    assert captured["adjust"] == ""
+    assert meta["source_plan"] == "tushare->day_like"
+    assert meta["actual_source"] == "tushare"
+
+
+def test_fetch_kline_daylike_falls_back_to_day_like_when_tushare_fails(monkeypatch) -> None:
+    monkeypatch.setattr(kline_fetcher, "_normalize_symbol", lambda symbol: "sh601328")
+    monkeypatch.setattr(kline_fetcher, "_normalize_interval", lambda interval: "day")
+    monkeypatch.setattr(kline_fetcher, "_parse_time", lambda value, is_intraday: None)
+    monkeypatch.setattr(kline_fetcher, "_make_opener", lambda: object())
+
+    monkeypatch.setattr(kline_fetcher, "_fetch_daylike_tushare", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("rate limit")))
+    monkeypatch.setattr(
+        kline_fetcher,
+        "_fetch_day_like_rows",
+        lambda *args, **kwargs: [_bar(f"2026-06-{day:02d}") for day in range(1, 4)],
+    )
+
+    rows = kline_fetcher.fetch_kline("601328", interval="day", limit=3, source_profile="mainland")
+    meta = kline_fetcher.get_last_fetch_metadata()
+
+    assert len(rows) == 3
+    assert meta["source_plan"] == "tushare->day_like"
+    assert meta["actual_source"] == "day_like"
+    assert meta["source_attempts"][0]["source"] == "tushare"
+    assert meta["source_attempts"][0]["status"] == "error"
+    assert meta["source_attempts"][1]["source"] == "day_like"
+    assert meta["source_attempts"][1]["row_count"] == 3
+    assert "已回退到 day_like" in str(meta["warning"])
+    assert "请求 3 根，实际返回 3 根" in str(meta["warning"])
+
+
 def test_fetch_intraday_tushare_empty_raises_rate_limit_hint(monkeypatch) -> None:
     class FakeTs:
         @staticmethod
