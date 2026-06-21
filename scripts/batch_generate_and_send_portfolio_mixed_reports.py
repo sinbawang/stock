@@ -76,6 +76,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--day-bars", type=int, default=1000, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
     parser.add_argument("--m60-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 60M K-line fetch count.")
     parser.add_argument("--m15-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
+    parser.add_argument("--zhongshu-level", choices=("bi", "segment"), default="bi", help="Forwarded to batch_prepare_chanlun_reports.py to switch between bi and segment zhongshu rendering.")
     return parser.parse_args()
 
 
@@ -146,6 +147,7 @@ def _generate_all_timeframe_charts(
     day_bars: int = 1000,
     m60_bars: int = 600,
     m15_bars: int = 600,
+    zhongshu_level: str = "bi",
 ) -> None:
     with tempfile.TemporaryDirectory(prefix="single_holding_", dir=str(ROOT / "data" / "_meta")) as temp_dir:
         holdings_path = Path(temp_dir) / "holdings.json"
@@ -168,6 +170,8 @@ def _generate_all_timeframe_charts(
                 str(m60_bars),
                 "--m15-bars",
                 str(m15_bars),
+                "--zhongshu-level",
+                zhongshu_level,
             ]
         )
 
@@ -218,6 +222,7 @@ def generate_bundle(
     day_bars: int = 1000,
     m60_bars: int = 600,
     m15_bars: int = 600,
+    zhongshu_level: str = "bi",
 ) -> GeneratedBundle:
     reuse_existing_base = _should_reuse_existing_base(holding, skip_gen_base)
     if holding.market == "CN":
@@ -253,6 +258,7 @@ def generate_bundle(
         day_bars=day_bars,
         m60_bars=m60_bars,
         m15_bars=m15_bars,
+        zhongshu_level=zhongshu_level,
     )
 
     symbol_dir = ROOT / "data" / "reports" / (holding.symbol.zfill(5) if holding.market == "HK" else holding.symbol)
@@ -326,6 +332,7 @@ def main() -> None:
             day_bars=args.day_bars,
             m60_bars=args.m60_bars,
             m15_bars=args.m15_bars,
+            zhongshu_level=args.zhongshu_level,
         )
         print(
             f"generated {holding.symbol} bucket={bundle.combined_bucket} chart_svg={bundle.chart_svg} chart_jpg={bundle.chart_jpg}",

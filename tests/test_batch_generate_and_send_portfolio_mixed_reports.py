@@ -83,6 +83,8 @@ def test_generate_bundle_runs_three_timeframe_chart_pipeline(monkeypatch, tmp_pa
     assert commands[0][1].endswith("generate_h_share_single_mixed_report.py")
     assert commands[1][1].endswith("batch_prepare_chanlun_reports.py")
     assert commands[1][2] == "--holdings-file"
+    assert "--zhongshu-level" in commands[1]
+    assert commands[1][commands[1].index("--zhongshu-level") + 1] == "bi"
     assert bundle.chart_jpg == report_root / "60m" / "structure.jpg"
     assert bundle.chart_svg == report_root / "60m" / "structure.svg"
     assert (report_root / "day" / "structure.jpg").exists()

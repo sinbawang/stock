@@ -106,6 +106,7 @@
 这两个入口当前都支持把结构识别和抓取窗口参数继续透传到 [scripts/refresh_holdings_publish_to_cloudbase.py](scripts/refresh_holdings_publish_to_cloudbase.py) 再传给缠论图生成链路，常用参数包括：
 
 - `--pending-reverse-mode {any|effective_only|tail_mixed}`
+- `--zhongshu-level {bi|segment}`
 - `--day-bars 1000`
 - `--m60-bars 600`
 - `--m15-bars 600`
@@ -115,7 +116,7 @@
 示例：
 
 ```powershell
-bin\runone.bat 000591 --pending-reverse-mode tail_mixed --day-bars 1000 --m60-bars 800 --m15-bars 1200 --skip-build --skip-upload
+bin\runone.bat 000591 --zhongshu-level segment --pending-reverse-mode tail_mixed --day-bars 1000 --m60-bars 800 --m15-bars 1200 --skip-build --skip-upload
 ```
 
 ## 当前目录约定

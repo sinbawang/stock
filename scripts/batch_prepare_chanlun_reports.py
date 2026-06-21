@@ -124,6 +124,12 @@ def parse_args() -> argparse.Namespace:
         default="any",
         help="笔尾部反向分型占位口径：any=当前保守口径，effective_only=全局仅允许满足间隔的反向分型占位，tail_mixed=仅对最后未确认尾笔链路启用 effective_only。",
     )
+    parser.add_argument(
+        "--zhongshu-level",
+        choices=("bi", "segment"),
+        default="bi",
+        help="中枢绘制层级：bi=笔中枢，segment=线段中枢。",
+    )
     return parser.parse_args()
 
 
@@ -447,6 +453,7 @@ def export_case(
     title: str,
     data_fetch: dict[str, object] | None = None,
     pending_reverse_mode: str = "any",
+    zhongshu_level: str = "bi",
 ) -> dict[str, Path]:
     layout = timeframe_report_paths(security.symbol, timeframe, rows)
     raw_csv = layout.raw_csv
@@ -471,7 +478,11 @@ def export_case(
     )
     segments = identify_segments(bis)
     confirmed_bis = [bi for bi in bis if bi.is_confirmed]
-    zhongshus = identify_zhongshu(confirmed_bis)
+    confirmed_segments = [segment for segment in segments if segment.is_confirmed]
+    if zhongshu_level == "segment":
+        zhongshus = identify_zhongshu(confirmed_segments, structure_level="segment")
+    else:
+        zhongshus = identify_zhongshu(confirmed_bis, structure_level="bi")
     macd_points = calculate_macd(raw_bars)
 
     confirmed_fx_ids: set[int] = set()
@@ -528,6 +539,7 @@ def export_case(
             "source": (data_fetch or {}).get("source"),
             "data_fetch": data_fetch,
             "pending_reverse_mode": pending_reverse_mode,
+            "zhongshu_level": zhongshu_level,
             "structure": {
                 "latest_zhongshu": latest_zhongshu,
                 "zhongshus": serialize_zhongshus(zhongshus),
@@ -710,6 +722,7 @@ def main() -> None:
                 f"{security.symbol} {security.name} day",
                 data_fetch=day_fetch,
                 pending_reverse_mode=args.pending_reverse_mode,
+                zhongshu_level=args.zhongshu_level,
             )
             m60_case = export_case(
                 security,
@@ -718,6 +731,7 @@ def main() -> None:
                 f"{security.symbol} {security.name} 60m",
                 data_fetch=m60_fetch,
                 pending_reverse_mode=args.pending_reverse_mode,
+                zhongshu_level=args.zhongshu_level,
             )
             export_case(
                 security,
@@ -726,6 +740,7 @@ def main() -> None:
                 f"{security.symbol} {security.name} 15m",
                 data_fetch=m15_fetch,
                 pending_reverse_mode=args.pending_reverse_mode,
+                zhongshu_level=args.zhongshu_level,
             )
             bundle.append((security, day_case, m60_case))
             print(f"Prepared {security.name}")

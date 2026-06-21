@@ -80,6 +80,7 @@ exit /b %EXIT_CODE%
 echo Usage: %~n0 SYMBOL [NAME] [CN^|HK] [extra refresh_holdings_publish_to_cloudbase args]
 echo Example: %~n0 09988 "阿里巴巴" HK
 echo Example: %~n0 000591 --pending-reverse-mode tail_mixed --skip-build --skip-upload
+echo Example: %~n0 000591 --zhongshu-level segment --skip-build --skip-upload
 echo Example: %~n0 000591 --day-bars 1000 --skip-build --skip-upload
 echo Example: %~n0 000591 --m60-bars 800 --m15-bars 1200 --skip-build --skip-upload
 echo Diagnostic: %~n0 checkxq

@@ -87,3 +87,36 @@ def test_plot_structure_uses_smaller_markers_for_unconfirmed_fractals():
     assert (6, 1.0) in texts_by_marker['▲']
     assert (3, 0.55) in texts_by_marker['▲']
     assert (6, 1.0) in texts_by_marker['▼']
+
+
+def test_plot_structure_can_draw_segment_level_zhongshu():
+    bars = _bars()
+    normalized_bars = _normalized(bars)
+    bis = [
+        Bi(0, BiDirection.UP, 0, 1, bars[1].ts, bars[4].ts, 12.0, 9.0, (0, 2), True),
+        Bi(1, BiDirection.DOWN, 1, 2, bars[4].ts, bars[5].ts, 11.8, 9.5, (2, 3), True),
+    ]
+    segments = [
+        Segment(0, BiDirection.DOWN, 0, 2, bars[0].ts, bars[1].ts, 11.0, 9.2, 11.0, 9.2, (0, 1), [0, 1, 2], True),
+        Segment(1, BiDirection.UP, 3, 5, bars[1].ts, bars[2].ts, 9.3, 11.4, 11.4, 9.3, (1, 2), [3, 4, 5], True),
+        Segment(2, BiDirection.DOWN, 6, 8, bars[2].ts, bars[3].ts, 11.3, 9.8, 11.3, 9.8, (2, 3), [6, 7, 8], True),
+        Segment(3, BiDirection.UP, 9, 11, bars[3].ts, bars[4].ts, 9.9, 11.8, 11.8, 9.9, (2, 3), [9, 10, 11], True),
+        Segment(4, BiDirection.DOWN, 12, 14, bars[4].ts, bars[5].ts, 11.7, 9.4, 11.7, 9.4, (3, 3), [12, 13, 14], True),
+    ]
+    zhongshus = [
+        Zhongshu(0, 1, 3, 9.8, 11.3, 9.3, 11.8, bars[1].ts, bars[4].ts, [1, 2, 3], False, 0, [1, 2, 3], 4, structure_level="segment"),
+    ]
+
+    fig = Plotter().plot_structure(
+        bars,
+        [],
+        bis,
+        segments,
+        zhongshus,
+        normalized_bars=normalized_bars,
+    )
+
+    assert len(fig.axes[0].patches) >= len(bars) + 1
+    labels = [text.get_text() for text in fig.axes[0].texts]
+    assert any(label == 'S0' for label in labels)
+    assert any(label.startswith('ZS0 [9.80, 11.30] S1,2,3') for label in labels)

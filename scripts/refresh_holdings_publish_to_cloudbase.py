@@ -70,6 +70,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--day-bars", type=int, default=1000, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
     parser.add_argument("--m60-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 60M K-line fetch count.")
     parser.add_argument("--m15-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
+    parser.add_argument("--zhongshu-level", choices=("bi", "segment"), default="bi", help="Forwarded to batch_prepare_chanlun_reports.py to switch between bi and segment zhongshu rendering.")
     parser.add_argument("--cloud-prefix", default="miniapp-publish/latest", help="Cloud storage prefix for upload")
     parser.add_argument("--env-id", default=None, help="CloudBase env id forwarded to uploader")
     parser.add_argument("--region", default=None, help="CloudBase region forwarded to uploader")
@@ -121,6 +122,7 @@ def regenerate_holdings(args: argparse.Namespace) -> None:
                     day_bars=args.day_bars,
                     m60_bars=args.m60_bars,
                     m15_bars=args.m15_bars,
+                    zhongshu_level=args.zhongshu_level,
                 )
                 print(
                     f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
@@ -141,6 +143,7 @@ def regenerate_holdings(args: argparse.Namespace) -> None:
                     day_bars=args.day_bars,
                     m60_bars=args.m60_bars,
                     m15_bars=args.m15_bars,
+                    zhongshu_level=args.zhongshu_level,
                 ): (index, holding)
                 for index, holding in enumerate(holdings, start=1)
             }

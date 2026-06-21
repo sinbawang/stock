@@ -160,6 +160,8 @@ class Plotter:
         bars: List[Bar],
         segments: List[Segment],
         normalized_bars: Optional[List[NormalizedBar]],
+        *,
+        show_segment_ids: bool = False,
     ) -> None:
         for segment in segments:
             start_idx, end_idx = self._normalized_range_to_bar_range(
@@ -178,6 +180,26 @@ class Plotter:
                 alpha=0.72,
                 zorder=3,
             )
+            if show_segment_ids:
+                label_x = (start_idx + end_idx) / 2
+                label_y = (segment.start_price + segment.end_price) / 2
+                ax.text(
+                    label_x,
+                    label_y,
+                    f"S{segment.segment_id}",
+                    color=self.segment_color,
+                    fontsize=8,
+                    alpha=0.88,
+                    ha='center',
+                    va='center',
+                    bbox={
+                        'boxstyle': 'round,pad=0.15',
+                        'facecolor': self.panel_background,
+                        'edgecolor': 'none',
+                        'alpha': 0.65,
+                    },
+                    zorder=5,
+                )
 
     def _draw_zhongshus(
         self,
@@ -185,29 +207,36 @@ class Plotter:
         bars: List[Bar],
         zhongshus: List[Zhongshu],
         bis: List[Bi],
+        segments: List[Segment],
         normalized_bars: Optional[List[NormalizedBar]],
     ) -> None:
         bi_by_id = {bi.bi_id: bi for bi in bis}
+        segment_by_id = {segment.segment_id: segment for segment in segments}
         for color_index, zs in enumerate(zhongshus):
             if not zs.bi_ids:
                 continue
 
-            start_bi = bi_by_id.get(zs.bi_ids[0])
-            end_bi = bi_by_id.get(zs.bi_ids[-1])
-            if start_bi is None or end_bi is None:
+            if zs.structure_level == "segment":
+                start_unit = segment_by_id.get(zs.bi_ids[0])
+                end_unit = segment_by_id.get(zs.bi_ids[-1])
+            else:
+                start_unit = bi_by_id.get(zs.bi_ids[0])
+                end_unit = bi_by_id.get(zs.bi_ids[-1])
+
+            if start_unit is None or end_unit is None:
                 continue
 
             start_idx, _ = self._normalized_range_to_bar_range(
                 bars,
                 normalized_bars,
-                start_bi.norm_bar_range[0],
-                start_bi.norm_bar_range[1],
+                start_unit.norm_bar_range[0],
+                start_unit.norm_bar_range[1],
             )
             _, end_idx = self._normalized_range_to_bar_range(
                 bars,
                 normalized_bars,
-                end_bi.norm_bar_range[0],
-                end_bi.norm_bar_range[1],
+                end_unit.norm_bar_range[0],
+                end_unit.norm_bar_range[1],
             )
             width = max(end_idx - start_idx, 1)
             color = self.zhongshu_colors[color_index % len(self.zhongshu_colors)]
@@ -225,7 +254,11 @@ class Plotter:
             ax.text(
                 end_idx + 0.2,
                 zs.zs_high,
-                f"ZS{zs.zs_id} [{zs.zs_low:.2f}, {zs.zs_high:.2f}]",
+                (
+                    f"ZS{zs.zs_id} [{zs.zs_low:.2f}, {zs.zs_high:.2f}]"
+                    if zs.structure_level != "segment"
+                    else f"ZS{zs.zs_id} [{zs.zs_low:.2f}, {zs.zs_high:.2f}] S{','.join(str(bi_id) for bi_id in zs.bi_ids)}"
+                ),
                 color=color,
                 fontsize=9,
                 va='bottom',
@@ -330,6 +363,7 @@ class Plotter:
         """
         绘制主图总览：K 线 + 分型 + 笔 + 线段 + 中枢 + MACD。
         """
+        show_segment_ids = any(zs.structure_level == "segment" for zs in zhongshus)
         fig, (price_ax, macd_ax) = plt.subplots(
             2,
             1,
@@ -340,8 +374,8 @@ class Plotter:
         fig.patch.set_facecolor(self.background)
 
         self._draw_bars(price_ax, bars)
-        self._draw_zhongshus(price_ax, bars, zhongshus, bis, normalized_bars)
-        self._draw_segments(price_ax, bars, segments, normalized_bars)
+        self._draw_zhongshus(price_ax, bars, zhongshus, bis, segments, normalized_bars)
+        self._draw_segments(price_ax, bars, segments, normalized_bars, show_segment_ids=show_segment_ids)
         self._draw_bis(price_ax, bars, bis, normalized_bars)
         self._draw_fractals(price_ax, bars, fractals, normalized_bars, confirmed_fractal_ids)
         self._draw_macd(macd_ax, bars)

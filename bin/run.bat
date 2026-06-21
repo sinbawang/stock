@@ -71,6 +71,9 @@ echo.
 echo   %~n0 --pending-reverse-mode tail_mixed --skip-build --skip-upload
 echo     Regenerate reports with a custom pending reverse rule, without rebuilding or uploading.
 echo.
+echo   %~n0 --zhongshu-level segment --skip-build --skip-upload
+echo     Regenerate reports and draw segment zhongshu instead of bi zhongshu.
+echo.
 echo   %~n0 --day-bars 1000 --skip-build --skip-upload
 echo     Regenerate reports using a 1000-bar daily K-line fetch window.
 echo.

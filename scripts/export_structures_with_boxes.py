@@ -327,15 +327,16 @@ def serialize_zhongshus(zhongshus: list[Zhongshu]) -> list[dict[str, object]]:
 
 
 def format_zhongshu_structure_text(zs: Zhongshu) -> str:
+    unit_label = "线段" if zs.structure_level == "segment" else "笔"
     core_bis = ",".join(str(bi_id) for bi_id in zs.core_bi_ids) or "无"
     all_bis = ",".join(str(bi_id) for bi_id in zs.bi_ids) or "无"
     entering_bi = str(zs.entering_bi_id) if zs.entering_bi_id is not None else "无"
     exit_bi = str(zs.exit_bi_id) if zs.exit_bi_id is not None else "未出现"
     return (
-        f"本体三笔(core_bi_ids)：{core_bis}；"
-        f"扩展参与笔(bi_ids)：{all_bis}；"
-        f"进入笔：{entering_bi}；"
-        f"离开笔：{exit_bi}"
+        f"本体三{unit_label}(core_bi_ids)：{core_bis}；"
+        f"扩展参与{unit_label}(bi_ids)：{all_bis}；"
+        f"进入{unit_label}：{entering_bi}；"
+        f"离开{unit_label}：{exit_bi}"
     )
 
 

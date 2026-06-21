@@ -1,7 +1,7 @@
 """中枢识别单元测试。"""
 
 from datetime import datetime
-from chanlun.models import Bi, BiDirection
+from chanlun.models import Bi, BiDirection, Segment
 from chanlun.zhongshu import identify_zhongshu
 
 
@@ -18,6 +18,28 @@ def _bi(bi_id: int, direction: BiDirection, high: float, low: float) -> Bi:
         high=high,
         low=low,
         norm_bar_range=(bi_id, bi_id + 1),
+        is_confirmed=True,
+    )
+
+
+def _segment(segment_id: int, direction: BiDirection, high: float, low: float) -> Segment:
+    start = datetime(2024, 2, 1 + segment_id)
+    end = datetime(2024, 2, 1 + segment_id, 1)
+    start_price = low if direction == BiDirection.UP else high
+    end_price = high if direction == BiDirection.UP else low
+    return Segment(
+        segment_id=segment_id,
+        direction=direction,
+        start_bi_id=segment_id * 2,
+        end_bi_id=segment_id * 2 + 1,
+        start_ts=start,
+        end_ts=end,
+        start_price=start_price,
+        end_price=end_price,
+        high=high,
+        low=low,
+        norm_bar_range=(segment_id * 4, segment_id * 4 + 3),
+        bi_ids=[segment_id * 2, segment_id * 2 + 1],
         is_confirmed=True,
     )
 
@@ -91,3 +113,21 @@ class TestIdentifyZhongshu:
         assert result[0].exit_bi_id == 4
         assert result[1].entering_bi_id == 4
         assert result[1].render_end_bi_id == 8
+
+    def test_identify_segment_zhongshu(self):
+        segments = [
+            _segment(0, BiDirection.DOWN, 110, 98),
+            _segment(1, BiDirection.UP, 106, 100),
+            _segment(2, BiDirection.DOWN, 104, 101),
+            _segment(3, BiDirection.UP, 103, 102),
+            _segment(4, BiDirection.DOWN, 102, 96),
+        ]
+
+        result = identify_zhongshu(segments, structure_level="segment")
+
+        assert len(result) == 1
+        assert result[0].structure_level == "segment"
+        assert result[0].entering_bi_id == 0
+        assert result[0].core_bi_ids == [1, 2, 3]
+        assert result[0].bi_ids == [1, 2, 3]
+        assert result[0].exit_bi_id == 4
