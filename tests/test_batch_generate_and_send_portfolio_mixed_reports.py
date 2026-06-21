@@ -20,6 +20,7 @@ module_spec = importlib.util.spec_from_file_location(
 )
 assert module_spec and module_spec.loader
 module = importlib.util.module_from_spec(module_spec)
+sys.modules[module_spec.name] = module
 module_spec.loader.exec_module(module)
 
 

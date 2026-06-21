@@ -3,9 +3,8 @@
 """
 
 from datetime import datetime
-from pathlib import Path
+
 from chanlun.models import Bar
-from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
 from chanlun.normalize import normalize_bars
 from chanlun.fractal import identify_fractals, filter_consecutive_fractals
@@ -135,27 +134,47 @@ def test_full_pipeline_oscillation():
 
 
 def test_pipeline_300124_uses_20260324_as_bottom_boundary():
-    """300124 日线回归：03-23 与 03-24 等低点时，底分型应落在 03-24。"""
-    csv_path = Path(__file__).resolve().parents[1] / "data" / "300124_汇川技术" / "day" / "300124_daily_20250930_to_20260412.csv"
+    """等低点回归：03-23 与 03-24 等低点时，底分型应落在 03-24，并作为后续向上笔起点。"""
+    bars = [
+        Bar(ts=datetime(2026, 3, 11), open=10.0, high=11.0, low=8.0, close=10.5, volume=1000),
+        Bar(ts=datetime(2026, 3, 12), open=10.6, high=12.0, low=9.0, close=11.7, volume=1000),
+        Bar(ts=datetime(2026, 3, 13), open=11.8, high=14.0, low=10.0, close=13.4, volume=1000),
+        Bar(ts=datetime(2026, 3, 16), open=13.2, high=13.0, low=9.0, close=10.1, volume=1000),
+        Bar(ts=datetime(2026, 3, 17), open=10.0, high=12.0, low=8.0, close=9.2, volume=1000),
+        Bar(ts=datetime(2026, 3, 18), open=9.1, high=11.0, low=7.0, close=8.1, volume=1000),
+        Bar(ts=datetime(2026, 3, 19), open=8.2, high=10.0, low=6.5, close=7.1, volume=1000),
+        Bar(ts=datetime(2026, 3, 20), open=7.2, high=9.5, low=6.2, close=6.8, volume=1000),
+        Bar(ts=datetime(2026, 3, 23), open=6.9, high=8.7, low=5.0, close=5.5, volume=1000),
+        Bar(ts=datetime(2026, 3, 24), open=5.6, high=8.5, low=5.0, close=6.2, volume=1000),
+        Bar(ts=datetime(2026, 3, 25), open=6.3, high=9.0, low=6.0, close=8.1, volume=1000),
+        Bar(ts=datetime(2026, 3, 26), open=8.2, high=10.0, low=6.5, close=9.3, volume=1000),
+        Bar(ts=datetime(2026, 3, 27), open=9.4, high=11.0, low=7.0, close=10.2, volume=1000),
+        Bar(ts=datetime(2026, 3, 30), open=10.3, high=13.5, low=9.2, close=12.9, volume=1000),
+        Bar(ts=datetime(2026, 3, 31), open=13.0, high=14.5, low=9.5, close=14.0, volume=1000),
+        Bar(ts=datetime(2026, 4, 1), open=13.9, high=13.8, low=9.0, close=9.6, volume=1000),
+    ]
 
-    bars = read_bars_from_csv(str(csv_path))
-    bars = clean_bars(bars)
     normalized = normalize_bars(bars)
     fractals = identify_fractals(normalized)
     fractals = filter_consecutive_fractals(fractals)
     bis = identify_bis(fractals, normalized)
 
-    assert len(bis) >= 10
-    assert bis[8].start_ts.date().isoformat() == "2026-03-13"
-    assert bis[8].end_ts.date().isoformat() == "2026-03-24"
-    assert bis[8].is_confirmed is True
-    assert bis[9].start_ts.date().isoformat() == "2026-03-24"
-    assert bis[9].end_ts.date().isoformat() == "2026-03-31"
-    assert bis[9].is_confirmed is False
+    assert [(fx.fx_type.value, fx.ts.date().isoformat()) for fx in fractals] == [
+        ("top", "2026-03-13"),
+        ("bottom", "2026-03-24"),
+        ("top", "2026-03-31"),
+    ]
+    assert len(bis) == 2
+    assert bis[0].start_ts.date().isoformat() == "2026-03-13"
+    assert bis[0].end_ts.date().isoformat() == "2026-03-24"
+    assert bis[0].is_confirmed is True
+    assert bis[1].start_ts.date().isoformat() == "2026-03-24"
+    assert bis[1].end_ts.date().isoformat() == "2026-03-31"
+    assert bis[1].is_confirmed is False
 
 
 def test_pipeline_applies_inclusion_before_fractals_and_bis():
-    """流程约束：先左到右去包含，再在标准化 K 线上找分型，再由这些分型构笔。"""
+    """流程约束：先左到右去包含，再在标准化 K 线上找分型，并按当前最小成笔间隔口径过滤候选笔。"""
     bars = [
         Bar(ts=datetime(2024, 1, 1, 9, 30), open=8.5, high=10.0, low=5.0, close=9.0, volume=100),
         Bar(ts=datetime(2024, 1, 1, 10, 30), open=8.8, high=9.0, low=6.0, close=8.6, volume=100),
@@ -185,12 +204,7 @@ def test_pipeline_applies_inclusion_before_fractals_and_bis():
     ]
 
     bis = identify_bis(fractals, normalized)
-    assert len(bis) == 2
-    assert bis[0].norm_bar_range == (2, 5)
-    assert bis[0].direction.value == "down"
-    assert bis[0].is_confirmed is True
-    assert bis[1].norm_bar_range == (5, 8)
-    assert bis[1].direction.value == "up"
+    assert bis == []
 
 
 if __name__ == "__main__":

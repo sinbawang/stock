@@ -154,6 +154,17 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
 c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloudbase.py --skip-regenerate --skip-upload --latest-only
 ```
 
+如果要在重生时同时验证缠论结构口径或不同级别抓取窗口，当前也支持直接附加：
+
+```powershell
+c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloudbase.py --symbols 09988 --latest-only --pending-reverse-mode tail_mixed --day-bars 1000 --m60-bars 800 --m15-bars 1200 --skip-upload
+```
+
+其中：
+
+- `pending-reverse-mode` 控制尾部反向分型占位口径
+- `day-bars` / `m60-bars` / `m15-bars` 控制各级别目标抓取根数
+
 当前推荐环境变量：
 
 - `CLOUDBASE_ENV_ID` 或 `TCB_ENV_ID`

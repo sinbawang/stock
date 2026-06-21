@@ -160,6 +160,19 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
 
 所以它适合“新增/修正单只股票后，尽快把最新发布层推上去”的场景。
 
+如果这次不是持仓变更，而是要验证缠论结构口径或抓取窗口，也可以直接在这个总控入口上追加参数，例如：
+
+```powershell
+c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloudbase.py --symbols 09988 --latest-only --pending-reverse-mode tail_mixed --day-bars 1000 --m60-bars 800 --m15-bars 1200 --skip-upload
+```
+
+这组参数分别控制：
+
+- `pending-reverse-mode`: 尾部反向分型占位口径
+- `day-bars`: 日线目标抓取根数
+- `m60-bars`: 60M 目标抓取根数
+- `m15-bars`: 15M 目标抓取根数
+
 ## 7. 发布后确认点
 
 发布完成后，至少确认三件事：

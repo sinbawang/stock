@@ -115,7 +115,28 @@ def _extract_text(text: str, pattern: str) -> str | None:
 
 
 def load_fundamental_ref(target: CombinedTarget, meta_dir: Path) -> FundamentalBriefRef:
-    json_path = meta_dir / target.symbol / "base.json" if (meta_dir / target.symbol / "base.json").exists() else REPORTS_DIR / target.symbol / "base.json"
+    local_json_path = meta_dir / target.symbol / "base.json"
+    if local_json_path.exists():
+        payload = json.loads(local_json_path.read_text(encoding="utf-8"))
+        summary = payload.get("summary", {})
+        return FundamentalBriefRef(
+            score=summary.get("score"),
+            rating=summary.get("rating"),
+            submodel=summary.get("submodel"),
+            path=local_json_path,
+        )
+
+    local_text_path = latest_file(meta_dir, f"{target.symbol}_{target.name}*_fundamental_brief_*.txt")
+    if local_text_path is not None:
+        text = local_text_path.read_text(encoding="utf-8")
+        return FundamentalBriefRef(
+            score=_extract_float(text, r"^- 总分:\s*([0-9.]+)"),
+            rating=_extract_text(text, r"^- 评级:\s*([A-D])"),
+            submodel=_extract_text(text, r"^- 子模型:\s*([^\n]+)"),
+            path=local_text_path,
+        )
+
+    json_path = REPORTS_DIR / target.symbol / "base.json"
     if json_path.exists():
         payload = json.loads(json_path.read_text(encoding="utf-8"))
         summary = payload.get("summary", {})
@@ -125,16 +146,8 @@ def load_fundamental_ref(target: CombinedTarget, meta_dir: Path) -> FundamentalB
             submodel=summary.get("submodel"),
             path=json_path,
         )
-    path = latest_file(meta_dir, f"{target.symbol}_{target.name}*_fundamental_brief_*.txt")
-    if path is None:
-        return FundamentalBriefRef()
-    text = path.read_text(encoding="utf-8")
-    return FundamentalBriefRef(
-        score=_extract_float(text, r"^- 总分:\s*([0-9.]+)"),
-        rating=_extract_text(text, r"^- 评级:\s*([A-D])"),
-        submodel=_extract_text(text, r"^- 子模型:\s*([^\n]+)"),
-        path=path,
-    )
+
+    return FundamentalBriefRef()
 
 
 def load_latest_technical_map(meta_dir: Path) -> tuple[dict[str, TechnicalRef], Path | None]:
@@ -151,7 +164,10 @@ def load_latest_technical_map(meta_dir: Path) -> tuple[dict[str, TechnicalRef], 
                     continue
                 payload = json.loads(tech_path.read_text(encoding="utf-8"))
                 summary = payload.get("summary", {})
-                refs[symbol_dir.name.zfill(6)] = TechnicalRef(
+                symbol = symbol_dir.name.zfill(6)
+                if symbol in refs:
+                    continue
+                refs[symbol] = TechnicalRef(
                     conclusion=summary.get("conclusion"),
                     suggestion=summary.get("suggestion"),
                     path=tech_path,

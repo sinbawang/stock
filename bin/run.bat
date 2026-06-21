@@ -68,6 +68,15 @@ echo.
 echo   %~n0 --no-skip-gen-base --parallelism 4
 echo     Force regenerate fundamental base reports before rebuilding/uploading.
 echo.
+echo   %~n0 --pending-reverse-mode tail_mixed --skip-build --skip-upload
+echo     Regenerate reports with a custom pending reverse rule, without rebuilding or uploading.
+echo.
+echo   %~n0 --day-bars 1000 --skip-build --skip-upload
+echo     Regenerate reports using a 1000-bar daily K-line fetch window.
+echo.
+echo   %~n0 --m60-bars 800 --m15-bars 1200 --skip-build --skip-upload
+echo     Regenerate reports using custom 60M and 15M fetch windows.
+echo.
 echo   %~n0 --symbols 000591 000651 --skip-build --skip-upload --parallelism 2
 echo     Validate two symbols only, without rebuilding the publish bundle or uploading.
 echo.

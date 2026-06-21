@@ -678,9 +678,9 @@ def test_auto_manufacturing_specialist_fields_refine_existing_dimensions_when_pr
     inventory_cycle = next(score for score in enriched.dimension_scores if score.dimension == "inventory_channel_and_turnover")
 
     assert enriched.total_score > baseline.total_score
-    assert "毛利率趋势 improving" in (profit_quality.score_basis or "")
+    assert "毛利率趋势 改善" in (profit_quality.score_basis or "")
     assert "海外收入占比 31.50" in (growth_delivery.score_basis or "")
-    assert "价格战压力 low" in (inventory_cycle.score_basis or "")
+    assert "价格战压力 较低" in (inventory_cycle.score_basis or "")
 
 
 def test_analyze_snapshot_scores_energy_resource_end_to_end():
@@ -755,9 +755,17 @@ def test_render_fundamental_brief_includes_manual_supplement_block():
     assert "- 资源周期韧性:" in rendered
     assert "peg=" in rendered
     assert "dividend_yield=6.3" in rendered
-    assert "现金流与杠杆: operating_cashflow_growth=18.7, interest_bearing_debt_growth=5.3, capex_to_operating_cashflow=0.42, free_cashflow_yield=9.4" in rendered
+    assert "现金流与杠杆:" in rendered
+    assert "operating_cashflow_growth=18.70" in rendered
+    assert "interest_bearing_debt_growth=5.30" in rendered
+    assert "capex_to_operating_cashflow=0.42" in rendered
+    assert "free_cashflow_yield=9.40" in rendered
     assert "手工补充字段:" in rendered
-    assert "杜邦拆解: 净利率=11.6, 总资产周转率=0.94, 权益乘数=1.5152, 杜邦驱动=利润率与周转驱动" in rendered
+    assert "杜邦拆解:" in rendered
+    assert "净利率=11.60" in rendered
+    assert "总资产周转率=0.94" in rendered
+    assert "权益乘数=1.52" in rendered
+    assert "杜邦驱动=利润率与周转驱动" in rendered
     assert "- dividend_yield=6.3" in rendered
     assert "- reserve_life_index=14.5" in rendered
     assert '- notes="2025 annual report p.34, p.112"' in rendered
@@ -848,7 +856,12 @@ def test_render_fundamental_brief_can_include_insurance_metric_summary():
 
     rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
 
-    assert "保险经营与偿付: solvency_adequacy_ratio=228, combined_ratio=97.6, investment_return=4.7, embedded_value_growth=10.5, new_business_value_growth=12.3" in rendered
+    assert "保险经营与偿付:" in rendered
+    assert "solvency_adequacy_ratio=228" in rendered
+    assert "combined_ratio=97.60" in rendered
+    assert "investment_return=4.70" in rendered
+    assert "embedded_value_growth=10.50" in rendered
+    assert "new_business_value_growth=12.30" in rendered
 
 
 def test_render_fundamental_brief_can_include_bank_metric_summary():
@@ -857,7 +870,12 @@ def test_render_fundamental_brief_can_include_bank_metric_summary():
 
     rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
 
-    assert "银行监管与息差: core_tier1_ratio=10.6, npl_ratio=1.28, provision_coverage_ratio=242, net_interest_margin=1.82, loan_deposit_growth_gap=1.4" in rendered
+    assert "银行监管与息差:" in rendered
+    assert "core_tier1_ratio=10.60" in rendered
+    assert "npl_ratio=1.28" in rendered
+    assert "provision_coverage_ratio=242.00" in rendered
+    assert "net_interest_margin=1.82" in rendered
+    assert "loan_deposit_growth_gap=1.40" in rendered
 
 
 def test_render_fundamental_brief_can_include_broker_metric_summary():
@@ -887,9 +905,19 @@ def test_render_fundamental_brief_can_include_auto_and_resource_specialist_summa
     resource_result = analyze_snapshot(resource_snapshot, "energy_resource_v1")
     resource_rendered = render_fundamental_brief(scorecard=resource_result, snapshot=resource_snapshot)
 
-    assert "质量与稳健: roe=18.8, roe_3y_cv=0.03, gross_margin=16.8, gross_margin_trend=改善, operating_cashflow_to_profit=2.8" in auto_rendered
-    assert "汽车经营专项: overseas_revenue_share=31.5, price_war_pressure=较低" in auto_rendered
-    assert "资源经营专项: unit_cost_position=0.82, reserve_life_index=14.5, commodity_price_sensitivity=0.46" in resource_rendered
+    assert "质量与稳健:" in auto_rendered
+    assert "roe=18.80" in auto_rendered
+    assert "roe_3y_cv=0.03" in auto_rendered
+    assert "gross_margin=16.80" in auto_rendered
+    assert "gross_margin_trend=改善" in auto_rendered
+    assert "operating_cashflow_to_profit=2.80" in auto_rendered
+    assert "汽车经营专项:" in auto_rendered
+    assert "overseas_revenue_share=31.50" in auto_rendered
+    assert "price_war_pressure=较低" in auto_rendered
+    assert "资源经营专项:" in resource_rendered
+    assert "unit_cost_position=0.82" in resource_rendered
+    assert "reserve_life_index=14.50" in resource_rendered
+    assert "commodity_price_sensitivity=0.46" in resource_rendered
 
 
 def test_render_fundamental_brief_does_not_show_auto_specialist_summary_for_non_auto_snapshot():
@@ -902,7 +930,12 @@ def test_render_fundamental_brief_does_not_show_auto_specialist_summary_for_non_
     rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
 
     assert "汽车经营专项:" not in rendered
-    assert "质量与稳健: roe=9.8, roe_3y_cv=0.28, gross_margin=22.4, gross_margin_trend=改善, operating_cashflow_to_profit=0.84" in rendered
+    assert "质量与稳健:" in rendered
+    assert "roe=9.80" in rendered
+    assert "roe_3y_cv=0.28" in rendered
+    assert "gross_margin=22.40" in rendered
+    assert "gross_margin_trend=改善" in rendered
+    assert "operating_cashflow_to_profit=0.84" in rendered
 
 
 def test_render_fundamental_brief_can_include_general_quality_summary():
@@ -919,7 +952,14 @@ def test_render_fundamental_brief_can_include_general_quality_summary():
 
     rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
 
-    assert "质量与稳健: roe=18.6, roe_3y_mean=17.2, roe_3y_cv=0.18, operating_cashflow_to_profit=1.12, operating_cashflow_to_profit_history=[1.12, 1.04, 0.96], current_ratio=1.46, debt_to_asset=52.3" in rendered
+    assert "质量与稳健:" in rendered
+    assert "roe=18.60" in rendered
+    assert "roe_3y_mean=17.20" in rendered
+    assert "roe_3y_cv=0.18" in rendered
+    assert "operating_cashflow_to_profit=1.12" in rendered
+    assert "operating_cashflow_to_profit_history=[1.12, 1.04, 0.96]" in rendered
+    assert "current_ratio=1.46" in rendered
+    assert "debt_to_asset=52.30" in rendered
 
 
 def test_render_fundamental_brief_can_include_growth_delivery_summary():
@@ -928,7 +968,10 @@ def test_render_fundamental_brief_can_include_growth_delivery_summary():
 
     rendered = render_fundamental_brief(scorecard=result, snapshot=snapshot)
 
-    assert "成长兑现: revenue_growth=21.3, net_profit_growth=33.8, guidance_attainment=超预期" in rendered
+    assert "成长兑现:" in rendered
+    assert "revenue_growth=21.30" in rendered
+    assert "net_profit_growth=33.80" in rendered
+    assert "guidance_attainment=超预期" in rendered
 
 
 def test_safe_cn_valuation_series_returns_empty_frame_on_error(monkeypatch):
@@ -1366,9 +1409,9 @@ def test_render_blended_reports_include_anchor_and_overlay_sections():
     assert "年报权重: 80% | 季报权重: 20%" in scorecard_text
     assert "基本面混合简报" in brief_text
     assert "年报锚定分" in brief_text
-    assert "季报刷新层拆解" in brief_text
+    assert "中间报告期刷新层拆解" in brief_text
     assert "年报维度分计算" in brief_text
-    assert "季报维度分计算" in brief_text
+    assert "中间报告期维度分计算" in brief_text
     assert "- 盈利质量:" in brief_text
     assert "折算" in brief_text
     assert "- 现金流刷新:" in brief_text

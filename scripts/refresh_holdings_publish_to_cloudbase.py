@@ -61,6 +61,15 @@ def parse_args() -> argparse.Namespace:
         default=min(4, max(1, os.cpu_count() or 1)),
         help="How many holdings to generate in parallel during regeneration.",
     )
+    parser.add_argument(
+        "--pending-reverse-mode",
+        choices=("any", "effective_only", "tail_mixed"),
+        default="any",
+        help="Forwarded to batch_prepare_chanlun_reports.py to control pending reverse fractal handling.",
+    )
+    parser.add_argument("--day-bars", type=int, default=1000, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
+    parser.add_argument("--m60-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 60M K-line fetch count.")
+    parser.add_argument("--m15-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
     parser.add_argument("--cloud-prefix", default="miniapp-publish/latest", help="Cloud storage prefix for upload")
     parser.add_argument("--env-id", default=None, help="CloudBase env id forwarded to uploader")
     parser.add_argument("--region", default=None, help="CloudBase region forwarded to uploader")
@@ -105,7 +114,14 @@ def regenerate_holdings(args: argparse.Namespace) -> None:
     if worker_count == 1:
         for index, holding in enumerate(holdings, start=1):
             try:
-                bundle = generate_report_bundle(holding, skip_gen_base=args.skip_gen_base)
+                bundle = generate_report_bundle(
+                    holding,
+                    skip_gen_base=args.skip_gen_base,
+                    pending_reverse_mode=args.pending_reverse_mode,
+                    day_bars=args.day_bars,
+                    m60_bars=args.m60_bars,
+                    m15_bars=args.m15_bars,
+                )
                 print(
                     f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
                     f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg}",
@@ -117,7 +133,15 @@ def regenerate_holdings(args: argparse.Namespace) -> None:
     else:
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
             future_map = {
-                executor.submit(generate_report_bundle, holding, skip_gen_base=args.skip_gen_base): (index, holding)
+                executor.submit(
+                    generate_report_bundle,
+                    holding,
+                    skip_gen_base=args.skip_gen_base,
+                    pending_reverse_mode=args.pending_reverse_mode,
+                    day_bars=args.day_bars,
+                    m60_bars=args.m60_bars,
+                    m15_bars=args.m15_bars,
+                ): (index, holding)
                 for index, holding in enumerate(holdings, start=1)
             }
             for future in as_completed(future_map):

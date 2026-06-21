@@ -2713,8 +2713,8 @@ def test_fetch_and_analyze_hk_snapshot_accepts_manual_auto_specialist_fields(mon
     assert any("Manual supplement applied before analysis" in item for item in result.assumptions)
     assert any("以下字段当前使用手工补充口径" in item for item in result.scorecard.warnings)
     dimension_basis = "\n".join(score.score_basis or "" for score in result.scorecard.dimension_scores)
-    assert "毛利率趋势 improving" in dimension_basis
-    assert "价格战压力 low" in dimension_basis
+    assert "毛利率趋势 改善" in dimension_basis
+    assert "价格战压力 较低" in dimension_basis
     assert "海外收入占比 31.50" in dimension_basis
 
 

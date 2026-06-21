@@ -618,7 +618,7 @@ def send_message(
                     visible_row_index=visible_row_index,
                     current_chat_only=current_chat_only,
                     allow_search_switch=allow_search_switch,
-                    require_input_focus=True,
+                    require_input_focus=False,
                 )
                 send_to_current_chat(message=None, filepaths=[filepath], hwnd=hwnd)
 

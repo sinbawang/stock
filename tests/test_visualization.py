@@ -84,6 +84,6 @@ def test_plot_structure_uses_smaller_markers_for_unconfirmed_fractals():
     for text in fig.axes[0].texts:
         texts_by_marker.setdefault(text.get_text(), []).append((text.get_fontsize(), text.get_alpha()))
 
-    assert (12, 1.0) in texts_by_marker['▲']
-    assert (6, 0.55) in texts_by_marker['▲']
-    assert (12, 1.0) in texts_by_marker['▼']
+    assert (6, 1.0) in texts_by_marker['▲']
+    assert (3, 0.55) in texts_by_marker['▲']
+    assert (6, 1.0) in texts_by_marker['▼']

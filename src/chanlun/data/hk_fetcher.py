@@ -32,6 +32,7 @@ def fetch_hk_daily(
     start: str,
     end: Optional[str] = None,
     adjust: str = "",
+    limit: int = 1000,
 ) -> list[dict]:
     """
     获取港股日 K 数据（腾讯财经，默认不复权）。
@@ -41,6 +42,7 @@ def fetch_hk_daily(
         start:  开始日期，格式 "YYYY-MM-DD"
         end:    结束日期，格式 "YYYY-MM-DD"，None 表示今日
         adjust: 复权方式，""不复权 / "qfq"前复权 / "hfq"后复权
+        limit:  期望返回的最大 K 线数量
 
     Returns:
         OHLCV 字典列表，字段: ts, open, high, low, close, volume
@@ -49,13 +51,14 @@ def fetch_hk_daily(
         end = date.today().strftime("%Y-%m-%d")
 
     code = symbol.lstrip("0").zfill(5)  # 保证5位，如 03690
+    effective_limit = max(1, int(limit))
     adj_key = "qfqday" if adjust == "qfq" else "day"
     var_name = f"kline_dayfqhk{code}"
     r_val = f"{random.random():.6f}"
     url = (
         "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
         f"?_var={var_name}"
-        f"&param=hk{code},day,{start},{end},1000,qfq"
+        f"&param=hk{code},day,{start},{end},{effective_limit},qfq"
         f"&r={r_val}"
     )
 
@@ -91,7 +94,7 @@ def fetch_hk_daily(
         })
 
     rows.sort(key=lambda r: r["ts"])
-    return rows
+    return rows[-effective_limit:]
 
 
 def save_to_csv(rows: list[dict], filepath: str) -> None:

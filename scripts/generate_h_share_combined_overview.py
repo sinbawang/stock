@@ -125,7 +125,34 @@ def _extract_text(text: str, pattern: str) -> str | None:
 
 
 def load_fundamental_ref(target: CombinedTarget, meta_dir: Path) -> FundamentalBriefRef:
-    json_path = meta_dir / target.symbol / "base.json" if (meta_dir / target.symbol / "base.json").exists() else REPORTS_DIR / target.symbol / "base.json"
+    local_json_path = meta_dir / target.symbol / "base.json"
+    if local_json_path.exists():
+        payload = json.loads(local_json_path.read_text(encoding="utf-8"))
+        summary = payload.get("summary", {})
+        return FundamentalBriefRef(
+            score=summary.get("score"),
+            rating=summary.get("rating"),
+            submodel=summary.get("submodel"),
+            path=local_json_path,
+        )
+
+    local_text_path = latest_file(meta_dir, f"{target.symbol}_{target.name}*_fundamental_brief_*.txt")
+    if local_text_path is not None:
+        text = local_text_path.read_text(encoding="utf-8")
+        score = _extract_float(text, r"^- 总分:\s*([0-9.]+)")
+        if score is None:
+            score = _extract_float(text, r"总分:\s*([0-9.]+)")
+        rating = _extract_text(text, r"^- 评级:\s*([A-D])")
+        if rating is None:
+            rating = _extract_text(text, r"评级:\s*([A-D])")
+        return FundamentalBriefRef(
+            score=score,
+            rating=rating,
+            submodel=_extract_text(text, r"^- 子模型:\s*([^\n]+)"),
+            path=local_text_path,
+        )
+
+    json_path = REPORTS_DIR / target.symbol / "base.json"
     if json_path.exists():
         payload = json.loads(json_path.read_text(encoding="utf-8"))
         summary = payload.get("summary", {})
@@ -135,22 +162,8 @@ def load_fundamental_ref(target: CombinedTarget, meta_dir: Path) -> FundamentalB
             submodel=summary.get("submodel"),
             path=json_path,
         )
-    path = latest_file(meta_dir, f"{target.symbol}_{target.name}*_fundamental_brief_*.txt")
-    if path is None:
-        return FundamentalBriefRef()
-    text = path.read_text(encoding="utf-8")
-    score = _extract_float(text, r"^- 总分:\s*([0-9.]+)")
-    if score is None:
-        score = _extract_float(text, r"总分:\s*([0-9.]+)")
-    rating = _extract_text(text, r"^- 评级:\s*([A-D])")
-    if rating is None:
-        rating = _extract_text(text, r"评级:\s*([A-D])")
-    return FundamentalBriefRef(
-        score=score,
-        rating=rating,
-        submodel=_extract_text(text, r"^- 子模型:\s*([^\n]+)"),
-        path=path,
-    )
+
+    return FundamentalBriefRef()
 
 
 def load_latest_technical_map(meta_dir: Path) -> tuple[dict[str, TechnicalRef], Path | None]:
@@ -167,7 +180,10 @@ def load_latest_technical_map(meta_dir: Path) -> tuple[dict[str, TechnicalRef], 
                     continue
                 payload = json.loads(tech_path.read_text(encoding="utf-8"))
                 summary = payload.get("summary", {})
-                refs[symbol_dir.name.zfill(5)] = TechnicalRef(
+                symbol = symbol_dir.name.zfill(5)
+                if symbol in refs:
+                    continue
+                refs[symbol] = TechnicalRef(
                     conclusion=summary.get("conclusion"),
                     suggestion=summary.get("suggestion"),
                     path=tech_path,
@@ -221,19 +237,18 @@ def load_latest_capital_flow_map(meta_dir: Path, target_symbols: set[str] | None
         refs: dict[str, CapitalFlowRef] = {}
         symbols = target_symbols or set()
         for symbol in symbols:
-            for json_path in (meta_dir / symbol / "fund.json", REPORTS_DIR / symbol / "fund.json"):
-                if not json_path.exists():
-                    continue
-                payload = json.loads(json_path.read_text(encoding="utf-8"))
-                summary = payload.get("summary", {})
-                refs[symbol] = CapitalFlowRef(
-                    score=summary.get("score"),
-                    rating=summary.get("rating"),
-                    source=summary.get("source"),
-                    bucket=summary.get("bucket"),
-                    path=json_path,
-                )
-                break
+            json_path = meta_dir / symbol / "fund.json"
+            if not json_path.exists():
+                continue
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
+            summary = payload.get("summary", {})
+            refs[symbol] = CapitalFlowRef(
+                score=summary.get("score"),
+                rating=summary.get("rating"),
+                source=summary.get("source"),
+                bucket=summary.get("bucket"),
+                path=json_path,
+            )
         return refs, None
     best_refs: dict[str, CapitalFlowRef] = {}
     best_path: Path | None = None
@@ -490,7 +505,7 @@ def render_combined_overview(rows: list[CombinedOverviewRow], technical_summary_
             "- fundamental 优先读取 reports/<symbol>/base.json，缺失时回退到旧版基本面简报文本。",
             "- technical 优先读取 reports/<symbol>/60m/tech.json；存在组合摘要时仍复用最新 group888 60M 缠论综合操作建议中的港股行。",
             "- capital_flow 优先读取最新港股资金面批量概览。HK V1 使用港股通成份行情成交额/换手率、个股南向净买额、南向持股变化和 HKEX 沽空成交额。",
-            "- 若批量概览暂缺，则回退读取 reports/<symbol>/fund.json。",
+            "- 若批量概览暂缺，则仅回退读取当前 meta_dir/<symbol>/fund.json；未提供时保持 HK pending。",
             "- 个股南向净买额来自东方财富港股通个股成交榜历史，仅在个股进入成交榜的交易日可用；沽空比例依赖成交额可用性。",
             "- priority/action 是三轴对照后的管理标签；当前港股资金分会直接影响 confirming/mixed/cautious 分组。",
             "- 本报告用于三轴对照，不构成投资建议。",

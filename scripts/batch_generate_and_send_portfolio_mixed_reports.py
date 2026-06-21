@@ -67,6 +67,15 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Reuse an existing base.json instead of regenerating the fundamental report when possible. Use --no-skip-gen-base to force refresh.",
     )
+    parser.add_argument(
+        "--pending-reverse-mode",
+        choices=("any", "effective_only", "tail_mixed"),
+        default="any",
+        help="Forwarded to batch_prepare_chanlun_reports.py to control pending reverse fractal handling.",
+    )
+    parser.add_argument("--day-bars", type=int, default=1000, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
+    parser.add_argument("--m60-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 60M K-line fetch count.")
+    parser.add_argument("--m15-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
     return parser.parse_args()
 
 
@@ -130,7 +139,14 @@ def _single_holding_payload(holding: Holding) -> dict:
     }
 
 
-def _generate_all_timeframe_charts(holding: Holding) -> None:
+def _generate_all_timeframe_charts(
+    holding: Holding,
+    *,
+    pending_reverse_mode: str = "any",
+    day_bars: int = 1000,
+    m60_bars: int = 600,
+    m15_bars: int = 600,
+) -> None:
     with tempfile.TemporaryDirectory(prefix="single_holding_", dir=str(ROOT / "data" / "_meta")) as temp_dir:
         holdings_path = Path(temp_dir) / "holdings.json"
         holdings_path.write_text(
@@ -144,6 +160,14 @@ def _generate_all_timeframe_charts(holding: Holding) -> None:
                 str(SCRIPTS / "batch_prepare_chanlun_reports.py"),
                 "--holdings-file",
                 str(holdings_path),
+                "--pending-reverse-mode",
+                pending_reverse_mode,
+                "--day-bars",
+                str(day_bars),
+                "--m60-bars",
+                str(m60_bars),
+                "--m15-bars",
+                str(m15_bars),
             ]
         )
 
@@ -186,7 +210,15 @@ def _should_reuse_existing_base(holding: Holding, skip_gen_base: bool) -> bool:
     return existing.annual == latest.annual and existing.interim == latest.interim
 
 
-def generate_bundle(holding: Holding, *, skip_gen_base: bool = True) -> GeneratedBundle:
+def generate_bundle(
+    holding: Holding,
+    *,
+    skip_gen_base: bool = True,
+    pending_reverse_mode: str = "any",
+    day_bars: int = 1000,
+    m60_bars: int = 600,
+    m15_bars: int = 600,
+) -> GeneratedBundle:
     reuse_existing_base = _should_reuse_existing_base(holding, skip_gen_base)
     if holding.market == "CN":
         mixed_stdout = _run_command(
@@ -215,7 +247,13 @@ def generate_bundle(holding: Holding, *, skip_gen_base: bool = True) -> Generate
             ]
         )
 
-    _generate_all_timeframe_charts(holding)
+    _generate_all_timeframe_charts(
+        holding,
+        pending_reverse_mode=pending_reverse_mode,
+        day_bars=day_bars,
+        m60_bars=m60_bars,
+        m15_bars=m15_bars,
+    )
 
     symbol_dir = ROOT / "data" / "reports" / (holding.symbol.zfill(5) if holding.market == "HK" else holding.symbol)
     m60_dir = symbol_dir / "60m"
@@ -281,7 +319,14 @@ def main() -> None:
     print(f"holdings={len(holdings)}")
     for index, holding in enumerate(holdings, start=1):
         print(f"generating {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name}", flush=True)
-        bundle = generate_bundle(holding, skip_gen_base=args.skip_gen_base)
+        bundle = generate_bundle(
+            holding,
+            skip_gen_base=args.skip_gen_base,
+            pending_reverse_mode=args.pending_reverse_mode,
+            day_bars=args.day_bars,
+            m60_bars=args.m60_bars,
+            m15_bars=args.m15_bars,
+        )
         print(
             f"generated {holding.symbol} bucket={bundle.combined_bucket} chart_svg={bundle.chart_svg} chart_jpg={bundle.chart_jpg}",
             flush=True,

@@ -96,6 +96,28 @@
 - [docs/hk-minute-data-source.md](docs/hk-minute-data-source.md)
 - [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
 
+## 批量刷新入口
+
+当前批量刷新与发布建议优先走这两个入口：
+
+- `bin/run.bat`: 面向全持仓刷新，内部固定追加 `--latest-only`
+- `bin/runone.bat SYMBOL ...`: 面向单标的刷新，内部固定追加 `--symbols SYMBOL --latest-only`
+
+这两个入口当前都支持把结构识别和抓取窗口参数继续透传到 [scripts/refresh_holdings_publish_to_cloudbase.py](scripts/refresh_holdings_publish_to_cloudbase.py) 再传给缠论图生成链路，常用参数包括：
+
+- `--pending-reverse-mode {any|effective_only|tail_mixed}`
+- `--day-bars 1000`
+- `--m60-bars 600`
+- `--m15-bars 600`
+- `--skip-build`
+- `--skip-upload`
+
+示例：
+
+```powershell
+bin\runone.bat 000591 --pending-reverse-mode tail_mixed --day-bars 1000 --m60-bars 800 --m15-bars 1200 --skip-build --skip-upload
+```
+
 ## 当前目录约定
 
 当前默认按下面的目录协议维护持仓与报告：

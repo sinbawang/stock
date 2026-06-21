@@ -19,7 +19,11 @@ from report_retention import prune_older_outputs
 
 from chanlun.bi import identify_bis
 from chanlun.chart_export import save_structure_charts
-from chanlun.default_ranges import default_structure_start
+from chanlun.default_ranges import (
+    default_day_start_for_bar_target,
+    default_intraday_start_for_bar_target,
+    default_structure_start,
+)
 from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
 from chanlun.data.hk_fetcher import fetch_hk_daily, save_to_csv as save_hk_daily_csv
@@ -99,9 +103,12 @@ def _data_fetch_payload(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="批量生成最新日线、60M、15M 缠论图、分析文本、操作建议，并可选发送到当前微信会话")
-    parser.add_argument("--day-start", default=default_structure_start("day"), help="日线起始日期")
-    parser.add_argument("--m60-start", default=default_structure_start("60m"), help="60M 起始时间")
-    parser.add_argument("--m15-start", default=default_structure_start("15m"), help="15M 起始时间")
+    parser.add_argument("--day-start", default=None, help="日线起始日期；未指定时按日线根数自动回推")
+    parser.add_argument("--day-bars", type=int, default=1000, help="日线抓取目标根数，默认 1000")
+    parser.add_argument("--m60-start", default=None, help="60M 起始时间；未指定时按 60M 根数自动回推")
+    parser.add_argument("--m60-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="60M 抓取目标根数，默认 600")
+    parser.add_argument("--m15-start", default=None, help="15M 起始时间；未指定时按 15M 根数自动回推")
+    parser.add_argument("--m15-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="15M 抓取目标根数，默认 600")
     parser.add_argument(
         "--holdings-file",
         default=str(DEFAULT_HOLDINGS_FILE),
@@ -160,15 +167,15 @@ def load_securities(holdings_file: Path | None = None) -> list[Security]:
     return list(dedup.values()) or SECURITIES
 
 
-def fetch_day_rows(security: Security, start: str) -> tuple[list[dict], dict[str, object]]:
+def fetch_day_rows(security: Security, start: str, day_bars: int) -> tuple[list[dict], dict[str, object]]:
     if security.market == "HK":
-        rows = fetch_hk_daily(security.symbol, start=start)
-        return rows, _data_fetch_payload("tencent.hk_daily", rows, None)
-    rows = fetch_kline(security.symbol, start=start, interval="day")
-    return rows, _data_fetch_payload("tencent.day", rows, None)
+        rows = fetch_hk_daily(security.symbol, start=start, limit=day_bars)
+        return rows, _data_fetch_payload("tencent.hk_daily", rows, day_bars)
+    rows = fetch_kline(security.symbol, start=start, interval="day", limit=day_bars)
+    return rows, _data_fetch_payload("tencent.day", rows, day_bars)
 
 
-def fetch_m60_rows(security: Security, start: str) -> tuple[list[dict], dict[str, object]]:
+def fetch_m60_rows(security: Security, start: str, m60_bars: int) -> tuple[list[dict], dict[str, object]]:
     if security.market == "HK":
         primary_source, fallback_sources, _ = resolve_hk_minute_source_selection()
         rows, _ = fetch_hk_minute_with_policy(
@@ -178,29 +185,29 @@ def fetch_m60_rows(security: Security, start: str) -> tuple[list[dict], dict[str
             adjust="",
             primary_source=primary_source,
             fallback_sources=fallback_sources,
-            min_rows=INTRADAY_SOURCE_PROBE_ROWS,
+            min_rows=m60_bars,
         )
         fetch_meta = get_last_hk_fetch_metadata()
         return rows, _data_fetch_payload(
             describe_source_chain(primary_source, fallback_sources),
             rows,
-            None,
+            m60_bars,
             actual_source=str(fetch_meta.get("actual_source") or primary_source),
             source_attempts=list(fetch_meta.get("source_attempts") or []),
         )
     fetch_source, _ = resolve_a_share_intraday_source_label()
-    rows = fetch_kline(security.symbol, start=start, interval="m60", min_rows=INTRADAY_SOURCE_PROBE_ROWS)
+    rows = fetch_kline(security.symbol, start=start, interval="m60", limit=m60_bars, min_rows=m60_bars)
     fetch_meta = get_last_fetch_metadata()
     return rows, _data_fetch_payload(
         fetch_source,
         rows,
-        None,
+        m60_bars,
         actual_source=str(fetch_meta.get("actual_source") or fetch_source),
         source_attempts=list(fetch_meta.get("source_attempts") or []),
     )
 
 
-def fetch_m15_rows(security: Security, start: str) -> tuple[list[dict], dict[str, object]]:
+def fetch_m15_rows(security: Security, start: str, m15_bars: int) -> tuple[list[dict], dict[str, object]]:
     if security.market == "HK":
         primary_source, fallback_sources, _ = resolve_hk_minute_source_selection()
         rows, _ = fetch_hk_minute_with_policy(
@@ -210,23 +217,23 @@ def fetch_m15_rows(security: Security, start: str) -> tuple[list[dict], dict[str
             adjust="",
             primary_source=primary_source,
             fallback_sources=fallback_sources,
-            min_rows=INTRADAY_SOURCE_PROBE_ROWS,
+            min_rows=m15_bars,
         )
         fetch_meta = get_last_hk_fetch_metadata()
         return rows, _data_fetch_payload(
             describe_source_chain(primary_source, fallback_sources),
             rows,
-            None,
+            m15_bars,
             actual_source=str(fetch_meta.get("actual_source") or primary_source),
             source_attempts=list(fetch_meta.get("source_attempts") or []),
         )
     fetch_source, _ = resolve_a_share_intraday_source_label()
-    rows = fetch_kline(security.symbol, start=start, interval="m15", min_rows=INTRADAY_SOURCE_PROBE_ROWS)
+    rows = fetch_kline(security.symbol, start=start, interval="m15", limit=m15_bars, min_rows=m15_bars)
     fetch_meta = get_last_fetch_metadata()
     return rows, _data_fetch_payload(
         fetch_source,
         rows,
-        None,
+        m15_bars,
         actual_source=str(fetch_meta.get("actual_source") or fetch_source),
         source_attempts=list(fetch_meta.get("source_attempts") or []),
     )
@@ -678,6 +685,9 @@ def send_batch_current_chat(
 
 def main() -> None:
     args = parse_args()
+    day_start = args.day_start or default_day_start_for_bar_target(args.day_bars)
+    m60_start = args.m60_start or default_intraday_start_for_bar_target("60m", args.m60_bars)
+    m15_start = args.m15_start or default_intraday_start_for_bar_target("15m", args.m15_bars)
     securities = load_securities(Path(args.holdings_file) if args.holdings_file else None)
     bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]] = []
     summary_path: Path | None = None
@@ -689,9 +699,9 @@ def main() -> None:
             print(f"Loaded {security.name}")
     else:
         for security in securities:
-            day_rows, day_fetch = fetch_day_rows(security, args.day_start)
-            m60_rows, m60_fetch = fetch_m60_rows(security, args.m60_start)
-            m15_rows, m15_fetch = fetch_m15_rows(security, args.m15_start)
+            day_rows, day_fetch = fetch_day_rows(security, day_start, args.day_bars)
+            m60_rows, m60_fetch = fetch_m60_rows(security, m60_start, args.m60_bars)
+            m15_rows, m15_fetch = fetch_m15_rows(security, m15_start, args.m15_bars)
 
             day_case = export_case(
                 security,
