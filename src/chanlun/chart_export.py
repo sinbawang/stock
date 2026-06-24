@@ -21,6 +21,11 @@ _PREFERRED_CJK_FONTS = (
     "WenQuanYi Zen Hei",
 )
 _FONT_CONFIGURED = False
+_STRUCTURE_CHART_HEIGHT = 10.0
+_STRUCTURE_CHART_MIN_WIDTH = 14.0
+_STRUCTURE_CHART_MAX_WIDTH = 32.0
+_STRUCTURE_CHART_BASE_WIDTH = 8.0
+_STRUCTURE_CHART_WIDTH_PER_BAR = 0.12
 
 
 def _configure_matplotlib_cjk_font() -> str | None:
@@ -46,6 +51,14 @@ def _configure_matplotlib_cjk_font() -> str | None:
     return None
 
 
+def structure_chart_figsize(bar_count: int) -> tuple[float, float]:
+    """Return a fixed-height, variable-width figure size for structure charts."""
+    normalized_count = max(bar_count, 0)
+    width = _STRUCTURE_CHART_BASE_WIDTH + normalized_count * _STRUCTURE_CHART_WIDTH_PER_BAR
+    width = max(_STRUCTURE_CHART_MIN_WIDTH, min(width, _STRUCTURE_CHART_MAX_WIDTH))
+    return (width, _STRUCTURE_CHART_HEIGHT)
+
+
 def save_structure_charts(
     *,
     bars: list[Bar],
@@ -60,7 +73,7 @@ def save_structure_charts(
 ) -> None:
     """Render the unified structure chart to svg/png/jpg artifacts."""
     _configure_matplotlib_cjk_font()
-    plotter = Plotter(figsize=(16, 10))
+    plotter = Plotter(figsize=structure_chart_figsize(len(bars)))
     segments = identify_segments(bis)
     confirmed_fractal_ids = {
         fractal_id

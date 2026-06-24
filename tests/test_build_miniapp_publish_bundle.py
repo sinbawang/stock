@@ -77,8 +77,8 @@ def test_generate_bundle_writes_index_groups_and_stock_payloads(tmp_path: Path) 
         stock_dir = reports_root / symbol
         (stock_dir / "60m").mkdir(parents=True)
         (stock_dir / "15m").mkdir(parents=True)
-        (stock_dir / "60m" / "structure.jpg").write_text("jpg60", encoding="utf-8")
-        (stock_dir / "15m" / "structure.jpg").write_text("jpg15", encoding="utf-8")
+        (stock_dir / "60m" / "structure.svg").write_text("<svg>60m</svg>", encoding="utf-8")
+        (stock_dir / "15m" / "structure.svg").write_text("<svg>15m</svg>", encoding="utf-8")
         (stock_dir / "base.json").write_text(
             json.dumps(
                 {
@@ -207,7 +207,7 @@ Generated at: 2026-05-30T20:05:52
 
     detail_payload = json.loads((latest_dir / "stocks" / "00700" / "detail.json").read_text(encoding="utf-8"))
     assert detail_payload["headline"]["priority"] == "P1"
-    assert detail_payload["charts"][0]["path"] == "stocks/00700/charts/60m.jpg"
+    assert detail_payload["charts"][0]["path"] == "stocks/00700/charts/60m.svg"
 
     a_share_group = json.loads((latest_dir / "groups" / "a_share.json").read_text(encoding="utf-8"))
     assert a_share_group["sections"][1]["items"][0]["symbol"] == "000651"
@@ -215,5 +215,5 @@ Generated at: 2026-05-30T20:05:52
     portfolio_group = json.loads((latest_dir / "groups" / "portfolio.json").read_text(encoding="utf-8"))
     assert portfolio_group["sections"][0]["items"][0]["symbol"] == "00700"
 
-    assert (latest_dir / "stocks" / "000651" / "charts" / "60m.jpg").exists()
-    assert (snapshot_dir / "stocks" / "00700" / "charts" / "15m.jpg").exists()
+    assert (latest_dir / "stocks" / "000651" / "charts" / "60m.svg").exists()
+    assert (snapshot_dir / "stocks" / "00700" / "charts" / "15m.svg").exists()

@@ -24,6 +24,8 @@ class Plotter:
         self.down_color = '#26a69a'
         self.bi_color = '#33c3ff'
         self.segment_color = '#f7b500'
+        self.ma5_color = '#60a5fa'
+        self.ma10_color = '#f59e0b'
         self.dif_color = '#f0e040'
         self.dea_color = '#ff8c00'
         self.zero_color = '#808080'
@@ -57,6 +59,17 @@ class Plotter:
         histogram = dif - dea
         return dif, dea, histogram
 
+    @staticmethod
+    def _sma(values: List[float], period: int) -> np.ndarray:
+        averages = np.full(len(values), np.nan, dtype=float)
+        if period <= 0 or len(values) < period:
+            return averages
+
+        cumulative = np.cumsum(np.asarray(values, dtype=float))
+        cumulative[period:] = cumulative[period:] - cumulative[:-period]
+        averages[period - 1:] = cumulative[period - 1:] / period
+        return averages
+
     def _style_axis(self, ax, show_x: bool = False) -> None:
         ax.set_facecolor(self.panel_background)
         for spine in ax.spines.values():
@@ -66,6 +79,61 @@ class Plotter:
         ax.xaxis.label.set_color('#d0d0d0')
         ax.title.set_color('#f3f3f3')
         ax.grid(True, alpha=0.18, color='#666666', linestyle='--')
+
+    def _apply_time_axis(
+        self,
+        ax,
+        bars: List[Bar],
+        *,
+        max_ticks: int = 8,
+        time_format: str = "%m%d%H%M",
+        label_size: int = 7,
+    ) -> list[int]:
+        if not bars:
+            return []
+
+        tick_budget = max(max_ticks, 2)
+        step = max(1, int(np.ceil(len(bars) / tick_budget)))
+        tick_positions = list(range(0, len(bars), step))
+        last_index = len(bars) - 1
+        if tick_positions[-1] != last_index:
+            tick_positions.append(last_index)
+
+        tick_labels = [bars[index].ts.strftime(time_format) for index in tick_positions]
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels, rotation=0, ha='center', fontsize=label_size)
+        return tick_positions
+
+    def _draw_index_scale(
+        self,
+        ax,
+        tick_positions: List[int],
+        *,
+        label_size: int = 7,
+    ) -> None:
+        if not tick_positions:
+            return
+
+        for index in tick_positions:
+            ax.plot(
+                [index, index],
+                [0.0, -0.04],
+                transform=ax.get_xaxis_transform(),
+                color='#7a7a7a',
+                linewidth=0.7,
+                clip_on=False,
+            )
+            ax.text(
+                index,
+                -0.12,
+                str(index),
+                transform=ax.get_xaxis_transform(),
+                color='#bdbdbd',
+                fontsize=label_size,
+                ha='center',
+                va='top',
+                clip_on=False,
+            )
 
     def _normalized_index_to_bar_index(
         self,
@@ -105,6 +173,14 @@ class Plotter:
             height = abs(bar.close - bar.open)
             ax.bar(i, height, width=0.6, bottom=min(bar.open, bar.close), color=color)
 
+    def _draw_moving_averages(self, ax, bars: List[Bar]) -> None:
+        closes = [bar.close for bar in bars]
+        x = np.arange(len(bars))
+        ma5 = self._sma(closes, 5)
+        ma10 = self._sma(closes, 10)
+        ax.plot(x, ma5, color=self.ma5_color, linewidth=1.2, alpha=0.95, label='MA5', zorder=2)
+        ax.plot(x, ma10, color=self.ma10_color, linewidth=1.2, alpha=0.95, label='MA10', zorder=2)
+
     def _draw_fractals(
         self,
         ax,
@@ -113,6 +189,12 @@ class Plotter:
         normalized_bars: Optional[List[NormalizedBar]],
         confirmed_fractal_ids: Optional[set[int]] = None,
     ) -> None:
+        if bars:
+            price_span = max(bar.high for bar in bars) - min(bar.low for bar in bars)
+        else:
+            price_span = 0.0
+        price_offset = max(price_span * 0.015, 0.08)
+
         for fractal in fractals:
             bar_index = self._normalized_index_to_bar_index(
                 bars,
@@ -125,8 +207,32 @@ class Plotter:
             alpha = 1.0 if is_confirmed else 0.55
             if fractal.is_top():
                 ax.text(bar_index, bar.high, '▼', color='#ff6b6b', fontsize=fontsize, alpha=alpha, ha='center', va='bottom')
+                if is_confirmed:
+                    ax.text(
+                        bar_index,
+                        bar.high + price_offset,
+                        f"{bar.high:.2f}",
+                        color='#ffb4b4',
+                        fontsize=7,
+                        alpha=0.92,
+                        ha='center',
+                        va='bottom',
+                        zorder=5,
+                    )
             else:
                 ax.text(bar_index, bar.low, '▲', color='#4ecdc4', fontsize=fontsize, alpha=alpha, ha='center', va='top')
+                if is_confirmed:
+                    ax.text(
+                        bar_index,
+                        bar.low - price_offset,
+                        f"{bar.low:.2f}",
+                        color='#9ff3eb',
+                        fontsize=7,
+                        alpha=0.92,
+                        ha='center',
+                        va='top',
+                        zorder=5,
+                    )
 
     def _draw_bis(
         self,
@@ -374,18 +480,23 @@ class Plotter:
         fig.patch.set_facecolor(self.background)
 
         self._draw_bars(price_ax, bars)
+        self._draw_moving_averages(price_ax, bars)
         self._draw_zhongshus(price_ax, bars, zhongshus, bis, segments, normalized_bars)
         self._draw_segments(price_ax, bars, segments, normalized_bars, show_segment_ids=show_segment_ids)
         self._draw_bis(price_ax, bars, bis, normalized_bars)
         self._draw_fractals(price_ax, bars, fractals, normalized_bars, confirmed_fractal_ids)
         self._draw_macd(macd_ax, bars)
 
-        self._style_axis(price_ax, show_x=False)
-        self._style_axis(macd_ax, show_x=True)
+        self._style_axis(price_ax, show_x=True)
+        self._style_axis(macd_ax, show_x=False)
+        tick_positions = self._apply_time_axis(price_ax, bars)
+        self._draw_index_scale(macd_ax, tick_positions)
+        price_ax.tick_params(axis='x', pad=2)
+        macd_ax.tick_params(axis='x', labelbottom=False)
 
         price_ax.set_title(title)
         price_ax.set_ylabel("Price")
-        macd_ax.set_xlabel("Bar Index")
+        macd_ax.set_xlabel("")
 
-        fig.subplots_adjust(left=0.06, right=0.98, top=0.95, bottom=0.08, hspace=0.04)
+        fig.subplots_adjust(left=0.06, right=0.98, top=0.95, bottom=0.08, hspace=0.08)
         return fig

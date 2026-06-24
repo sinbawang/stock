@@ -89,6 +89,13 @@ def safe_text(value: Any, default: str = "") -> str:
     return str(value).strip()
 
 
+def chart_publish_path(charts: list[dict[str, str]], timeframe: str) -> str | None:
+    for chart in charts:
+        if chart.get("timeframe") == timeframe:
+            return chart.get("relative_path")
+    return None
+
+
 def maybe_float(value: Any) -> float | None:
     if value is None:
         return None
@@ -283,14 +290,17 @@ def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
 def build_chart_specs(stock_dir: Path) -> list[dict[str, str]]:
     charts: list[dict[str, str]] = []
     for timeframe in ("60m", "15m", "day"):
-        chart_path = stock_dir / timeframe / "structure.jpg"
-        if chart_path.exists():
+        for extension in ("svg", "jpg", "png"):
+            chart_path = stock_dir / timeframe / f"structure.{extension}"
+            if not chart_path.exists():
+                continue
             charts.append({
                 "timeframe": timeframe,
                 "source_path": str(chart_path),
-                "relative_path": f"charts/{timeframe}.jpg",
+                "relative_path": f"charts/{timeframe}.{extension}",
                 "label": f"{timeframe.upper()} 结构图",
             })
+            break
     return charts
 
 
@@ -302,6 +312,7 @@ def build_summary_payload(holding: Holding, stock_dir: Path, group_item: dict[st
     fund_summary = fund_payload.get("summary") or {}
     tech_summary = tech_payload.get("summary") or {}
     charts = build_chart_specs(stock_dir)
+    cover_chart_path = chart_publish_path(charts, "60m")
     updated_at = max(
         safe_text(base_payload.get("generated_at")),
         safe_text(fund_payload.get("generated_at")),
@@ -340,7 +351,7 @@ def build_summary_payload(holding: Holding, stock_dir: Path, group_item: dict[st
                 "summary": first_non_empty(fund_summary.get("comment"), (fund_payload.get("scorecard") or {}).get("combined_comment")),
             },
         },
-        "cover_chart": {"timeframe": "60m", "path": f"stocks/{holding.symbol}/charts/60m.jpg"} if any(chart["timeframe"] == "60m" for chart in charts) else None,
+        "cover_chart": {"timeframe": "60m", "path": f"stocks/{holding.symbol}/{cover_chart_path}"} if cover_chart_path else None,
         "jump": {"detail": f"stocks/{holding.symbol}/detail.json"},
         "tags": [value for value in [group_item.get("bucket") if group_item else None, group_item.get("priority") if group_item else None, group_item.get("action") if group_item else None] if value],
     }

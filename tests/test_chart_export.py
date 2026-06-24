@@ -79,3 +79,12 @@ def test_save_structure_charts_writes_all_formats(tmp_path: Path) -> None:
     assert svg_path.exists()
     assert png_path.exists()
     assert jpg_path.exists()
+
+
+def test_structure_chart_figsize_scales_width_with_bar_count() -> None:
+    assert chart_export.structure_chart_figsize(0) == (14.0, 10.0)
+    assert chart_export.structure_chart_figsize(50) == (14.0, 10.0)
+    assert chart_export.structure_chart_figsize(60) == (15.2, 10.0)
+    assert chart_export.structure_chart_figsize(90) == (18.799999999999997, 10.0)
+    assert chart_export.structure_chart_figsize(120) == (22.4, 10.0)
+    assert chart_export.structure_chart_figsize(400) == (32.0, 10.0)
