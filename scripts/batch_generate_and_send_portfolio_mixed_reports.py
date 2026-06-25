@@ -54,7 +54,7 @@ class ExistingBasePeriods:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate latest mixed reports and 60M charts for all holdings, then send the three raw briefs as text to the current WeChat chat.")
+    parser = argparse.ArgumentParser(description="Generate latest mixed reports and day/60M/30M/15M/5M charts for all holdings, then send the three raw briefs as text to the current WeChat chat.")
     parser.add_argument("--holdings-file", default=str(DEFAULT_HOLDINGS_FILE), help="Combined holdings JSON file")
     parser.add_argument("--text-chunk-chars", type=int, default=DEFAULT_TEXT_CHUNK_CHARS, help="Max chars per text chunk before adding the message label")
     parser.add_argument("--limit", type=int, default=None, help="Optional max holding count for validation")
@@ -75,7 +75,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--day-bars", type=int, default=1000, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
     parser.add_argument("--m60-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 60M K-line fetch count.")
+    parser.add_argument("--m30-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 30M K-line fetch count.")
     parser.add_argument("--m15-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
+    parser.add_argument("--m5-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 5M K-line fetch count.")
     parser.add_argument("--zhongshu-level", choices=("bi", "segment"), default="bi", help="Forwarded to batch_prepare_chanlun_reports.py to switch between bi and segment zhongshu rendering.")
     return parser.parse_args()
 
@@ -146,7 +148,9 @@ def _generate_all_timeframe_charts(
     pending_reverse_mode: str = "any",
     day_bars: int = 1000,
     m60_bars: int = 600,
+    m30_bars: int = 600,
     m15_bars: int = 600,
+    m5_bars: int = 600,
     zhongshu_level: str = "bi",
 ) -> None:
     with tempfile.TemporaryDirectory(prefix="single_holding_", dir=str(ROOT / "data" / "_meta")) as temp_dir:
@@ -168,8 +172,12 @@ def _generate_all_timeframe_charts(
                 str(day_bars),
                 "--m60-bars",
                 str(m60_bars),
+                "--m30-bars",
+                str(m30_bars),
                 "--m15-bars",
                 str(m15_bars),
+                "--m5-bars",
+                str(m5_bars),
                 "--zhongshu-level",
                 zhongshu_level,
             ]
@@ -221,7 +229,9 @@ def generate_bundle(
     pending_reverse_mode: str = "any",
     day_bars: int = 1000,
     m60_bars: int = 600,
+    m30_bars: int = 600,
     m15_bars: int = 600,
+    m5_bars: int = 600,
     zhongshu_level: str = "bi",
 ) -> GeneratedBundle:
     reuse_existing_base = _should_reuse_existing_base(holding, skip_gen_base)
@@ -257,7 +267,9 @@ def generate_bundle(
         pending_reverse_mode=pending_reverse_mode,
         day_bars=day_bars,
         m60_bars=m60_bars,
+        m30_bars=m30_bars,
         m15_bars=m15_bars,
+        m5_bars=m5_bars,
         zhongshu_level=zhongshu_level,
     )
 
@@ -331,7 +343,9 @@ def main() -> None:
             pending_reverse_mode=args.pending_reverse_mode,
             day_bars=args.day_bars,
             m60_bars=args.m60_bars,
+            m30_bars=args.m30_bars,
             m15_bars=args.m15_bars,
+            m5_bars=args.m5_bars,
             zhongshu_level=args.zhongshu_level,
         )
         print(

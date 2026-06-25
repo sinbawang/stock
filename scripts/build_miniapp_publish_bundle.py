@@ -289,7 +289,7 @@ def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
 
 def build_chart_specs(stock_dir: Path) -> list[dict[str, str]]:
     charts: list[dict[str, str]] = []
-    for timeframe in ("60m", "15m", "day"):
+    for timeframe in ("60m", "30m", "15m", "5m", "day"):
         for extension in ("svg", "jpg", "png"):
             chart_path = stock_dir / timeframe / f"structure.{extension}"
             if not chart_path.exists():

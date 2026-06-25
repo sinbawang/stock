@@ -65,7 +65,7 @@ def test_generate_bundle_runs_three_timeframe_chart_pipeline(monkeypatch, tmp_pa
                     "HK": [{"symbol": "00728", "name": "中国电信"}],
                 }
             }
-            for timeframe in ("day", "60m", "15m"):
+            for timeframe in ("day", "60m", "30m", "15m", "5m"):
                 timeframe_dir = report_root / timeframe
                 timeframe_dir.mkdir(parents=True, exist_ok=True)
                 (timeframe_dir / "structure.jpg").write_text("jpg", encoding="utf-8")
@@ -85,7 +85,11 @@ def test_generate_bundle_runs_three_timeframe_chart_pipeline(monkeypatch, tmp_pa
     assert commands[1][2] == "--holdings-file"
     assert "--zhongshu-level" in commands[1]
     assert commands[1][commands[1].index("--zhongshu-level") + 1] == "bi"
+    assert "--m30-bars" in commands[1]
+    assert "--m5-bars" in commands[1]
     assert bundle.chart_jpg == report_root / "60m" / "structure.jpg"
     assert bundle.chart_svg == report_root / "60m" / "structure.svg"
     assert (report_root / "day" / "structure.jpg").exists()
+    assert (report_root / "30m" / "structure.jpg").exists()
     assert (report_root / "15m" / "structure.jpg").exists()
+    assert (report_root / "5m" / "structure.jpg").exists()

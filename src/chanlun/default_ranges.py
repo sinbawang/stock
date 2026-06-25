@@ -9,7 +9,9 @@ from datetime import datetime, timedelta
 _LOOKBACK_DAYS = {
     "day": 1000,
     "60m": 300,
+    "30m": 180,
     "15m": 120,
+    "5m": 30,
 }
 
 _DAY_BAR_TO_CALENDAR_DAYS = 1.6
@@ -34,7 +36,7 @@ def default_intraday_start_for_bar_target(
 ) -> str:
     """Approximate an intraday start time that usually covers the requested bar count."""
     normalized = timeframe.strip().lower()
-    if normalized not in {"60m", "15m"}:
+    if normalized not in {"60m", "30m", "15m", "5m"}:
         raise ValueError(f"Unsupported intraday timeframe: {timeframe}")
     if bar_count <= 0:
         raise ValueError(f"bar_count must be positive, got {bar_count}")
@@ -51,7 +53,7 @@ def default_structure_start(timeframe: str, now: datetime | None = None) -> str:
     """Return a conservative dynamic default start time for structure charts.
 
     Chart pipelines fetch by time window rather than exact bar count. These
-    calendar lookbacks are chosen so the default day/60m/15m windows typically
+    calendar lookbacks are chosen so the default day/60m/30m/15m/5m windows typically
     cover at least about 600 K-lines across A-share and HK sessions.
     """
     normalized = timeframe.strip().lower()
