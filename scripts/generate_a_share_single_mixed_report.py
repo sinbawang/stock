@@ -260,7 +260,13 @@ def _save_technical_report(
         window_basis_label = precision_window_display.get("label") if precision_window_display else None
         if window_basis_label:
             advice_text += f"\n区间套窗口：{window_basis_label}"
-    summary_payload = build_technical_summary(PRIMARY_TECHNICAL_LABEL, signals, advice_text)
+    summary_payload = build_technical_summary(
+        PRIMARY_TECHNICAL_LABEL,
+        signals,
+        advice_text,
+        raw_bars=raw_bars,
+        precision_entry=precision_entry,
+    )
     if precision_entry is not None:
         summary_payload["precision_entry"] = precision_entry
         summary_payload["precision_window_display"] = precision_window_display

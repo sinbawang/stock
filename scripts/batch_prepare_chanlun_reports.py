@@ -270,11 +270,140 @@ def extract_signals(bis, zhongshus, macd_points, *, raw_bars=None) -> dict[str, 
     return analyze_chanlun_signals(raw_bars or [], bis, zhongshus, macd_points)
 
 
-def build_technical_summary(timeframe_label: str, signals: dict[str, object], advice_text: str) -> dict[str, object]:
+def _clamp_score(value: int | float) -> int:
+    return max(0, min(100, int(round(value))))
+
+
+def _technical_rating(score: int) -> str:
+    if score >= 80:
+        return "A"
+    if score >= 65:
+        return "B"
+    if score >= 45:
+        return "C"
+    return "D"
+
+
+def _technical_bias(conclusion: str | None) -> str | None:
+    text = (conclusion or "").strip()
+    for prefix in ("偏多", "偏强", "震荡", "偏弱", "偏空"):
+        if text.startswith(prefix):
+            return prefix
+    return text.split("，", 1)[0] if text else None
+
+
+def _score_structure_component(signals: dict[str, object]) -> int:
+    structure_state = signals.get("structure_state") or {}
+    ongoing = structure_state.get("current_ongoing") or {}
+    ongoing_type = ongoing.get("type")
+    score = 10
+    if ongoing_type in {"up", "down"}:
+        score = 20
+    elif ongoing_type == "range":
+        score = 14
+    if signals.get("current_zs") is not None:
+        score += 6
+    relationship_kind = ((structure_state.get("relationship") or {}).get("kind") or "").strip()
+    if relationship_kind and relationship_kind != "undetermined":
+        score += 4
+    if signals.get("buy_points") or signals.get("sell_points"):
+        score += 2
+    return min(score, 30)
+
+
+def _score_location_component(raw_bars, signals: dict[str, object]) -> int:
+    current_zs = signals.get("current_zs")
+    close_price = getattr(raw_bars[-1], "close", None) if raw_bars else None
+    if current_zs is None or close_price is None:
+        return 10
+    if signals.get("buy_points"):
+        return 18
+    if signals.get("sell_points"):
+        return 17
+    if close_price >= current_zs.zs_high:
+        return 15
+    if close_price <= current_zs.zs_low:
+        return 7
+    return 11
+
+
+def _score_signal_component(signals: dict[str, object]) -> int:
+    active_points = [str(point) for point in [*(signals.get("buy_points") or []), *(signals.get("sell_points") or [])]]
+    if not active_points:
+        return 10
+    strength_map = {
+        "buy_1": 20,
+        "buy_2": 22,
+        "buy_3": 18,
+        "sell_1": 20,
+        "sell_2": 22,
+        "sell_3": 18,
+    }
+    return max(strength_map.get(point, 10) for point in active_points)
+
+
+def _score_divergence_component(signals: dict[str, object]) -> int:
+    divergence = signals.get("divergence") or {}
+    if (divergence.get("trend") or {}).get("active"):
+        return 15
+    if (divergence.get("range") or {}).get("active"):
+        return 11
+    if (divergence.get("top") or {}).get("active") or (divergence.get("bottom") or {}).get("active"):
+        return 8
+    return 4
+
+
+def _score_execution_component(precision_entry: dict[str, object] | None) -> int:
+    if not precision_entry:
+        return 0
+    if precision_entry.get("status") == "actionable":
+        return 10
+    if precision_entry.get("status") == "watch":
+        return 5
+    return 3
+
+
+def build_technical_score_summary(
+    raw_bars,
+    signals: dict[str, object],
+    *,
+    conclusion: str | None,
+    precision_entry: dict[str, object] | None = None,
+) -> dict[str, object]:
+    structure = _score_structure_component(signals)
+    location = _score_location_component(raw_bars, signals)
+    signal = _score_signal_component(signals)
+    divergence = _score_divergence_component(signals)
+    execution = _score_execution_component(precision_entry)
+    score = _clamp_score(structure + location + signal + divergence + execution)
+    return {
+        "score": score,
+        "rating": _technical_rating(score),
+        "bias": _technical_bias(conclusion),
+        "score_breakdown": {
+            "structure": structure,
+            "location": location,
+            "signal": signal,
+            "divergence": divergence,
+            "execution": execution,
+        },
+    }
+
+
+def build_technical_summary(
+    timeframe_label: str,
+    signals: dict[str, object],
+    advice_text: str,
+    *,
+    raw_bars=None,
+    precision_entry: dict[str, object] | None = None,
+) -> dict[str, object]:
+    conclusion = _extract_prefixed_value_from_text(advice_text, "结论：") or None
     return {
         "operation_level": timeframe_label,
-        "conclusion": _extract_prefixed_value_from_text(advice_text, "结论：") or None,
+        "conclusion": conclusion,
         "suggestion": _extract_prefixed_value_from_text(advice_text, "建议：") or None,
+        **build_technical_score_summary(raw_bars, signals, conclusion=conclusion, precision_entry=precision_entry),
         **build_signal_summary_fields(signals),
     }
 
@@ -429,7 +558,12 @@ def export_case(
         analysis_text = analysis_text.replace("60M", timeframe_label)
     signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
     advice_text = build_advice(security.name, timeframe_label, raw_bars, signals)
-    summary_payload = build_technical_summary(timeframe_label, signals, advice_text)
+    summary_payload = build_technical_summary(
+        timeframe_label,
+        signals,
+        advice_text,
+        raw_bars=raw_bars,
+    )
     report_text = analysis_text + "\n\n" + advice_text + "\n"
     latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
 

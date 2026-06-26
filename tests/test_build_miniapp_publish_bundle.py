@@ -124,6 +124,16 @@ def test_generate_bundle_writes_index_groups_and_stock_payloads(tmp_path: Path) 
                     "timeframe": "30m",
                     "source": "akshare.eastmoney",
                     "summary": {
+                        "score": 78,
+                        "rating": "B",
+                        "bias": "偏强",
+                        "score_breakdown": {
+                            "structure": 24,
+                            "location": 15,
+                            "signal": 22,
+                            "divergence": 11,
+                            "execution": 6,
+                        },
                         "conclusion": "偏强，持有为主。",
                         "suggestion": "继续持有",
                         "buy_points": ["buy2"],
@@ -263,6 +273,9 @@ Generated at: 2026-05-30T20:05:52
     index_payload = json.loads((latest_dir / "index.json").read_text(encoding="utf-8"))
     assert index_payload["counts"]["stocks"] == 2
     assert index_payload["stocks"][0]["symbol"] == "00700"
+    assert index_payload["stocks"][0]["technical_score"] == 78
+    assert index_payload["stocks"][0]["technical_rating"] == "B"
+    assert index_payload["stocks"][0]["technical_bias"] == "偏强"
 
     summary_payload = json.loads((latest_dir / "stocks" / "000651" / "summary.json").read_text(encoding="utf-8"))
     assert summary_payload["priority"] == "P2"
@@ -271,6 +284,10 @@ Generated at: 2026-05-30T20:05:52
     assert summary_payload["cards"]["technical"]["signal_descriptions"][0].startswith("二买，一买后回抽确认")
     assert summary_payload["cards"]["technical"]["timeframe"] == "30m"
     assert summary_payload["cards"]["technical"]["timeframe_label"] == "30M"
+    assert summary_payload["cards"]["technical"]["score"] == 78
+    assert summary_payload["cards"]["technical"]["rating"] == "B"
+    assert summary_payload["cards"]["technical"]["bias"] == "偏强"
+    assert summary_payload["cards"]["technical"]["score_breakdown"]["signal"] == 22
     assert summary_payload["cover_chart"]["timeframe"] == "30m"
     assert summary_payload["cards"]["technical"]["precision_entry"]["operation_level"] == "5M"
     assert summary_payload["cards"]["technical"]["precision_note"].startswith("5M 已出现二买")
@@ -307,6 +324,9 @@ Generated at: 2026-05-30T20:05:52
     ]
     assert detail_payload["sections"][1]["buy_point_labels"] == ["二买"]
     assert detail_payload["sections"][1]["signal_descriptions"][0].startswith("二买，一买后回抽确认")
+    assert detail_payload["sections"][1]["score"] == 78
+    assert detail_payload["sections"][1]["rating"] == "B"
+    assert detail_payload["sections"][1]["bias"] == "偏强"
     assert detail_payload["overview"]["bullets"][1].startswith("30M 技术面")
     assert detail_payload["sections"][1]["precision_entry"]["timeframe"] == "5m"
     assert detail_payload["sections"][1]["precision_window_basis_label"] == "中枢到锚点窗口"
@@ -325,7 +345,11 @@ Generated at: 2026-05-30T20:05:52
     assert a_share_group["sections"][1]["items"][0]["symbol"] == "000651"
 
     portfolio_group = json.loads((latest_dir / "groups" / "portfolio.json").read_text(encoding="utf-8"))
+    assert portfolio_group["counts"]["items"] == 2
     assert portfolio_group["sections"][0]["items"][0]["symbol"] == "00700"
+    assert portfolio_group["sections"][0]["items"][0]["technical_score"] == 78
+    assert portfolio_group["sections"][0]["items"][0]["technical_rating"] == "B"
+    assert portfolio_group["sections"][0]["items"][0]["technical_bias"] == "偏强"
 
     assert (latest_dir / "stocks" / "000651" / "charts" / "60m.svg").exists()
     assert (latest_dir / "stocks" / "000651" / "charts" / "30m.svg").exists()

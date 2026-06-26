@@ -16,7 +16,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import run_cn_60m_chanlun_to_wechat as cn_report
-from batch_prepare_chanlun_reports import build_advice
+from batch_prepare_chanlun_reports import build_advice, build_technical_summary
 
 
 @dataclass
@@ -151,3 +151,43 @@ def test_analyze_current_state_uses_human_readable_signal_names(monkeypatch) -> 
 
     assert "买点：二买" in text
     assert "信号细化：二买，一买后回抽确认，低点未再跌破前低，参考价 10.25，关联中枢 ZS2" in text
+
+
+def test_build_technical_summary_includes_action_value_score() -> None:
+    signals = {
+        "current_zs": _sample_zhongshu(),
+        "buy_points": ["buy_2"],
+        "sell_points": [],
+        "signal_points": [],
+        "signal_catalog": [],
+        "structure_state": {
+            "current_ongoing": {"type": "up"},
+            "relationship": {"kind": "completed_then_new_type_ongoing"},
+        },
+        "divergence": {
+            "trend": {"active": True},
+            "range": {"active": False},
+            "top": {"active": False},
+            "bottom": {"active": True},
+        },
+    }
+    raw_bars = [SimpleNamespace(close=10.2)]
+
+    summary = build_technical_summary(
+        "30M",
+        signals,
+        "结论：偏多，允许轻仓试错。\n建议：分批试仓。",
+        raw_bars=raw_bars,
+        precision_entry={"status": "actionable"},
+    )
+
+    assert summary["score"] == 95
+    assert summary["rating"] == "A"
+    assert summary["bias"] == "偏多"
+    assert summary["score_breakdown"] == {
+        "structure": 30,
+        "location": 18,
+        "signal": 22,
+        "divergence": 15,
+        "execution": 10,
+    }

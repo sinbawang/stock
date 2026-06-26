@@ -113,6 +113,55 @@ def priority_rank(priority: str | None) -> int:
     return mapping.get((priority or "").strip(), 99)
 
 
+def bias_rank(bias: str | None) -> int:
+    mapping = {"偏多": 1, "偏强": 2, "震荡": 3, "偏弱": 4, "偏空": 5}
+    return mapping.get((bias or "").strip(), 9)
+
+
+def technical_sort_key(item: dict[str, Any]) -> tuple[int, int, int, str, str]:
+    technical_payload = item.get("cards", {}).get("technical", {}) if item.get("cards") else item.get("technical", {})
+    technical = technical_payload if isinstance(technical_payload, dict) else {}
+    score = technical.get("score") if technical else item.get("technical_score")
+    try:
+        numeric_score = int(score)
+    except (TypeError, ValueError):
+        numeric_score = -1
+    return (
+        priority_rank(item.get("priority")),
+        -numeric_score,
+        bias_rank(technical.get("bias") if technical else item.get("technical_bias")),
+        safe_text(item.get("updated_at")),
+        safe_text(item.get("symbol")),
+    )
+
+
+def build_portfolio_item(summary_payload: dict[str, Any], group_item: dict[str, Any] | None = None) -> dict[str, Any]:
+    technical = ((summary_payload.get("cards") or {}).get("technical") or {})
+    fundamental = ((summary_payload.get("cards") or {}).get("fundamental") or {})
+    capital_flow = ((summary_payload.get("cards") or {}).get("capital_flow") or {})
+    return {
+        "priority": (group_item or {}).get("priority") or summary_payload.get("priority"),
+        "action": (group_item or {}).get("action") or summary_payload.get("action"),
+        "symbol": summary_payload.get("symbol"),
+        "name": summary_payload.get("name"),
+        "market": summary_payload.get("market"),
+        "bucket": (group_item or {}).get("bucket") or summary_payload.get("bucket"),
+        "fundamental": f"{safe_text(fundamental.get('score'), 'missing')}/{safe_text(fundamental.get('rating'), 'missing')}",
+        "technical": safe_text(technical.get("conclusion"), "missing"),
+        "capital_flow": f"{safe_text(capital_flow.get('score'), 'missing')}/{safe_text(capital_flow.get('rating'), 'missing')}/{safe_text(capital_flow.get('source'), 'missing')}",
+        "comment": (group_item or {}).get("comment") or summary_payload.get("comment"),
+        "updated_at": summary_payload.get("updated_at"),
+        "summary": f"stocks/{summary_payload['symbol']}/summary.json",
+        "detail": f"stocks/{summary_payload['symbol']}/detail.json",
+        "cover_chart": (summary_payload.get("cover_chart") or {}).get("path"),
+        "technical_score": technical.get("score"),
+        "technical_rating": technical.get("rating"),
+        "technical_bias": technical.get("bias"),
+        "technical_score_breakdown": technical.get("score_breakdown") or {},
+        "tags": summary_payload.get("tags") or [],
+    }
+
+
 def parse_markdown_table_row(line: str) -> list[str]:
     return [cell.strip() for cell in line.strip().strip("|").split("|")]
 
@@ -401,6 +450,10 @@ def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
         "timeframe": tech_payload.get("timeframe") or PRIMARY_TECHNICAL_TIMEFRAME,
         "source": tech_payload.get("source"),
         "operation_level": summary.get("operation_level"),
+        "score": summary.get("score"),
+        "rating": summary.get("rating"),
+        "bias": summary.get("bias"),
+        "score_breakdown": summary.get("score_breakdown") or {},
         "conclusion": summary.get("conclusion"),
         "suggestion": summary.get("suggestion"),
         "buy_points": summary.get("buy_points") or [],
@@ -481,6 +534,10 @@ def build_summary_payload(holding: Holding, stock_dir: Path, group_item: dict[st
                 "timeframe": tech_payload.get("timeframe") or PRIMARY_TECHNICAL_TIMEFRAME,
                 "timeframe_label": PRIMARY_TECHNICAL_LABEL,
                 "operation_level": tech_summary.get("operation_level"),
+                "score": tech_summary.get("score"),
+                "rating": tech_summary.get("rating"),
+                "bias": tech_summary.get("bias"),
+                "score_breakdown": tech_summary.get("score_breakdown") or {},
                 "conclusion": tech_summary.get("conclusion"),
                 "suggestion": tech_summary.get("suggestion"),
                 "buy_points": tech_summary.get("buy_points") or [],
@@ -582,16 +639,13 @@ def copy_chart_assets(chart_specs: list[dict[str, str]], stock_target_dir: Path)
         shutil.copy2(source_path, target_path)
 
 
-def build_portfolio_group(group_payloads: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    items: list[dict[str, Any]] = []
-    for payload in group_payloads.values():
-        for section in payload.get("sections", []):
-            items.extend(section.get("items", []))
-    items.sort(key=lambda item: (priority_rank(item.get("priority")), item.get("symbol", "")))
+def build_portfolio_group(summary_payloads: list[dict[str, Any]], group_item_map: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    items = [build_portfolio_item(summary_payload, group_item_map.get(str(summary_payload.get("symbol")))) for summary_payload in summary_payloads]
+    items.sort(key=technical_sort_key)
     return {
         "schema_version": "v1",
         "group": "portfolio",
-        "generated_at": max((payload.get("generated_at") or "") for payload in group_payloads.values()) if group_payloads else "",
+        "generated_at": max((payload.get("updated_at") or "") for payload in summary_payloads) if summary_payloads else "",
         "counts": {"items": len(items)},
         "sections": [{"key": "portfolio", "title": "全部持仓", "items": items}],
         "notes": ["由 A 股与港股组合概览合并生成，仅用于原生小程序展示。"],
@@ -599,7 +653,7 @@ def build_portfolio_group(group_payloads: dict[str, dict[str, Any]]) -> dict[str
 
 
 def build_index_payload(summary_payloads: list[dict[str, Any]], generated_at: str) -> dict[str, Any]:
-    ordered = sorted(summary_payloads, key=lambda item: (priority_rank(item.get("priority")), item.get("market", ""), item.get("symbol", "")))
+    ordered = sorted(summary_payloads, key=technical_sort_key)
     return {
         "schema_version": "v1",
         "generated_at": generated_at,
@@ -624,6 +678,9 @@ def build_index_payload(summary_payloads: list[dict[str, Any]], generated_at: st
                 "summary": f"stocks/{item['symbol']}/summary.json",
                 "detail": f"stocks/{item['symbol']}/detail.json",
                 "cover_chart": item.get("cover_chart", {}).get("path") if item.get("cover_chart") else None,
+                "technical_score": ((item.get("cards") or {}).get("technical") or {}).get("score"),
+                "technical_rating": ((item.get("cards") or {}).get("technical") or {}).get("rating"),
+                "technical_bias": ((item.get("cards") or {}).get("technical") or {}).get("bias"),
                 "tags": item.get("tags", []),
             }
             for item in ordered
@@ -666,7 +723,7 @@ def generate_bundle(holdings_path: Path, reports_root: Path, publish_root: Path,
             write_json(stock_target_dir / "detail.json", detail_payload)
             copy_chart_assets(chart_specs, stock_target_dir)
 
-    portfolio_payload = build_portfolio_group(group_payloads)
+    portfolio_payload = build_portfolio_group(summary_payloads, group_item_map)
     generated_at = datetime.now().isoformat(timespec="seconds")
     index_payload = build_index_payload(summary_payloads, generated_at)
     for target in targets:
