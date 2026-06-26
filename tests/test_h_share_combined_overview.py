@@ -58,9 +58,9 @@ def test_h_share_combined_overview_marks_capital_flow_pending(tmp_path) -> None:
 """.strip(),
         encoding="utf-8",
     )
-    (tmp_path / "group888_60m_operation_summary_20260519_205731.txt").write_text(
+    (tmp_path / "group888_30m_operation_summary_20260519_205731.txt").write_text(
         """
-【全部持仓 60M 缠论综合操作建议】
+【全部持仓 30M 缠论综合操作建议】
 
 逐只建议：
 - 汇川技术(300124)：偏多，允许轻仓试错。 建议：A 股行不应进入港股技术 map。
@@ -108,9 +108,9 @@ def test_h_share_combined_overview_uses_latest_capital_flow_overview(tmp_path) -
 """.strip(),
         encoding="utf-8",
     )
-    (tmp_path / "group888_60m_operation_summary_20260519_205731.txt").write_text(
+    (tmp_path / "group888_30m_operation_summary_20260519_205731.txt").write_text(
         """
-【全部持仓 60M 缠论综合操作建议】
+【全部持仓 30M 缠论综合操作建议】
 
 逐只建议：
 - 腾讯(00700)：偏多，允许轻仓试错。 建议：分批试仓，跌破 445.80 则严格止损。
@@ -162,9 +162,9 @@ def test_h_share_combined_overview_shows_failed_capital_flow_status(tmp_path) ->
 """.strip(),
         encoding="utf-8",
     )
-    (tmp_path / "group888_60m_operation_summary_20260519_205731.txt").write_text(
+    (tmp_path / "group888_30m_operation_summary_20260519_205731.txt").write_text(
         """
-【全部持仓 60M 缠论综合操作建议】
+【全部持仓 30M 缠论综合操作建议】
 
 逐只建议：
 - 腾讯(00700)：偏多，允许轻仓试错。 建议：分批试仓。

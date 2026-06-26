@@ -17,6 +17,12 @@ if str(SCRIPTS) not in sys.path:
 
 from report_retention import prune_older_outputs
 
+from chanlun.analysis import (
+    analyze_chanlun_signals,
+    build_signal_explanation_lines,
+    build_signal_summary_fields,
+    format_signal_point_labels,
+)
 from chanlun.bi import identify_bis
 from chanlun.chart_export import save_structure_charts
 from chanlun.default_ranges import (
@@ -260,117 +266,16 @@ def save_rows(security: Security, timeframe: str, rows: list[dict], path: Path) 
         save_kline_csv(rows, str(path))
 
 
-def extract_signals(bis, zhongshus, macd_points) -> dict[str, object]:
-    confirmed_bis = [bi for bi in bis if bi.is_confirmed]
-    strengths = compute_bi_strengths(bis, macd_points)
-    latest_confirmed_up = next((bi for bi in reversed(confirmed_bis) if bi.is_up()), None)
-    previous_confirmed_up = None
-    if latest_confirmed_up is not None:
-        seen_latest = False
-        for bi in reversed(confirmed_bis):
-            if bi.bi_id == latest_confirmed_up.bi_id:
-                seen_latest = True
-                continue
-            if seen_latest and bi.is_up():
-                previous_confirmed_up = bi
-                break
-
-    latest_down = next((bi for bi in reversed(bis) if bi.is_down()), None)
-    top_divergence = False
-    if latest_confirmed_up and previous_confirmed_up:
-        last_strength = strengths.get(latest_confirmed_up.bi_id, {})
-        prev_strength = strengths.get(previous_confirmed_up.bi_id, {})
-        top_divergence = (
-            latest_confirmed_up.high > previous_confirmed_up.high
-            and last_strength.get("macd_sum_abs", 0.0) < prev_strength.get("macd_sum_abs", 0.0)
-        )
-
-    bottom_divergence = False
-    previous_confirmed_down = next((bi for bi in reversed(confirmed_bis) if bi.is_down()), None)
-    if latest_down and previous_confirmed_down and latest_down.bi_id != previous_confirmed_down.bi_id:
-        last_strength = strengths.get(latest_down.bi_id, {})
-        prev_strength = strengths.get(previous_confirmed_down.bi_id, {})
-        bottom_divergence = (
-            latest_down.low < previous_confirmed_down.low
-            and last_strength.get("macd_sum_abs", 0.0) < prev_strength.get("macd_sum_abs", 0.0)
-        )
-
-    current_zs = zhongshus[-1] if zhongshus else None
-    buy_points: list[str] = []
-    sell_points: list[str] = []
-    if current_zs and latest_down and bottom_divergence and latest_down.low <= current_zs.zs_low:
-        buy_points.append("buy_1")
-    if current_zs and latest_confirmed_up and top_divergence and latest_confirmed_up.high >= current_zs.zs_high:
-        sell_points.append("sell_1")
-    if current_zs and latest_confirmed_up and latest_confirmed_up.high > current_zs.zs_high and latest_down and latest_down.low >= current_zs.zs_high:
-        buy_points.append("buy_3")
-    if current_zs and latest_down and latest_down.low < current_zs.zs_low and latest_confirmed_up and latest_confirmed_up.high <= current_zs.zs_low:
-        sell_points.append("sell_3")
-    return {
-        "current_zs": current_zs,
-        "latest_confirmed_up": latest_confirmed_up,
-        "latest_down": latest_down,
-        "top_divergence": top_divergence,
-        "bottom_divergence": bottom_divergence,
-        "buy_points": buy_points,
-        "sell_points": sell_points,
-    }
-
-
-def _format_signal_point_name(point: str) -> str:
-    return point.replace("_", "")
-
-
-def _format_signal_point_time(bi) -> str | None:
-    if bi is None or getattr(bi, "end_ts", None) is None:
-        return None
-    return bi.end_ts.isoformat(timespec="seconds")
-
-
-def _build_signal_point_detail(point: str, signal_bi, price: float | None) -> dict[str, object]:
-    return {
-        "point": _format_signal_point_name(point),
-        "time": _format_signal_point_time(signal_bi),
-        "price": round(float(price), 2) if price is not None else None,
-    }
+def extract_signals(bis, zhongshus, macd_points, *, raw_bars=None) -> dict[str, object]:
+    return analyze_chanlun_signals(raw_bars or [], bis, zhongshus, macd_points)
 
 
 def build_technical_summary(timeframe_label: str, signals: dict[str, object], advice_text: str) -> dict[str, object]:
-    latest_up = signals.get("latest_confirmed_up")
-    latest_down = signals.get("latest_down")
-    buy_points = [str(point) for point in signals.get("buy_points", [])]
-    sell_points = [str(point) for point in signals.get("sell_points", [])]
-    signal_point_details: list[dict[str, object]] = []
-    signal_catalog: list[dict[str, object]] = []
-    active_points = set(buy_points + sell_points)
-
-    for point in buy_points:
-        signal_point_details.append(_build_signal_point_detail(point, latest_down, getattr(latest_down, "low", None)))
-    for point in sell_points:
-        signal_point_details.append(_build_signal_point_detail(point, latest_up, getattr(latest_up, "high", None)))
-    for point in ("buy_1", "buy_2", "buy_3"):
-        signal_catalog.append(
-            {
-                **_build_signal_point_detail(point, latest_down, getattr(latest_down, "low", None) if point in active_points else None),
-                "active": point in active_points,
-            }
-        )
-    for point in ("sell_1", "sell_2", "sell_3"):
-        signal_catalog.append(
-            {
-                **_build_signal_point_detail(point, latest_up, getattr(latest_up, "high", None) if point in active_points else None),
-                "active": point in active_points,
-            }
-        )
-
     return {
         "operation_level": timeframe_label,
         "conclusion": _extract_prefixed_value_from_text(advice_text, "结论：") or None,
         "suggestion": _extract_prefixed_value_from_text(advice_text, "建议：") or None,
-        "buy_points": [_format_signal_point_name(point) for point in buy_points],
-        "sell_points": [_format_signal_point_name(point) for point in sell_points],
-        "signal_points": signal_point_details,
-        "signal_catalog": signal_catalog,
+        **build_signal_summary_fields(signals),
     }
 
 
@@ -383,6 +288,9 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
     top_divergence = signals["top_divergence"]
     bottom_divergence = signals["bottom_divergence"]
     close_price = raw_bars[-1].close
+    signal_explanations = build_signal_explanation_lines(signals)
+    buy_labels = "、".join(format_signal_point_labels(buy_points))
+    sell_labels = "、".join(format_signal_point_labels(sell_points))
 
     lines = [f"【{name} {timeframe_label} 操作建议】"]
     if buy_points:
@@ -390,7 +298,7 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
         lines.extend(
             [
                 "结论：偏多，允许轻仓试错。",
-                f"理由：出现 {'、'.join(buy_points)}，结构上已有缠论买点雏形。",
+                f"理由：出现 {buy_labels}，结构上已有缠论买点雏形。",
                 f"建议：分批试仓，跌破 {stop_hint} 则严格止损。",
             ]
         )
@@ -399,7 +307,7 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
         lines.extend(
             [
                 "结论：偏空，优先减仓或兑现。",
-                f"理由：出现 {'、'.join(sell_points)}，结构偏向卖点。",
+                f"理由：出现 {sell_labels}，结构偏向卖点。",
                 f"建议：反抽不过 {reduce_hint} 以减仓为主，不逆势加仓。",
             ]
         )
@@ -438,11 +346,15 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
 
     if current_zs:
         lines.append(f"结构说明：{format_zhongshu_structure_text(current_zs)}。")
+    if signal_explanations:
+        lines.append(f"信号说明：{'；'.join(signal_explanations)}。")
 
     if bottom_divergence and not buy_points:
         lines.append("补充：已有底背驰迹象，但买点尚未确认，最多列入观察名单。")
     if top_divergence and not sell_points:
         lines.append("补充：已有顶背驰迹象，若后续反弹无力，应优先考虑保护利润。")
+    if timeframe_label == "30M":
+        lines.append("次级别说明：5M 主要用于区间套趋势背驰定位更精确的买卖点，同时承担日内短线做T节奏。")
     lines.append("说明：以上仅基于缠论结构与 MACD 强弱，不构成投资建议。")
     return "\n".join(lines)
 
@@ -515,7 +427,7 @@ def export_case(
     timeframe_label = timeframe_display_label(timeframe)
     if timeframe != "60m":
         analysis_text = analysis_text.replace("60M", timeframe_label)
-    signals = extract_signals(bis, zhongshus, macd_points)
+    signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
     advice_text = build_advice(security.name, timeframe_label, raw_bars, signals)
     summary_payload = build_technical_summary(timeframe_label, signals, advice_text)
     report_text = analysis_text + "\n\n" + advice_text + "\n"
@@ -540,6 +452,8 @@ def export_case(
                 "latest_zhongshu": latest_zhongshu,
                 "zhongshus": serialize_zhongshus(zhongshus),
             },
+            "structure_state": signals.get("structure_state"),
+            "divergence": signals.get("divergence"),
             "summary": summary_payload,
             "analysis_text": analysis_text,
             "advice_text": advice_text,

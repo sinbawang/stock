@@ -47,9 +47,9 @@ def test_run_hk_daily_overview_generates_capital_and_combined_reports(monkeypatc
 """.strip(),
         encoding="utf-8",
     )
-    (tmp_path / "group888_60m_operation_summary_20260519_205731.txt").write_text(
+    (tmp_path / "group888_30m_operation_summary_20260519_205731.txt").write_text(
         """
-【全部持仓 60M 缠论综合操作建议】
+【全部持仓 30M 缠论综合操作建议】
 
 逐只建议：
 - 腾讯(00700)：偏多，允许轻仓试错。 建议：分批试仓，跌破 445.80 则严格止损。
@@ -134,9 +134,9 @@ def test_run_hk_daily_overview_can_send_combined_report_to_wechat(monkeypatch, t
 """.strip(),
         encoding="utf-8",
     )
-    (tmp_path / "group888_60m_operation_summary_20260519_205731.txt").write_text(
+    (tmp_path / "group888_30m_operation_summary_20260519_205731.txt").write_text(
         """
-【全部持仓 60M 缠论综合操作建议】
+【全部持仓 30M 缠论综合操作建议】
 
 逐只建议：
 - 美团(03690)：震荡，等待方向选择。 建议：等待重新站回关键中枢。

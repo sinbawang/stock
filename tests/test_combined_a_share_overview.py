@@ -65,9 +65,9 @@ def test_combined_a_share_overview_parses_three_axes(tmp_path) -> None:
 """.strip(),
         encoding="utf-8",
     )
-    (tmp_path / "group888_60m_operation_summary_20260519_205731.txt").write_text(
+    (tmp_path / "group888_30m_operation_summary_20260519_205731.txt").write_text(
         """
-【全部持仓 60M 缠论综合操作建议】
+【全部持仓 30M 缠论综合操作建议】
 
 逐只建议：
 - 太阳能(000591)：偏强，持有为主。 建议：已有仓位可继续持有。
@@ -124,7 +124,7 @@ def test_combined_view_marks_technical_and_capital_risk_as_cautious() -> None:
     )
 
     assert bucket == "cautious"
-    assert comment == "谨慎：60M 技术节奏偏弱；资金面偏弱"
+    assert comment == "谨慎：30M 技术节奏偏弱；资金面偏弱"
 
 
 def test_combined_view_keeps_base_and_technical_alignment_trackable() -> None:
@@ -135,7 +135,7 @@ def test_combined_view_keeps_base_and_technical_alignment_trackable() -> None:
     )
 
     assert bucket == "confirming"
-    assert comment == "可跟踪试仓：基本面质量较好；60M 技术节奏偏积极；资金面尚未强确认"
+    assert comment == "可跟踪试仓：基本面质量较好；30M 技术节奏偏积极；资金面尚未强确认"
 
 
 def test_combined_view_requires_no_weak_axis_for_high_confirmation() -> None:
@@ -146,7 +146,7 @@ def test_combined_view_requires_no_weak_axis_for_high_confirmation() -> None:
     )
 
     assert bucket == "confirming"
-    assert comment == "确认度较高：基本面质量较好；60M 技术节奏偏积极；资金面有一定确认"
+    assert comment == "确认度较高：基本面质量较好；30M 技术节奏偏积极；资金面有一定确认"
 
 
 def test_action_label_distinguishes_tracking_and_risk_actions() -> None:
@@ -156,7 +156,7 @@ def test_action_label_distinguishes_tracking_and_risk_actions() -> None:
         technical=TechnicalRef(),
         capital_flow=CapitalFlowRef(),
         combined_bucket="confirming",
-        combined_comment="可跟踪试仓：基本面质量较好；60M 技术节奏偏积极；资金面尚未强确认",
+        combined_comment="可跟踪试仓：基本面质量较好；30M 技术节奏偏积极；资金面尚未强确认",
     )
     cautious_row = combined_module.CombinedOverviewRow(
         target=CombinedTarget(symbol="600900", name="长江电力"),
@@ -164,7 +164,7 @@ def test_action_label_distinguishes_tracking_and_risk_actions() -> None:
         technical=TechnicalRef(),
         capital_flow=CapitalFlowRef(),
         combined_bucket="cautious",
-        combined_comment="谨慎：60M 技术节奏偏弱；资金面偏弱",
+        combined_comment="谨慎：30M 技术节奏偏弱；资金面偏弱",
     )
 
     assert _action_label(tracking_row) == "跟踪试仓"
@@ -178,7 +178,7 @@ def test_management_section_splits_action_watch_and_risk_pools() -> None:
         technical=TechnicalRef(),
         capital_flow=CapitalFlowRef(),
         combined_bucket="confirming",
-        combined_comment="可跟踪试仓：基本面质量较好；60M 技术节奏偏积极；资金面尚未强确认",
+        combined_comment="可跟踪试仓：基本面质量较好；30M 技术节奏偏积极；资金面尚未强确认",
     )
     watch_row = combined_module.CombinedOverviewRow(
         target=CombinedTarget(symbol="000651", name="格力电器"),
@@ -186,7 +186,7 @@ def test_management_section_splits_action_watch_and_risk_pools() -> None:
         technical=TechnicalRef(),
         capital_flow=CapitalFlowRef(),
         combined_bucket="mixed",
-        combined_comment="分化：60M 技术节奏偏积极；资金面偏弱",
+        combined_comment="分化：30M 技术节奏偏积极；资金面偏弱",
     )
     risk_row = combined_module.CombinedOverviewRow(
         target=CombinedTarget(symbol="600900", name="长江电力"),
@@ -194,7 +194,7 @@ def test_management_section_splits_action_watch_and_risk_pools() -> None:
         technical=TechnicalRef(),
         capital_flow=CapitalFlowRef(),
         combined_bucket="cautious",
-        combined_comment="谨慎：60M 技术节奏偏弱；资金面偏弱",
+        combined_comment="谨慎：30M 技术节奏偏弱；资金面偏弱",
     )
 
     assert _management_section(action_row) == "今日动作"
@@ -217,7 +217,7 @@ def test_combined_a_share_overview_reads_new_reports_layout_json(tmp_path) -> No
     )
 
     stock_dir = tmp_path / "601328"
-    (stock_dir / "60m").mkdir(parents=True)
+    (stock_dir / "30m").mkdir(parents=True)
     (stock_dir / "base.json").write_text(
         json.dumps(
             {
@@ -245,7 +245,7 @@ def test_combined_a_share_overview_reads_new_reports_layout_json(tmp_path) -> No
         ),
         encoding="utf-8",
     )
-    (stock_dir / "60m" / "tech.json").write_text(
+    (stock_dir / "30m" / "tech.json").write_text(
         json.dumps(
             {
                 "summary": {
@@ -265,6 +265,6 @@ def test_combined_a_share_overview_reads_new_reports_layout_json(tmp_path) -> No
     assert len(rows) == 1
     assert rows[0].fundamental.path == stock_dir / "base.json"
     assert rows[0].capital_flow.path == stock_dir / "fund.json"
-    assert rows[0].technical.path == stock_dir / "60m" / "tech.json"
+    assert rows[0].technical.path == stock_dir / "30m" / "tech.json"
     assert rows[0].combined_bucket == "confirming"
     assert "P1 | 跟踪试仓 | 601328 | 交通银行 | confirming | 69.2/B | 偏多，允许轻仓试错。 | 59.1/C/fallback" in text

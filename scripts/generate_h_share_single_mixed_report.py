@@ -7,6 +7,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 SCRIPTS = ROOT / "scripts"
@@ -18,10 +20,11 @@ if str(SCRIPTS) not in sys.path:
 from batch_prepare_chanlun_reports import build_advice, build_technical_summary, extract_signals
 from capital_flow.reporting import save_capital_flow_text
 from capital_flow.services import fetch_and_analyze_hk_flow
+from chanlun.analysis import build_lower_timeframe_precision_entry, build_precision_window_display
 from chanlun.bi import identify_bis
 from chanlun.chart_export import save_structure_charts
 from chanlun.default_ranges import default_structure_start
-from chanlun.data import read_bars_from_csv
+from chanlun.data import read_bars_from_csv, read_bars_from_dataframe
 from chanlun.data.cleaner import clean_bars
 from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, get_last_fetch_metadata, save_to_csv as save_hk_minute_csv
 from chanlun.data.source_profiles import available_source_profiles, resolve_hk_minute_source_selection
@@ -55,14 +58,19 @@ DEFAULT_CACHE_DIR = CAPITAL_FLOW_CACHE_DIR
 DEFAULT_MANUAL_SUPPLEMENT_DIR = ROOT / "data" / "_meta" / "manual_supplements"
 INTRADAY_SOURCE_PROBE_ROWS = 600
 BAR_COUNT_POLICY = "feasible_maximum"
+PRIMARY_TECHNICAL_TIMEFRAME = "30m"
+PRIMARY_TECHNICAL_LABEL = "30M"
+LOWER_PRECISION_TIMEFRAME = "5m"
+LOWER_PRECISION_LABEL = "5M"
+LOWER_PRECISION_PENDING_REVERSE_MODE = "effective_only"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate a single-stock H-share mixed report and optionally send it to the current WeChat chat.")
     parser.add_argument("symbol", help="HK symbol such as 09988")
     parser.add_argument("--name", required=True, help="Security name")
-    parser.add_argument("--start", default=default_structure_start("60m"), help="60M analysis start time")
-    parser.add_argument("--end", default=None, help="Optional 60M analysis end time")
+    parser.add_argument("--start", default=default_structure_start(PRIMARY_TECHNICAL_TIMEFRAME), help="30M analysis start time")
+    parser.add_argument("--end", default=None, help="Optional 30M analysis end time")
     parser.add_argument("--adjust", default="", choices=["qfq", "hfq", ""], help="Adjustment mode; defaults to raw/no adjustment")
     parser.add_argument("--source-profile", default=None, choices=available_source_profiles(), help="HK minute source profile; defaults to CHANLUN_SOURCE_PROFILE or mainland")
     parser.add_argument("--source", default=None, choices=["xueqiu", "akshare"], help="Primary HK minute source; defaults to the selected source profile")
@@ -129,6 +137,50 @@ def _load_existing_fundamental_ref(base_path: Path) -> FundamentalBriefRef | Non
     )
 
 
+def _build_lower_precision_entry(
+    *,
+    symbol: str,
+    start: str,
+    end: str | None,
+    adjust: str,
+    primary_source: str,
+    fallback_sources: tuple[str, ...] | None,
+    signals: dict[str, object],
+) -> dict[str, object] | None:
+    rows, used_source = fetch_hk_minute_with_policy(
+        symbol,
+        period="5",
+        start=start,
+        end=end,
+        adjust=adjust,
+        primary_source=primary_source,
+        fallback_sources=fallback_sources,
+        min_rows=INTRADAY_SOURCE_PROBE_ROWS,
+    )
+    fetch_meta = get_last_fetch_metadata()
+    actual_source = str(fetch_meta.get("actual_source") or used_source)
+    if not rows:
+        return None
+
+    raw_bars = clean_bars(read_bars_from_dataframe(pd.DataFrame(rows)))
+    normalized_bars = normalize_bars(raw_bars)
+    fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
+    bis = identify_bis(fractals, normalized_bars, pending_reverse_mode=LOWER_PRECISION_PENDING_REVERSE_MODE)
+    confirmed_bis = [bi for bi in bis if bi.is_confirmed]
+    zhongshus = identify_zhongshu(confirmed_bis)
+    macd_points = calculate_macd(raw_bars)
+    lower_signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
+    return build_lower_timeframe_precision_entry(
+        signals,
+        lower_signals,
+        lower_timeframe=LOWER_PRECISION_TIMEFRAME,
+        lower_timeframe_label=LOWER_PRECISION_LABEL,
+        pending_reverse_mode=LOWER_PRECISION_PENDING_REVERSE_MODE,
+        source=used_source,
+        source_actual=actual_source,
+    )
+
+
 def _save_technical_report(
     *,
     symbol: str,
@@ -142,7 +194,7 @@ def _save_technical_report(
 ) -> tuple[TechnicalRef, Path]:
     rows, used_source = fetch_hk_minute_with_policy(
         symbol,
-        period="60",
+        period="30",
         start=start,
         end=end,
         adjust=adjust,
@@ -153,28 +205,23 @@ def _save_technical_report(
     fetch_meta = get_last_fetch_metadata()
     actual_source = str(fetch_meta.get("actual_source") or used_source)
     if not rows:
-        raise RuntimeError("未抓到任何60M数据")
+        raise RuntimeError("未抓到任何30M数据")
 
     stock_root = None if output_dir == stock_report_dir(symbol.zfill(5)) else output_dir
-    paths = build_paths(symbol, name, rows) if stock_root is None else {
-        "base_dir": timeframe_report_paths(symbol, "60m", rows, stock_root=stock_root).root_dir,
-        "raw_csv": timeframe_report_paths(symbol, "60m", rows, stock_root=stock_root).raw_csv,
-        "normalized_csv": timeframe_report_paths(symbol, "60m", rows, stock_root=stock_root).normalized_csv,
+    layout = timeframe_report_paths(symbol, PRIMARY_TECHNICAL_TIMEFRAME, rows, stock_root=stock_root)
+    paths = {
+        "base_dir": layout.root_dir,
+        "raw_csv": layout.raw_csv,
+        "normalized_csv": layout.normalized_csv,
+        "fractals_csv": layout.fractals_csv,
+        "confirmed_fractals_csv": layout.confirmed_fractals_csv,
+        "bis_csv": layout.bis_csv,
+        "zhongshu_csv": layout.zhongshu_csv,
+        "macd_csv": layout.macd_csv,
+        "svg": layout.chart_svg,
+        "png": layout.chart_png,
+        "jpg": layout.chart_jpg,
     }
-    if "svg" not in paths:
-        layout = timeframe_report_paths(symbol, "60m", rows, stock_root=stock_root)
-        paths.update(
-            {
-                "fractals_csv": layout.fractals_csv,
-                "confirmed_fractals_csv": layout.confirmed_fractals_csv,
-                "bis_csv": layout.bis_csv,
-                "zhongshu_csv": layout.zhongshu_csv,
-                "macd_csv": layout.macd_csv,
-                "svg": layout.chart_svg,
-                "png": layout.chart_png,
-                "jpg": layout.chart_jpg,
-            }
-        )
     save_hk_minute_csv(rows, str(paths["raw_csv"]))
 
     raw_bars = clean_bars(read_bars_from_csv(str(paths["raw_csv"])))
@@ -207,25 +254,44 @@ def _save_technical_report(
         svg_path=paths["svg"],
         png_path=paths["png"],
         jpg_path=paths["jpg"],
-        title=f"{symbol} {name} 60m",
+        title=f"{symbol} {name} {PRIMARY_TECHNICAL_TIMEFRAME}",
     )
 
     analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points)
-    signals = extract_signals(bis, zhongshus, macd_points)
-    advice_text = build_advice(name, "60M", raw_bars, signals)
-    summary_payload = build_technical_summary("60M", signals, advice_text)
+    analysis_text = analysis_text.replace("60M", PRIMARY_TECHNICAL_LABEL)
+    signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
+    precision_entry = _build_lower_precision_entry(
+        symbol=symbol,
+        start=start,
+        end=end,
+        adjust=adjust,
+        primary_source=primary_source,
+        fallback_sources=fallback_sources,
+        signals=signals,
+    )
+    precision_window_display = build_precision_window_display(precision_entry)
+    advice_text = build_advice(name, PRIMARY_TECHNICAL_LABEL, raw_bars, signals)
+    if precision_entry is not None:
+        advice_text += f"\n区间套定位：{precision_entry['note']}"
+        window_basis_label = precision_window_display.get("label") if precision_window_display else None
+        if window_basis_label:
+            advice_text += f"\n区间套窗口：{window_basis_label}"
+    summary_payload = build_technical_summary(PRIMARY_TECHNICAL_LABEL, signals, advice_text)
+    if precision_entry is not None:
+        summary_payload["precision_entry"] = precision_entry
+        summary_payload["precision_window_display"] = precision_window_display
     conclusion = summary_payload.get("conclusion") or "missing"
     suggestion = summary_payload.get("suggestion") or "等待更多技术面确认。"
     latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
 
-    output_path = output_dir / "60m" / "tech.json"
+    output_path = output_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json"
     write_json(
         output_path,
         {
             "report_type": "technical",
             "symbol": symbol,
             "name": name,
-            "timeframe": "60m",
+            "timeframe": PRIMARY_TECHNICAL_TIMEFRAME,
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "source": used_source,
             "source_actual": actual_source,
@@ -243,6 +309,10 @@ def _save_technical_report(
                 "latest_zhongshu": latest_zhongshu,
                 "zhongshus": serialize_zhongshus(zhongshus),
             },
+            "structure_state": signals.get("structure_state"),
+            "divergence": signals.get("divergence"),
+            "precision_entry": precision_entry,
+            "precision_window_display": precision_window_display,
             "summary": summary_payload,
             "analysis_text": analysis_text,
             "advice_text": advice_text,
@@ -299,8 +369,8 @@ def _save_combined_report(
             "",
             "## 说明",
             "",
-            "- mixed_overview 基于最新单股基本面、60M 技术面、港股资金面即时生成。",
-            "- 技术面结论口径沿用 60M 缠论操作建议的偏多/偏弱/偏空表达。",
+            "- mixed_overview 基于最新单股基本面、30M 技术面、港股资金面即时生成。",
+            "- 技术面结论口径沿用 30M 缠论操作建议的偏多/偏弱/偏空表达。",
             "- 本报告用于三轴对照，不构成投资建议。",
         ]
     )

@@ -15,12 +15,15 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from chanlun.analysis import build_precision_window_display, build_signal_explanation_lines, format_signal_point_labels
 from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
 DEFAULT_REPORTS_ROOT = REPORTS_DIR
 DEFAULT_PUBLISH_ROOT = ROOT / "build" / "miniapp-publish"
+PRIMARY_TECHNICAL_TIMEFRAME = "30m"
+PRIMARY_TECHNICAL_LABEL = "30M"
 
 
 @dataclass(frozen=True)
@@ -213,6 +216,124 @@ def first_non_empty(*values: Any) -> str:
     return ""
 
 
+def trend_type_label(value: Any) -> str:
+    mapping = {
+        "up": "上涨",
+        "down": "下跌",
+        "range": "盘整",
+        "consolidation": "盘整",
+    }
+    return mapping.get(safe_text(value).lower(), safe_text(value))
+
+
+def signal_point_label(value: Any) -> str:
+    labels = format_signal_point_labels([value] if value else [])
+    return labels[0] if labels else safe_text(value)
+
+
+def normalize_signal_point(signal: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not signal:
+        return None
+    point = safe_text(signal.get("point"))
+    return {
+        "point": point,
+        "label": signal_point_label(point),
+        "time": signal.get("time"),
+        "price": maybe_float(signal.get("price")),
+        "active": bool(signal.get("active", True)),
+        "basis": signal.get("basis"),
+    }
+
+
+def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, Any]:
+    summary = tech_payload.get("summary") or {}
+    structure_state = summary.get("structure_state") or tech_payload.get("structure_state") or {}
+    previous_raw = structure_state.get("last_completed") or {}
+    current_raw = structure_state.get("current_ongoing") or {}
+    relationship = structure_state.get("relationship") or {}
+
+    previous = {
+        "type": previous_raw.get("type"),
+        "type_label": trend_type_label(previous_raw.get("type")),
+        "start_ts": previous_raw.get("start_ts"),
+        "end_ts": previous_raw.get("end_ts"),
+        "zs_count": previous_raw.get("zs_count"),
+        "status": previous_raw.get("status"),
+    }
+    current = {
+        "type": current_raw.get("type"),
+        "type_label": trend_type_label(current_raw.get("type")),
+        "start_ts": current_raw.get("start_ts"),
+        "latest_ts": current_raw.get("latest_ts"),
+        "zs_count": current_raw.get("zs_count") or current_raw.get("zs_count_so_far"),
+        "status": current_raw.get("status"),
+    }
+
+    lines: list[str] = []
+    if previous.get("type"):
+        lines.append(
+            f"上个已完成走势：{previous['type_label']} {safe_text(previous.get('start_ts'))} -> {safe_text(previous.get('end_ts'))}"
+        )
+    if current.get("type"):
+        lines.append(
+            f"当前进行走势：{current['type_label']} 自 {safe_text(current.get('start_ts'))} 起，最新 {safe_text(current.get('latest_ts'))}"
+        )
+    note = safe_text(relationship.get("note"))
+    if note:
+        lines.append(f"走势连接：{note}")
+
+    return {
+        "previous": previous,
+        "current": current,
+        "relationship": relationship,
+        "lines": lines,
+    }
+
+
+def build_latest_signal_summary(tech_payload: dict[str, Any]) -> dict[str, Any]:
+    summary = tech_payload.get("summary") or {}
+    active_signals = [normalize_signal_point(item) for item in (summary.get("signal_points") or [])]
+    catalog_signals = [normalize_signal_point(item) for item in (summary.get("signal_catalog") or []) if item.get("active")]
+    merged = [item for item in active_signals + catalog_signals if item and item.get("point")]
+
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for item in merged:
+        key = (safe_text(item.get("point")), safe_text(item.get("time")), safe_text(item.get("price")))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+
+    deduped.sort(key=lambda item: safe_text(item.get("time")), reverse=True)
+    latest_buy = next((item for item in deduped if safe_text(item.get("point")).startswith("buy")), None)
+    latest_sell = next((item for item in deduped if safe_text(item.get("point")).startswith("sell")), None)
+    latest_overall = deduped[0] if deduped else None
+
+    lines: list[str] = []
+    if latest_buy:
+        buy_price = f"，价格 {latest_buy['price']:.2f}" if latest_buy.get("price") is not None else ""
+        lines.append(f"最近买点：{latest_buy['label']} {safe_text(latest_buy.get('time'))}{buy_price}")
+    if latest_sell:
+        sell_price = f"，价格 {latest_sell['price']:.2f}" if latest_sell.get("price") is not None else ""
+        lines.append(f"最近卖点：{latest_sell['label']} {safe_text(latest_sell.get('time'))}{sell_price}")
+
+    return {
+        "latest_buy": latest_buy,
+        "latest_sell": latest_sell,
+        "latest_overall": latest_overall,
+        "recent_active": deduped[:3],
+        "lines": lines,
+    }
+
+
+def build_technical_focus_lines(decomposition: dict[str, Any], signal_summary: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+    lines.extend(decomposition.get("lines") or [])
+    lines.extend(signal_summary.get("lines") or [])
+    return lines
+
+
 def build_fundamental_section(base_payload: dict[str, Any]) -> dict[str, Any]:
     summary = base_payload.get("summary") or {}
     blended = base_payload.get("blended") or {}
@@ -263,23 +384,41 @@ def build_capital_flow_section(fund_payload: dict[str, Any]) -> dict[str, Any]:
         "warnings": (scorecard.get("warnings") or [])[:3],
         "metrics": metrics[:5],
     }
-
-
 def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
     summary = tech_payload.get("summary") or {}
     analysis_text = safe_text(tech_payload.get("analysis_text"))
+    precision_entry = summary.get("precision_entry") or tech_payload.get("precision_entry") or {}
+    precision_window_display = build_precision_window_display(precision_entry)
+    same_level_decomposition = build_same_level_decomposition(tech_payload)
+    latest_signal_summary = build_latest_signal_summary(tech_payload)
+    signal_context = {
+        "signal_points": summary.get("signal_points") or [],
+        "signal_catalog": summary.get("signal_catalog") or [],
+    }
     return {
         "key": "technical",
         "title": "技术面",
-        "timeframe": tech_payload.get("timeframe") or "60m",
+        "timeframe": tech_payload.get("timeframe") or PRIMARY_TECHNICAL_TIMEFRAME,
         "source": tech_payload.get("source"),
         "operation_level": summary.get("operation_level"),
         "conclusion": summary.get("conclusion"),
         "suggestion": summary.get("suggestion"),
         "buy_points": summary.get("buy_points") or [],
+        "buy_point_labels": format_signal_point_labels(summary.get("buy_points") or []),
         "sell_points": summary.get("sell_points") or [],
+        "sell_point_labels": format_signal_point_labels(summary.get("sell_points") or []),
         "signal_points": summary.get("signal_points") or [],
         "signal_catalog": summary.get("signal_catalog") or [],
+        "signal_descriptions": build_signal_explanation_lines(signal_context),
+        "same_level_decomposition": same_level_decomposition,
+        "latest_signal_summary": latest_signal_summary,
+        "technical_focus_lines": build_technical_focus_lines(same_level_decomposition, latest_signal_summary),
+        "precision_entry": precision_entry,
+        "precision_note": precision_entry.get("note"),
+        "precision_window_basis_label": precision_entry.get("window_basis_label") or (precision_entry.get("nested_from") or {}).get("window_basis_label"),
+        "precision_window_basis_description": precision_entry.get("window_basis_description") or (precision_entry.get("nested_from") or {}).get("window_basis_description"),
+        "precision_window_display": precision_window_display,
+        "precision_signal_descriptions": precision_entry.get("signal_descriptions") or [],
         "overview": extract_section_lines(analysis_text, "概览：")[:4],
         "structure": extract_section_lines(analysis_text, "结构：")[:4],
         "signals": extract_section_lines(analysis_text, "信号：")[:4],
@@ -289,7 +428,7 @@ def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
 
 def build_chart_specs(stock_dir: Path) -> list[dict[str, str]]:
     charts: list[dict[str, str]] = []
-    for timeframe in ("60m", "30m", "15m", "5m", "day"):
+    for timeframe in ("30m", "60m", "15m", "5m", "day"):
         for extension in ("svg", "jpg", "png"):
             chart_path = stock_dir / timeframe / f"structure.{extension}"
             if not chart_path.exists():
@@ -307,12 +446,16 @@ def build_chart_specs(stock_dir: Path) -> list[dict[str, str]]:
 def build_summary_payload(holding: Holding, stock_dir: Path, group_item: dict[str, Any] | None) -> dict[str, Any]:
     base_payload = read_json(stock_dir / "base.json")
     fund_payload = read_json(stock_dir / "fund.json")
-    tech_payload = read_json(stock_dir / "60m" / "tech.json")
+    tech_payload = read_json(stock_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json")
     base_summary = base_payload.get("summary") or {}
     fund_summary = fund_payload.get("summary") or {}
     tech_summary = tech_payload.get("summary") or {}
+    precision_entry = tech_summary.get("precision_entry") or tech_payload.get("precision_entry") or {}
+    precision_window_display = build_precision_window_display(precision_entry)
+    same_level_decomposition = build_same_level_decomposition(tech_payload)
+    latest_signal_summary = build_latest_signal_summary(tech_payload)
     charts = build_chart_specs(stock_dir)
-    cover_chart_path = chart_publish_path(charts, "60m")
+    cover_chart_path = chart_publish_path(charts, PRIMARY_TECHNICAL_TIMEFRAME)
     updated_at = max(
         safe_text(base_payload.get("generated_at")),
         safe_text(fund_payload.get("generated_at")),
@@ -335,14 +478,31 @@ def build_summary_payload(holding: Holding, stock_dir: Path, group_item: dict[st
                 "summary": first_non_empty(base_summary.get("comment"), (base_payload.get("blended") or {}).get("annual_anchor", {}).get("scorecard", {}).get("combined_comment")),
             },
             "technical": {
-                "timeframe": tech_payload.get("timeframe") or "60m",
+                "timeframe": tech_payload.get("timeframe") or PRIMARY_TECHNICAL_TIMEFRAME,
+                "timeframe_label": PRIMARY_TECHNICAL_LABEL,
                 "operation_level": tech_summary.get("operation_level"),
                 "conclusion": tech_summary.get("conclusion"),
                 "suggestion": tech_summary.get("suggestion"),
                 "buy_points": tech_summary.get("buy_points") or [],
+                "buy_point_labels": format_signal_point_labels(tech_summary.get("buy_points") or []),
                 "sell_points": tech_summary.get("sell_points") or [],
+                "sell_point_labels": format_signal_point_labels(tech_summary.get("sell_points") or []),
                 "signal_points": tech_summary.get("signal_points") or [],
                 "signal_catalog": tech_summary.get("signal_catalog") or [],
+                "signal_descriptions": build_signal_explanation_lines(
+                    {
+                        "signal_points": tech_summary.get("signal_points") or [],
+                        "signal_catalog": tech_summary.get("signal_catalog") or [],
+                    }
+                ),
+                "same_level_decomposition": same_level_decomposition,
+                "latest_signal_summary": latest_signal_summary,
+                "technical_focus_lines": build_technical_focus_lines(same_level_decomposition, latest_signal_summary),
+                "precision_entry": precision_entry,
+                "precision_note": precision_entry.get("note"),
+                "precision_window_basis_label": precision_entry.get("window_basis_label") or (precision_entry.get("nested_from") or {}).get("window_basis_label"),
+                "precision_window_basis_description": precision_entry.get("window_basis_description") or (precision_entry.get("nested_from") or {}).get("window_basis_description"),
+                "precision_window_display": precision_window_display,
             },
             "capital_flow": {
                 "score": fund_summary.get("score"),
@@ -351,7 +511,7 @@ def build_summary_payload(holding: Holding, stock_dir: Path, group_item: dict[st
                 "summary": first_non_empty(fund_summary.get("comment"), (fund_payload.get("scorecard") or {}).get("combined_comment")),
             },
         },
-        "cover_chart": {"timeframe": "60m", "path": f"stocks/{holding.symbol}/{cover_chart_path}"} if cover_chart_path else None,
+        "cover_chart": {"timeframe": PRIMARY_TECHNICAL_TIMEFRAME, "path": f"stocks/{holding.symbol}/{cover_chart_path}"} if cover_chart_path else None,
         "jump": {"detail": f"stocks/{holding.symbol}/detail.json"},
         "tags": [value for value in [group_item.get("bucket") if group_item else None, group_item.get("priority") if group_item else None, group_item.get("action") if group_item else None] if value],
     }
@@ -360,14 +520,14 @@ def build_summary_payload(holding: Holding, stock_dir: Path, group_item: dict[st
 def build_detail_payload(holding: Holding, stock_dir: Path, group_item: dict[str, Any] | None) -> tuple[dict[str, Any], list[dict[str, str]]]:
     base_payload = read_json(stock_dir / "base.json")
     fund_payload = read_json(stock_dir / "fund.json")
-    tech_payload = read_json(stock_dir / "60m" / "tech.json")
+    tech_payload = read_json(stock_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json")
     charts = build_chart_specs(stock_dir)
     fundamental = build_fundamental_section(base_payload)
     technical = build_technical_section(tech_payload)
     capital_flow = build_capital_flow_section(fund_payload)
     overview_bullets = [
         f"基本面 {safe_text(fundamental.get('score'), 'missing')}/{safe_text(fundamental.get('rating'), 'missing')}",
-        f"60M 技术面 {safe_text(technical.get('conclusion'), 'missing')}",
+        f"{PRIMARY_TECHNICAL_LABEL} 技术面 {safe_text(technical.get('conclusion'), 'missing')}",
         f"资金面 {safe_text(capital_flow.get('score'), 'missing')}/{safe_text(capital_flow.get('rating'), 'missing')}",
     ]
     updated_at = max(

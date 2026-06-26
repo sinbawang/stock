@@ -61,7 +61,7 @@ def test_compact_capital_flow_omits_non_operational_sections() -> None:
 def test_generate_report_writes_compact_single_stock_text(tmp_path: Path, monkeypatch) -> None:
     report_root = tmp_path / "reports"
     stock_dir = report_root / "00700"
-    (stock_dir / "60m").mkdir(parents=True)
+    (stock_dir / "30m").mkdir(parents=True)
     (stock_dir / "base.json").write_text(
         json.dumps(
             {
@@ -107,12 +107,29 @@ def test_generate_report_writes_compact_single_stock_text(tmp_path: Path, monkey
         ),
         encoding="utf-8",
     )
-    (stock_dir / "60m" / "tech.json").write_text(
+    (stock_dir / "30m" / "tech.json").write_text(
         json.dumps(
             {
                 "summary": {
                     "conclusion": "偏空，优先减仓或兑现。",
                     "suggestion": "反抽不过 479.60 以减仓为主。",
+                    "precision_entry": {
+                        "operation_level": "5M",
+                        "timeframe": "5m",
+                        "pending_reverse_mode": "effective_only",
+                        "status": "watch",
+                        "window_basis_label": "中枢到锚点窗口",
+                        "note": "5M 已出现顶部趋势背驰，等待次级别卖点确认后再精确执行。窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+                    },
+                    "signal_catalog": [
+                        {
+                            "point": "sell3",
+                            "active": True,
+                            "time": "2026-05-22T14:30:00",
+                            "price": 479.60,
+                            "basis": "leave_zs_then_rebound_fails_lower_edge",
+                        }
+                    ],
                 },
                 "analysis_text": "概览：\n- 时间区间：2026-05-01 到 2026-05-22\n\n结构：\n- 未确认向下笔。\n\n信号：\n- 卖点：sell_3\n",
             },
@@ -135,10 +152,106 @@ def test_generate_report_writes_compact_single_stock_text(tmp_path: Path, monkey
     assert "【基本面】" in output
     assert "【资金面】" in output
     assert "【技术面】" in output
-    assert "60M图: chart.jpg" in output
+    assert "30M图: chart.jpg" in output
     assert "概览原文:" in output
     assert "guidance_attainment" in output
     assert "short_sell_ratio" in output
+    assert "买卖点: 三卖(active)@2026-05-22T14:30:00/479.60 [跌破中枢后反抽下沿失败]" in output
+    assert "5M区间套: 5M 已出现顶部趋势背驰，等待次级别卖点确认后再精确执行。窗口依据：" in output
+    assert "5M窗口: 中枢到锚点窗口" in output
+
+
+def test_generate_report_writes_a_share_human_signal_text(tmp_path: Path, monkeypatch) -> None:
+    report_root = tmp_path / "reports"
+    stock_dir = report_root / "300124"
+    (stock_dir / "30m").mkdir(parents=True)
+    (stock_dir / "base.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "score": 78.2,
+                    "rating": "B",
+                    "comment": "基本面处于可继续跟踪区间。",
+                },
+                "blended": {
+                    "annual_anchor": {
+                        "scorecard": {
+                            "dimension_scores": [
+                                {"dimension": "profit_quality", "score": 20.0, "missing_metrics": []},
+                            ]
+                        }
+                    }
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (stock_dir / "fund.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "score": 61.5,
+                    "rating": "B",
+                    "comment": "资金面中性偏稳。",
+                },
+                "scorecard": {
+                    "trade_date": "2026-05-22",
+                    "dimension_scores": [],
+                },
+                "snapshot": {
+                    "main_net_inflow": 10,
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (stock_dir / "30m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "conclusion": "偏多，允许轻仓试错。",
+                    "suggestion": "分批试仓，跌破 72.30 则严格止损。",
+                    "precision_entry": {
+                        "operation_level": "5M",
+                        "timeframe": "5m",
+                        "pending_reverse_mode": "effective_only",
+                        "status": "actionable",
+                        "window_basis_label": "中枢到锚点窗口",
+                        "note": "5M 已出现二买，可按 effective_only 口径用于区间套精确定位。窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+                    },
+                    "signal_catalog": [
+                        {
+                            "point": "buy2",
+                            "active": True,
+                            "time": "2026-05-22T14:30:00",
+                            "price": 72.30,
+                            "basis": "buy1_pullback_confirmation",
+                        }
+                    ],
+                },
+                "analysis_text": "概览：\n- 时间区间：2026-05-01 到 2026-05-22\n\n结构：\n- 最新确认向上笔。\n\n信号：\n- 买点：buy_2\n",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (stock_dir / "overview.txt").write_text("canonical overview", encoding="utf-8")
+    monkeypatch.setattr(module, "_find_latest_chart", lambda symbol, name: Path("chart.jpg"))
+
+    path = module.generate_report(
+        symbol="300124",
+        name="汇川技术",
+        report_root=report_root,
+        output_dir=stock_dir,
+    )
+
+    output = path.read_text(encoding="utf-8")
+    assert "汇川技术 300124｜三轴操盘摘要" in output
+    assert "买卖点: 二买(active)@2026-05-22T14:30:00/72.30 [一买后回抽确认，低点未再跌破前低]" in output
+    assert "5M区间套: 5M 已出现二买，可按 effective_only 口径用于区间套精确定位。窗口依据：" in output
+    assert "5M窗口: 中枢到锚点窗口" in output
 
 
 def test_batch_main_writes_symbol_compacts_and_group_summary(tmp_path: Path, monkeypatch) -> None:

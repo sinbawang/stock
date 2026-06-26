@@ -26,6 +26,8 @@ from storage_layout import holdings_file
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
 DEFAULT_TEXT_CHUNK_CHARS = 320
+PRIMARY_TECHNICAL_TIMEFRAME = "30m"
+PRIMARY_TECHNICAL_LABEL = "30M"
 
 
 @dataclass(frozen=True)
@@ -54,7 +56,7 @@ class ExistingBasePeriods:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate latest mixed reports and day/60M/30M/15M/5M charts for all holdings, then send the three raw briefs as text to the current WeChat chat.")
+    parser = argparse.ArgumentParser(description="Generate latest mixed reports and day/30M/15M/5M charts for all holdings, then send the three raw briefs as text to the current WeChat chat.")
     parser.add_argument("--holdings-file", default=str(DEFAULT_HOLDINGS_FILE), help="Combined holdings JSON file")
     parser.add_argument("--text-chunk-chars", type=int, default=DEFAULT_TEXT_CHUNK_CHARS, help="Max chars per text chunk before adding the message label")
     parser.add_argument("--limit", type=int, default=None, help="Optional max holding count for validation")
@@ -274,7 +276,7 @@ def generate_bundle(
     )
 
     symbol_dir = ROOT / "data" / "reports" / (holding.symbol.zfill(5) if holding.market == "HK" else holding.symbol)
-    m60_dir = symbol_dir / "60m"
+    primary_chart_dir = symbol_dir / PRIMARY_TECHNICAL_TIMEFRAME
 
     return GeneratedBundle(
         holding=holding,
@@ -283,8 +285,8 @@ def generate_bundle(
         capital_flow_report=Path(_extract_value(mixed_stdout, "capital_flow_report=")),
         combined_report=Path(_extract_value(mixed_stdout, "combined_report=")),
         combined_bucket=_extract_value(mixed_stdout, "combined_bucket="),
-        chart_svg=(m60_dir / "structure.svg") if (m60_dir / "structure.svg").exists() else None,
-        chart_jpg=(m60_dir / "structure.jpg") if (m60_dir / "structure.jpg").exists() else None,
+        chart_svg=(primary_chart_dir / "structure.svg") if (primary_chart_dir / "structure.svg").exists() else None,
+        chart_jpg=(primary_chart_dir / "structure.jpg") if (primary_chart_dir / "structure.jpg").exists() else None,
     )
 
 
@@ -318,7 +320,7 @@ def _send_labeled_text(label: str, text: str, max_chars: int) -> None:
 def send_bundle(bundle: GeneratedBundle, max_chars: int) -> None:
     header = (
         f"【{bundle.holding.symbol} {bundle.holding.name}】最新 mixed 分组: {bundle.combined_bucket}。"
-        f"day / 60M / 15M 缠论结构图已生成，本次按文本发送基本面、技术面、资金面三份简报。"
+        f"day / {PRIMARY_TECHNICAL_LABEL} / 15M / 5M 缠论结构图已生成，本次按文本发送基本面、技术面、资金面三份简报。"
     )
     send_current_chat_text(header, duplicate_send_window_seconds=0, disable_dedupe=True)
     _send_labeled_text(f"{bundle.holding.symbol} {bundle.holding.name} 基本面简报", bundle.fundamental_brief.read_text(encoding="utf-8"), max_chars)

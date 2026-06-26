@@ -156,7 +156,7 @@ def test_save_combined_report_writes_latest_overview_file(tmp_path: Path) -> Non
         row=row,
         output_dir=tmp_path,
         fundamental_path=tmp_path / "base.json",
-        technical_path=tmp_path / "60m" / "tech.json",
+        technical_path=tmp_path / "30m" / "tech.json",
         capital_flow_path=tmp_path / "fund.json",
     )
 
@@ -167,7 +167,10 @@ def test_save_combined_report_writes_latest_overview_file(tmp_path: Path) -> Non
 
 
 def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(tmp_path: Path, monkeypatch) -> None:
-    rows = [{"ts": "2026-05-01 10:30:00"}, {"ts": "2026-05-29 14:30:00"}]
+    rows = [
+        {"ts": "2026-05-01 10:30:00", "open": 5.2, "high": 5.4, "low": 5.1, "close": 5.3, "volume": 900},
+        {"ts": "2026-05-29 14:30:00", "open": 5.3, "high": 5.7, "low": 5.2, "close": 5.6, "volume": 1100},
+    ]
     raw_bars = [SimpleNamespace(ts="2026-05-01 10:30:00")]
     normalized_bars = [SimpleNamespace(idx=0)]
     zhongshus = [
@@ -223,7 +226,15 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     monkeypatch.setattr(module, "export_zhongshus", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "export_macd", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "analyze_current_state", lambda *args, **kwargs: "analysis")
-    monkeypatch.setattr(module, "extract_signals", lambda *args, **kwargs: {"bucket": "watch"})
+    monkeypatch.setattr(
+        module,
+        "extract_signals",
+        lambda *args, **kwargs: {
+            "bucket": "watch",
+            "structure_state": {"current_ongoing": {"type": "range"}},
+            "divergence": {"trend": {"active": False}, "range": {"active": False}},
+        },
+    )
     monkeypatch.setattr(module, "build_advice", lambda *args, **kwargs: "建议：观察")
     monkeypatch.setattr(module, "build_technical_summary", lambda *args, **kwargs: {"conclusion": "偏强", "suggestion": "观察"})
 
@@ -248,15 +259,17 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     artifacts = payload["artifacts"]
     data_fetch = payload["data_fetch"]
-    assert output_path == tmp_path / "60m" / "tech.json"
+    assert output_path == tmp_path / "30m" / "tech.json"
     assert Path(artifacts["structure_svg"]).exists()
     assert Path(artifacts["structure_png"]).exists()
     assert Path(artifacts["structure_jpg"]).exists()
-    assert Path(artifacts["raw_csv"]).parent == tmp_path / "60m" / "analyze"
+    assert Path(artifacts["raw_csv"]).parent == tmp_path / "30m" / "analyze"
     assert data_fetch["source"] == "xueqiu"
     assert payload["source_actual"] == "xueqiu"
     assert payload["structure"]["latest_zhongshu"]["core_bi_ids"] == [19, 20, 21]
     assert payload["structure"]["latest_zhongshu"]["bi_ids"] == [19, 20, 21, 22]
+    assert payload["structure_state"]["current_ongoing"]["type"] == "range"
+    assert payload["divergence"]["trend"]["active"] is False
     assert data_fetch["actual_source"] == "xueqiu"
     assert data_fetch["source_attempts"][0]["source"] == "xueqiu"
     assert data_fetch["actual_bar_count"] == len(raw_bars)
@@ -264,3 +277,16 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     assert data_fetch["fulfilled_min_rows"] is None
     assert data_fetch["bar_count_policy"] == "feasible_maximum"
     assert data_fetch["source_probe_min_rows"] == 600
+    assert payload["timeframe"] == "30m"
+    assert payload["precision_entry"]["timeframe"] == "5m"
+    assert payload["precision_entry"]["pending_reverse_mode"] == "effective_only"
+    assert payload["summary"]["precision_entry"]["operation_level"] == "5M"
+    assert "区间套定位：" in payload["advice_text"]
+    window_basis_label = payload["precision_entry"].get("window_basis_label")
+    if window_basis_label:
+        assert f"区间套窗口：{window_basis_label}" in payload["advice_text"]
+        assert payload["precision_window_display"]["label"] == window_basis_label
+        assert payload["summary"]["precision_window_display"]["label"] == window_basis_label
+    else:
+        assert payload["precision_window_display"] is None
+        assert payload["summary"]["precision_window_display"] is None

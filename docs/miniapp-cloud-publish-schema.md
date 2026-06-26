@@ -253,9 +253,20 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
       "summary": "基本面暂处可跟踪区间"
     },
     "technical": {
-      "timeframe": "60m",
+      "timeframe": "30m",
+      "timeframe_label": "30M",
       "conclusion": "偏强，持有为主。",
-      "suggestion": "已有仓位可继续持有，回踩不破 38.34 再考虑加仓。"
+      "suggestion": "已有仓位可继续持有，回踩不破 38.34 再考虑加仓。",
+      "precision_note": "5M 已出现二买，可按 effective_only 口径用于区间套精确定位。窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+      "precision_window_display": {
+        "title": "5M区间套窗口",
+        "label": "中枢到锚点窗口",
+        "description": "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+        "lines": [
+          "5M窗口：中枢到锚点窗口",
+          "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。"
+        ]
+      }
     },
     "capital_flow": {
       "score": 51.4,
@@ -265,8 +276,8 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
     }
   },
   "cover_chart": {
-    "timeframe": "60m",
-    "path": "stocks/000651/charts/60m.jpg"
+    "timeframe": "30m",
+    "path": "stocks/000651/charts/30m.jpg"
   },
   "jump": {
     "detail": "stocks/000651/detail.json"
@@ -305,10 +316,10 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
     "bucket": "watch"
   },
   "overview": {
-    "summary": "观察：60M 技术节奏偏积极",
+    "summary": "观察：30M 技术节奏偏积极",
     "bullets": [
       "基本面 54.8/C，质量一般但可跟踪",
-      "60M 技术面偏强，持有为主",
+      "30M 技术面偏强，持有为主",
       "资金面 51.4/C，当前不构成强确认"
     ]
   },
@@ -325,9 +336,19 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
     {
       "key": "technical",
       "title": "技术面",
-      "timeframe": "60m",
+      "timeframe": "30m",
       "conclusion": "偏强，持有为主。",
       "suggestion": "已有仓位可继续持有，回踩不破 38.34 再考虑加仓。",
+      "precision_note": "5M 已出现二买，可按 effective_only 口径用于区间套精确定位。窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+      "precision_window_display": {
+        "title": "5M区间套窗口",
+        "label": "中枢到锚点窗口",
+        "description": "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+        "lines": [
+          "5M窗口：中枢到锚点窗口",
+          "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。"
+        ]
+      },
       "overview": [
         "时间区间：2026-01-19 10:30 到 2026-05-29 15:00",
         "中枢数量：1"
@@ -353,6 +374,7 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
     }
   ],
   "charts": [
+    {"timeframe": "30m", "path": "stocks/000651/charts/30m.jpg", "label": "30M 结构图"},
     {"timeframe": "60m", "path": "stocks/000651/charts/60m.jpg", "label": "60M 结构图"},
     {"timeframe": "15m", "path": "stocks/000651/charts/15m.jpg", "label": "15M 结构图"},
     {"timeframe": "day", "path": "stocks/000651/charts/day.jpg", "label": "日线结构图"}

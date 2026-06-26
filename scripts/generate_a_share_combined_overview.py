@@ -19,6 +19,8 @@ from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
 DEFAULT_META_DIR = REPORTS_META_DIR
+PRIMARY_TECHNICAL_TIMEFRAME = "30m"
+PRIMARY_TECHNICAL_LABEL = "30M"
 
 
 @dataclass(frozen=True)
@@ -151,7 +153,7 @@ def load_fundamental_ref(target: CombinedTarget, meta_dir: Path) -> FundamentalB
 
 
 def load_latest_technical_map(meta_dir: Path) -> tuple[dict[str, TechnicalRef], Path | None]:
-    path = latest_file(meta_dir, "group888_60m_operation_summary_*.txt")
+    path = latest_file(meta_dir, "group888_30m_operation_summary_*.txt")
     if path is None:
         refs: dict[str, TechnicalRef] = {}
         candidate_roots = [meta_dir, REPORTS_DIR]
@@ -159,7 +161,7 @@ def load_latest_technical_map(meta_dir: Path) -> tuple[dict[str, TechnicalRef], 
             if not root.exists():
                 continue
             for symbol_dir in [item for item in root.iterdir() if item.is_dir() and item.name != "_meta"]:
-                tech_path = symbol_dir / "60m" / "tech.json"
+                tech_path = symbol_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json"
                 if not tech_path.exists():
                     continue
                 payload = json.loads(tech_path.read_text(encoding="utf-8"))
@@ -302,9 +304,9 @@ def _build_combined_view(fundamental: FundamentalBriefRef, technical: TechnicalR
         weak_reasons.append("基本面偏弱")
 
     if technical_signal == "support":
-        support_reasons.append("60M 技术节奏偏积极")
+        support_reasons.append(f"{PRIMARY_TECHNICAL_LABEL} 技术节奏偏积极")
     elif technical_signal == "weak":
-        weak_reasons.append("60M 技术节奏偏弱")
+        weak_reasons.append(f"{PRIMARY_TECHNICAL_LABEL} 技术节奏偏弱")
 
     if capital_signal == "support":
         support_reasons.append("资金面有一定确认")
@@ -465,7 +467,7 @@ def render_combined_overview(rows: list[CombinedOverviewRow], technical_summary_
             "## 口径说明",
             "",
             "- fundamental 优先读取 reports/<symbol>/base.json，缺失时回退到旧版基本面简报文本。",
-            "- technical 优先读取 reports/<symbol>/60m/tech.json；存在组合摘要时仍复用最新 group888 60M 缠论综合操作建议。",
+            "- technical 优先读取 reports/<symbol>/30m/tech.json；存在组合摘要时仍优先复用最新 group888 30M 缠论综合操作建议。",
             "- capital_flow 读取最新 A 股资金面批量概览；若为 fallback 来源，已在资金面评分中保守折减。",
             "- 若单股批量概览暂缺，则回退读取 reports/<symbol>/fund.json。",
             "- priority/action 是三轴对照后的管理标签，只用于观察清单排序；今日动作/观察池/风险池按 priority 派生。",

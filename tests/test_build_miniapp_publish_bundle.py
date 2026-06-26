@@ -117,13 +117,72 @@ def test_generate_bundle_writes_index_groups_and_stock_payloads(tmp_path: Path) 
             ),
             encoding="utf-8",
         )
-        (stock_dir / "60m" / "tech.json").write_text(
+        (stock_dir / "30m" / "tech.json").write_text(
             json.dumps(
                 {
                     "generated_at": "2026-05-30T20:33:27",
-                    "timeframe": "60m",
+                    "timeframe": "30m",
                     "source": "akshare.eastmoney",
-                    "summary": {"conclusion": "偏强，持有为主。", "suggestion": "继续持有"},
+                    "summary": {
+                        "conclusion": "偏强，持有为主。",
+                        "suggestion": "继续持有",
+                        "buy_points": ["buy2"],
+                        "signal_catalog": [
+                            {
+                                "point": "buy2",
+                                "active": True,
+                                "time": "2026-05-29T10:30:00",
+                                "price": 10.25,
+                                "basis": "buy1_pullback_confirmation",
+                            },
+                            {
+                                "point": "sell3",
+                                "active": True,
+                                "time": "2026-05-27T14:30:00",
+                                "price": 10.88,
+                                "basis": "leave_zs_then_rebound_fails_lower_edge",
+                            },
+                        ],
+                        "structure_state": {
+                            "last_completed": {
+                                "type": "up",
+                                "status": "completed",
+                                "start_ts": "2026-04-01T10:30:00",
+                                "end_ts": "2026-05-10T10:30:00",
+                                "zs_count": 2,
+                            },
+                            "current_ongoing": {
+                                "type": "down",
+                                "status": "ongoing",
+                                "start_ts": "2026-05-15T10:30:00",
+                                "latest_ts": "2026-05-29T10:30:00",
+                                "zs_count": 1,
+                            },
+                            "relationship": {
+                                "kind": "completed_then_new_type_ongoing",
+                                "note": "上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。",
+                            },
+                        },
+                        "precision_entry": {
+                            "operation_level": "5M",
+                            "timeframe": "5m",
+                            "pending_reverse_mode": "effective_only",
+                            "status": "actionable",
+                            "window_basis_label": "中枢到锚点窗口",
+                            "window_basis_description": "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+                            "note": "5M 已出现二买，可按 effective_only 口径用于区间套精确定位。窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+                            "signal_descriptions": ["二买，一买后回抽确认，参考价 10.25"],
+                        },
+                        "signal_points": [
+                            {
+                                "point": "buy2",
+                                "active": True,
+                                "price": 10.25,
+                                "basis": "buy1_pullback_confirmation",
+                                "related_zs_id": 2,
+                            }
+                        ],
+                    },
                     "analysis_text": "概览：\n- 时间区间：2026-01-26 到 2026-05-29\n\n结构：\n- 最新确认向上笔：...\n\n信号：\n- buy_3\n\n观察重点：\n- 是否突破\n",
                 },
                 ensure_ascii=False,
@@ -208,16 +267,59 @@ Generated at: 2026-05-30T20:05:52
     summary_payload = json.loads((latest_dir / "stocks" / "000651" / "summary.json").read_text(encoding="utf-8"))
     assert summary_payload["priority"] == "P2"
     assert summary_payload["jump"]["detail"] == "stocks/000651/detail.json"
+    assert summary_payload["cards"]["technical"]["buy_point_labels"] == ["二买"]
+    assert summary_payload["cards"]["technical"]["signal_descriptions"][0].startswith("二买，一买后回抽确认")
+    assert summary_payload["cards"]["technical"]["timeframe"] == "30m"
+    assert summary_payload["cards"]["technical"]["timeframe_label"] == "30M"
+    assert summary_payload["cover_chart"]["timeframe"] == "30m"
+    assert summary_payload["cards"]["technical"]["precision_entry"]["operation_level"] == "5M"
+    assert summary_payload["cards"]["technical"]["precision_note"].startswith("5M 已出现二买")
+    assert "窗口依据：" in summary_payload["cards"]["technical"]["precision_note"]
+    assert summary_payload["cards"]["technical"]["precision_window_basis_label"] == "中枢到锚点窗口"
+    assert summary_payload["cards"]["technical"]["precision_window_basis_description"] == "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。"
+    assert summary_payload["cards"]["technical"]["precision_window_display"]["title"] == "5M区间套窗口"
+    assert summary_payload["cards"]["technical"]["precision_window_display"]["label"] == "中枢到锚点窗口"
+    assert summary_payload["cards"]["technical"]["precision_window_display"]["description"] == "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。"
+    assert summary_payload["cards"]["technical"]["precision_window_display"]["lines"] == [
+        "5M窗口：中枢到锚点窗口",
+        "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+    ]
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["previous"]["type_label"] == "上涨"
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["current"]["type_label"] == "下跌"
+    assert summary_payload["cards"]["technical"]["latest_signal_summary"]["latest_buy"]["label"] == "二买"
+    assert summary_payload["cards"]["technical"]["latest_signal_summary"]["latest_sell"]["label"] == "三卖"
+    assert summary_payload["cards"]["technical"]["technical_focus_lines"] == [
+        "上个已完成走势：上涨 2026-04-01T10:30:00 -> 2026-05-10T10:30:00",
+        "当前进行走势：下跌 自 2026-05-15T10:30:00 起，最新 2026-05-29T10:30:00",
+        "走势连接：上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。",
+        "最近买点：二买 2026-05-29T10:30:00，价格 10.25",
+        "最近卖点：三卖 2026-05-27T14:30:00，价格 10.88",
+    ]
 
     detail_payload = json.loads((latest_dir / "stocks" / "00700" / "detail.json").read_text(encoding="utf-8"))
     assert detail_payload["headline"]["priority"] == "P1"
-    assert detail_payload["charts"][0]["path"] == "stocks/00700/charts/60m.svg"
+    assert detail_payload["charts"][0]["path"] == "stocks/00700/charts/30m.svg"
     assert [chart["path"] for chart in detail_payload["charts"]] == [
-        "stocks/00700/charts/60m.svg",
         "stocks/00700/charts/30m.svg",
+        "stocks/00700/charts/60m.svg",
         "stocks/00700/charts/15m.svg",
         "stocks/00700/charts/5m.svg",
     ]
+    assert detail_payload["sections"][1]["buy_point_labels"] == ["二买"]
+    assert detail_payload["sections"][1]["signal_descriptions"][0].startswith("二买，一买后回抽确认")
+    assert detail_payload["overview"]["bullets"][1].startswith("30M 技术面")
+    assert detail_payload["sections"][1]["precision_entry"]["timeframe"] == "5m"
+    assert detail_payload["sections"][1]["precision_window_basis_label"] == "中枢到锚点窗口"
+    assert detail_payload["sections"][1]["precision_window_basis_description"] == "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。"
+    assert detail_payload["sections"][1]["precision_window_display"]["title"] == "5M区间套窗口"
+    assert detail_payload["sections"][1]["precision_window_display"]["lines"] == [
+        "5M窗口：中枢到锚点窗口",
+        "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+    ]
+    assert detail_payload["sections"][1]["same_level_decomposition"]["previous"]["type_label"] == "上涨"
+    assert detail_payload["sections"][1]["same_level_decomposition"]["current"]["type_label"] == "下跌"
+    assert detail_payload["sections"][1]["latest_signal_summary"]["latest_overall"]["label"] == "二买"
+    assert detail_payload["sections"][1]["technical_focus_lines"][0].startswith("上个已完成走势：上涨")
 
     a_share_group = json.loads((latest_dir / "groups" / "a_share.json").read_text(encoding="utf-8"))
     assert a_share_group["sections"][1]["items"][0]["symbol"] == "000651"

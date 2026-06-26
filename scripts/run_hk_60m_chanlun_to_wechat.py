@@ -19,6 +19,13 @@ from chanlun.data.cleaner import clean_bars
 from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, get_last_fetch_metadata, save_to_csv
 from chanlun.data.source_profiles import available_source_profiles, resolve_hk_minute_source_selection
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
+from chanlun.analysis import (
+    analyze_chanlun_signals,
+    build_signal_explanation_lines,
+    build_signal_summary_fields,
+    compute_bi_strengths as shared_compute_bi_strengths,
+    format_signal_point_labels,
+)
 from chanlun.models import Bar, Bi, Fractal, NormalizedBar, Zhongshu
 from chanlun.normalize import normalize_bars
 from chanlun.segment import identify_segments
@@ -120,17 +127,7 @@ def build_paths(symbol: str, name: str, bars: list[dict]) -> dict[str, Path]:
 
 
 def compute_bi_strengths(bis: list[Bi], macd_points: list[Any]) -> dict[int, dict[str, float]]:
-    strengths: dict[int, dict[str, float]] = {}
-    for bi in bis:
-        segment = [point for point in macd_points if bi.start_ts <= point.ts <= bi.end_ts]
-        if not segment:
-            continue
-        strengths[bi.bi_id] = {
-            "macd_sum_abs": sum(abs(point.macd) for point in segment),
-            "dif_max": max(point.dif for point in segment),
-            "dif_min": min(point.dif for point in segment),
-        }
-    return strengths
+    return shared_compute_bi_strengths(bis, macd_points)
 
 
 def analyze_current_state(
@@ -140,51 +137,19 @@ def analyze_current_state(
     zhongshus: list[Zhongshu],
     macd_points: list[Any],
 ) -> str:
-    confirmed_bis = [bi for bi in bis if bi.is_confirmed]
-    strengths = compute_bi_strengths(bis, macd_points)
-    latest_confirmed_up = next((bi for bi in reversed(confirmed_bis) if bi.is_up()), None)
-    previous_confirmed_up = None
-    if latest_confirmed_up is not None:
-        seen_latest = False
-        for bi in reversed(confirmed_bis):
-            if bi.bi_id == latest_confirmed_up.bi_id:
-                seen_latest = True
-                continue
-            if seen_latest and bi.is_up():
-                previous_confirmed_up = bi
-                break
-
-    latest_down = next((bi for bi in reversed(bis) if bi.is_down()), None)
-    top_divergence = False
-    if latest_confirmed_up and previous_confirmed_up:
-        last_strength = strengths.get(latest_confirmed_up.bi_id, {})
-        prev_strength = strengths.get(previous_confirmed_up.bi_id, {})
-        top_divergence = (
-            latest_confirmed_up.high > previous_confirmed_up.high
-            and last_strength.get("macd_sum_abs", 0.0) < prev_strength.get("macd_sum_abs", 0.0)
-        )
-
-    bottom_divergence = False
-    previous_confirmed_down = next((bi for bi in reversed(confirmed_bis) if bi.is_down()), None)
-    if latest_down and previous_confirmed_down and latest_down.bi_id != previous_confirmed_down.bi_id:
-        last_strength = strengths.get(latest_down.bi_id, {})
-        prev_strength = strengths.get(previous_confirmed_down.bi_id, {})
-        bottom_divergence = (
-            latest_down.low < previous_confirmed_down.low
-            and last_strength.get("macd_sum_abs", 0.0) < prev_strength.get("macd_sum_abs", 0.0)
-        )
-
-    current_zs = zhongshus[-1] if zhongshus else None
-    buy_points: list[str] = []
-    sell_points: list[str] = []
-    if current_zs and latest_down and bottom_divergence and latest_down.low <= current_zs.zs_low:
-        buy_points.append("buy_1")
-    if current_zs and latest_confirmed_up and top_divergence and latest_confirmed_up.high >= current_zs.zs_high:
-        sell_points.append("sell_1")
-    if current_zs and latest_confirmed_up and latest_confirmed_up.high > current_zs.zs_high and latest_down and latest_down.low >= current_zs.zs_high:
-        buy_points.append("buy_3")
-    if current_zs and latest_down and latest_down.low < current_zs.zs_low and latest_confirmed_up and latest_confirmed_up.high <= current_zs.zs_low:
-        sell_points.append("sell_3")
+    signals = analyze_chanlun_signals(raw_bars, bis, zhongshus, macd_points)
+    current_zs = signals["current_zs"]
+    latest_confirmed_up = signals["latest_confirmed_up"]
+    latest_down = signals["latest_down"]
+    top_divergence = signals["top_divergence"]
+    bottom_divergence = signals["bottom_divergence"]
+    buy_points = signals["buy_points"]
+    sell_points = signals["sell_points"]
+    signal_explanations = build_signal_explanation_lines(signals)
+    structure_state = signals["structure_state"]
+    relationship = structure_state.get("relationship") or {}
+    last_completed = structure_state.get("last_completed") or {}
+    current_ongoing = structure_state.get("current_ongoing") or {}
 
     actual_start = raw_bars[0].ts.strftime("%Y-%m-%d %H:%M")
     actual_end = raw_bars[-1].ts.strftime("%Y-%m-%d %H:%M")
@@ -196,6 +161,14 @@ def analyze_current_state(
     if current_zs:
         overview_lines.append(
             f"最新中枢：{current_zs.zs_low:.2f}-{current_zs.zs_high:.2f}，覆盖 {current_zs.start_ts.strftime('%m-%d %H:%M')} 到 {current_zs.end_ts.strftime('%m-%d %H:%M')}"
+        )
+    if last_completed:
+        overview_lines.append(
+            f"上一个已完成走势类型：{last_completed.get('type')}，起于 {str(last_completed.get('start_ts') or '')[:16].replace('T', ' ')}，止于 {str(last_completed.get('end_ts') or '')[:16].replace('T', ' ')}"
+        )
+    if current_ongoing:
+        overview_lines.append(
+            f"当前正在进行走势类型：{current_ongoing.get('type')}，起于 {str(current_ongoing.get('start_ts') or '')[:16].replace('T', ' ')}，最新时间 {str(current_ongoing.get('latest_ts') or '')[:16].replace('T', ' ')}"
         )
 
     structure_lines: list[str] = []
@@ -210,13 +183,19 @@ def analyze_current_state(
         )
     if current_zs:
         structure_lines.append(f"最新中枢结构：{format_zhongshu_structure_text(current_zs)}")
+    if relationship.get("note"):
+        structure_lines.append(f"走势连接判断：{relationship['note']}")
 
     signal_lines = [
         "顶背驰：有" if top_divergence else "顶背驰：无",
         "底背驰：有" if bottom_divergence else "底背驰：无",
-        f"买点：{', '.join(buy_points)}" if buy_points else "买点：当前无确认一二三类买点",
-        f"卖点：{', '.join(sell_points)}" if sell_points else "卖点：当前无确认一二三类卖点",
+        f"趋势背驰：{'有' if signals['divergence']['trend']['active'] else '无'}",
+        f"盘整背驰：{'有' if signals['divergence']['range']['active'] else '无'}",
+        f"买点：{', '.join(format_signal_point_labels(buy_points))}" if buy_points else "买点：当前无确认一二三类买点",
+        f"卖点：{', '.join(format_signal_point_labels(sell_points))}" if sell_points else "卖点：当前无确认一二三类卖点",
     ]
+    if signal_explanations:
+        signal_lines.extend([f"信号细化：{line}" for line in signal_explanations])
 
     focus_lines: list[str] = []
     if current_zs:
@@ -281,6 +260,9 @@ def write_technical_report_json(
     actual_bar_count: int,
     requested_min_rows: int | None,
     zhongshus: list[Zhongshu],
+    structure_state: dict[str, object] | None = None,
+    divergence: dict[str, object] | None = None,
+    summary_payload: dict[str, object] | None = None,
 ) -> Path:
     latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
     return write_json(
@@ -307,7 +289,10 @@ def write_technical_report_json(
                 "latest_zhongshu": latest_zhongshu,
                 "zhongshus": serialize_zhongshus(zhongshus),
             },
-            "summary": {
+            "structure_state": structure_state,
+            "divergence": divergence,
+            "summary": summary_payload
+            or {
                 "conclusion": _extract_prefixed_value(advice_text, "结论："),
                 "suggestion": _extract_prefixed_value(advice_text, "建议："),
             },
@@ -391,7 +376,13 @@ def main() -> None:
         title=f"{args.symbol} {args.name} 60m",
     )
     analysis_text = analyze_current_state(args.name, raw_bars, bis, zhongshus, macd_points)
+    signals = analyze_chanlun_signals(raw_bars, bis, zhongshus, macd_points)
     advice_text = ""
+    summary_payload = {
+        "conclusion": _extract_prefixed_value(advice_text, "结论："),
+        "suggestion": _extract_prefixed_value(advice_text, "建议："),
+        **build_signal_summary_fields(signals),
+    }
     technical_report_path = write_technical_report_json(
         path=paths["base_dir"] / "tech.json",
         symbol=args.symbol,
@@ -414,6 +405,9 @@ def main() -> None:
         actual_bar_count=len(raw_bars),
         requested_min_rows=None,
         zhongshus=zhongshus,
+        structure_state=signals["structure_state"],
+        divergence=signals["divergence"],
+        summary_payload=summary_payload,
     )
 
     print(f"原始 CSV: {paths['raw_csv']}")

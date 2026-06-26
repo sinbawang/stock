@@ -133,6 +133,8 @@
 - `source`
 - `artifacts`
 - `stats`
+- `precision_entry`
+- `precision_window_display`
 
 其中 `summary` 当前至少可能包含：
 
@@ -146,11 +148,52 @@
 - `sell_points`
 - `signal_points`
 - `signal_catalog`
+- `precision_entry`
+- `precision_window_display`
+
+当前三轴 mixed 报告主链路里，`30m/tech.json` 已经稳定带出一组次级别区间套字段，用于表达“30M 主操作级别下的 5M 精确执行层”：
+
+- 顶层 `precision_entry`
+- 顶层 `precision_window_display`
+- `summary.precision_entry`
+- `summary.precision_window_display`
+
+其中：
+
+- `precision_entry` 表达 5M 执行层的状态、信号、背驰与绑定来源
+- `precision_window_display` 是面向消费层的展示块，当前结构为 `{title, label, description, lines}`
+
+当前 `precision_entry` 常见字段包括：
+
+- `operation_level`: 当前为 `5M`
+- `timeframe`: 当前为 `5m`
+- `pending_reverse_mode`: 当前默认 `effective_only`
+- `status`: `standby`、`watch`、`actionable`
+- `note`
+- `signal_descriptions`
+- `window_basis_label`
+- `window_basis_description`
+- `nested_from`
+
+当前 `nested_from` 常见字段包括：
+
+- `side`
+- `window_start_time`
+- `window_end_time`
+- `window_basis`
+- `window_basis_label`
+- `window_basis_description`
+- `anchor_time`
+- `related_zs_id`
+- `exit_bi_id`
+- `zs_is_terminated`
+- `trigger`
 
 因此当前读取规则应是：
 
 - 联合文本和小程序发布层可以稳定依赖 `summary.conclusion`、`summary.suggestion`、`analysis_text`、`advice_text`
 - 对 `source`、`artifacts`、`stats` 与更细的 `summary` 字段，必须按“有则用、无则降级”处理
+- 对 `precision_entry` 与 `precision_window_display`，当前可在 mixed 报告主链路中稳定依赖，但在其他旧入口仍应按 optional 处理
 
 ### 3.4 `tech.json` 建议新增的走势结构状态字段
 

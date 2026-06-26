@@ -16,20 +16,23 @@ if str(SRC) not in sys.path:
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+from chanlun.analysis import SIGNAL_BASIS_LABELS, build_precision_window_display, format_signal_point_label
 from report_retention import prune_older_outputs
 from storage_layout import REPORTS_DIR, stock_report_dir, stock_overview_report_path
 
 DEFAULT_REPORT_ROOT = REPORTS_DIR
 DEFAULT_BUILD_DIR = ROOT / "build" / "wechat"
+PRIMARY_TECHNICAL_TIMEFRAME = "30m"
+PRIMARY_TECHNICAL_LABEL = "30M"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate a compact single H-share report with fundamental, capital-flow, technical, and 60M chart refs.")
+    parser = argparse.ArgumentParser(description="Generate a compact single H-share report with fundamental, capital-flow, technical, and 30M chart refs.")
     parser.add_argument("symbol", help="HK symbol such as 00700")
     parser.add_argument("--name", required=True, help="Security name")
     parser.add_argument("--report-root", default=str(DEFAULT_REPORT_ROOT), help="Canonical reports root directory")
     parser.add_argument("--output-dir", default=None, help="Optional output directory for compact report")
-    parser.add_argument("--refresh-chart", action="store_true", help="Try refreshing the 60M chart before rendering compact report")
+    parser.add_argument("--refresh-chart", action="store_true", help="Try refreshing the 30M chart before rendering compact report")
     parser.add_argument("--source", default="xueqiu", choices=["xueqiu", "akshare"], help="Primary HK minute source when refreshing chart")
     parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="Fallback HK minute source when refreshing chart")
     return parser.parse_args()
@@ -234,6 +237,7 @@ def _compact_technical_payload(payload: dict) -> list[str]:
     if not summary:
         return ["结论: missing"]
     analysis_text = payload.get("analysis_text") or ""
+    precision_entry = summary.get("precision_entry") or payload.get("precision_entry") or {}
     lines = [
         f"操作级别: {summary.get('operation_level') or payload.get('timeframe') or 'missing'}",
         f"结论: {summary.get('conclusion') or 'missing'}",
@@ -243,13 +247,15 @@ def _compact_technical_payload(payload: dict) -> list[str]:
     if signal_points:
         formatted_points = []
         for item in signal_points[:6]:
-            point = item.get("point") or "unknown"
+            point = format_signal_point_label(str(item.get("point") or "unknown"))
             active = item.get("active")
             time_text = item.get("time") or "missing"
             price = item.get("price")
             price_text = f"{price:.2f}" if isinstance(price, (int, float)) else "missing"
             status = "active" if active is not False else "inactive"
-            formatted_points.append(f"{point}({status})@{time_text}/{price_text}")
+            basis = SIGNAL_BASIS_LABELS.get(str(item.get("basis") or "")) if active is not False else None
+            detail = f" [{basis}]" if basis else ""
+            formatted_points.append(f"{point}({status})@{time_text}/{price_text}{detail}")
         lines.append("买卖点: " + "；".join(formatted_points))
     overview = _limit_lines(_extract_section_lines(analysis_text, "概览："), 3)
     structure = _limit_lines(_extract_section_lines(analysis_text, "结构："), 3)
@@ -260,13 +266,20 @@ def _compact_technical_payload(payload: dict) -> list[str]:
         lines.append("结构: " + _join_short(structure, 3))
     if signals:
         lines.append("信号: " + _join_short(signals, 4))
+    if precision_entry:
+        lower_level = precision_entry.get("operation_level") or precision_entry.get("timeframe") or "5M"
+        note = precision_entry.get("note") or "missing"
+        precision_window_display = build_precision_window_display(precision_entry)
+        lines.append(f"{lower_level}区间套: {note}")
+        if precision_window_display and precision_window_display.get("label"):
+            lines.append(f"{lower_level}窗口: {precision_window_display['label']}")
     return lines
 
 
 def _find_latest_chart(symbol: str, name: str) -> Path | None:
     patterns = [
-        DEFAULT_BUILD_DIR / "data" / symbol / "60m" / "structure.jpg",
-        ROOT / "data" / "reports" / symbol / "60m" / "structure.svg",
+        DEFAULT_BUILD_DIR / "data" / symbol / PRIMARY_TECHNICAL_TIMEFRAME / "structure.jpg",
+        ROOT / "data" / "reports" / symbol / PRIMARY_TECHNICAL_TIMEFRAME / "structure.svg",
     ]
     matches: list[Path] = []
     for pattern in patterns:
@@ -307,7 +320,7 @@ def generate_report(
     stock_dir = report_root / symbol
     fundamental_path = stock_dir / "base.json"
     capital_path = stock_dir / "fund.json"
-    technical_path = stock_dir / "60m" / "tech.json"
+    technical_path = stock_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json"
     chart_path = _find_latest_chart(symbol, name)
 
     generated_at = datetime.now()
@@ -325,9 +338,9 @@ def generate_report(
     if canonical_overview.exists():
         lines.extend(["", f"概览原文: {canonical_overview}"])
     if chart_path is not None:
-        lines.extend([f"60M图: {chart_path}"])
+        lines.extend([f"{PRIMARY_TECHNICAL_LABEL}图: {chart_path}"])
     if chart_note:
-        lines.extend(["", "【提示】", f"60M图刷新失败，已复用最新已有图。原因: {chart_note}"])
+        lines.extend(["", "【提示】", f"{PRIMARY_TECHNICAL_LABEL}图刷新失败，已复用最新已有图。原因: {chart_note}"])
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

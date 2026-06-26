@@ -38,6 +38,10 @@ class FakeBi:
 
 def _sample_zhongshu(exit_bi_id: int | None = None) -> SimpleNamespace:
     return SimpleNamespace(
+        zs_id=2,
+        structure_level="bi",
+        recognition_mode="fixed_first_three_overlap",
+        render_mode="core_plus_extension",
         zs_low=10.1,
         zs_high=10.8,
         start_ts=datetime(2026, 5, 1, 10, 30),
@@ -68,6 +72,33 @@ def test_build_advice_mentions_core_and_extended_bis() -> None:
     assert "离开笔：未出现" in text
 
 
+def test_build_advice_describes_second_buy_in_plain_language() -> None:
+    signals = {
+        "current_zs": _sample_zhongshu(),
+        "latest_confirmed_up": None,
+        "latest_down": SimpleNamespace(low=10.25),
+        "buy_points": ["buy_2"],
+        "sell_points": [],
+        "top_divergence": False,
+        "bottom_divergence": False,
+        "signal_points": [
+            {
+                "point": "buy2",
+                "active": True,
+                "price": 10.25,
+                "basis": "buy1_pullback_confirmation",
+                "related_zs_id": 2,
+            }
+        ],
+    }
+    raw_bars = [SimpleNamespace(close=10.5)]
+
+    text = build_advice("示例标的", "60M", raw_bars, signals)
+
+    assert "出现 二买" in text
+    assert "信号说明：二买，一买后回抽确认，低点未再跌破前低，参考价 10.25，关联中枢 ZS2。" in text
+
+
 def test_analyze_current_state_mentions_core_and_extended_bis(monkeypatch) -> None:
     monkeypatch.setattr(cn_report, "compute_bi_strengths", lambda bis, macd_points: {})
     raw_bars = [
@@ -84,3 +115,39 @@ def test_analyze_current_state_mentions_core_and_extended_bis(monkeypatch) -> No
     assert "最新中枢结构：本体三笔(core_bi_ids)：9,10,11" in text
     assert "扩展参与笔(bi_ids)：9,10,11,12" in text
     assert "离开笔：13" in text
+    assert "当前正在进行走势类型：range" in text
+    assert "盘整背驰：无" in text
+
+
+def test_analyze_current_state_uses_human_readable_signal_names(monkeypatch) -> None:
+    monkeypatch.setattr(cn_report, "compute_bi_strengths", lambda bis, macd_points: {})
+    raw_bars = [
+        SimpleNamespace(ts=datetime(2026, 5, 1, 10, 30), close=10.2),
+        SimpleNamespace(ts=datetime(2026, 5, 29, 14, 30), close=10.6),
+    ]
+    bis = [
+        FakeBi(7, "up", datetime(2026, 5, 1, 10, 30), datetime(2026, 5, 8, 14, 30), 10.9, 10.0),
+        FakeBi(12, "down", datetime(2026, 5, 9, 10, 30), datetime(2026, 5, 29, 14, 30), 10.8, 10.2, is_confirmed=False),
+    ]
+    original_analyze = cn_report.analyze_chanlun_signals
+
+    def fake_analyze(raw_bars, bis, zhongshus, macd_points):
+        payload = original_analyze(raw_bars, bis, zhongshus, macd_points)
+        payload["buy_points"] = ["buy_2"]
+        payload["signal_points"] = [
+            {
+                "point": "buy2",
+                "active": True,
+                "price": 10.25,
+                "basis": "buy1_pullback_confirmation",
+                "related_zs_id": 2,
+            }
+        ]
+        return payload
+
+    monkeypatch.setattr(cn_report, "analyze_chanlun_signals", fake_analyze)
+
+    text = cn_report.analyze_current_state("示例标的", raw_bars, bis, [_sample_zhongshu(13)], [])
+
+    assert "买点：二买" in text
+    assert "信号细化：二买，一买后回抽确认，低点未再跌破前低，参考价 10.25，关联中枢 ZS2" in text
