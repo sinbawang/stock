@@ -4,10 +4,9 @@ import argparse
 import json
 import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
-
-import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -24,14 +23,15 @@ from chanlun.analysis import build_lower_timeframe_precision_entry, build_precis
 from chanlun.bi import identify_bis
 from chanlun.chart_export import save_structure_charts
 from chanlun.default_ranges import default_structure_start
-from chanlun.data import read_bars_from_csv, read_bars_from_dataframe
+from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
 from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, get_last_fetch_metadata, save_to_csv as save_hk_minute_csv
 from chanlun.data.source_profiles import available_source_profiles, resolve_hk_minute_source_selection
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.normalize import normalize_bars
+from chanlun.segment import identify_segments
 from chanlun.zhongshu import identify_zhongshu
-from export_structures_with_boxes import calculate_macd, export_bis, export_confirmed_fractals, export_fractals, export_macd, export_zhongshus, serialize_zhongshu, serialize_zhongshus
+from export_structures_with_boxes import calculate_macd, export_bis, export_confirmed_fractals, export_fractals, export_macd, export_segments, export_zhongshus, serialize_zhongshu, serialize_zhongshus
 from fundamental.reporting.presentation import build_fundamental_presentation, write_base_text
 from fundamental.services import fetch_and_analyze_hk_blended_fundamentals
 from report_retention import prune_older_outputs
@@ -59,9 +59,12 @@ INTRADAY_SOURCE_PROBE_ROWS = 600
 BAR_COUNT_POLICY = "feasible_maximum"
 PRIMARY_TECHNICAL_TIMEFRAME = "30m"
 PRIMARY_TECHNICAL_LABEL = "30M"
+PRIMARY_TECHNICAL_SOURCE_PROBE_MIN_ROWS = 480
 LOWER_PRECISION_TIMEFRAME = "5m"
 LOWER_PRECISION_LABEL = "5M"
 LOWER_PRECISION_PENDING_REVERSE_MODE = "effective_only"
+LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS = 480
+LAST_TECHNICAL_TIMINGS: dict[str, float] = {}
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,6 +89,14 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Reuse an existing base.json instead of regenerating the fundamental report when possible. Use --no-skip-gen-base to force refresh.",
+    )
+    parser.add_argument(
+        "--skip-gen-fund",
+        "--skipGenFund",
+        dest="skip_gen_fund",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Reuse an existing fund.json instead of regenerating the capital-flow report when possible.",
     )
     return parser.parse_args()
 
@@ -133,9 +144,28 @@ def _load_existing_fundamental_ref(base_path: Path) -> FundamentalBriefRef | Non
     )
 
 
+def _load_existing_capital_flow_ref(fund_path: Path) -> CapitalFlowRef | None:
+    if not fund_path.exists():
+        return None
+    payload = json.loads(fund_path.read_text(encoding="utf-8"))
+    summary = payload.get("summary") or {}
+    score = summary.get("score")
+    rating = summary.get("rating")
+    source = summary.get("source")
+    if score is None or not rating:
+        return None
+    bucket = summary.get("bucket")
+    if not bucket:
+        score_value = float(score)
+        bucket = "strong" if score_value >= 80 else "watch" if score_value >= 65 else "neutral" if score_value >= 50 else "weak"
+    return CapitalFlowRef(score=float(score), rating=str(rating), source=str(source or ""), bucket=str(bucket), path=fund_path)
+
+
 def _build_lower_precision_entry(
     *,
     symbol: str,
+    name: str,
+    output_dir: Path,
     start: str,
     end: str | None,
     adjust: str,
@@ -151,21 +181,43 @@ def _build_lower_precision_entry(
         adjust=adjust,
         primary_source=primary_source,
         fallback_sources=fallback_sources,
-        min_rows=INTRADAY_SOURCE_PROBE_ROWS,
+        min_rows=LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS,
+        stop_on_sufficient_rows=True,
     )
     fetch_meta = get_last_fetch_metadata()
     actual_source = str(fetch_meta.get("actual_source") or used_source)
     if not rows:
         return None
 
-    raw_bars = clean_bars(read_bars_from_dataframe(pd.DataFrame(rows)))
+    stock_root = None if output_dir == stock_report_dir(symbol.zfill(5)) else output_dir
+    lower_layout = timeframe_report_paths(symbol, LOWER_PRECISION_TIMEFRAME, rows, stock_root=stock_root)
+    save_hk_minute_csv(rows, str(lower_layout.raw_csv))
+
+    raw_bars = clean_bars(read_bars_from_csv(str(lower_layout.raw_csv)))
     normalized_bars = normalize_bars(raw_bars)
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
     bis = identify_bis(fractals, normalized_bars, pending_reverse_mode=LOWER_PRECISION_PENDING_REVERSE_MODE)
+    segments = identify_segments(bis)
     confirmed_bis = [bi for bi in bis if bi.is_confirmed]
     zhongshus = identify_zhongshu(confirmed_bis)
     macd_points = calculate_macd(raw_bars)
     lower_signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
+    _write_lower_precision_report(
+        symbol=symbol,
+        name=name,
+        layout=lower_layout,
+        raw_bars=raw_bars,
+        normalized_bars=normalized_bars,
+        fractals=fractals,
+        bis=bis,
+        segments=segments,
+        zhongshus=zhongshus,
+        macd_points=macd_points,
+        signals=lower_signals,
+        source=used_source,
+        actual_source=actual_source,
+        source_attempts=list(fetch_meta.get("source_attempts") or []),
+    )
     return build_lower_timeframe_precision_entry(
         signals,
         lower_signals,
@@ -174,6 +226,116 @@ def _build_lower_precision_entry(
         pending_reverse_mode=LOWER_PRECISION_PENDING_REVERSE_MODE,
         source=used_source,
         source_actual=actual_source,
+    )
+
+
+def _write_lower_precision_report(
+    *,
+    symbol: str,
+    name: str,
+    layout,
+    raw_bars,
+    normalized_bars,
+    fractals,
+    bis,
+    segments,
+    zhongshus,
+    macd_points,
+    signals: dict[str, object],
+    source: str,
+    actual_source: str,
+    source_attempts: list[dict[str, object]],
+) -> None:
+    write_normalized_csv(layout.normalized_csv, normalized_bars)
+
+    confirmed_fx_ids: set[int] = set()
+    for bi in bis:
+        if bi.is_confirmed:
+            confirmed_fx_ids.add(bi.start_fx_id)
+            confirmed_fx_ids.add(bi.end_fx_id)
+    unconfirmed_end_fx_ids = {bi.end_fx_id for bi in bis if not bi.is_confirmed}
+
+    export_fractals(layout.fractals_csv, normalized_bars, fractals, confirmed_fx_ids, unconfirmed_end_fx_ids)
+    export_confirmed_fractals(layout.confirmed_fractals_csv, normalized_bars, fractals, confirmed_fx_ids)
+    export_bis(layout.bis_csv, bis)
+    export_segments(layout.segments_csv, segments)
+    export_zhongshus(layout.zhongshu_csv, zhongshus)
+    export_macd(layout.macd_csv, macd_points)
+    save_structure_charts(
+        bars=raw_bars,
+        normalized_bars=normalized_bars,
+        fractals=fractals,
+        bis=bis,
+        zhongshus=zhongshus,
+        svg_path=layout.chart_svg,
+        png_path=layout.chart_png,
+        jpg_path=layout.chart_jpg,
+        title=f"{symbol} {name} {LOWER_PRECISION_TIMEFRAME}",
+    )
+
+    analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points).replace("60M", LOWER_PRECISION_LABEL)
+    advice_text = build_advice(name, LOWER_PRECISION_LABEL, raw_bars, signals)
+    summary_payload = build_technical_summary(
+        LOWER_PRECISION_LABEL,
+        signals,
+        advice_text,
+        raw_bars=raw_bars,
+    )
+    report_text = analysis_text + "\n\n" + advice_text + "\n"
+    latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
+
+    analysis_path = layout.root_dir / "analysis.txt"
+    advice_path = layout.root_dir / "advice.txt"
+    report_path = layout.root_dir / "report.txt"
+    analysis_path.write_text(analysis_text + "\n", encoding="utf-8")
+    advice_path.write_text(advice_text + "\n", encoding="utf-8")
+    report_path.write_text(report_text, encoding="utf-8")
+    write_json(
+        layout.technical_report_json,
+        {
+            "report_type": "technical",
+            "symbol": symbol,
+            "name": name,
+            "timeframe": LOWER_PRECISION_TIMEFRAME,
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "source": source,
+            "source_actual": actual_source,
+            "data_fetch": {
+                "source": source,
+                "actual_source": actual_source,
+                "source_attempts": source_attempts,
+                "actual_bar_count": len(raw_bars),
+                "requested_min_rows": LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS,
+                "fulfilled_min_rows": len(raw_bars) >= LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS,
+                "bar_count_policy": BAR_COUNT_POLICY,
+                "source_probe_min_rows": LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS,
+            },
+            "pending_reverse_mode": LOWER_PRECISION_PENDING_REVERSE_MODE,
+            "zhongshu_level": "bi",
+            "structure": {
+                "latest_zhongshu": latest_zhongshu,
+                "zhongshus": serialize_zhongshus(zhongshus),
+            },
+            "structure_state": signals.get("structure_state"),
+            "divergence": signals.get("divergence"),
+            "summary": summary_payload,
+            "analysis_text": analysis_text,
+            "advice_text": advice_text,
+            "artifacts": {
+                "raw_csv": layout.raw_csv,
+                "normalized_csv": layout.normalized_csv,
+                "fractals_csv": layout.fractals_csv,
+                "confirmed_fractals_csv": layout.confirmed_fractals_csv,
+                "bis_csv": layout.bis_csv,
+                "segments_csv": layout.segments_csv,
+                "zhongshu_csv": layout.zhongshu_csv,
+                "macd_csv": layout.macd_csv,
+                "structure_svg": layout.chart_svg,
+                "structure_png": layout.chart_png,
+                "structure_jpg": layout.chart_jpg,
+                "report_txt": report_path,
+            },
+        },
     )
 
 
@@ -188,6 +350,7 @@ def _save_technical_report(
     primary_source: str,
     fallback_sources: tuple[str, ...] | None,
 ) -> tuple[TechnicalRef, Path]:
+    started_total = time.perf_counter()
     rows, used_source = fetch_hk_minute_with_policy(
         symbol,
         period="30",
@@ -196,7 +359,8 @@ def _save_technical_report(
         adjust=adjust,
         primary_source=primary_source,
         fallback_sources=fallback_sources,
-        min_rows=INTRADAY_SOURCE_PROBE_ROWS,
+        min_rows=PRIMARY_TECHNICAL_SOURCE_PROBE_MIN_ROWS,
+        stop_on_sufficient_rows=True,
     )
     fetch_meta = get_last_fetch_metadata()
     actual_source = str(fetch_meta.get("actual_source") or used_source)
@@ -256,8 +420,11 @@ def _save_technical_report(
     analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points)
     analysis_text = analysis_text.replace("60M", PRIMARY_TECHNICAL_LABEL)
     signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
+    started_precision = time.perf_counter()
     precision_entry = _build_lower_precision_entry(
         symbol=symbol,
+        name=name,
+        output_dir=output_dir,
         start=start,
         end=end,
         adjust=adjust,
@@ -265,6 +432,7 @@ def _save_technical_report(
         fallback_sources=fallback_sources,
         signals=signals,
     )
+    precision_seconds = time.perf_counter() - started_precision
     precision_window_display = build_precision_window_display(precision_entry)
     advice_text = build_advice(name, PRIMARY_TECHNICAL_LABEL, raw_bars, signals)
     if precision_entry is not None:
@@ -302,10 +470,10 @@ def _save_technical_report(
                 "actual_source": actual_source,
                 "source_attempts": fetch_meta.get("source_attempts") or [],
                 "actual_bar_count": len(raw_bars),
-                "requested_min_rows": None,
-                "fulfilled_min_rows": None,
+                "requested_min_rows": PRIMARY_TECHNICAL_SOURCE_PROBE_MIN_ROWS,
+                "fulfilled_min_rows": len(raw_bars) >= PRIMARY_TECHNICAL_SOURCE_PROBE_MIN_ROWS,
                 "bar_count_policy": BAR_COUNT_POLICY,
-                "source_probe_min_rows": INTRADAY_SOURCE_PROBE_ROWS,
+                "source_probe_min_rows": PRIMARY_TECHNICAL_SOURCE_PROBE_MIN_ROWS,
             },
             "structure": {
                 "latest_zhongshu": latest_zhongshu,
@@ -331,6 +499,15 @@ def _save_technical_report(
                 "structure_jpg": paths["jpg"],
             },
         },
+    )
+    total_seconds = time.perf_counter() - started_total
+    LAST_TECHNICAL_TIMINGS.clear()
+    LAST_TECHNICAL_TIMINGS.update(
+        {
+            "technical_30m_seconds": max(total_seconds - precision_seconds, 0.0),
+            "technical_5m_seconds": precision_seconds,
+            "technical_total_seconds": total_seconds,
+        }
     )
     return TechnicalRef(conclusion=conclusion, suggestion=suggestion, path=output_path), output_path
 
@@ -390,6 +567,7 @@ def main() -> None:
     manual_supplement_path = _resolve_manual_supplement_path(args.symbol.zfill(5), args.manual_supplement_path)
 
     base_path = stock_base_report_path(args.symbol.zfill(5)) if output_dir == stock_report_dir(args.symbol.zfill(5)) else output_dir / "base.json"
+    started_fundamental = time.perf_counter()
     fundamental_ref = _load_existing_fundamental_ref(base_path) if args.skip_gen_base else None
     fundamental_path = base_path
     if fundamental_ref is None:
@@ -426,6 +604,7 @@ def main() -> None:
         )
     else:
         print(f"fundamental_reused= {fundamental_path}")
+    fundamental_seconds = time.perf_counter() - started_fundamental
 
     resolved_primary_source, resolved_fallback_sources, _ = resolve_hk_minute_source_selection(
         primary_source=getattr(args, "source", None),
@@ -433,7 +612,7 @@ def main() -> None:
         source_profile=getattr(args, "source_profile", None),
     )
 
-    technical_ref, technical_path = _save_technical_report(
+    technical_result = _save_technical_report(
         symbol=args.symbol,
         name=args.name,
         output_dir=output_dir,
@@ -443,50 +622,60 @@ def main() -> None:
         primary_source=resolved_primary_source,
         fallback_sources=resolved_fallback_sources,
     )
+    technical_ref, technical_path = technical_result[:2]
+    technical_timings = dict(LAST_TECHNICAL_TIMINGS)
 
-    capital_flow_result = fetch_and_analyze_hk_flow(
-        args.symbol,
-        args.name,
-        use_cache=True,
-        cache_dir=Path(args.cache_dir),
-        max_cache_age_days=args.max_cache_age_days,
-    )
-    capital_bucket = (
-        "strong"
-        if capital_flow_result.scorecard.total_score >= 80
-        else "watch"
-        if capital_flow_result.scorecard.total_score >= 65
-        else "neutral"
-        if capital_flow_result.scorecard.total_score >= 50
-        else "weak"
-    )
-    capital_flow_path = write_json(
-        stock_fund_report_path(args.symbol.zfill(5)) if output_dir == stock_report_dir(args.symbol.zfill(5)) else output_dir / "fund.json",
-        {
-            "report_type": "capital_flow",
-            "symbol": args.symbol.zfill(5),
-            "name": args.name,
-            "generated_at": datetime.now().isoformat(timespec="seconds"),
-            "summary": {
-                "score": capital_flow_result.scorecard.total_score,
-                "rating": capital_flow_result.scorecard.rating,
-                "bucket": capital_bucket,
-                "source": capital_flow_result.snapshot.source,
-                "comment": getattr(capital_flow_result.scorecard, "combined_comment", None),
+    started_capital_flow = time.perf_counter()
+    capital_flow_path = stock_fund_report_path(args.symbol.zfill(5)) if output_dir == stock_report_dir(args.symbol.zfill(5)) else output_dir / "fund.json"
+    capital_flow_ref = _load_existing_capital_flow_ref(capital_flow_path) if getattr(args, "skip_gen_fund", False) else None
+    if capital_flow_ref is None:
+        capital_flow_result = fetch_and_analyze_hk_flow(
+            args.symbol,
+            args.name,
+            use_cache=True,
+            cache_dir=Path(args.cache_dir),
+            max_cache_age_days=args.max_cache_age_days,
+        )
+        capital_bucket = (
+            "strong"
+            if capital_flow_result.scorecard.total_score >= 80
+            else "watch"
+            if capital_flow_result.scorecard.total_score >= 65
+            else "neutral"
+            if capital_flow_result.scorecard.total_score >= 50
+            else "weak"
+        )
+        capital_flow_path = write_json(
+            capital_flow_path,
+            {
+                "report_type": "capital_flow",
+                "symbol": args.symbol.zfill(5),
+                "name": args.name,
+                "generated_at": datetime.now().isoformat(timespec="seconds"),
+                "summary": {
+                    "score": capital_flow_result.scorecard.total_score,
+                    "rating": capital_flow_result.scorecard.rating,
+                    "bucket": capital_bucket,
+                    "source": capital_flow_result.snapshot.source,
+                    "comment": getattr(capital_flow_result.scorecard, "combined_comment", None),
+                },
+                "scorecard": capital_flow_result.scorecard,
+                "snapshot": capital_flow_result.snapshot,
             },
-            "scorecard": capital_flow_result.scorecard,
-            "snapshot": capital_flow_result.snapshot,
-        },
-    )
-    capital_flow_ref = CapitalFlowRef(
-        score=capital_flow_result.scorecard.total_score,
-        rating=capital_flow_result.scorecard.rating,
-        source=capital_flow_result.snapshot.source,
-        bucket=capital_bucket,
-        path=capital_flow_path,
-    )
+        )
+        capital_flow_ref = CapitalFlowRef(
+            score=capital_flow_result.scorecard.total_score,
+            rating=capital_flow_result.scorecard.rating,
+            source=capital_flow_result.snapshot.source,
+            bucket=capital_bucket,
+            path=capital_flow_path,
+        )
+    else:
+        print(f"capital_flow_reused= {capital_flow_path}")
+    capital_flow_seconds = time.perf_counter() - started_capital_flow
 
     target = CombinedTarget(symbol=args.symbol.zfill(5), name=args.name)
+    started_combined = time.perf_counter()
     combined_bucket, combined_comment = _build_combined_view(fundamental_ref, technical_ref, capital_flow_ref)
     row = CombinedOverviewRow(
         target=target,
@@ -503,12 +692,18 @@ def main() -> None:
         technical_path=technical_path,
         capital_flow_path=capital_flow_path,
     )
+    combined_seconds = time.perf_counter() - started_combined
 
     print(f"fundamental_brief= {fundamental_path}")
     print(f"technical_report= {technical_path}")
     print(f"capital_flow_report= {capital_flow_path}")
     print(f"combined_report= {combined_path}")
     print(f"combined_bucket= {combined_bucket}")
+    print(f"timing_fundamental_seconds= {fundamental_seconds:.2f}")
+    print(f"timing_technical_30m_seconds= {technical_timings.get('technical_30m_seconds', 0.0):.2f}")
+    print(f"timing_technical_5m_seconds= {technical_timings.get('technical_5m_seconds', 0.0):.2f}")
+    print(f"timing_capital_flow_seconds= {capital_flow_seconds:.2f}")
+    print(f"timing_combined_seconds= {combined_seconds:.2f}")
 
 if __name__ == "__main__":
     main()

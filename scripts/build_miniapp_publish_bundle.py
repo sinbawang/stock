@@ -40,6 +40,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--publish-root", default=str(DEFAULT_PUBLISH_ROOT), help="Publish bundle root")
     parser.add_argument("--snapshot-stamp", default=None, help="Optional explicit snapshot stamp such as 20260530_210500")
     parser.add_argument("--latest-only", action="store_true", help="Only write the latest bundle and skip snapshots/<stamp>")
+    parser.add_argument(
+        "--publish-timeframes",
+        nargs="+",
+        choices=("day", "60m", "30m", "15m", "5m"),
+        default=None,
+        help="Optional chart timeframes to include in the publish bundle. Defaults to all available chart assets.",
+    )
     return parser.parse_args()
 
 
@@ -479,9 +486,10 @@ def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_chart_specs(stock_dir: Path) -> list[dict[str, str]]:
+def build_chart_specs(stock_dir: Path, publish_timeframes: tuple[str, ...] | None = None) -> list[dict[str, str]]:
     charts: list[dict[str, str]] = []
-    for timeframe in ("30m", "60m", "15m", "5m", "day"):
+    timeframe_order = publish_timeframes or ("30m", "60m", "15m", "5m", "day")
+    for timeframe in timeframe_order:
         for extension in ("svg", "jpg", "png"):
             chart_path = stock_dir / timeframe / f"structure.{extension}"
             if not chart_path.exists():
@@ -496,7 +504,12 @@ def build_chart_specs(stock_dir: Path) -> list[dict[str, str]]:
     return charts
 
 
-def build_summary_payload(holding: Holding, stock_dir: Path, group_item: dict[str, Any] | None) -> dict[str, Any]:
+def build_summary_payload(
+    holding: Holding,
+    stock_dir: Path,
+    group_item: dict[str, Any] | None,
+    publish_timeframes: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
     base_payload = read_json(stock_dir / "base.json")
     fund_payload = read_json(stock_dir / "fund.json")
     tech_payload = read_json(stock_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json")
@@ -507,7 +520,7 @@ def build_summary_payload(holding: Holding, stock_dir: Path, group_item: dict[st
     precision_window_display = build_precision_window_display(precision_entry)
     same_level_decomposition = build_same_level_decomposition(tech_payload)
     latest_signal_summary = build_latest_signal_summary(tech_payload)
-    charts = build_chart_specs(stock_dir)
+    charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes)
     cover_chart_path = chart_publish_path(charts, PRIMARY_TECHNICAL_TIMEFRAME)
     updated_at = max(
         safe_text(base_payload.get("generated_at")),
@@ -574,11 +587,16 @@ def build_summary_payload(holding: Holding, stock_dir: Path, group_item: dict[st
     }
 
 
-def build_detail_payload(holding: Holding, stock_dir: Path, group_item: dict[str, Any] | None) -> tuple[dict[str, Any], list[dict[str, str]]]:
+def build_detail_payload(
+    holding: Holding,
+    stock_dir: Path,
+    group_item: dict[str, Any] | None,
+    publish_timeframes: tuple[str, ...] | None = None,
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
     base_payload = read_json(stock_dir / "base.json")
     fund_payload = read_json(stock_dir / "fund.json")
     tech_payload = read_json(stock_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json")
-    charts = build_chart_specs(stock_dir)
+    charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes)
     fundamental = build_fundamental_section(base_payload)
     technical = build_technical_section(tech_payload)
     capital_flow = build_capital_flow_section(fund_payload)
@@ -694,7 +712,14 @@ def ensure_clean_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def generate_bundle(holdings_path: Path, reports_root: Path, publish_root: Path, snapshot_stamp: str | None, latest_only: bool) -> dict[str, Path]:
+def generate_bundle(
+    holdings_path: Path,
+    reports_root: Path,
+    publish_root: Path,
+    snapshot_stamp: str | None,
+    latest_only: bool,
+    publish_timeframes: tuple[str, ...] | None = None,
+) -> dict[str, Path]:
     stamp = snapshot_stamp or datetime.now().strftime("%Y%m%d_%H%M%S")
     latest_dir = publish_root / "latest"
     snapshot_dir = publish_root / "snapshots" / stamp
@@ -713,8 +738,8 @@ def generate_bundle(holdings_path: Path, reports_root: Path, publish_root: Path,
         if not stock_dir.exists():
             continue
         base_source_path = stock_dir / "base.json"
-        summary_payload = build_summary_payload(holding, stock_dir, group_item_map.get(holding.symbol))
-        detail_payload, chart_specs = build_detail_payload(holding, stock_dir, group_item_map.get(holding.symbol))
+        summary_payload = build_summary_payload(holding, stock_dir, group_item_map.get(holding.symbol), publish_timeframes=publish_timeframes)
+        detail_payload, chart_specs = build_detail_payload(holding, stock_dir, group_item_map.get(holding.symbol), publish_timeframes=publish_timeframes)
         summary_payloads.append(summary_payload)
         for target in targets:
             stock_target_dir = target / "stocks" / holding.symbol
@@ -744,6 +769,7 @@ def main() -> None:
         publish_root=Path(args.publish_root),
         snapshot_stamp=args.snapshot_stamp,
         latest_only=args.latest_only,
+        publish_timeframes=tuple(args.publish_timeframes) if args.publish_timeframes else None,
     )
     print(f"latest= {outputs['latest']}")
     if not args.latest_only:

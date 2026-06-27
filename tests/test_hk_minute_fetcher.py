@@ -205,6 +205,30 @@ def test_fetch_hk_minute_with_policy_returns_best_available_rows_when_probe_targ
     assert len(rows) == 499
 
 
+def test_fetch_hk_minute_with_policy_stops_after_primary_when_rows_are_sufficient(monkeypatch):
+    calls: list[str] = []
+
+    def fake_fetch(symbol, period="60", start=None, end=None, adjust="qfq", source="xueqiu"):
+        calls.append(source)
+        if source == "xueqiu":
+            return [{"ts": f"2026-01-01 10:{index:02d}"} for index in range(5)]
+        raise AssertionError("fallback should not be called when primary rows are already sufficient")
+
+    monkeypatch.setattr(module, "fetch_hk_minute", fake_fetch)
+
+    rows, used_source = module.fetch_hk_minute_with_policy(
+        "03690",
+        primary_source="xueqiu",
+        fallback_sources=("akshare",),
+        min_rows=4,
+        stop_on_sufficient_rows=True,
+    )
+
+    assert calls == ["xueqiu"]
+    assert used_source == "xueqiu"
+    assert len(rows) == 5
+
+
 def test_fetch_hk_minute_with_policy_records_error_and_best_source(monkeypatch):
     def fake_fetch(symbol, period="60", start=None, end=None, adjust="qfq", source="xueqiu"):
         if source == "xueqiu":

@@ -6,6 +6,7 @@ import shlex
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,6 +57,14 @@ def parse_args() -> argparse.Namespace:
         help="Reuse an existing base.json instead of regenerating the fundamental report when possible. Use --no-skip-gen-base to force refresh.",
     )
     parser.add_argument(
+        "--skip-gen-fund",
+        "--skipGenFund",
+        dest="skip_gen_fund",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Reuse an existing fund.json instead of regenerating the capital-flow report when possible.",
+    )
+    parser.add_argument(
         "--parallelism",
         type=int,
         default=min(4, max(1, os.cpu_count() or 1)),
@@ -67,10 +76,26 @@ def parse_args() -> argparse.Namespace:
         default="any",
         help="Forwarded to batch_prepare_chanlun_reports.py to control pending reverse fractal handling.",
     )
-    parser.add_argument("--day-bars", type=int, default=1000, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
+    parser.add_argument("--day-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
     parser.add_argument("--m60-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 60M K-line fetch count.")
+    parser.add_argument("--m30-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 30M K-line fetch count.")
     parser.add_argument("--m15-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
+    parser.add_argument("--m5-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 5M K-line fetch count.")
     parser.add_argument("--zhongshu-level", choices=("bi", "segment"), default="bi", help="Forwarded to batch_prepare_chanlun_reports.py to switch between bi and segment zhongshu rendering.")
+    parser.add_argument(
+        "--tech-timeframes",
+        nargs="+",
+        choices=("day", "60m", "30m", "15m", "5m"),
+        default=["day", "60m", "15m"],
+        help="Technical levels to generate in addition to the mixed report path. Defaults to day/60m/15m because 30m is already produced by the mixed report and 5m precision is already embedded there.",
+    )
+    parser.add_argument(
+        "--publish-timeframes",
+        nargs="+",
+        choices=("day", "60m", "30m", "15m", "5m"),
+        default=None,
+        help="Optional chart timeframes to include in the publish bundle. Defaults to all available chart assets.",
+    )
     parser.add_argument("--cloud-prefix", default="miniapp-publish/latest", help="Cloud storage prefix for upload")
     parser.add_argument("--env-id", default=None, help="CloudBase env id forwarded to uploader")
     parser.add_argument("--region", default=None, help="CloudBase region forwarded to uploader")
@@ -109,24 +134,29 @@ def regenerate_holdings(args: argparse.Namespace) -> None:
         raise RuntimeError("No holdings found for regeneration")
 
     worker_count = max(1, min(args.parallelism, len(holdings)))
-    print(f"regenerate_holdings={len(holdings)} parallelism={worker_count} skip_gen_base={args.skip_gen_base}", flush=True)
+    print(f"regenerate_holdings={len(holdings)} parallelism={worker_count} skip_gen_base={args.skip_gen_base} skip_gen_fund={args.skip_gen_fund} tech_timeframes={','.join(args.tech_timeframes)}", flush=True)
 
     failures: list[str] = []
     if worker_count == 1:
         for index, holding in enumerate(holdings, start=1):
             try:
+                started = time.perf_counter()
                 bundle = generate_report_bundle(
                     holding,
                     skip_gen_base=args.skip_gen_base,
+                    skip_gen_fund=args.skip_gen_fund,
                     pending_reverse_mode=args.pending_reverse_mode,
                     day_bars=args.day_bars,
                     m60_bars=args.m60_bars,
+                    m30_bars=args.m30_bars,
                     m15_bars=args.m15_bars,
+                    m5_bars=args.m5_bars,
                     zhongshu_level=args.zhongshu_level,
+                    tech_timeframes=tuple(args.tech_timeframes),
                 )
                 print(
                     f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
-                    f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg}",
+                    f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg} seconds={time.perf_counter() - started:.2f}",
                     flush=True,
                 )
             except Exception as exc:  # pragma: no cover - operational batch script
@@ -139,21 +169,25 @@ def regenerate_holdings(args: argparse.Namespace) -> None:
                     generate_report_bundle,
                     holding,
                     skip_gen_base=args.skip_gen_base,
+                    skip_gen_fund=args.skip_gen_fund,
                     pending_reverse_mode=args.pending_reverse_mode,
                     day_bars=args.day_bars,
                     m60_bars=args.m60_bars,
+                    m30_bars=args.m30_bars,
                     m15_bars=args.m15_bars,
+                    m5_bars=args.m5_bars,
                     zhongshu_level=args.zhongshu_level,
-                ): (index, holding)
+                    tech_timeframes=tuple(args.tech_timeframes),
+                ): (index, holding, time.perf_counter())
                 for index, holding in enumerate(holdings, start=1)
             }
             for future in as_completed(future_map):
-                index, holding = future_map[future]
+                index, holding, started = future_map[future]
                 try:
                     bundle = future.result()
                     print(
                         f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
-                        f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg}",
+                        f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg} seconds={time.perf_counter() - started:.2f}",
                         flush=True,
                     )
                 except Exception as exc:  # pragma: no cover - operational batch script
@@ -170,6 +204,7 @@ def rebuild_publish_bundle(args: argparse.Namespace) -> Path:
         publish_root=Path(args.publish_root),
         snapshot_stamp=args.snapshot_stamp,
         latest_only=args.latest_only,
+        publish_timeframes=tuple(args.publish_timeframes) if args.publish_timeframes else None,
     )
     print(f"latest= {outputs['latest']}", flush=True)
     if not args.latest_only:
@@ -206,15 +241,23 @@ def upload_publish_bundle(args: argparse.Namespace, source_dir: Path) -> None:
 def main() -> None:
     args = parse_args()
 
+    started_total = time.perf_counter()
     if not args.skip_regenerate:
+        started_regenerate = time.perf_counter()
         regenerate_holdings(args)
+        print(f"timing regenerate_seconds={time.perf_counter() - started_regenerate:.2f}", flush=True)
 
     latest_dir = Path(args.publish_root) / "latest"
     if not args.skip_build:
+        started_build = time.perf_counter()
         latest_dir = rebuild_publish_bundle(args)
+        print(f"timing build_seconds={time.perf_counter() - started_build:.2f}", flush=True)
 
     if not args.skip_upload:
+        started_upload = time.perf_counter()
         upload_publish_bundle(args, latest_dir)
+        print(f"timing upload_seconds={time.perf_counter() - started_upload:.2f}", flush=True)
+    print(f"timing total_seconds={time.perf_counter() - started_total:.2f}", flush=True)
 
 
 if __name__ == "__main__":

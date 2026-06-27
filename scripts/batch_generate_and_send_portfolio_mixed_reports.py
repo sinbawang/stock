@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -67,17 +68,32 @@ def parse_args() -> argparse.Namespace:
         help="Reuse an existing base.json instead of regenerating the fundamental report when possible. Use --no-skip-gen-base to force refresh.",
     )
     parser.add_argument(
+        "--skip-gen-fund",
+        "--skipGenFund",
+        dest="skip_gen_fund",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Reuse an existing fund.json instead of regenerating the capital-flow report when possible.",
+    )
+    parser.add_argument(
         "--pending-reverse-mode",
         choices=("any", "effective_only", "tail_mixed"),
         default="any",
         help="Forwarded to batch_prepare_chanlun_reports.py to control pending reverse fractal handling.",
     )
-    parser.add_argument("--day-bars", type=int, default=1000, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
+    parser.add_argument("--day-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
     parser.add_argument("--m60-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 60M K-line fetch count.")
     parser.add_argument("--m30-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 30M K-line fetch count.")
     parser.add_argument("--m15-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
     parser.add_argument("--m5-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 5M K-line fetch count.")
     parser.add_argument("--zhongshu-level", choices=("bi", "segment"), default="bi", help="Forwarded to batch_prepare_chanlun_reports.py to switch between bi and segment zhongshu rendering.")
+    parser.add_argument(
+        "--tech-timeframes",
+        nargs="+",
+        choices=("day", "60m", "30m", "15m", "5m"),
+        default=["day", "60m", "15m"],
+        help="Technical levels to generate through batch_prepare_chanlun_reports.py. Defaults to day/60m/15m because 30m is already produced by the mixed report path and 5m precision is already embedded in the mixed report.",
+    )
     return parser.parse_args()
 
 
@@ -100,17 +116,28 @@ def load_holdings(path: Path, market_filter: str = "ALL") -> list[Holding]:
 
 
 def _run_command(command: list[str]) -> str:
-    completed = subprocess.run(command, capture_output=True, text=True)
-    if completed.returncode != 0:
-        details: list[str] = [f"Command failed with exit code {completed.returncode}: {command!r}"]
-        if completed.stdout.strip():
-            details.append("stdout:")
-            details.append(completed.stdout.strip())
-        if completed.stderr.strip():
-            details.append("stderr:")
-            details.append(completed.stderr.strip())
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    output_lines: list[str] = []
+    assert process.stdout is not None
+    for line in process.stdout:
+        output_lines.append(line)
+        print(line, end="", flush=True)
+    process.stdout.close()
+    returncode = process.wait()
+    combined_output = "".join(output_lines)
+    if returncode != 0:
+        details: list[str] = [f"Command failed with exit code {returncode}: {command!r}"]
+        if combined_output.strip():
+            details.append("output:")
+            details.append(combined_output.strip())
         raise RuntimeError("\n".join(details))
-    return completed.stdout
+    return combined_output
 
 
 def _extract_value(stdout_text: str, prefix: str) -> str:
@@ -145,13 +172,16 @@ def _generate_all_timeframe_charts(
     holding: Holding,
     *,
     pending_reverse_mode: str = "any",
-    day_bars: int = 1000,
+    day_bars: int = 600,
     m60_bars: int = 600,
     m30_bars: int = 600,
     m15_bars: int = 600,
     m5_bars: int = 600,
     zhongshu_level: str = "bi",
+    tech_timeframes: tuple[str, ...] = ("day", "60m", "15m", "5m"),
 ) -> None:
+    if not tech_timeframes:
+        return
     with tempfile.TemporaryDirectory(prefix="single_holding_", dir=str(ROOT / "data" / "_meta")) as temp_dir:
         holdings_path = Path(temp_dir) / "holdings.json"
         holdings_path.write_text(
@@ -162,6 +192,7 @@ def _generate_all_timeframe_charts(
         _run_command(
             [
                 sys.executable,
+                "-u",
                 str(SCRIPTS / "batch_prepare_chanlun_reports.py"),
                 "--holdings-file",
                 str(holdings_path),
@@ -179,6 +210,8 @@ def _generate_all_timeframe_charts(
                 str(m5_bars),
                 "--zhongshu-level",
                 zhongshu_level,
+                "--timeframes",
+                *tech_timeframes,
             ]
         )
 
@@ -225,30 +258,36 @@ def generate_bundle(
     holding: Holding,
     *,
     skip_gen_base: bool = True,
+    skip_gen_fund: bool = False,
     pending_reverse_mode: str = "any",
-    day_bars: int = 1000,
+    day_bars: int = 600,
     m60_bars: int = 600,
     m30_bars: int = 600,
     m15_bars: int = 600,
     m5_bars: int = 600,
     zhongshu_level: str = "bi",
+    tech_timeframes: tuple[str, ...] = ("day", "60m", "15m"),
 ) -> GeneratedBundle:
     reuse_existing_base = _should_reuse_existing_base(holding, skip_gen_base)
+    started_mixed = time.perf_counter()
     if holding.market == "CN":
         mixed_stdout = _run_command(
             [
                 sys.executable,
+                "-u",
                 str(SCRIPTS / "generate_a_share_single_mixed_report.py"),
                 holding.symbol,
                 "--name",
                 holding.name,
                 f"--{'skip-gen-base' if reuse_existing_base else 'no-skip-gen-base'}",
+                f"--{'skip-gen-fund' if skip_gen_fund else 'no-skip-gen-fund'}",
             ]
         )
     else:
         mixed_stdout = _run_command(
             [
                 sys.executable,
+                "-u",
                 str(SCRIPTS / "generate_h_share_single_mixed_report.py"),
                 holding.symbol,
                 "--name",
@@ -258,9 +297,12 @@ def generate_bundle(
                 "--fallback-source",
                 "akshare",
                 f"--{'skip-gen-base' if reuse_existing_base else 'no-skip-gen-base'}",
+                f"--{'skip-gen-fund' if skip_gen_fund else 'no-skip-gen-fund'}",
             ]
         )
+    print(f"timing {holding.symbol} mixed seconds={time.perf_counter() - started_mixed:.2f}", flush=True)
 
+    started_charts = time.perf_counter()
     _generate_all_timeframe_charts(
         holding,
         pending_reverse_mode=pending_reverse_mode,
@@ -270,7 +312,9 @@ def generate_bundle(
         m15_bars=m15_bars,
         m5_bars=m5_bars,
         zhongshu_level=zhongshu_level,
+        tech_timeframes=tech_timeframes,
     )
+    print(f"timing {holding.symbol} extra_charts seconds={time.perf_counter() - started_charts:.2f}", flush=True)
 
     symbol_dir = ROOT / "data" / "reports" / (holding.symbol.zfill(5) if holding.market == "HK" else holding.symbol)
     primary_chart_dir = symbol_dir / PRIMARY_TECHNICAL_TIMEFRAME
@@ -301,6 +345,7 @@ def main() -> None:
         bundle = generate_bundle(
             holding,
             skip_gen_base=args.skip_gen_base,
+            skip_gen_fund=args.skip_gen_fund,
             pending_reverse_mode=args.pending_reverse_mode,
             day_bars=args.day_bars,
             m60_bars=args.m60_bars,
@@ -308,6 +353,7 @@ def main() -> None:
             m15_bars=args.m15_bars,
             m5_bars=args.m5_bars,
             zhongshu_level=args.zhongshu_level,
+            tech_timeframes=tuple(args.tech_timeframes),
         )
         print(
             f"generated {holding.symbol} bucket={bundle.combined_bucket} chart_svg={bundle.chart_svg} chart_jpg={bundle.chart_jpg}",

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -55,7 +57,7 @@ from export_structures_with_boxes import (
 )
 from report_json import write_json
 from run_hk_60m_chanlun_report import analyze_current_state, compute_bi_strengths, write_normalized_csv
-from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file, timeframe_report_paths
+from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file, stock_report_dir, timeframe_report_paths
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,7 @@ SECURITIES = [
 DEFAULT_HOLDINGS_FILE = holdings_file()
 INTRADAY_SOURCE_PROBE_ROWS = 600
 BAR_COUNT_POLICY = "feasible_maximum"
+HK_REUSABLE_5M_MIN_ROWS = 480
 INTRADAY_TIMEFRAME_SPECS = (
     ("60m", "60", "60M"),
     ("30m", "30", "30M"),
@@ -120,7 +123,7 @@ def _data_fetch_payload(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="批量生成最新日线、60M、30M、15M、5M 缠论图、分析文本、操作建议")
     parser.add_argument("--day-start", default=None, help="日线起始日期；未指定时按日线根数自动回推")
-    parser.add_argument("--day-bars", type=int, default=1000, help="日线抓取目标根数，默认 1000")
+    parser.add_argument("--day-bars", type=int, default=600, help="日线抓取目标根数，默认 600")
     parser.add_argument("--m60-start", default=None, help="60M 起始时间；未指定时按 60M 根数自动回推")
     parser.add_argument("--m60-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="60M 抓取目标根数，默认 600")
     parser.add_argument("--m30-start", default=None, help="30M 起始时间；未指定时按 30M 根数自动回推")
@@ -145,6 +148,13 @@ def parse_args() -> argparse.Namespace:
         choices=("bi", "segment"),
         default="bi",
         help="中枢绘制层级：bi=笔中枢，segment=线段中枢。",
+    )
+    parser.add_argument(
+        "--timeframes",
+        nargs="+",
+        choices=("day", "60m", "30m", "15m", "5m"),
+        default=["day", "60m", "30m", "15m", "5m"],
+        help="需要生成的技术级别；默认全部生成。",
     )
     return parser.parse_args()
 
@@ -211,6 +221,10 @@ def fetch_intraday_rows(
 ) -> tuple[list[dict], dict[str, object]]:
     interval = f"m{period}"
     if security.market == "HK":
+        if timeframe == "5m":
+            reused_rows = _load_reusable_hk_intraday_rows(security, timeframe, min(bar_count, HK_REUSABLE_5M_MIN_ROWS))
+            if reused_rows is not None:
+                return reused_rows, _data_fetch_payload("local.hk_5m_cache", reused_rows, bar_count, actual_source="local.hk_5m_cache")
         primary_source, fallback_sources, _ = resolve_hk_minute_source_selection()
         rows, _ = fetch_hk_minute_with_policy(
             security.symbol,
@@ -239,6 +253,39 @@ def fetch_intraday_rows(
         actual_source=str(fetch_meta.get("actual_source") or fetch_source),
         source_attempts=list(fetch_meta.get("source_attempts") or []),
     )
+
+
+def _load_reusable_hk_intraday_rows(security: Security, timeframe: str, min_rows: int) -> list[dict] | None:
+    analyze_dir = stock_report_dir(security.symbol) / timeframe / "analyze"
+    if not analyze_dir.exists():
+        return None
+
+    candidates = [
+        path
+        for path in analyze_dir.glob(f"{security.symbol}_{timeframe}_*.csv")
+        if "_normalized" not in path.name
+    ]
+    if not candidates:
+        return None
+
+    latest_path = max(candidates, key=lambda item: item.stat().st_mtime)
+    with latest_path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        rows = [
+            {
+                "ts": str(row.get("ts") or "").strip(),
+                "open": float(row.get("open") or 0),
+                "high": float(row.get("high") or 0),
+                "low": float(row.get("low") or 0),
+                "close": float(row.get("close") or 0),
+                "volume": int(float(row.get("volume") or 0)),
+            }
+            for row in reader
+            if str(row.get("ts") or "").strip()
+        ]
+    if len(rows) < min_rows:
+        return None
+    return rows
 
 
 def fetch_m15_rows(security: Security, start: str, m15_bars: int) -> tuple[list[dict], dict[str, object]]:
@@ -703,8 +750,55 @@ def load_existing_case(security: Security, timeframe: str) -> dict[str, Path]:
     raise FileNotFoundError(f"未找到规范技术报告目录: {base_dir}")
 
 
+def _reuse_existing_hk_5m_case(
+    security: Security,
+    rows: list[dict],
+    *,
+    pending_reverse_mode: str,
+    zhongshu_level: str,
+) -> dict[str, Path] | None:
+    if security.market != "HK" or pending_reverse_mode not in {"any", "effective_only"} or zhongshu_level != "bi":
+        return None
+
+    layout = timeframe_report_paths(security.symbol, "5m", rows)
+    required_paths = [
+        layout.raw_csv,
+        layout.normalized_csv,
+        layout.fractals_csv,
+        layout.confirmed_fractals_csv,
+        layout.bis_csv,
+        layout.segments_csv,
+        layout.zhongshu_csv,
+        layout.macd_csv,
+        layout.chart_svg,
+        layout.chart_png,
+        layout.chart_jpg,
+        layout.technical_report_json,
+        layout.root_dir / "analysis.txt",
+        layout.root_dir / "advice.txt",
+        layout.root_dir / "report.txt",
+    ]
+    if any(not path.exists() for path in required_paths):
+        return None
+
+    payload = json.loads(layout.technical_report_json.read_text(encoding="utf-8"))
+    if payload.get("timeframe") != "5m":
+        return None
+    if payload.get("pending_reverse_mode") != "effective_only":
+        return None
+    if str(payload.get("zhongshu_level") or "bi") != "bi":
+        return None
+
+    data_fetch = payload.get("data_fetch") or {}
+    if int(data_fetch.get("actual_bar_count") or 0) < len(rows):
+        return None
+
+    return load_existing_case(security, "5m")
+
+
 def main() -> None:
     args = parse_args()
+    selected_timeframes = tuple(dict.fromkeys(args.timeframes))
     day_start = args.day_start or default_day_start_for_bar_target(args.day_bars)
     m60_start = args.m60_start or default_intraday_start_for_bar_target("60m", args.m60_bars)
     m30_start = args.m30_start or default_intraday_start_for_bar_target("30m", args.m30_bars)
@@ -713,46 +807,66 @@ def main() -> None:
     securities = load_securities(Path(args.holdings_file) if args.holdings_file else None)
     bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]] = []
     for security in securities:
-        day_rows, day_fetch = fetch_day_rows(security, day_start, args.day_bars)
-        m60_rows, m60_fetch = fetch_m60_rows(security, m60_start, args.m60_bars)
-        intraday_cases = {
-            "60m": (m60_rows, m60_fetch),
-            "30m": fetch_intraday_rows(security, timeframe="30m", period="30", start=m30_start, bar_count=args.m30_bars),
-            "15m": fetch_m15_rows(security, m15_start, args.m15_bars),
-            "5m": fetch_intraday_rows(security, timeframe="5m", period="5", start=m5_start, bar_count=args.m5_bars),
-        }
+        day_case: dict[str, Path] = {}
+        m60_case: dict[str, Path] = {}
 
-        day_case = export_case(
-            security,
-            "day",
-            day_rows,
-            f"{security.symbol} {security.name} day",
-            data_fetch=day_fetch,
-            pending_reverse_mode=args.pending_reverse_mode,
-            zhongshu_level=args.zhongshu_level,
-        )
-        m60_case = export_case(
-            security,
-            "60m",
-            intraday_cases["60m"][0],
-            f"{security.symbol} {security.name} 60m",
-            data_fetch=intraday_cases["60m"][1],
-            pending_reverse_mode=args.pending_reverse_mode,
-            zhongshu_level=args.zhongshu_level,
-        )
-        for timeframe, (rows, fetch_meta) in intraday_cases.items():
-            if timeframe == "60m":
-                continue
-            export_case(
+        if "day" in selected_timeframes:
+            started = time.perf_counter()
+            day_rows, day_fetch = fetch_day_rows(security, day_start, args.day_bars)
+            day_case = export_case(
                 security,
-                timeframe,
-                rows,
-                f"{security.symbol} {security.name} {timeframe}",
-                data_fetch=fetch_meta,
+                "day",
+                day_rows,
+                f"{security.symbol} {security.name} day",
+                data_fetch=day_fetch,
                 pending_reverse_mode=args.pending_reverse_mode,
                 zhongshu_level=args.zhongshu_level,
             )
-        bundle.append((security, day_case, m60_case))
+            print(f"timing {security.symbol} day seconds={time.perf_counter() - started:.2f}", flush=True)
+
+        timeframe_specs = {
+            "60m": ("60", m60_start, args.m60_bars),
+            "30m": ("30", m30_start, args.m30_bars),
+            "15m": ("15", m15_start, args.m15_bars),
+            "5m": ("5", m5_start, args.m5_bars),
+        }
+        for timeframe in ("60m", "30m", "15m", "5m"):
+            if timeframe not in selected_timeframes:
+                continue
+            period, start, bar_count = timeframe_specs[timeframe]
+            started = time.perf_counter()
+            if timeframe == "60m":
+                rows, fetch_meta = fetch_m60_rows(security, start, bar_count)
+            elif timeframe == "15m":
+                rows, fetch_meta = fetch_m15_rows(security, start, bar_count)
+            else:
+                rows, fetch_meta = fetch_intraday_rows(security, timeframe=timeframe, period=period, start=start, bar_count=bar_count)
+            exported = None
+            if timeframe == "5m":
+                exported = _reuse_existing_hk_5m_case(
+                    security,
+                    rows,
+                    pending_reverse_mode=args.pending_reverse_mode,
+                    zhongshu_level=args.zhongshu_level,
+                )
+                if exported is not None:
+                    print(f"reuse {security.symbol} 5m existing_effective_only_case", flush=True)
+            if exported is None:
+                exported = export_case(
+                    security,
+                    timeframe,
+                    rows,
+                    f"{security.symbol} {security.name} {timeframe}",
+                    data_fetch=fetch_meta,
+                    pending_reverse_mode=args.pending_reverse_mode,
+                    zhongshu_level=args.zhongshu_level,
+                )
+            if timeframe == "60m":
+                m60_case = exported
+            print(f"timing {security.symbol} {timeframe} seconds={time.perf_counter() - started:.2f}", flush=True)
+
+        if m60_case:
+            bundle.append((security, day_case, m60_case))
         print(f"Prepared {security.name}")
 
     REPORTS_META_DIR.mkdir(parents=True, exist_ok=True)
@@ -766,8 +880,9 @@ def main() -> None:
     manifest.write_text("\n".join(lines), encoding="utf-8")
     print(f"Manifest: {manifest}")
 
-    summary_path = write_group_operation_summary(bundle)
-    print(f"Summary: {summary_path}")
+    if bundle:
+        summary_path = write_group_operation_summary(bundle)
+        print(f"Summary: {summary_path}")
 
 
 if __name__ == "__main__":

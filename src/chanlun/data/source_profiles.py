@@ -20,19 +20,19 @@ _A_SHARE_INTRADAY_SOURCE_LABELS: dict[str, str] = {
 }
 
 _A_SHARE_INTRADAY_SOURCE_PROFILES: dict[str, tuple[str, ...]] = {
-    "mainland": ("tushare", "tencent", "xueqiu", "eastmoney"),
+    "mainland": ("tencent", "xueqiu", "eastmoney", "tushare"),
     "tencent-only": ("tencent",),
-    "xueqiu-first": ("xueqiu", "tencent", "eastmoney"),
-    "eastmoney-first": ("eastmoney", "tencent", "xueqiu"),
+    "xueqiu-first": ("xueqiu", "tencent", "eastmoney", "tushare"),
+    "eastmoney-first": ("eastmoney", "tencent", "xueqiu", "tushare"),
     "tushare-first": ("tushare", "tencent", "xueqiu", "eastmoney"),
     "tushare-only": ("tushare",),
 }
 
 _A_SHARE_DAYLIKE_SOURCE_PROFILES: dict[str, tuple[str, ...]] = {
-    "mainland": ("tushare", "day_like"),
+    "mainland": ("day_like", "tushare"),
     "tencent-only": ("day_like",),
-    "xueqiu-first": ("tushare", "day_like"),
-    "eastmoney-first": ("tushare", "day_like"),
+    "xueqiu-first": ("day_like", "tushare"),
+    "eastmoney-first": ("day_like", "tushare"),
     "tushare-first": ("tushare", "day_like"),
     "tushare-only": ("tushare",),
 }

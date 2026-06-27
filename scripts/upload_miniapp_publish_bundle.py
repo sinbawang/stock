@@ -5,6 +5,7 @@ import hashlib
 import json
 import mimetypes
 import os
+import fnmatch
 import sys
 import time
 import uuid
@@ -19,6 +20,13 @@ import requests
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_DIR = ROOT / "build" / "miniapp-publish" / "latest"
 DEFAULT_MANIFEST_PATH = ROOT / "build" / "miniapp-publish" / "cloudbase-upload-manifest.json"
+ALWAYS_UPLOAD_PATTERNS = (
+    "index.json",
+    "groups/*.json",
+    "stocks/*/base.json",
+    "stocks/*/detail.json",
+    "stocks/*/summary.json",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -53,6 +61,81 @@ class CreatedApiKey:
 
 class CloudBaseUploadError(RuntimeError):
     pass
+
+
+def load_previous_manifest(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    files = payload.get("files")
+    if not isinstance(files, list):
+        return None
+    return payload
+
+
+def file_should_always_upload(relative_path: str) -> bool:
+    normalized = relative_path.replace("\\", "/")
+    return any(fnmatch.fnmatch(normalized, pattern) for pattern in ALWAYS_UPLOAD_PATTERNS)
+
+
+def previous_upload_index(previous_manifest: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    if previous_manifest is None:
+        return {}
+    indexed: dict[str, dict[str, Any]] = {}
+    for item in previous_manifest.get("files") or []:
+        if not isinstance(item, dict):
+            continue
+        relative_path = str(item.get("relative_path") or "").strip()
+        if not relative_path:
+            continue
+        indexed[relative_path] = item
+    return indexed
+
+
+def plan_uploads(
+    files: list[LocalFile],
+    previous_manifest: dict[str, Any] | None,
+    *,
+    env_id: str | None,
+    region: str,
+    cloud_prefix: str,
+) -> tuple[list[LocalFile], list[dict[str, Any]]]:
+    previous_files = previous_upload_index(previous_manifest)
+    same_target = bool(
+        previous_manifest
+        and previous_manifest.get("env_id") == (env_id or "")
+        and previous_manifest.get("region") == region
+        and previous_manifest.get("cloud_prefix") == cloud_prefix
+    )
+
+    deferred: list[LocalFile] = []
+    immediate: list[LocalFile] = []
+    skipped: list[dict[str, Any]] = []
+    for item in files:
+        if file_should_always_upload(item.relative_path):
+            deferred.append(item)
+            continue
+
+        previous = previous_files.get(item.relative_path) if same_target else None
+        if previous and str(previous.get("sha256") or "") == item.sha256:
+            skipped.append(
+                {
+                    "relative_path": item.relative_path,
+                    "cloud_path": item.cloud_path,
+                    "file_id": previous.get("file_id"),
+                    "size": item.size,
+                    "sha256": item.sha256,
+                    "status": "skipped",
+                }
+            )
+            continue
+        immediate.append(item)
+    return immediate + deferred, skipped
 
 
 def iter_local_files(source_dir: Path, cloud_prefix: str) -> list[LocalFile]:
@@ -284,8 +367,19 @@ def main() -> int:
     if not files:
         raise CloudBaseUploadError(f"No files found under {source_dir}")
 
+    previous_manifest = load_previous_manifest(manifest_path)
+    upload_plan, skipped_uploads = plan_uploads(
+        files,
+        previous_manifest,
+        env_id=args.env_id,
+        region=args.region,
+        cloud_prefix=args.cloud_prefix,
+    )
+
     print(f"source={source_dir}")
     print(f"files={len(files)}")
+    print(f"uploading={len(upload_plan)}")
+    print(f"skipped={len(skipped_uploads)}")
     print(f"cloud_prefix={args.cloud_prefix}")
 
     if args.dry_run:
@@ -294,15 +388,16 @@ def main() -> int:
             region=args.region,
             source_dir=source_dir,
             cloud_prefix=args.cloud_prefix,
-            uploads=[
+            uploads=skipped_uploads + [
                 {
                     "relative_path": item.relative_path,
                     "cloud_path": item.cloud_path,
                     "file_id": None,
                     "size": item.size,
                     "sha256": item.sha256,
+                    "status": "planned",
                 }
-                for item in files
+                for item in upload_plan
             ],
         )
         write_manifest(manifest_path, manifest)
@@ -322,9 +417,9 @@ def main() -> int:
         print(f"created_api_key={created_api_key.key_id}")
 
     session = new_session()
-    uploads: list[dict[str, Any]] = []
+    uploads: list[dict[str, Any]] = list(skipped_uploads)
     try:
-        for item in files:
+        for item in upload_plan:
             metadata = get_upload_metadata(
                 session,
                 env_id=args.env_id,
@@ -340,6 +435,7 @@ def main() -> int:
                     "file_id": metadata["fileId"],
                     "size": item.size,
                     "sha256": item.sha256,
+                    "status": "uploaded",
                 }
             )
             print(f"uploaded {item.relative_path} -> {metadata['fileId']}")
@@ -358,6 +454,8 @@ def main() -> int:
     )
     write_manifest(manifest_path, manifest)
     print(f"manifest={manifest_path}")
+    for item in skipped_uploads:
+        print(f"skipped {item['relative_path']}")
     if manifest["index"]["file_id"]:
         print(f"index_file_id={manifest['index']['file_id']}")
     return 0

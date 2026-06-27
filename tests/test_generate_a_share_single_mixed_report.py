@@ -160,7 +160,7 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     assert payload["structure"]["zhongshus"][0]["render_end_bi_id"] == 12
     assert payload["structure_state"]["current_ongoing"]["type"] == "range"
     assert payload["divergence"]["trend"]["active"] is False
-    assert data_fetch["source"] == "tushare->tencent->xueqiu->eastmoney"
+    assert data_fetch["source"] == "tencent->xueqiu->eastmoney->tushare"
     assert data_fetch["actual_source"] == "xueqiu"
     assert data_fetch["source_attempts"][0]["source"] == "tushare"
     assert data_fetch["actual_bar_count"] == len(raw_bars)

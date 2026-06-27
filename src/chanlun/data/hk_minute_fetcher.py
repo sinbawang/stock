@@ -520,6 +520,7 @@ def fetch_hk_minute_with_policy(
     primary_source: str = _DEFAULT_PRIMARY_SOURCE,
     fallback_sources: Optional[Sequence[str]] = None,
     min_rows: Optional[int] = None,
+    stop_on_sufficient_rows: bool = False,
 ) -> tuple[list[dict], str]:
     """
     按统一策略抓取港股分钟线。
@@ -575,6 +576,9 @@ def fetch_hk_minute_with_policy(
         if not rows:
             failures.append(f"{source}: empty")
             continue
+
+        if stop_on_sufficient_rows and (min_rows is None or len(rows) >= min_rows):
+            break
 
     if best_source is not None:
         _update_last_fetch_metadata(

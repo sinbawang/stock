@@ -4,6 +4,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -60,6 +61,7 @@ PRIMARY_TECHNICAL_LABEL = "30M"
 LOWER_PRECISION_TIMEFRAME = "5m"
 LOWER_PRECISION_LABEL = "5M"
 LOWER_PRECISION_PENDING_REVERSE_MODE = "effective_only"
+LAST_TECHNICAL_TIMINGS: dict[str, float] = {}
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,6 +82,14 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Reuse an existing base.json instead of regenerating the fundamental report when possible. Use --no-skip-gen-base to force refresh.",
+    )
+    parser.add_argument(
+        "--skip-gen-fund",
+        "--skipGenFund",
+        dest="skip_gen_fund",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Reuse an existing fund.json instead of regenerating the capital-flow report when possible.",
     )
     return parser.parse_args()
 
@@ -124,6 +134,23 @@ def _load_existing_fundamental_ref(base_path: Path) -> FundamentalBriefRef | Non
         submodel=str(submodel),
         path=base_path,
     )
+
+
+def _load_existing_capital_flow_ref(fund_path: Path) -> CapitalFlowRef | None:
+    if not fund_path.exists():
+        return None
+    payload = json.loads(fund_path.read_text(encoding="utf-8"))
+    summary = payload.get("summary") or {}
+    score = summary.get("score")
+    rating = summary.get("rating")
+    source = summary.get("source")
+    if score is None or not rating:
+        return None
+    bucket = summary.get("bucket")
+    if not bucket:
+        score_value = float(score)
+        bucket = "strong" if score_value >= 80 else "watch" if score_value >= 65 else "neutral" if score_value >= 50 else "weak"
+    return CapitalFlowRef(score=float(score), rating=str(rating), source=str(source or ""), bucket=str(bucket), path=fund_path)
 
 
 def _build_lower_precision_entry(
@@ -180,6 +207,7 @@ def _save_technical_report(
     adjust: str,
     source_profile: str | None = None,
 ) -> tuple[TechnicalRef, Path]:
+    started_total = time.perf_counter()
     fetch_source, _ = resolve_a_share_intraday_source_label(source_profile)
     rows = fetch_kline(symbol, start=start, end=end, interval=PRIMARY_TECHNICAL_TIMEFRAME, adjust=adjust, limit=5000, min_rows=INTRADAY_SOURCE_PROBE_ROWS, source_profile=source_profile)
     fetch_meta = get_last_fetch_metadata()
@@ -241,6 +269,7 @@ def _save_technical_report(
     analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points)
     analysis_text = analysis_text.replace("60M", PRIMARY_TECHNICAL_LABEL)
     signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
+    started_precision = time.perf_counter()
     precision_entry = _build_lower_precision_entry(
         symbol=symbol,
         start=start,
@@ -249,6 +278,7 @@ def _save_technical_report(
         source_profile=source_profile,
         signals=signals,
     )
+    precision_seconds = time.perf_counter() - started_precision
     precision_window_display = build_precision_window_display(precision_entry)
     advice_text = build_advice(name, PRIMARY_TECHNICAL_LABEL, raw_bars, signals)
     if precision_entry is not None:
@@ -316,6 +346,15 @@ def _save_technical_report(
             },
         },
     )
+    total_seconds = time.perf_counter() - started_total
+    LAST_TECHNICAL_TIMINGS.clear()
+    LAST_TECHNICAL_TIMINGS.update(
+        {
+            "technical_30m_seconds": max(total_seconds - precision_seconds, 0.0),
+            "technical_5m_seconds": precision_seconds,
+            "technical_total_seconds": total_seconds,
+        }
+    )
     return TechnicalRef(conclusion=conclusion, suggestion=suggestion, path=output_path), output_path
 
 
@@ -374,6 +413,7 @@ def main() -> None:
 
     normalized_symbol = _normalize_symbol(args.symbol)
     base_path = stock_base_report_path(normalized_symbol) if output_dir == stock_report_dir(normalized_symbol) else output_dir / "base.json"
+    started_fundamental = time.perf_counter()
     fundamental_ref = _load_existing_fundamental_ref(base_path) if args.skip_gen_base else None
     fundamental_path = base_path
     if fundamental_ref is None:
@@ -408,8 +448,9 @@ def main() -> None:
         )
     else:
         print(f"fundamental_reused= {fundamental_path}")
+    fundamental_seconds = time.perf_counter() - started_fundamental
 
-    technical_ref, technical_path = _save_technical_report(
+    technical_result = _save_technical_report(
         symbol=normalized_symbol,
         name=args.name,
         output_dir=output_dir,
@@ -418,50 +459,60 @@ def main() -> None:
         adjust=args.adjust,
         source_profile=getattr(args, "source_profile", None),
     )
+    technical_ref, technical_path = technical_result[:2]
+    technical_timings = dict(LAST_TECHNICAL_TIMINGS)
 
-    capital_flow_result = fetch_and_analyze_cn_flow(
-        normalized_symbol,
-        args.name,
-        use_cache=True,
-        cache_dir=Path(args.cache_dir),
-        max_cache_age_days=args.max_cache_age_days,
-    )
-    capital_bucket = (
-        "strong"
-        if capital_flow_result.scorecard.total_score >= 80
-        else "watch"
-        if capital_flow_result.scorecard.total_score >= 65
-        else "neutral"
-        if capital_flow_result.scorecard.total_score >= 50
-        else "weak"
-    )
-    capital_flow_path = write_json(
-        stock_fund_report_path(normalized_symbol) if output_dir == stock_report_dir(normalized_symbol) else output_dir / "fund.json",
-        {
-            "report_type": "capital_flow",
-            "symbol": normalized_symbol,
-            "name": args.name,
-            "generated_at": datetime.now().isoformat(timespec="seconds"),
-            "summary": {
-                "score": capital_flow_result.scorecard.total_score,
-                "rating": capital_flow_result.scorecard.rating,
-                "bucket": capital_bucket,
-                "source": capital_flow_result.snapshot.source,
-                "comment": getattr(capital_flow_result.scorecard, "combined_comment", None),
+    started_capital_flow = time.perf_counter()
+    capital_flow_path = stock_fund_report_path(normalized_symbol) if output_dir == stock_report_dir(normalized_symbol) else output_dir / "fund.json"
+    capital_flow_ref = _load_existing_capital_flow_ref(capital_flow_path) if getattr(args, "skip_gen_fund", False) else None
+    if capital_flow_ref is None:
+        capital_flow_result = fetch_and_analyze_cn_flow(
+            normalized_symbol,
+            args.name,
+            use_cache=True,
+            cache_dir=Path(args.cache_dir),
+            max_cache_age_days=args.max_cache_age_days,
+        )
+        capital_bucket = (
+            "strong"
+            if capital_flow_result.scorecard.total_score >= 80
+            else "watch"
+            if capital_flow_result.scorecard.total_score >= 65
+            else "neutral"
+            if capital_flow_result.scorecard.total_score >= 50
+            else "weak"
+        )
+        capital_flow_path = write_json(
+            capital_flow_path,
+            {
+                "report_type": "capital_flow",
+                "symbol": normalized_symbol,
+                "name": args.name,
+                "generated_at": datetime.now().isoformat(timespec="seconds"),
+                "summary": {
+                    "score": capital_flow_result.scorecard.total_score,
+                    "rating": capital_flow_result.scorecard.rating,
+                    "bucket": capital_bucket,
+                    "source": capital_flow_result.snapshot.source,
+                    "comment": getattr(capital_flow_result.scorecard, "combined_comment", None),
+                },
+                "scorecard": capital_flow_result.scorecard,
+                "snapshot": capital_flow_result.snapshot,
             },
-            "scorecard": capital_flow_result.scorecard,
-            "snapshot": capital_flow_result.snapshot,
-        },
-    )
-    capital_flow_ref = CapitalFlowRef(
-        score=capital_flow_result.scorecard.total_score,
-        rating=capital_flow_result.scorecard.rating,
-        source=capital_flow_result.snapshot.source,
-        bucket=capital_bucket,
-        path=capital_flow_path,
-    )
+        )
+        capital_flow_ref = CapitalFlowRef(
+            score=capital_flow_result.scorecard.total_score,
+            rating=capital_flow_result.scorecard.rating,
+            source=capital_flow_result.snapshot.source,
+            bucket=capital_bucket,
+            path=capital_flow_path,
+        )
+    else:
+        print(f"capital_flow_reused= {capital_flow_path}")
+    capital_flow_seconds = time.perf_counter() - started_capital_flow
 
     target = CombinedTarget(symbol=normalized_symbol, name=args.name)
+    started_combined = time.perf_counter()
     combined_bucket, combined_comment = _build_combined_view(fundamental_ref, technical_ref, capital_flow_ref)
     row = CombinedOverviewRow(
         target=target,
@@ -478,12 +529,18 @@ def main() -> None:
         technical_path=technical_path,
         capital_flow_path=capital_flow_path,
     )
+    combined_seconds = time.perf_counter() - started_combined
 
     print(f"fundamental_brief= {fundamental_path}")
     print(f"technical_report= {technical_path}")
     print(f"capital_flow_report= {capital_flow_path}")
     print(f"combined_report= {combined_path}")
     print(f"combined_bucket= {combined_bucket}")
+    print(f"timing_fundamental_seconds= {fundamental_seconds:.2f}")
+    print(f"timing_technical_30m_seconds= {technical_timings.get('technical_30m_seconds', 0.0):.2f}")
+    print(f"timing_technical_5m_seconds= {technical_timings.get('technical_5m_seconds', 0.0):.2f}")
+    print(f"timing_capital_flow_seconds= {capital_flow_seconds:.2f}")
+    print(f"timing_combined_seconds= {combined_seconds:.2f}")
 
 if __name__ == "__main__":
     main()

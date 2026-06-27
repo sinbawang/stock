@@ -198,7 +198,13 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
         )
     ]
 
-    monkeypatch.setattr(module, "fetch_hk_minute_with_policy", lambda *args, **kwargs: (rows, "xueqiu"))
+    fetch_calls: list[dict[str, object]] = []
+
+    def fake_fetch_hk_minute_with_policy(*args, **kwargs):
+        fetch_calls.append(dict(kwargs))
+        return rows, "xueqiu"
+
+    monkeypatch.setattr(module, "fetch_hk_minute_with_policy", fake_fetch_hk_minute_with_policy)
     monkeypatch.setattr(
         module,
         "get_last_fetch_metadata",
@@ -223,8 +229,10 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     monkeypatch.setattr(module, "export_fractals", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "export_confirmed_fractals", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "export_bis", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_segments", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "export_zhongshus", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "export_macd", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "identify_segments", lambda *args, **kwargs: [])
     monkeypatch.setattr(module, "analyze_current_state", lambda *args, **kwargs: "analysis")
     monkeypatch.setattr(
         module,
@@ -273,13 +281,26 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     assert data_fetch["actual_source"] == "xueqiu"
     assert data_fetch["source_attempts"][0]["source"] == "xueqiu"
     assert data_fetch["actual_bar_count"] == len(raw_bars)
-    assert data_fetch["requested_min_rows"] is None
-    assert data_fetch["fulfilled_min_rows"] is None
+    assert data_fetch["requested_min_rows"] == module.PRIMARY_TECHNICAL_SOURCE_PROBE_MIN_ROWS
+    assert data_fetch["fulfilled_min_rows"] is False
     assert data_fetch["bar_count_policy"] == "feasible_maximum"
-    assert data_fetch["source_probe_min_rows"] == 600
+    assert data_fetch["source_probe_min_rows"] == module.PRIMARY_TECHNICAL_SOURCE_PROBE_MIN_ROWS
     assert payload["timeframe"] == "30m"
     assert payload["precision_entry"]["timeframe"] == "5m"
     assert payload["precision_entry"]["pending_reverse_mode"] == "effective_only"
+    lower_payload = json.loads((tmp_path / "5m" / "tech.json").read_text(encoding="utf-8"))
+    assert lower_payload["timeframe"] == "5m"
+    assert lower_payload["pending_reverse_mode"] == "effective_only"
+    assert lower_payload["data_fetch"]["requested_min_rows"] == module.LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS
+    assert lower_payload["data_fetch"]["fulfilled_min_rows"] is False
+    assert lower_payload["data_fetch"]["source_probe_min_rows"] == module.LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS
+    assert Path(lower_payload["artifacts"]["structure_svg"]).exists()
+    assert fetch_calls[0]["period"] == "30"
+    assert fetch_calls[0]["min_rows"] == module.PRIMARY_TECHNICAL_SOURCE_PROBE_MIN_ROWS
+    assert fetch_calls[0]["stop_on_sufficient_rows"] is True
+    assert fetch_calls[1]["period"] == "5"
+    assert fetch_calls[1]["min_rows"] == module.LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS
+    assert fetch_calls[1]["stop_on_sufficient_rows"] is True
     assert payload["summary"]["precision_entry"]["operation_level"] == "5M"
     assert "区间套定位：" in payload["advice_text"]
     window_basis_label = payload["precision_entry"].get("window_basis_label")
@@ -290,3 +311,4 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     else:
         assert payload["precision_window_display"] is None
         assert payload["summary"]["precision_window_display"] is None
+
