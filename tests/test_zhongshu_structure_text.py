@@ -15,7 +15,7 @@ if str(SRC) not in sys.path:
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import run_cn_60m_chanlun_to_wechat as cn_report
+import run_cn_60m_chanlun_report as cn_report
 from batch_prepare_chanlun_reports import build_advice, build_technical_summary
 
 

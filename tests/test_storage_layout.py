@@ -13,8 +13,8 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from storage_layout import REPORTS_DIR, holdings_file, timeframe_report_paths
-import run_cn_60m_chanlun_to_wechat as cn_module
-import run_hk_60m_chanlun_to_wechat as hk_module
+import run_cn_60m_chanlun_report as cn_module
+import run_hk_60m_chanlun_report as hk_module
 
 
 def _bars() -> list[dict]:

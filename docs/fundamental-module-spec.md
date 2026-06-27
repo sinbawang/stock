@@ -475,7 +475,7 @@
 - `fundamental_risks`
 - `combined_comment`
 
-如果要看当前仓库里已经落地的 `plus_60m` 联合文本到底如何组织、包含哪些区块、如何处理来源警告与微信发送产物，直接看 [combined-analysis-output-spec.md](combined-analysis-output-spec.md)。
+如果要看当前仓库里已经落地的 `plus_60m` 联合文本到底如何组织、包含哪些区块、如何处理来源警告与技术面产物，直接看 [combined-analysis-output-spec.md](combined-analysis-output-spec.md)。
 
 ## 13. 第一阶段交付范围
 
@@ -505,7 +505,7 @@
 - 质量因子稳定性分析
 - 财报日期与技术信号联动
 - 基本面结果持久化到 CSV / JSON
-- 与微信发送链路结合
+- 与发布层/消费层结合
 - 金融行业专属评分模型
 - 动作映射作为策略层单独模块
 

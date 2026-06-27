@@ -22,12 +22,6 @@ from .models import (
     BiDirection,
 )
 from .segment import identify_segments
-from .wechat import (
-    WeChatConfig,
-    WeChatMessenger,
-    WeChatDependencyError,
-    WeChatFriendNotFoundError,
-)
 
 __all__ = [
     "Bar",
@@ -39,8 +33,4 @@ __all__ = [
     "FractalType",
     "BiDirection",
     "identify_segments",
-    "WeChatConfig",
-    "WeChatMessenger",
-    "WeChatDependencyError",
-    "WeChatFriendNotFoundError",
 ]

@@ -54,10 +54,7 @@ from export_structures_with_boxes import (
     export_zhongshus,
 )
 from report_json import write_json
-from run_hk_60m_chanlun_to_wechat import analyze_current_state, compute_bi_strengths, write_normalized_csv
-from send_wechat_current_chat_files import send_current_chat_files
-from send_wechat_current_chat_text import send_current_chat_text
-from send_wechat_native import send_message
+from run_hk_60m_chanlun_report import analyze_current_state, compute_bi_strengths, write_normalized_csv
 from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file, timeframe_report_paths
 
 
@@ -121,7 +118,7 @@ def _data_fetch_payload(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="批量生成最新日线、60M、30M、15M、5M 缠论图、分析文本、操作建议，并可选发送到当前微信会话")
+    parser = argparse.ArgumentParser(description="批量生成最新日线、60M、30M、15M、5M 缠论图、分析文本、操作建议")
     parser.add_argument("--day-start", default=None, help="日线起始日期；未指定时按日线根数自动回推")
     parser.add_argument("--day-bars", type=int, default=1000, help="日线抓取目标根数，默认 1000")
     parser.add_argument("--m60-start", default=None, help="60M 起始时间；未指定时按 60M 根数自动回推")
@@ -137,10 +134,6 @@ def parse_args() -> argparse.Namespace:
         default=str(DEFAULT_HOLDINGS_FILE),
         help="持仓清单 JSON 文件，默认读取 data/stock_holdings.json；不存在时回退到脚本内置名单。",
     )
-    parser.add_argument("--send-current-chat", action="store_true", help="生成完成后发送到当前已打开微信会话")
-    parser.add_argument("--send-only", action="store_true", help="只发送已生成的最新报告和图片，不重新生成")
-    parser.add_argument("--disable-dedupe", action="store_true", help="关闭短时间重复发送保护，用于立即重发")
-    parser.add_argument("--target-label", default="888", help="仅用于日志展示的目标名称")
     parser.add_argument(
         "--pending-reverse-mode",
         choices=("any", "effective_only", "tail_mixed"),
@@ -710,35 +703,6 @@ def load_existing_case(security: Security, timeframe: str) -> dict[str, Path]:
     raise FileNotFoundError(f"未找到规范技术报告目录: {base_dir}")
 
 
-def send_batch_current_chat(
-    bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]],
-    target_label: str,
-    summary_path: Path,
-    *,
-    disable_dedupe: bool = False,
-) -> None:
-    print(f"Sending consolidated 60M summary to current chat ({target_label})")
-    send_current_chat_text(
-        summary_path.read_text(encoding="utf-8"),
-        duplicate_send_window_seconds=300,
-        disable_dedupe=disable_dedupe,
-    )
-
-    for security, day_case, m60_case in bundle:
-        message_text = build_send_text_60m_only(security, m60_case["report"])
-        print(f"Sending {security.name} to current chat ({target_label})")
-        send_current_chat_text(
-            message_text,
-            duplicate_send_window_seconds=300,
-            disable_dedupe=disable_dedupe,
-        )
-        send_current_chat_files(
-            [m60_case["jpg"]],
-            duplicate_send_window_seconds=300,
-            disable_dedupe=disable_dedupe,
-        )
-
-
 def main() -> None:
     args = parse_args()
     day_start = args.day_start or default_day_start_for_bar_target(args.day_bars)
@@ -748,80 +712,62 @@ def main() -> None:
     m5_start = args.m5_start or default_intraday_start_for_bar_target("5m", args.m5_bars)
     securities = load_securities(Path(args.holdings_file) if args.holdings_file else None)
     bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]] = []
-    summary_path: Path | None = None
-    if args.send_only:
-        for security in securities:
-            day_case = load_existing_case(security, "day")
-            m60_case = load_existing_case(security, "60m")
-            bundle.append((security, day_case, m60_case))
-            print(f"Loaded {security.name}")
-    else:
-        for security in securities:
-            day_rows, day_fetch = fetch_day_rows(security, day_start, args.day_bars)
-            m60_rows, m60_fetch = fetch_m60_rows(security, m60_start, args.m60_bars)
-            intraday_cases = {
-                "60m": (m60_rows, m60_fetch),
-                "30m": fetch_intraday_rows(security, timeframe="30m", period="30", start=m30_start, bar_count=args.m30_bars),
-                "15m": fetch_m15_rows(security, m15_start, args.m15_bars),
-                "5m": fetch_intraday_rows(security, timeframe="5m", period="5", start=m5_start, bar_count=args.m5_bars),
-            }
+    for security in securities:
+        day_rows, day_fetch = fetch_day_rows(security, day_start, args.day_bars)
+        m60_rows, m60_fetch = fetch_m60_rows(security, m60_start, args.m60_bars)
+        intraday_cases = {
+            "60m": (m60_rows, m60_fetch),
+            "30m": fetch_intraday_rows(security, timeframe="30m", period="30", start=m30_start, bar_count=args.m30_bars),
+            "15m": fetch_m15_rows(security, m15_start, args.m15_bars),
+            "5m": fetch_intraday_rows(security, timeframe="5m", period="5", start=m5_start, bar_count=args.m5_bars),
+        }
 
-            day_case = export_case(
+        day_case = export_case(
+            security,
+            "day",
+            day_rows,
+            f"{security.symbol} {security.name} day",
+            data_fetch=day_fetch,
+            pending_reverse_mode=args.pending_reverse_mode,
+            zhongshu_level=args.zhongshu_level,
+        )
+        m60_case = export_case(
+            security,
+            "60m",
+            intraday_cases["60m"][0],
+            f"{security.symbol} {security.name} 60m",
+            data_fetch=intraday_cases["60m"][1],
+            pending_reverse_mode=args.pending_reverse_mode,
+            zhongshu_level=args.zhongshu_level,
+        )
+        for timeframe, (rows, fetch_meta) in intraday_cases.items():
+            if timeframe == "60m":
+                continue
+            export_case(
                 security,
-                "day",
-                day_rows,
-                f"{security.symbol} {security.name} day",
-                data_fetch=day_fetch,
+                timeframe,
+                rows,
+                f"{security.symbol} {security.name} {timeframe}",
+                data_fetch=fetch_meta,
                 pending_reverse_mode=args.pending_reverse_mode,
                 zhongshu_level=args.zhongshu_level,
             )
-            m60_case = export_case(
-                security,
-                "60m",
-                intraday_cases["60m"][0],
-                f"{security.symbol} {security.name} 60m",
-                data_fetch=intraday_cases["60m"][1],
-                pending_reverse_mode=args.pending_reverse_mode,
-                zhongshu_level=args.zhongshu_level,
-            )
-            for timeframe, (rows, fetch_meta) in intraday_cases.items():
-                if timeframe == "60m":
-                    continue
-                export_case(
-                    security,
-                    timeframe,
-                    rows,
-                    f"{security.symbol} {security.name} {timeframe}",
-                    data_fetch=fetch_meta,
-                    pending_reverse_mode=args.pending_reverse_mode,
-                    zhongshu_level=args.zhongshu_level,
-                )
-            bundle.append((security, day_case, m60_case))
-            print(f"Prepared {security.name}")
+        bundle.append((security, day_case, m60_case))
+        print(f"Prepared {security.name}")
 
-        REPORTS_META_DIR.mkdir(parents=True, exist_ok=True)
-        manifest = REPORTS_META_DIR / f"group888_send_manifest_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        lines = ["群聊 888 待发送清单", ""]
-        for security, day_case, m60_case in bundle:
-            lines.append(f"{security.name} ({security.symbol})")
-            lines.append(f"- 60M 报告: {m60_case['report']}")
-            lines.append(f"- 60M 图片: {m60_case['jpg']}")
-            lines.append("")
-        manifest.write_text("\n".join(lines), encoding="utf-8")
-        print(f"Manifest: {manifest}")
+    REPORTS_META_DIR.mkdir(parents=True, exist_ok=True)
+    manifest = REPORTS_META_DIR / f"group888_generation_manifest_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    lines = ["group888 生成清单", ""]
+    for security, day_case, m60_case in bundle:
+        lines.append(f"{security.name} ({security.symbol})")
+        lines.append(f"- 60M 报告: {m60_case['report']}")
+        lines.append(f"- 60M 图片: {m60_case['jpg']}")
+        lines.append("")
+    manifest.write_text("\n".join(lines), encoding="utf-8")
+    print(f"Manifest: {manifest}")
 
     summary_path = write_group_operation_summary(bundle)
     print(f"Summary: {summary_path}")
-
-    if args.send_current_chat:
-        if summary_path is None:
-            raise RuntimeError("missing summary path")
-        send_batch_current_chat(
-            bundle,
-            args.target_label,
-            summary_path,
-            disable_dedupe=args.disable_dedupe,
-        )
 
 
 if __name__ == "__main__":

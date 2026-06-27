@@ -20,15 +20,15 @@
 
 但“技术面 + 基本面”的联合分析仍主要停留在脚本层组织：
 
-- [scripts/run_hk_60m_chanlun_to_wechat.py](c:/sinba/stock/scripts/run_hk_60m_chanlun_to_wechat.py)
-- [scripts/run_cn_60m_chanlun_to_wechat.py](c:/sinba/stock/scripts/run_cn_60m_chanlun_to_wechat.py)
+- [scripts/run_hk_60m_chanlun_report.py](c:/sinba/stock/scripts/run_hk_60m_chanlun_report.py)
+- [scripts/run_cn_60m_chanlun_report.py](c:/sinba/stock/scripts/run_cn_60m_chanlun_report.py)
 
 当前脚本层实际上承担了四类职责：
 
 1. 抓取并标准化 60M K 线
 2. 识别分型、笔、中枢、MACD 并导出结构图
 3. 生成技术面观察文本与末尾操作建议
-4. 把技术面文本、基本面文本、图片和微信发送拼成最终交付物
+4. 把技术面文本、基本面文本和图片拼成最终交付物
 
 这意味着当前“联合分析”已经能交付，但还不是一个干净的公共服务接口。
 
@@ -38,7 +38,7 @@
 
 - HK / CN 两条链路会重复维护拼接逻辑
 - 以后新增日线、周线或批量分析时，很容易复制出第二套第三套文本拼装
-- 微信发送、文件落盘、分析计算三类职责会继续缠在一起
+- 文件落盘、发布准备、分析计算三类职责会继续缠在一起
 - 想做测试时，很难只验证“联合分析文本是否正确”，因为当前逻辑混在脚本流程里
 
 所以这里真正需要收口的不是“再写一个大脚本”，而是：
@@ -61,12 +61,11 @@
 - 解析 CLI 参数
 - 决定是否落盘
 - 决定是否渲染 SVG / PNG / JPG
-- 决定是否发送微信
+- 决定是否落盘或进入发布流程
 - 决定输出目录、文件命名和联系人
 
 ### 3.3 不应该放进联合服务层的东西
 
-- 直接操作微信 UI
 - 硬编码联系人 `888`
 - 依赖某个脚本的路径规则去决定领域结果
 - 在服务层里直接 print 终端提示
@@ -108,7 +107,7 @@ build_cn_60m_combined_analysis(...)
 - 调基础技术面服务
 - 调基础基本面服务
 - 产出联合文本与结构化结果
-- 不直接处理微信发送
+- 不直接处理发布动作
 
 这样设计的原因是：
 
@@ -225,7 +224,7 @@ def build_cn_60m_combined_analysis(...) -> CombinedAnalysisResult:
 - HK 基本面：`fetch_and_analyze_hk_snapshot(...)`
 - CN 基本面：`fetch_and_analyze_cn_snapshot(...)`
 - 基本面文本：`render_scorecard_text(...)`
-- 技术面现有识别流程：当前在 `run_hk_60m_chanlun_to_wechat.py` / `run_cn_60m_chanlun_to_wechat.py` 内部
+- 技术面现有识别流程：当前在 `run_hk_60m_chanlun_report.py` / `run_cn_60m_chanlun_report.py` 内部
 
 也就是说，最现实的第一步不是重写算法，而是：
 
@@ -248,7 +247,7 @@ def build_cn_60m_combined_analysis(...) -> CombinedAnalysisResult:
 
 1. 先冻结这份公共接口说明
 2. 再把 HK / CN 两个脚本里共同的联合文本拼装逻辑提成函数
-3. 让脚本层只负责参数、落盘、图片和微信发送
+3. 让脚本层只负责参数、落盘、图片和发布准备
 4. 最后再考虑是否统一成更上层的跨市场接口
 
 这样不会打断现有 live 可用链路，也不会为了“架构好看”提前抽象过度。

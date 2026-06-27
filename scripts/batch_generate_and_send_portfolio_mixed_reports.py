@@ -19,8 +19,6 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from fundamental.data import fetch_cn_available_report_periods, fetch_hk_available_report_periods
-from send_wechat_current_chat_text import send_current_chat_text
-from send_wechat_native import _split_message_chunks
 from storage_layout import holdings_file
 
 
@@ -56,9 +54,8 @@ class ExistingBasePeriods:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate latest mixed reports and day/30M/15M/5M charts for all holdings, then send the three raw briefs as text to the current WeChat chat.")
+    parser = argparse.ArgumentParser(description="Generate latest mixed reports and day/30M/15M/5M charts for all holdings.")
     parser.add_argument("--holdings-file", default=str(DEFAULT_HOLDINGS_FILE), help="Combined holdings JSON file")
-    parser.add_argument("--text-chunk-chars", type=int, default=DEFAULT_TEXT_CHUNK_CHARS, help="Max chars per text chunk before adding the message label")
     parser.add_argument("--limit", type=int, default=None, help="Optional max holding count for validation")
     parser.add_argument("--market", choices=["ALL", "CN", "HK"], default="ALL", help="Optional market filter")
     parser.add_argument(
@@ -290,44 +287,6 @@ def generate_bundle(
     )
 
 
-def _rebalance_chunks(chunks: list[str], max_chars: int) -> list[str]:
-    if not chunks:
-        return []
-    merged: list[str] = []
-    current = chunks[0]
-    for chunk in chunks[1:]:
-        candidate = f"{current}\n\n{chunk}"
-        if len(candidate) <= max_chars:
-            current = candidate
-            continue
-        merged.append(current)
-        current = chunk
-    merged.append(current)
-    return merged
-
-
-def _send_labeled_text(label: str, text: str, max_chars: int) -> None:
-    chunks = _rebalance_chunks(_split_message_chunks(text.strip(), max_chars=max_chars), max_chars)
-    total = len(chunks)
-    for index, chunk in enumerate(chunks, start=1):
-        send_current_chat_text(
-            f"【{label} {index}/{total}】\n{chunk}",
-            duplicate_send_window_seconds=0,
-            disable_dedupe=True,
-        )
-
-
-def send_bundle(bundle: GeneratedBundle, max_chars: int) -> None:
-    header = (
-        f"【{bundle.holding.symbol} {bundle.holding.name}】最新 mixed 分组: {bundle.combined_bucket}。"
-        f"day / {PRIMARY_TECHNICAL_LABEL} / 15M / 5M 缠论结构图已生成，本次按文本发送基本面、技术面、资金面三份简报。"
-    )
-    send_current_chat_text(header, duplicate_send_window_seconds=0, disable_dedupe=True)
-    _send_labeled_text(f"{bundle.holding.symbol} {bundle.holding.name} 基本面简报", bundle.fundamental_brief.read_text(encoding="utf-8"), max_chars)
-    _send_labeled_text(f"{bundle.holding.symbol} {bundle.holding.name} 技术面简报", bundle.technical_report.read_text(encoding="utf-8"), max_chars)
-    _send_labeled_text(f"{bundle.holding.symbol} {bundle.holding.name} 资金面简报", bundle.capital_flow_report.read_text(encoding="utf-8"), max_chars)
-
-
 def main() -> None:
     args = parse_args()
     holdings = load_holdings(Path(args.holdings_file), market_filter=args.market)
@@ -354,8 +313,7 @@ def main() -> None:
             f"generated {holding.symbol} bucket={bundle.combined_bucket} chart_svg={bundle.chart_svg} chart_jpg={bundle.chart_jpg}",
             flush=True,
         )
-        send_bundle(bundle, max_chars=args.text_chunk_chars)
-        print(f"sent {holding.symbol} {holding.name}", flush=True)
+        print(f"prepared {holding.symbol} {holding.name}", flush=True)
 
 
 if __name__ == "__main__":

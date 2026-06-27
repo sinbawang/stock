@@ -65,7 +65,7 @@
 - [docs/fundamental-interim-scoring-design.md](docs/fundamental-interim-scoring-design.md): 年报锚定 + 季报刷新评分设计
 - [docs/fundamental-interim-scoring-interface.md](docs/fundamental-interim-scoring-interface.md): 跨报告期评分对象与服务接口说明
 - [docs/hk-financial-second-source-plan.md](docs/hk-financial-second-source-plan.md): 港股金融第二数据源与 fallback 方案
-- [docs/combined-analysis-output-spec.md](docs/combined-analysis-output-spec.md): 当前 `plus_60m` 联合文本与微信发送产物规格
+- [docs/combined-analysis-output-spec.md](docs/combined-analysis-output-spec.md): 当前 `plus_60m` 联合文本与技术面产物规格
 - [docs/combined-analysis-service-interface.md](docs/combined-analysis-service-interface.md): 联合分析链路的公共服务接口说明
 - [docs/miniapp-cloud-publish-schema.md](docs/miniapp-cloud-publish-schema.md): 小程序云存储发布层协议
 - [docs/miniapp-native-agent-prompt.md](docs/miniapp-native-agent-prompt.md): 小程序原生页生成提示词
@@ -161,40 +161,7 @@ bin\runone.bat 000591 --zhongshu-level segment --pending-reverse-mode tail_mixed
 .\venv\Scripts\python.exe scripts/batch_regenerate_fundamental_briefs.py --meta-dir data\_meta --save-scorecard-text
 ```
 
-如果要把已经生成好的文本报告发到当前已打开的微信会话，当前建议使用稳定的文本发送入口：
-
-```powershell
-.\venv\Scripts\python.exe scripts/send_wechat_current_chat_text.py data\reports\00700\overview.txt
-```
-
-使用前先手动打开目标微信群或联系人会话。该入口默认只向当前会话发送文本文件，不执行自动搜索切换，也不依赖附件发送链路。
-
-如果要把已经生成好的结构图或其他文件发到当前已打开的微信会话，当前建议使用对应的文件发送入口：
-
-```powershell
-.\venv\Scripts\python.exe scripts/send_wechat_current_chat_files.py build\wechat\data\02208\60m\structure.jpg
-```
-
-该入口同样要求先手动打开目标会话；发送后会检查当前会话消息列表是否发生变化，避免“命令成功但微信未收到”的静默失败。
-
-如果要一次发送“文本报告 + 一张或多张图”，当前建议使用组合发送入口：
-
-```powershell
-.\venv\Scripts\python.exe scripts/send_wechat_current_chat_bundle.py --message-file data\reports\00700\overview.txt --file data\reports\00700\60m\structure.jpg
-```
-
-该入口会先发文本，再按当前会话发送文件，适合“报告正文 + 技术图”这类常见组合场景。
-
-如果希望把“生成 + 发送”合并成一条高层命令，当前建议使用统一任务入口：
-
-```powershell
-.\venv\Scripts\python.exe scripts/run_wechat_report_task.py fundamental 02208 --name 金风科技 --blended-hk
-.\venv\Scripts\python.exe scripts/run_wechat_report_task.py hk60m --symbol 02208 --name 金风科技
-.\venv\Scripts\python.exe scripts/run_wechat_report_task.py cn60m --symbol 300124 --name 汇川技术
-```
-
-这些命令默认面向“当前已打开微信会话”的发送场景；如果只想生成、不发送，可加 `--generate-only`。
-每次通过该统一入口执行后，都会在 `data\reports\_meta` 额外落一份 `wechat_task_manifest_*` 审计文件，记录任务类型、参数、状态和生成/发送产物，便于后续回查与重放。
+桌面微信发送链路已经移除。当前报告生成后，如果需要对外消费，建议直接走 CloudBase 发布链路，将 `data/reports` 产物构造成 `miniapp-publish/latest` 并上传，供小程序原生页读取。
 
 如果需要生成单标的三轴 compact 摘要，当前 compact 链已经直接读取 canonical 报告目录，不再依赖 `data\_meta` 下的历史文本归档：
 
@@ -247,15 +214,7 @@ bin\runone.bat 000591 --zhongshu-level segment --pending-reverse-mode tail_mixed
 .\venv\Scripts\python.exe scripts\run_a_share_daily_overview.py --no-fallback
 ```
 
-每次运行默认还会在 `data\reports\_meta` 写入 `a_share_daily_overview_manifest_*.json`，记录持仓输入、关键参数、资金面成功/失败数量、输出报告路径和微信发送状态；如不需要审计文件，可加 `--no-manifest`。
-
-如果要生成后把最终三轴管理清单发送到当前已打开的微信会话：
-
-```powershell
-.\venv\Scripts\python.exe scripts\run_a_share_daily_overview.py --send-wechat
-```
-
-发送前请先手动打开目标微信群或联系人会话。该开关只发送最终 `group_a_share_combined_overview_*.txt`，不发送单标的资金面明细。
+每次运行默认还会在 `data\reports\_meta` 写入 `a_share_daily_overview_manifest_*.json`，记录持仓输入、关键参数、资金面成功/失败数量和输出报告路径；如不需要审计文件，可加 `--no-manifest`。
 
 港股资金面有独立的持仓批量入口，默认读取 `data\stock_holdings.json`，并在 `reports\<symbol>\fund.json` 更新单标的资金面报告，在 `reports\_meta` 生成 `group_h_share_capital_flow_overview_*.txt`：
 
@@ -279,15 +238,7 @@ bin\runone.bat 000591 --zhongshu-level segment --pending-reverse-mode tail_mixed
 .\venv\Scripts\python.exe scripts\run_h_share_daily_overview.py
 ```
 
-该入口会先生成港股资金面单标的报告与 `group_h_share_capital_flow_overview_*.txt`，再复用最新基本面简报、最新 60M 技术面组合建议和刚生成的资金面概览，输出 `data/reports/_meta/group_h_share_combined_overview_*.txt`。每次运行默认还会在 `data/reports/_meta` 写入 `h_share_daily_overview_manifest_*.json`，记录输入、参数、资金面成功/失败数量、输出路径和微信发送状态；如不需要审计文件，可加 `--no-manifest`。
-
-如果要生成后把最终港股三轴管理清单发送到当前已打开的微信会话：
-
-```powershell
-.\venv\Scripts\python.exe scripts\run_h_share_daily_overview.py --send-wechat
-```
-
-发送前请先手动打开目标微信群或联系人会话。该开关只发送最终 `group_h_share_combined_overview_*.txt`，不发送单标的资金面明细。
+该入口会先生成港股资金面单标的报告与 `group_h_share_capital_flow_overview_*.txt`，再复用最新基本面简报、最新 60M 技术面组合建议和刚生成的资金面概览，输出 `data/reports/_meta/group_h_share_combined_overview_*.txt`。每次运行默认还会在 `data/reports/_meta` 写入 `h_share_daily_overview_manifest_*.json`，记录输入、参数、资金面成功/失败数量和输出路径；如不需要审计文件，可加 `--no-manifest`。
 
 如果你在 Python 代码里直接消费报告输出，当前推荐：
 
@@ -318,7 +269,6 @@ chanlun-stock/
 │   │   ├── fractal.py          # 分型识别
 │   │   ├── bi.py               # 笔识别
 │   │   ├── zhongshu.py         # 中枢识别
-│   │   ├── wechat.py           # 微信发送相关封装
 │   │   ├── data/
 │   │   │   ├── __init__.py
 │   │   │   ├── cleaner.py      # 数据清洗
@@ -409,8 +359,7 @@ chanlun-stock/
 │   ├── test_housekeep_generated_reports.py
 │   ├── test_integration.py
 │   ├── test_normalize.py
-│   ├── test_storage_layout.py
-│   └── test_wechat.py
+│   └── test_storage_layout.py
 ├── docs/
 │   ├── chanlun-rule-spec.md         # 缠论规则规格
 │   ├── hk-minute-data-source.md     # 港股分钟线数据源策略

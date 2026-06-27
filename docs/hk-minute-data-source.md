@@ -111,12 +111,12 @@ $env:XUEQIU_COOKIE = 'xq_a_token=REPLACE_ME; xqat=REPLACE_ME; u=REPLACE_ME'
 
 ## 当前脚本约定
 
-[scripts/run_hk_60m_chanlun_to_wechat.py](../scripts/run_hk_60m_chanlun_to_wechat.py) 已接入统一策略入口。
+[scripts/run_hk_60m_chanlun_report.py](../scripts/run_hk_60m_chanlun_report.py) 已接入统一策略入口。
 
 默认只用雪球：
 
 ```powershell
-c:/sinba/stock/venv/Scripts/python.exe scripts/run_hk_60m_chanlun_to_wechat.py \
+c:/sinba/stock/venv/Scripts/python.exe scripts/run_hk_60m_chanlun_report.py \
   --symbol 03690 \
   --name 美团 \
   --source xueqiu \
@@ -126,7 +126,7 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/run_hk_60m_chanlun_to_wechat.py \
 显式允许回退：
 
 ```powershell
-c:/sinba/stock/venv/Scripts/python.exe scripts/run_hk_60m_chanlun_to_wechat.py \
+c:/sinba/stock/venv/Scripts/python.exe scripts/run_hk_60m_chanlun_report.py \
   --symbol 03690 \
   --name 美团 \
   --source xueqiu \

@@ -17,7 +17,6 @@ if str(SRC) not in sys.path:
 
 import batch_generate_capital_flow_reports as capital_batch
 import generate_a_share_combined_overview as combined_overview
-import send_wechat_current_chat_text as wechat_text
 from storage_layout import CAPITAL_FLOW_CACHE_DIR, REPORTS_META_DIR, holdings_file
 
 
@@ -33,7 +32,6 @@ class AShareDailyOverviewResult:
     manifest_path: Path | None
     capital_flow_succeeded: int
     capital_flow_failed: int
-    wechat_sent: bool = False
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,16 +43,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fail-fast", action="store_true", help="Stop capital-flow generation after the first failed target")
     parser.add_argument("--no-cache", action="store_true", help="Disable local capital-flow cache fallback")
     parser.add_argument("--no-fallback", action="store_true", help="Disable low-confidence fallback sources")
-    parser.add_argument("--send-wechat", action="store_true", help="Send the combined overview text to the current foreground WeChat chat")
     parser.add_argument("--no-manifest", action="store_true", help="Do not write a daily overview run manifest JSON file")
-    parser.add_argument("--disable-dedupe", action="store_true", help="Disable short-window duplicate-send protection when sending to WeChat")
     parser.add_argument(
-        "--duplicate-send-window-seconds",
-        type=float,
-        default=300.0,
-        help="Skip duplicate WeChat sends within this many seconds; set to 0 to disable",
+        "--cache-dir", default=str(DEFAULT_CACHE_DIR), help="Local capital-flow cache directory"
     )
-    parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help="Local capital-flow cache directory")
     parser.add_argument(
         "--max-cache-age-days",
         type=int,
@@ -87,10 +79,6 @@ def save_daily_overview_manifest(
     combined_path: Path,
     capital_flow_succeeded: int,
     capital_flow_failed: int,
-    send_wechat: bool,
-    wechat_sent: bool,
-    disable_dedupe: bool,
-    duplicate_send_window_seconds: float,
 ) -> Path:
     meta_dir.mkdir(parents=True, exist_ok=True)
     generated_at = datetime.now()
@@ -120,12 +108,6 @@ def save_daily_overview_manifest(
             "succeeded": capital_flow_succeeded,
             "failed": capital_flow_failed,
         },
-        "wechat": {
-            "requested": send_wechat,
-            "sent": wechat_sent,
-            "disable_dedupe": disable_dedupe,
-            "duplicate_send_window_seconds": duplicate_send_window_seconds,
-        },
     }
     manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return manifest_path
@@ -141,10 +123,7 @@ def run_daily_overview(
     use_fallback: bool = True,
     cache_dir: Path | None = None,
     max_cache_age_days: int | None = 7,
-    send_wechat: bool = False,
     write_manifest: bool = True,
-    disable_dedupe: bool = False,
-    duplicate_send_window_seconds: float = 300.0,
 ) -> AShareDailyOverviewResult:
     capital_targets = capital_batch.discover_targets_from_holdings_file(holdings_file)
     combined_targets = combined_overview.discover_targets_from_holdings_file(holdings_file)
@@ -171,14 +150,6 @@ def run_daily_overview(
     rows, technical_summary_path, capital_flow_summary_path = combined_overview.build_rows(combined_targets, meta_dir)
     combined_text = combined_overview.render_combined_overview(rows, technical_summary_path, capital_flow_summary_path)
     combined_path = combined_overview.save_combined_overview(combined_text, meta_dir)
-    wechat_sent = False
-    if send_wechat:
-        wechat_text.send_current_chat_text_file(
-            combined_path,
-            duplicate_send_window_seconds=duplicate_send_window_seconds,
-            disable_dedupe=disable_dedupe,
-        )
-        wechat_sent = True
 
     capital_flow_succeeded = sum(1 for item in capital_results if item.status == "ok")
     capital_flow_failed = sum(1 for item in capital_results if item.status != "ok")
@@ -200,10 +171,6 @@ def run_daily_overview(
             combined_path=combined_path,
             capital_flow_succeeded=capital_flow_succeeded,
             capital_flow_failed=capital_flow_failed,
-            send_wechat=send_wechat,
-            wechat_sent=wechat_sent,
-            disable_dedupe=disable_dedupe,
-            duplicate_send_window_seconds=duplicate_send_window_seconds,
         )
 
     return AShareDailyOverviewResult(
@@ -212,7 +179,6 @@ def run_daily_overview(
         manifest_path=manifest_path,
         capital_flow_succeeded=capital_flow_succeeded,
         capital_flow_failed=capital_flow_failed,
-        wechat_sent=wechat_sent,
     )
 
 
@@ -228,17 +194,13 @@ def main() -> None:
         use_fallback=not args.no_fallback,
         cache_dir=Path(args.cache_dir),
         max_cache_age_days=None if args.max_cache_age_days < 0 else args.max_cache_age_days,
-        send_wechat=args.send_wechat,
         write_manifest=not args.no_manifest,
-        disable_dedupe=args.disable_dedupe,
-        duplicate_send_window_seconds=args.duplicate_send_window_seconds,
     )
     print(f"capital_flow_summary={result.capital_flow_summary_path}")
     print(f"combined_overview={result.combined_overview_path}")
     print(f"manifest={result.manifest_path if result.manifest_path is not None else 'disabled'}")
     print(f"capital_flow_succeeded={result.capital_flow_succeeded}")
     print(f"capital_flow_failed={result.capital_flow_failed}")
-    print(f"wechat_sent={result.wechat_sent}")
 
 
 if __name__ == "__main__":

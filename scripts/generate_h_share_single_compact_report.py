@@ -292,7 +292,7 @@ def _find_latest_chart(symbol: str, name: str) -> Path | None:
 def _refresh_chart(args: argparse.Namespace) -> str | None:
     command = [
         sys.executable,
-        str(SCRIPTS / "run_hk_60m_chanlun_to_wechat.py"),
+        str(SCRIPTS / "run_hk_60m_chanlun_report.py"),
         "--symbol",
         args.symbol,
         "--name",

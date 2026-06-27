@@ -15,8 +15,8 @@
 
 当前规格对应的是仓库里已经落地的 `plus_60m` 联合输出链路，主要由这些入口产出：
 
-- [scripts/run_hk_60m_chanlun_to_wechat.py](c:/sinba/stock/scripts/run_hk_60m_chanlun_to_wechat.py)
-- [scripts/run_cn_60m_chanlun_to_wechat.py](c:/sinba/stock/scripts/run_cn_60m_chanlun_to_wechat.py)
+- [scripts/run_hk_60m_chanlun_report.py](c:/sinba/stock/scripts/run_hk_60m_chanlun_report.py)
+- [scripts/run_cn_60m_chanlun_report.py](c:/sinba/stock/scripts/run_cn_60m_chanlun_report.py)
 
 当前覆盖场景：
 
@@ -104,7 +104,7 @@
 
 ### 3.2 图片产物
 
-- 一张适合微信发送的 JPG 结构图
+- 一张适合移动端阅读和发布层消费的 JPG 结构图
 - 上游还会保留原始 CSV、标准化 CSV、SVG、PNG、中枢/笔/MACD 导出等中间文件
 - 技术面图片和 `tech.json` 当前通常落在各标的自己的 `data/reports/<symbol>/<timeframe>/` 目录，分析 CSV 在其下的 `analyze/` 子目录
 
@@ -422,24 +422,13 @@
 
 - 一个把所有判断压缩成单句结论的黑盒信号
 
-## 8. 当前文件与发送约定
+## 8. 当前文件与发布约定
 
-当前微信发送链路的约定是：
+当前桌面微信发送链路已经移除，联合分析输出约定回收到 canonical 报告目录与 CloudBase 发布层：
 
-- 文本作为消息正文发送
-- 结构图 JPG 作为附件一起发送
-- 默认不自动乱切聊天窗口，除非显式允许
-
-相关入口：
-
-- [scripts/send_wechat_native.py](c:/sinba/stock/scripts/send_wechat_native.py)
-- [scripts/prepare_and_send_wechat_chart.py](c:/sinba/stock/scripts/prepare_and_send_wechat_chart.py)
-
-这意味着当前“联合分析输出规格”不仅是文本排版问题，也包含：
-
-- 文本适合直接贴进微信消息
-- 图片适合直接在微信中查看
-- 文件名与目录便于后续回溯与重发
+- 文本与技术面 JSON 保持可直接落盘、可直接打包
+- 结构图 JPG 保持适合移动端查看
+- 文件名与目录便于后续回溯、重建和发布
 
 ## 9. 当前已知限制
 

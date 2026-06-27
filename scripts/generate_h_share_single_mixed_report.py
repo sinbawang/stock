@@ -47,8 +47,7 @@ from generate_h_share_combined_overview import (
     _management_priority,
     _action_label,
 )
-from run_hk_60m_chanlun_to_wechat import analyze_current_state, build_paths, write_normalized_csv
-from send_wechat_current_chat_text import send_current_chat_text_file
+from run_hk_60m_chanlun_report import analyze_current_state, build_paths, write_normalized_csv
 from report_json import write_json
 from storage_layout import CAPITAL_FLOW_CACHE_DIR, stock_base_report_path, stock_fund_report_path, stock_overview_report_path, stock_report_dir, timeframe_report_paths
 
@@ -66,7 +65,7 @@ LOWER_PRECISION_PENDING_REVERSE_MODE = "effective_only"
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate a single-stock H-share mixed report and optionally send it to the current WeChat chat.")
+    parser = argparse.ArgumentParser(description="Generate a single-stock H-share mixed report.")
     parser.add_argument("symbol", help="HK symbol such as 09988")
     parser.add_argument("--name", required=True, help="Security name")
     parser.add_argument("--start", default=default_structure_start(PRIMARY_TECHNICAL_TIMEFRAME), help="30M analysis start time")
@@ -88,9 +87,6 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Reuse an existing base.json instead of regenerating the fundamental report when possible. Use --no-skip-gen-base to force refresh.",
     )
-    parser.add_argument("--send-wechat", action="store_true", help="Send the combined mixed report to the current WeChat chat")
-    parser.add_argument("--disable-dedupe", action="store_true", help="Disable short-window duplicate-send protection")
-    parser.add_argument("--duplicate-send-window-seconds", type=float, default=300.0, help="Skip duplicate sends within this many seconds; set to 0 to disable")
     return parser.parse_args()
 
 
@@ -513,15 +509,6 @@ def main() -> None:
     print(f"capital_flow_report= {capital_flow_path}")
     print(f"combined_report= {combined_path}")
     print(f"combined_bucket= {combined_bucket}")
-
-    if args.send_wechat:
-        send_current_chat_text_file(
-            combined_path,
-            duplicate_send_window_seconds=args.duplicate_send_window_seconds,
-            disable_dedupe=args.disable_dedupe,
-        )
-        print(f"wechat_sent= {combined_path}")
-
 
 if __name__ == "__main__":
     main()
