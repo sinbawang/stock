@@ -14,7 +14,8 @@ COPY pyproject.toml README.md requirements.txt /app/
 COPY src /app/src
 COPY scripts /app/scripts
 COPY docs /app/docs
-COPY data /app/data
+
+RUN mkdir -p /app/data /app/data/_meta /app/data/reports /app/data/reports/_meta
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .
