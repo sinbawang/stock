@@ -23,7 +23,10 @@ from fundamental.services import (
 )
 
 
-DEFAULT_MANUAL_SUPPLEMENT_DIR = ROOT / "data" / "_meta" / "manual_supplements"
+DEFAULT_MANUAL_SUPPLEMENT_DIRS = (
+    ROOT / "config" / "manual_supplements",
+    ROOT / "data" / "_meta" / "manual_supplements",
+)
 
 
 def _infer_market(symbol: str) -> str:
@@ -38,10 +41,11 @@ def _infer_market(symbol: str) -> str:
 def _resolve_manual_supplement_path(symbol: str, explicit_path: str | None) -> str | None:
     if explicit_path:
         return explicit_path
-    candidates = sorted(DEFAULT_MANUAL_SUPPLEMENT_DIR.glob(f"{symbol}_*.*"))
-    if not candidates:
-        return None
-    return str(candidates[0])
+    for supplement_dir in DEFAULT_MANUAL_SUPPLEMENT_DIRS:
+        candidates = sorted(supplement_dir.glob(f"{symbol}_*.*"))
+        if candidates:
+            return str(candidates[0])
+    return None
 
 
 def parse_args() -> argparse.Namespace:

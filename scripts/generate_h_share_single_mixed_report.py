@@ -54,7 +54,10 @@ from storage_layout import CAPITAL_FLOW_CACHE_DIR, stock_base_report_path, stock
 
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "_meta"
 DEFAULT_CACHE_DIR = CAPITAL_FLOW_CACHE_DIR
-DEFAULT_MANUAL_SUPPLEMENT_DIR = ROOT / "data" / "_meta" / "manual_supplements"
+DEFAULT_MANUAL_SUPPLEMENT_DIRS = (
+    ROOT / "config" / "manual_supplements",
+    ROOT / "data" / "_meta" / "manual_supplements",
+)
 INTRADAY_SOURCE_PROBE_ROWS = 600
 BAR_COUNT_POLICY = "feasible_maximum"
 PRIMARY_TECHNICAL_TIMEFRAME = "30m"
@@ -104,10 +107,11 @@ def parse_args() -> argparse.Namespace:
 def _resolve_manual_supplement_path(symbol: str, explicit_path: str | None) -> str | None:
     if explicit_path:
         return explicit_path
-    candidates = sorted(DEFAULT_MANUAL_SUPPLEMENT_DIR.glob(f"{symbol}_*.*"))
-    if not candidates:
-        return None
-    return str(candidates[0])
+    for supplement_dir in DEFAULT_MANUAL_SUPPLEMENT_DIRS:
+        candidates = sorted(supplement_dir.glob(f"{symbol}_*.*"))
+        if candidates:
+            return str(candidates[0])
+    return None
 
 
 def _extract_prefixed_value(text: str, prefix: str) -> str | None:

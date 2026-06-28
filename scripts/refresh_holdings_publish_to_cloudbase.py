@@ -71,6 +71,13 @@ def parse_args() -> argparse.Namespace:
         help="How many holdings to generate in parallel during regeneration.",
     )
     parser.add_argument(
+        "--fail-on-holding-error",
+        dest="fail_on_holding_error",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Fail the whole batch when any single holding regeneration fails. Defaults to false so partial failures are recorded and the batch continues.",
+    )
+    parser.add_argument(
         "--pending-reverse-mode",
         choices=("any", "effective_only", "tail_mixed"),
         default="any",
@@ -128,7 +135,7 @@ def select_holdings(args: argparse.Namespace):
     return holdings
 
 
-def regenerate_holdings(args: argparse.Namespace) -> None:
+def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
     holdings = select_holdings(args)
     if not holdings:
         raise RuntimeError("No holdings found for regeneration")
@@ -136,7 +143,8 @@ def regenerate_holdings(args: argparse.Namespace) -> None:
     worker_count = max(1, min(args.parallelism, len(holdings)))
     print(f"regenerate_holdings={len(holdings)} parallelism={worker_count} skip_gen_base={args.skip_gen_base} skip_gen_fund={args.skip_gen_fund} tech_timeframes={','.join(args.tech_timeframes)}", flush=True)
 
-    failures: list[str] = []
+    failures: list[dict[str, str]] = []
+    generated_count = 0
     if worker_count == 1:
         for index, holding in enumerate(holdings, start=1):
             try:
@@ -159,8 +167,16 @@ def regenerate_holdings(args: argparse.Namespace) -> None:
                     f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg} seconds={time.perf_counter() - started:.2f}",
                     flush=True,
                 )
+                generated_count += 1
             except Exception as exc:  # pragma: no cover - operational batch script
-                failures.append(f"{holding.market} {holding.symbol} {holding.name}: {exc}")
+                failures.append(
+                    {
+                        "market": holding.market,
+                        "symbol": holding.symbol,
+                        "name": holding.name,
+                        "error": str(exc),
+                    }
+                )
                 print(f"failed {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name}: {exc}", flush=True)
     else:
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
@@ -190,11 +206,33 @@ def regenerate_holdings(args: argparse.Namespace) -> None:
                         f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg} seconds={time.perf_counter() - started:.2f}",
                         flush=True,
                     )
+                    generated_count += 1
                 except Exception as exc:  # pragma: no cover - operational batch script
-                    failures.append(f"{holding.market} {holding.symbol} {holding.name}: {exc}")
+                    failures.append(
+                        {
+                            "market": holding.market,
+                            "symbol": holding.symbol,
+                            "name": holding.name,
+                            "error": str(exc),
+                        }
+                    )
                     print(f"failed {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name}: {exc}", flush=True)
+    failure_lines = [
+        f"{item['market']} {item['symbol']} {item['name']}: {item['error']}"
+        for item in failures
+    ]
+    if generated_count == 0:
+        raise RuntimeError("All holdings failed:\n" + "\n".join(failure_lines))
     if failures:
-        raise RuntimeError("Failed holdings:\n" + "\n".join(failures))
+        print("partial failures:\n" + "\n".join(failure_lines), flush=True)
+        if getattr(args, "fail_on_holding_error", False):
+            raise RuntimeError("Failed holdings:\n" + "\n".join(failure_lines))
+    return {
+        "requested_count": len(holdings),
+        "generated_count": generated_count,
+        "failed_count": len(failures),
+        "failed_holdings": failures,
+    }
 
 
 def rebuild_publish_bundle(args: argparse.Namespace) -> Path:

@@ -62,6 +62,7 @@ class PublishRefreshRequest(BaseModel):
     skip_upload: bool = False
     skip_gen_base: bool = True
     skip_gen_fund: bool = False
+    fail_on_holding_error: bool = False
     parallelism: int = Field(default=max(1, min(4, os.cpu_count() or 1)), ge=1)
     pending_reverse_mode: PendingReverseMode = "any"
     day_bars: int = Field(default=600, ge=1)
@@ -278,6 +279,7 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
         skip_upload=request.skip_upload,
         skip_gen_base=request.skip_gen_base,
         skip_gen_fund=request.skip_gen_fund,
+        fail_on_holding_error=request.fail_on_holding_error,
         parallelism=request.parallelism,
         pending_reverse_mode=request.pending_reverse_mode,
         day_bars=request.day_bars,
@@ -297,11 +299,14 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
         delete_created_api_key=request.delete_created_api_key,
         upload_dry_run=request.upload_dry_run,
     )
+    regeneration_result: dict[str, Any] | None = None
     if not args.skip_regenerate:
-        regenerate_holdings(args)
+        regeneration_result = regenerate_holdings(args)
     result = _publish_build_and_upload(args)
     result["regenerated"] = not args.skip_regenerate
     result["generated_timeframes"] = list(args.tech_timeframes)
+    if regeneration_result is not None:
+        result["regeneration_summary"] = regeneration_result
     return result
 
 

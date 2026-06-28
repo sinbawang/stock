@@ -12,6 +12,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+DEFAULT_MANUAL_SUPPLEMENT_DIR = ROOT / "config" / "manual_supplements"
+LEGACY_MANUAL_SUPPLEMENT_DIR = ROOT / "data" / "_meta" / "manual_supplements"
+
 from fundamental.reporting import (
     save_blended_fundamental_brief,
     save_blended_scorecard_text,
@@ -45,7 +48,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--manual-supplement-dir",
-        default=str(ROOT / "data" / "_meta" / "manual_supplements"),
+        default=str(DEFAULT_MANUAL_SUPPLEMENT_DIR),
         help="Directory containing manual supplement templates",
     )
     parser.add_argument("--output-dir", default=None, help="Output directory, defaults to meta dir")
@@ -110,10 +113,14 @@ def discover_targets_from_holdings_file(holdings_file: Path) -> list[BriefTarget
 
 
 def find_manual_supplement_path(symbol: str, supplement_dir: Path) -> str | None:
-    candidates = sorted(supplement_dir.glob(f"{symbol}_*.*"))
-    if not candidates:
-        return None
-    return str(candidates[0])
+    search_dirs: list[Path] = [supplement_dir]
+    if supplement_dir != LEGACY_MANUAL_SUPPLEMENT_DIR:
+        search_dirs.append(LEGACY_MANUAL_SUPPLEMENT_DIR)
+    for candidate_dir in search_dirs:
+        candidates = sorted(candidate_dir.glob(f"{symbol}_*.*"))
+        if candidates:
+            return str(candidates[0])
+    return None
 
 
 def regenerate_one(
