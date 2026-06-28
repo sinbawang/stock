@@ -92,6 +92,14 @@ INTRADAY_TIMEFRAME_SPECS = (
 )
 
 
+@dataclass(frozen=True)
+class BatchPrepareResult:
+    security_count: int
+    selected_timeframes: tuple[str, ...]
+    manifest_path: Path
+    summary_path: Path | None
+
+
 def timeframe_display_label(timeframe: str) -> str:
     normalized = timeframe.strip().lower()
     if normalized == "day":
@@ -796,15 +804,30 @@ def _reuse_existing_hk_5m_case(
     return load_existing_case(security, "5m")
 
 
-def main() -> None:
-    args = parse_args()
-    selected_timeframes = tuple(dict.fromkeys(args.timeframes))
-    day_start = args.day_start or default_day_start_for_bar_target(args.day_bars)
-    m60_start = args.m60_start or default_intraday_start_for_bar_target("60m", args.m60_bars)
-    m30_start = args.m30_start or default_intraday_start_for_bar_target("30m", args.m30_bars)
-    m15_start = args.m15_start or default_intraday_start_for_bar_target("15m", args.m15_bars)
-    m5_start = args.m5_start or default_intraday_start_for_bar_target("5m", args.m5_bars)
-    securities = load_securities(Path(args.holdings_file) if args.holdings_file else None)
+def run_batch_prepare(
+    *,
+    holdings_path: Path | None = None,
+    day_start: str | None = None,
+    day_bars: int = 600,
+    m60_start: str | None = None,
+    m60_bars: int = INTRADAY_SOURCE_PROBE_ROWS,
+    m30_start: str | None = None,
+    m30_bars: int = INTRADAY_SOURCE_PROBE_ROWS,
+    m15_start: str | None = None,
+    m15_bars: int = INTRADAY_SOURCE_PROBE_ROWS,
+    m5_start: str | None = None,
+    m5_bars: int = INTRADAY_SOURCE_PROBE_ROWS,
+    pending_reverse_mode: str = "any",
+    zhongshu_level: str = "bi",
+    timeframes: tuple[str, ...] = ("day", "60m", "30m", "15m", "5m"),
+) -> BatchPrepareResult:
+    selected_timeframes = tuple(dict.fromkeys(timeframes))
+    resolved_day_start = day_start or default_day_start_for_bar_target(day_bars)
+    resolved_m60_start = m60_start or default_intraday_start_for_bar_target("60m", m60_bars)
+    resolved_m30_start = m30_start or default_intraday_start_for_bar_target("30m", m30_bars)
+    resolved_m15_start = m15_start or default_intraday_start_for_bar_target("15m", m15_bars)
+    resolved_m5_start = m5_start or default_intraday_start_for_bar_target("5m", m5_bars)
+    securities = load_securities(holdings_path or DEFAULT_HOLDINGS_FILE)
     bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]] = []
     for security in securities:
         day_case: dict[str, Path] = {}
@@ -812,23 +835,23 @@ def main() -> None:
 
         if "day" in selected_timeframes:
             started = time.perf_counter()
-            day_rows, day_fetch = fetch_day_rows(security, day_start, args.day_bars)
+            day_rows, day_fetch = fetch_day_rows(security, resolved_day_start, day_bars)
             day_case = export_case(
                 security,
                 "day",
                 day_rows,
                 f"{security.symbol} {security.name} day",
                 data_fetch=day_fetch,
-                pending_reverse_mode=args.pending_reverse_mode,
-                zhongshu_level=args.zhongshu_level,
+                pending_reverse_mode=pending_reverse_mode,
+                zhongshu_level=zhongshu_level,
             )
             print(f"timing {security.symbol} day seconds={time.perf_counter() - started:.2f}", flush=True)
 
         timeframe_specs = {
-            "60m": ("60", m60_start, args.m60_bars),
-            "30m": ("30", m30_start, args.m30_bars),
-            "15m": ("15", m15_start, args.m15_bars),
-            "5m": ("5", m5_start, args.m5_bars),
+            "60m": ("60", resolved_m60_start, m60_bars),
+            "30m": ("30", resolved_m30_start, m30_bars),
+            "15m": ("15", resolved_m15_start, m15_bars),
+            "5m": ("5", resolved_m5_start, m5_bars),
         }
         for timeframe in ("60m", "30m", "15m", "5m"):
             if timeframe not in selected_timeframes:
@@ -846,8 +869,8 @@ def main() -> None:
                 exported = _reuse_existing_hk_5m_case(
                     security,
                     rows,
-                    pending_reverse_mode=args.pending_reverse_mode,
-                    zhongshu_level=args.zhongshu_level,
+                    pending_reverse_mode=pending_reverse_mode,
+                    zhongshu_level=zhongshu_level,
                 )
                 if exported is not None:
                     print(f"reuse {security.symbol} 5m existing_effective_only_case", flush=True)
@@ -858,8 +881,8 @@ def main() -> None:
                     rows,
                     f"{security.symbol} {security.name} {timeframe}",
                     data_fetch=fetch_meta,
-                    pending_reverse_mode=args.pending_reverse_mode,
-                    zhongshu_level=args.zhongshu_level,
+                    pending_reverse_mode=pending_reverse_mode,
+                    zhongshu_level=zhongshu_level,
                 )
             if timeframe == "60m":
                 m60_case = exported
@@ -880,9 +903,37 @@ def main() -> None:
     manifest.write_text("\n".join(lines), encoding="utf-8")
     print(f"Manifest: {manifest}")
 
+    summary_path: Path | None = None
     if bundle:
         summary_path = write_group_operation_summary(bundle)
         print(f"Summary: {summary_path}")
+
+    return BatchPrepareResult(
+        security_count=len(securities),
+        selected_timeframes=selected_timeframes,
+        manifest_path=manifest,
+        summary_path=summary_path,
+    )
+
+
+def main() -> None:
+    args = parse_args()
+    run_batch_prepare(
+        holdings_path=Path(args.holdings_file) if args.holdings_file else None,
+        day_start=args.day_start,
+        day_bars=args.day_bars,
+        m60_start=args.m60_start,
+        m60_bars=args.m60_bars,
+        m30_start=args.m30_start,
+        m30_bars=args.m30_bars,
+        m15_start=args.m15_start,
+        m15_bars=args.m15_bars,
+        m5_start=args.m5_start,
+        m5_bars=args.m5_bars,
+        pending_reverse_mode=args.pending_reverse_mode,
+        zhongshu_level=args.zhongshu_level,
+        timeframes=tuple(args.timeframes),
+    )
 
 
 if __name__ == "__main__":

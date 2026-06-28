@@ -68,6 +68,8 @@
 - [docs/combined-analysis-output-spec.md](docs/combined-analysis-output-spec.md): 当前 `plus_60m` 联合文本与技术面产物规格
 - [docs/combined-analysis-service-interface.md](docs/combined-analysis-service-interface.md): 联合分析链路的公共服务接口说明
 - [docs/miniapp-cloud-publish-schema.md](docs/miniapp-cloud-publish-schema.md): 小程序云存储发布层协议
+- [docs/tencent-container-service-plan.md](docs/tencent-container-service-plan.md): 持仓分析 API / 腾讯云容器服务化方案
+- [docs/tencent-cloud-deploy-runbook.md](docs/tencent-cloud-deploy-runbook.md): 腾讯云容器一键发布步骤
 - [docs/miniapp-native-agent-prompt.md](docs/miniapp-native-agent-prompt.md): 小程序原生页生成提示词
 - [docs/miniapp-native-agent-prompt-compact.md](docs/miniapp-native-agent-prompt-compact.md): 小程序原生页精简提示词
 - [.github/agents/chanlun-python.agent.md](.github/agents/chanlun-python.agent.md): 项目专用 agent 定义
