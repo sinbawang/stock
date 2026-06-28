@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--holdings-file",
         default=None,
-        help="Optional JSON holdings file such as data/stock_holdings.json; when provided, targets are loaded from it instead of historical brief files.",
+        help="Optional JSON holdings file such as config/stock_holdings.json; when provided, targets are loaded from it instead of historical brief files.",
     )
     parser.add_argument(
         "--manual-supplement-dir",

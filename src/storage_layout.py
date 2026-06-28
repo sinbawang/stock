@@ -6,11 +6,12 @@ from typing import Optional
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CONFIG_DIR = ROOT / "config"
 DATA_DIR = ROOT / "data"
 REPORTS_DIR = DATA_DIR / "reports"
 REPORTS_META_DIR = REPORTS_DIR / "_meta"
 DATA_META_DIR = DATA_DIR / "_meta"
-HOLDINGS_FILE = DATA_DIR / "stock_holdings.json"
+HOLDINGS_FILE = CONFIG_DIR / "stock_holdings.json"
 CAPITAL_FLOW_CACHE_DIR = DATA_META_DIR / "capital_flow_cache"
 
 

@@ -55,7 +55,7 @@
 
 如果某个段落没有标的，保留段落标题并显示 `暂无`，避免日报结构随着样本变化而跳动。
 
-港股持仓三段式概览由 [scripts/generate_h_share_combined_overview.py](../scripts/generate_h_share_combined_overview.py) 生成，默认读取 `data/stock_holdings.json`。它会优先读取最新 `group_h_share_capital_flow_overview_*.txt`；没有资金面概览时，`capital_flow` 必须显示 `missing/HK pending`；远端抓取失败时显示 `failed/primary` 或对应来源桶。当前 HK V1 资金面使用港股通成份行情的成交额/换手率、东方财富港股通个股成交榜历史中的个股南向净买额、沪深港通持股统计的 1 日南向持股市值变化，以及 HKEX 日终沽空成交额；沽空比例在成交额可用时用 `沽空成交额 / 成交额` 计算。个股南向净买额仅在标的进入成交榜的交易日可用，因此组合层可以把资金分真正用于 `confirming/mixed/cautious` 分组，但仍不能把单一公开资金源当作绝对真值。
+港股持仓三段式概览由 [scripts/generate_h_share_combined_overview.py](../scripts/generate_h_share_combined_overview.py) 生成，默认读取 `config/stock_holdings.json`。它会优先读取最新 `group_h_share_capital_flow_overview_*.txt`；没有资金面概览时，`capital_flow` 必须显示 `missing/HK pending`；远端抓取失败时显示 `failed/primary` 或对应来源桶。当前 HK V1 资金面使用港股通成份行情的成交额/换手率、东方财富港股通个股成交榜历史中的个股南向净买额、沪深港通持股统计的 1 日南向持股市值变化，以及 HKEX 日终沽空成交额；沽空比例在成交额可用时用 `沽空成交额 / 成交额` 计算。个股南向净买额仅在标的进入成交榜的交易日可用，因此组合层可以把资金分真正用于 `confirming/mixed/cautious` 分组，但仍不能把单一公开资金源当作绝对真值。
 
 ## 2. 联合输出的目标
 
@@ -78,7 +78,7 @@
 
 当前仓库的统一报告目录约定为：
 
-- 持仓清单：`data/stock_holdings.json`
+- 持仓清单：`config/stock_holdings.json`
 - 单股报告：`data/reports/<symbol>/base.json`、`data/reports/<symbol>/fund.json`、`data/reports/<symbol>/overview.txt`
 - 技术级别目录：`data/reports/<symbol>/day/`、`data/reports/<symbol>/60m/`、`data/reports/<symbol>/15m/`
 - 级别分析 CSV：`data/reports/<symbol>/<timeframe>/analyze/*.csv`

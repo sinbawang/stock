@@ -17,7 +17,7 @@ VALID_MARKETS = {"CN": 6, "HK": 5}
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Ensure a symbol exists in data/stock_holdings.json.")
+    parser = argparse.ArgumentParser(description="Ensure a symbol exists in config/stock_holdings.json.")
     parser.add_argument("symbol", help="Stock symbol, such as 000651 or 09988")
     parser.add_argument("--name", default=None, help="Stock name, required when appending a new holding")
     parser.add_argument("--market", choices=sorted(VALID_MARKETS), default=None, help="Explicit market override")

@@ -35,7 +35,7 @@
 
 ## 2. 把新标的加入持仓文件
 
-编辑 [data/stock_holdings.json](c:/sinba/stock/data/stock_holdings.json)，在 `markets.HK` 里加入：
+编辑 [config/stock_holdings.json](c:/sandbox/sinba/stock/config/stock_holdings.json)，在 `markets.HK` 里加入：
 
 ```json
 {
@@ -199,7 +199,7 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
 
 如果你现在要加的就是阿里巴巴，最短路径就是：
 
-1. 改 [data/stock_holdings.json](c:/sinba/stock/data/stock_holdings.json)，加入 `09988 / 阿里巴巴-W`
+1. 改 [config/stock_holdings.json](c:/sandbox/sinba/stock/config/stock_holdings.json)，加入 `09988 / 阿里巴巴-W`
 2. 跑单股探针
 3. 如有需要，新建 `09988_阿里巴巴-W_platform_internet_v1_latest.txt`
 4. rerun 单股探针

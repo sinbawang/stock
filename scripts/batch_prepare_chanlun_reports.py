@@ -143,7 +143,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--holdings-file",
         default=str(DEFAULT_HOLDINGS_FILE),
-        help="持仓清单 JSON 文件，默认读取 data/stock_holdings.json；不存在时回退到脚本内置名单。",
+        help="持仓清单 JSON 文件，默认读取 config/stock_holdings.json；不存在时回退到脚本内置名单。",
     )
     parser.add_argument(
         "--pending-reverse-mode",

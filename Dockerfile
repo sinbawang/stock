@@ -11,6 +11,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md requirements.txt /app/
+COPY config /app/config
 COPY src /app/src
 COPY scripts /app/scripts
 COPY docs /app/docs

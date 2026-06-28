@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--holdings-file",
         default=str(DEFAULT_HOLDINGS_FILE),
-        help="Holdings JSON file. Defaults to data/stock_holdings.json.",
+        help="Holdings JSON file. Defaults to config/stock_holdings.json.",
     )
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Report output directory")
     parser.add_argument("--trade-date", default=None, help="Optional trade date, formatted as YYYY-MM-DD")
