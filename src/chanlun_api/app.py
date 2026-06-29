@@ -48,6 +48,15 @@ def _dedupe_timeframes(values: list[Timeframe]) -> list[Timeframe]:
     return list(dict.fromkeys(values))
 
 
+def _normalize_technical_publish_timeframes(publish_timeframes: list[Timeframe] | None) -> list[Timeframe] | None:
+    if not publish_timeframes:
+        return None
+    normalized = _dedupe_timeframes(publish_timeframes)
+    if "day" not in normalized:
+        normalized.append("day")
+    return normalized
+
+
 class PublishRefreshRequest(BaseModel):
     holdings_file: str = Field(default=str(HOLDINGS_FILE))
     market: Market = "ALL"
@@ -311,6 +320,7 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
 
 
 def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
+    publish_timeframes = _normalize_technical_publish_timeframes(request.publish_timeframes)
     with _filtered_holdings_file(
         holdings_file=Path(request.holdings_file),
         market=request.market,
@@ -342,7 +352,7 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             latest_only=request.latest_only,
             skip_build=request.skip_build,
             skip_upload=request.skip_upload,
-            publish_timeframes=request.publish_timeframes,
+            publish_timeframes=publish_timeframes,
             cloud_prefix=request.cloud_prefix,
             env_id=request.env_id,
             region=request.region,
