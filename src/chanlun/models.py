@@ -180,6 +180,8 @@ class Zhongshu:
     structure_level: str = "bi"
     recognition_mode: str = "fixed_first_three_overlap"
     render_mode: str = "core_plus_extension"
+    superseded_by_zs_id: int | None = None
+    is_reabsorbed_by_larger_expansion: bool = False
 
     @property
     def width(self) -> float:

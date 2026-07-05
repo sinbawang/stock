@@ -36,9 +36,16 @@ class FakeBi:
         return self.direction == "down"
 
 
-def _sample_zhongshu(exit_bi_id: int | None = None) -> SimpleNamespace:
+def _sample_zhongshu(
+    exit_bi_id: int | None = None,
+    *,
+    zs_id: int = 2,
+    entering_bi_id: int = 8,
+    superseded_by_zs_id: int | None = None,
+    is_reabsorbed_by_larger_expansion: bool = False,
+) -> SimpleNamespace:
     return SimpleNamespace(
-        zs_id=2,
+        zs_id=zs_id,
         structure_level="bi",
         recognition_mode="fixed_first_three_overlap",
         render_mode="core_plus_extension",
@@ -46,10 +53,12 @@ def _sample_zhongshu(exit_bi_id: int | None = None) -> SimpleNamespace:
         zs_high=10.8,
         start_ts=datetime(2026, 5, 1, 10, 30),
         end_ts=datetime(2026, 5, 29, 14, 30),
-        entering_bi_id=8,
+        entering_bi_id=entering_bi_id,
         core_bi_ids=[9, 10, 11],
         bi_ids=[9, 10, 11, 12],
         exit_bi_id=exit_bi_id,
+        superseded_by_zs_id=superseded_by_zs_id,
+        is_reabsorbed_by_larger_expansion=is_reabsorbed_by_larger_expansion,
     )
 
 
@@ -117,6 +126,48 @@ def test_analyze_current_state_mentions_core_and_extended_bis(monkeypatch) -> No
     assert "离开笔：13" in text
     assert "当前正在进行走势类型：range" in text
     assert "盘整背驰：无" in text
+
+
+def test_analyze_current_state_includes_cut_status_text(monkeypatch) -> None:
+    monkeypatch.setattr(cn_report, "compute_bi_strengths", lambda bis, macd_points: {})
+    original_analyze = cn_report.analyze_chanlun_signals
+    raw_bars = [
+        SimpleNamespace(ts=datetime(2026, 5, 1, 10, 30), close=10.2),
+        SimpleNamespace(ts=datetime(2026, 5, 29, 14, 30), close=10.6),
+    ]
+    bis = [
+        FakeBi(7, "up", datetime(2026, 5, 1, 10, 30), datetime(2026, 5, 8, 14, 30), 10.9, 10.0),
+        FakeBi(12, "down", datetime(2026, 5, 9, 10, 30), datetime(2026, 5, 29, 14, 30), 10.8, 10.2, is_confirmed=False),
+    ]
+
+    def fake_analyze(raw_bars, bis, zhongshus, macd_points):
+        payload = original_analyze(raw_bars, bis, zhongshus, macd_points)
+        payload["structure_state"]["current_structure_status"] = "candidate_completed_waiting_stability"
+        return payload
+
+    monkeypatch.setattr(cn_report, "analyze_chanlun_signals", fake_analyze)
+
+    text = cn_report.analyze_current_state("示例标的", raw_bars, bis, [_sample_zhongshu(13)], [])
+
+    assert "切分状态：前段走势已具备完成候选，但边界仍待右侧结构确认稳定。" in text
+
+
+def test_analyze_current_state_includes_reabsorption_debug_text(monkeypatch) -> None:
+    monkeypatch.setattr(cn_report, "compute_bi_strengths", lambda bis, macd_points: {})
+    raw_bars = [
+        SimpleNamespace(ts=datetime(2026, 5, 1, 10, 30), close=10.2),
+        SimpleNamespace(ts=datetime(2026, 5, 29, 14, 30), close=10.6),
+    ]
+    bis = [
+        FakeBi(7, "up", datetime(2026, 5, 1, 10, 30), datetime(2026, 5, 8, 14, 30), 10.9, 10.0),
+        FakeBi(12, "down", datetime(2026, 5, 9, 10, 30), datetime(2026, 5, 29, 14, 30), 10.8, 10.2, is_confirmed=False),
+    ]
+    previous_zs = _sample_zhongshu(29, zs_id=2, entering_bi_id=18, superseded_by_zs_id=3, is_reabsorbed_by_larger_expansion=True)
+    current_zs = _sample_zhongshu(None, zs_id=3, entering_bi_id=29)
+
+    text = cn_report.analyze_current_state("示例标的", raw_bars, bis, [previous_zs, current_zs], [])
+
+    assert "重写说明：前一中枢 ZS2 虽已走出，但其走出笔 29 被当前中枢 ZS3 复用为进入笔 29，当前按更大级别扩展吸收处理。" in text
 
 
 def test_analyze_current_state_uses_human_readable_signal_names(monkeypatch) -> None:

@@ -15,7 +15,13 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from chanlun.analysis import build_precision_window_display, build_signal_explanation_lines, format_signal_point_labels
+from chanlun.analysis import (
+    build_precision_window_display,
+    build_signal_explanation_lines,
+    describe_structure_status,
+    format_signal_point_labels,
+    format_structure_status_label,
+)
 from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
 
@@ -287,6 +293,21 @@ def signal_point_label(value: Any) -> str:
     return labels[0] if labels else safe_text(value)
 
 
+def infer_structure_status(structure_state: dict[str, Any], current: dict[str, Any], relationship: dict[str, Any]) -> str:
+    explicit = safe_text(structure_state.get("current_structure_status"))
+    if explicit:
+        return explicit
+
+    relationship_kind = safe_text(relationship.get("kind"))
+    if relationship_kind == "same_type_extension":
+        return "ongoing_same_type"
+    if relationship_kind == "completed_then_new_type_ongoing":
+        return "completed_then_new_type"
+    if safe_text(current.get("type")) == "range":
+        return "ongoing_same_type"
+    return "ongoing_same_type"
+
+
 def normalize_signal_point(signal: dict[str, Any] | None) -> dict[str, Any] | None:
     if not signal:
         return None
@@ -299,6 +320,66 @@ def normalize_signal_point(signal: dict[str, Any] | None) -> dict[str, Any] | No
         "active": bool(signal.get("active", True)),
         "basis": signal.get("basis"),
     }
+
+
+def build_same_level_debug_context(tech_payload: dict[str, Any]) -> dict[str, Any]:
+    structure = tech_payload.get("structure") or {}
+    latest_raw = structure.get("latest_zhongshu") or {}
+    zhongshus = structure.get("zhongshus") or []
+    latest_zs_id = latest_raw.get("zs_id")
+
+    reabsorbed_predecessor = None
+    if latest_zs_id is not None:
+        reabsorbed_predecessor = next(
+            (
+                item
+                for item in reversed(zhongshus)
+                if item.get("superseded_by_zs_id") == latest_zs_id and item.get("is_reabsorbed_by_larger_expansion") is True
+            ),
+            None,
+        )
+
+    latest_debug = None
+    if latest_raw:
+        latest_debug = {
+            "zs_id": latest_raw.get("zs_id"),
+            "entering_bi_id": latest_raw.get("entering_bi_id"),
+            "exit_bi_id": latest_raw.get("exit_bi_id"),
+            "is_terminated": latest_raw.get("is_terminated"),
+            "superseded_by_zs_id": latest_raw.get("superseded_by_zs_id"),
+            "is_reabsorbed_by_larger_expansion": latest_raw.get("is_reabsorbed_by_larger_expansion"),
+        }
+
+    predecessor_debug = None
+    if reabsorbed_predecessor:
+        predecessor_debug = {
+            "zs_id": reabsorbed_predecessor.get("zs_id"),
+            "entering_bi_id": reabsorbed_predecessor.get("entering_bi_id"),
+            "exit_bi_id": reabsorbed_predecessor.get("exit_bi_id"),
+            "is_terminated": reabsorbed_predecessor.get("is_terminated"),
+            "superseded_by_zs_id": reabsorbed_predecessor.get("superseded_by_zs_id"),
+            "is_reabsorbed_by_larger_expansion": reabsorbed_predecessor.get("is_reabsorbed_by_larger_expansion"),
+        }
+
+    return {
+        "auto_reabsorption_detected": predecessor_debug is not None,
+        "latest_zhongshu": latest_debug,
+        "reabsorbed_predecessor": predecessor_debug,
+    }
+
+
+def build_reabsorption_focus_line(debug_context: dict[str, Any]) -> str:
+    if not debug_context.get("auto_reabsorption_detected"):
+        return ""
+    latest = debug_context.get("latest_zhongshu") or {}
+    predecessor = debug_context.get("reabsorbed_predecessor") or {}
+    if not latest or not predecessor:
+        return ""
+    return (
+        f"重写说明：前一中枢 ZS{predecessor.get('zs_id')} 的走出笔 {predecessor.get('exit_bi_id')} "
+        f"被当前中枢 ZS{latest.get('zs_id')} 复用为进入笔 {latest.get('entering_bi_id')}，"
+        "当前按更大级别扩展吸收处理。"
+    )
 
 
 def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, Any]:
@@ -324,6 +405,9 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
         "zs_count": current_raw.get("zs_count") or current_raw.get("zs_count_so_far"),
         "status": current_raw.get("status"),
     }
+    current_structure_status = infer_structure_status(structure_state, current, relationship)
+    current_structure_status_note = describe_structure_status(current_structure_status)
+    debug_context = build_same_level_debug_context(tech_payload)
     summary_note = "当前同级别走势输出为工程结构摘要，非严格递归分解后的最终理论标签。"
 
     lines: list[str] = []
@@ -338,12 +422,21 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
     note = safe_text(relationship.get("note"))
     if note:
         lines.append(f"走势连接：{note}")
+    if current_structure_status_note:
+        lines.append(f"切分状态：{current_structure_status_note}")
+    reabsorption_line = build_reabsorption_focus_line(debug_context)
+    if reabsorption_line:
+        lines.append(reabsorption_line)
     lines.append(f"口径说明：{summary_note}")
 
     return {
         "mode": "engineering_summary",
         "is_strict_theory_equivalent": False,
         "summary_note": summary_note,
+        "current_structure_status": current_structure_status,
+        "current_structure_status_label": format_structure_status_label(current_structure_status),
+        "current_structure_status_note": current_structure_status_note,
+        "debug_context": debug_context,
         "previous": previous,
         "current": current,
         "relationship": relationship,

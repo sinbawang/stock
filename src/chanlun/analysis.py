@@ -26,6 +26,20 @@ SIGNAL_BASIS_LABELS = {
 }
 
 
+STRUCTURE_STATUS_LABELS = {
+    "ongoing_same_type": "同类延伸中",
+    "candidate_completed_waiting_stability": "候选完成待确认",
+    "completed_then_new_type": "已切入新走势",
+}
+
+
+STRUCTURE_STATUS_NOTES = {
+    "ongoing_same_type": "当前仍优先按同一走势类型内部延伸处理，不抢先切分。",
+    "candidate_completed_waiting_stability": "前段走势已具备完成候选，但边界仍待右侧结构确认稳定。",
+    "completed_then_new_type": "前段走势完成边界已相对稳定，当前按新的同级别走势类型处理。",
+}
+
+
 def compute_bi_strengths(bis: list[Bi], macd_points: list[Any]) -> dict[int, dict[str, float]]:
     strengths: dict[int, dict[str, float]] = {}
     for bi in bis:
@@ -62,6 +76,43 @@ def format_signal_point_label(point: str) -> str:
 
 def format_signal_point_labels(points: list[str]) -> list[str]:
     return [format_signal_point_label(point) for point in points]
+
+
+def format_structure_status_label(value: Any) -> str:
+    return STRUCTURE_STATUS_LABELS.get(str(value or ""), str(value or ""))
+
+
+def describe_structure_status(value: Any) -> str:
+    return STRUCTURE_STATUS_NOTES.get(str(value or ""), "")
+
+
+def describe_reabsorbed_zhongshu_debug(zhongshus: list[Any], current_zs: Any | None) -> str:
+    if current_zs is None:
+        return ""
+    latest_zs_id = getattr(current_zs, "zs_id", None)
+    if latest_zs_id is None:
+        return ""
+
+    predecessor = next(
+        (
+            item
+            for item in reversed(zhongshus[:-1])
+            if getattr(item, "superseded_by_zs_id", None) == latest_zs_id
+            and bool(getattr(item, "is_reabsorbed_by_larger_expansion", False))
+        ),
+        None,
+    )
+    if predecessor is None:
+        return ""
+
+    previous_zs_id = getattr(predecessor, "zs_id", None)
+    previous_exit_bi_id = getattr(predecessor, "exit_bi_id", None)
+    current_entering_bi_id = getattr(current_zs, "entering_bi_id", None)
+    return (
+        f"重写说明：前一中枢 ZS{previous_zs_id} 虽已走出，"
+        f"但其走出笔 {previous_exit_bi_id} 被当前中枢 ZS{latest_zs_id} 复用为进入笔 {current_entering_bi_id}，"
+        "当前按更大级别扩展吸收处理。"
+    )
 
 
 def describe_signal_entry(entry: dict[str, object]) -> str:
@@ -182,6 +233,13 @@ def _build_group_state(
     }
 
 
+def _is_reabsorbed_tail(zhongshu: Zhongshu) -> bool:
+    return bool(
+        getattr(zhongshu, "is_reabsorbed_by_larger_expansion", False)
+        or getattr(zhongshu, "superseded_by_zs_id", None) is not None
+    )
+
+
 def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dict[str, object]:
     latest_bar_ts = raw_bars[-1].ts if raw_bars else None
     if not zhongshus:
@@ -199,6 +257,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
                 "kind": "undetermined",
                 "note": "当前尚未形成可用于同级别走势分解的中枢。",
             },
+            "current_structure_status": "ongoing_same_type",
         }
 
     if len(zhongshus) == 1:
@@ -219,6 +278,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
                 "kind": "undetermined",
                 "note": "当前只有一个同级别中枢，按工程口径先视为盘整进行中。",
             },
+            "current_structure_status": "ongoing_same_type",
         }
 
     relations = [_relation_kind(previous, current) for previous, current in zip(zhongshus, zhongshus[1:])]
@@ -228,10 +288,18 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
         current_start_relation -= 1
     current_start_index = current_start_relation
     if current_kind == "range" and current_start_relation > 0:
-        # When a new overlap suffix appears after a finished up/down run,
-        # treat the latest zhongshu as the start of the new ongoing range
-        # instead of folding the prior trend tail back into the new group.
-        current_start_index = current_start_relation + 1
+        previous_run_kind = relations[current_start_relation - 1]
+        previous_tail = zhongshus[-2]
+        previous_tail_is_same_type_extension = not bool(getattr(previous_tail, "is_terminated", False)) or _is_reabsorbed_tail(previous_tail)
+        if previous_run_kind in {"up", "down"} and previous_tail_is_same_type_extension:
+            while current_start_relation > 1 and relations[current_start_relation - 2] == previous_run_kind:
+                current_start_relation -= 1
+            current_start_index = current_start_relation - 1
+            current_kind = previous_run_kind
+        else:
+            # When a new overlap suffix appears after a finished up/down run,
+            # treat the latest zhongshu as the start of the new ongoing range.
+            current_start_index = current_start_relation + 1
     current_group_count = len(zhongshus) - current_start_index
     current_ongoing = _build_group_state(
         zhongshus,
@@ -265,17 +333,26 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
 
     relationship_kind = "undetermined"
     relationship_note = "当前同级别结构仍在演化，尚不能把新旧走势关系完全定型。"
+    current_structure_status = "ongoing_same_type"
     if last_completed is not None:
         if str(last_completed.get("type")) == str(current_ongoing.get("type")):
             relationship_kind = "same_type_extension"
             relationship_note = "当前结构更接近前一走势类型的同类延伸，暂未看到清晰的新类型完成边界。"
+            current_structure_status = "ongoing_same_type"
         else:
             relationship_kind = "completed_then_new_type_ongoing"
             relationship_note = "上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。"
+            current_structure_status = (
+                "candidate_completed_waiting_stability"
+                if current_ongoing.get("confirmation_basis") == "single_active_zhongshu"
+                else "completed_then_new_type"
+            )
     elif current_kind in {"up", "down"}:
         relationship_note = "已经出现同向不重叠中枢推进，当前按工程口径视为趋势进行中。"
+        current_structure_status = "ongoing_same_type"
     else:
         relationship_note = "当前主要围绕最近同级别中枢展开，按工程口径视为盘整进行中。"
+        current_structure_status = "ongoing_same_type"
 
     return {
         "last_completed": last_completed,
@@ -284,6 +361,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
             "kind": relationship_kind,
             "note": relationship_note,
         },
+        "current_structure_status": current_structure_status,
     }
 
 

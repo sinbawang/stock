@@ -19,6 +19,47 @@ def _overlaps_zone(item: Bi | Segment, zs_low: float, zs_high: float) -> bool:
     return max(zs_low, item.low) < min(zs_high, item.high)
 
 
+def _zones_overlap(previous: Zhongshu, current: Zhongshu) -> bool:
+    return max(previous.zs_low, current.zs_low) < min(previous.zs_high, current.zs_high)
+
+
+def _mark_reabsorbed_lineage(zhongshus: List[Zhongshu]) -> None:
+    for previous, current in zip(zhongshus, zhongshus[1:]):
+        if not previous.is_terminated:
+            continue
+        if previous.exit_bi_id is None or current.entering_bi_id != previous.exit_bi_id:
+            continue
+        if previous.structure_level != current.structure_level:
+            continue
+        if not _zones_overlap(previous, current):
+            continue
+        previous.superseded_by_zs_id = current.zs_id
+        previous.is_reabsorbed_by_larger_expansion = True
+
+    zhongshu_by_id = {zs.zs_id: zs for zs in zhongshus}
+    changed = True
+    while changed:
+        changed = False
+        for current in zhongshus:
+            successor_id = current.superseded_by_zs_id
+            if successor_id is None:
+                continue
+            successor = zhongshu_by_id.get(successor_id)
+            if successor is None or successor.superseded_by_zs_id is None:
+                continue
+            final_successor = zhongshu_by_id.get(successor.superseded_by_zs_id)
+            if final_successor is None:
+                continue
+            if current.structure_level != final_successor.structure_level:
+                continue
+            if not _zones_overlap(current, final_successor):
+                continue
+            if current.superseded_by_zs_id != final_successor.zs_id:
+                current.superseded_by_zs_id = final_successor.zs_id
+                current.is_reabsorbed_by_larger_expansion = True
+                changed = True
+
+
 def identify_zhongshu(items: List[Bi | Segment], *, structure_level: str = "bi") -> List[Zhongshu]:
     """
     识别中枢。
@@ -150,4 +191,5 @@ def identify_zhongshu(items: List[Bi | Segment], *, structure_level: str = "bi")
         else:
             i += 1
 
+    _mark_reabsorbed_lineage(zhongshus)
     return zhongshus

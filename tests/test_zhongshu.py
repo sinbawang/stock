@@ -1,8 +1,8 @@
 """中枢识别单元测试。"""
 
 from datetime import datetime
-from chanlun.models import Bi, BiDirection, Segment
-from chanlun.zhongshu import identify_zhongshu
+from chanlun.models import Bi, BiDirection, Segment, Zhongshu
+from chanlun.zhongshu import _mark_reabsorbed_lineage, identify_zhongshu
 
 
 def _bi(bi_id: int, direction: BiDirection, high: float, low: float) -> Bi:
@@ -41,6 +41,27 @@ def _segment(segment_id: int, direction: BiDirection, high: float, low: float) -
         norm_bar_range=(segment_id * 4, segment_id * 4 + 3),
         bi_ids=[segment_id * 2, segment_id * 2 + 1],
         is_confirmed=True,
+    )
+
+
+def _zhongshu(zs_id: int, *, low: float, high: float, entering_bi_id: int, exit_bi_id: int | None, terminated: bool) -> Zhongshu:
+    start = datetime(2024, 3, 1 + zs_id)
+    end = datetime(2024, 3, 1 + zs_id, 1)
+    return Zhongshu(
+        zs_id=zs_id,
+        start_bi_id=zs_id * 10,
+        end_bi_id=zs_id * 10 + 2,
+        zs_low=low,
+        zs_high=high,
+        peak_low=low - 1,
+        peak_high=high + 1,
+        start_ts=start,
+        end_ts=end,
+        bi_ids=[zs_id * 10, zs_id * 10 + 1, zs_id * 10 + 2],
+        is_terminated=terminated,
+        entering_bi_id=entering_bi_id,
+        core_bi_ids=[zs_id * 10, zs_id * 10 + 1, zs_id * 10 + 2],
+        exit_bi_id=exit_bi_id,
     )
 
 
@@ -112,6 +133,8 @@ class TestIdentifyZhongshu:
         assert zs.core_bi_ids == [1, 2, 3]
         assert zs.render_end_bi_id == 4
         assert zs.exit_bi_id == 5
+        assert zs.superseded_by_zs_id is None
+        assert zs.is_reabsorbed_by_larger_expansion is False
 
     def test_next_center_reuses_previous_exit_as_entering(self):
         bis = [
@@ -152,3 +175,37 @@ class TestIdentifyZhongshu:
         assert result[0].core_bi_ids == [1, 2, 3]
         assert result[0].bi_ids == [1, 2, 3]
         assert result[0].exit_bi_id == 4
+
+    def test_overlapping_followup_center_marks_previous_as_reabsorbed(self):
+        bis = [
+            _bi(0, BiDirection.DOWN, 110, 98),
+            _bi(1, BiDirection.UP, 106, 100),
+            _bi(2, BiDirection.DOWN, 104, 101),
+            _bi(3, BiDirection.UP, 103, 102),
+            _bi(4, BiDirection.DOWN, 102, 96),
+            _bi(5, BiDirection.UP, 102.5, 101.5),
+            _bi(6, BiDirection.DOWN, 102.3, 101.8),
+            _bi(7, BiDirection.UP, 102.8, 101.7),
+            _bi(8, BiDirection.DOWN, 102.1, 95.0),
+        ]
+
+        result = identify_zhongshu(bis)
+
+        assert len(result) == 2
+        assert result[0].exit_bi_id == 4
+        assert result[1].entering_bi_id == 4
+        assert result[0].is_reabsorbed_by_larger_expansion is True
+        assert result[0].superseded_by_zs_id == result[1].zs_id
+        assert result[1].is_reabsorbed_by_larger_expansion is False
+
+    def test_reabsorbed_lineage_can_collapse_to_later_overlapping_successor(self):
+        first = _zhongshu(1, low=102.0, high=103.0, entering_bi_id=0, exit_bi_id=4, terminated=True)
+        second = _zhongshu(2, low=101.7, high=102.4, entering_bi_id=4, exit_bi_id=8, terminated=True)
+        third = _zhongshu(3, low=101.9, high=102.2, entering_bi_id=8, exit_bi_id=None, terminated=False)
+
+        _mark_reabsorbed_lineage([first, second, third])
+
+        assert first.is_reabsorbed_by_larger_expansion is True
+        assert second.is_reabsorbed_by_larger_expansion is True
+        assert second.superseded_by_zs_id == third.zs_id
+        assert first.superseded_by_zs_id == third.zs_id

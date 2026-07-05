@@ -15,6 +15,7 @@ if str(SRC) not in sys.path:
 
 from chanlun.analysis import analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_signal_point_payloads, build_signal_summary_fields, build_structure_state
 from chanlun.models import Bi, BiDirection, Zhongshu
+from chanlun.zhongshu import identify_zhongshu
 
 
 def _zhongshu(zs_id: int, *, zs_low: float, zs_high: float, day: int) -> Zhongshu:
@@ -57,6 +58,7 @@ def test_build_structure_state_single_zhongshu_is_range_ongoing() -> None:
     assert state["last_completed"] is None
     assert state["current_ongoing"]["type"] == "range"
     assert state["current_ongoing"]["zs_count_so_far"] == 1
+    assert state["current_structure_status"] == "ongoing_same_type"
 
 
 def test_build_structure_state_two_non_overlapping_zhongshus_is_up_ongoing() -> None:
@@ -71,6 +73,7 @@ def test_build_structure_state_two_non_overlapping_zhongshus_is_up_ongoing() -> 
     assert state["current_ongoing"]["zs_count_so_far"] == 2
     assert state["last_completed"] is None
     assert state["relationship"]["kind"] == "undetermined"
+    assert state["current_structure_status"] == "ongoing_same_type"
 
 
 def test_build_structure_state_single_zhongshu_extension_stays_range_ongoing() -> None:
@@ -85,6 +88,7 @@ def test_build_structure_state_single_zhongshu_extension_stays_range_ongoing() -
     assert state["current_ongoing"]["zs_count_so_far"] == 1
     assert state["current_ongoing"]["latest_ts"] == "2026-05-10T14:30:00"
     assert state["relationship"]["kind"] == "undetermined"
+    assert state["current_structure_status"] == "ongoing_same_type"
 
 
 def test_build_structure_state_three_non_overlapping_up_zhongshus_extend_same_trend() -> None:
@@ -101,14 +105,16 @@ def test_build_structure_state_three_non_overlapping_up_zhongshus_extend_same_tr
     assert state["current_ongoing"]["zs_count_so_far"] == 3
     assert state["last_completed"] is None
     assert state["relationship"]["kind"] == "undetermined"
+    assert state["current_structure_status"] == "ongoing_same_type"
 
 
 def test_build_structure_state_up_then_overlapping_return_becomes_new_range_ongoing() -> None:
-    zhongshus = [
-        _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1),
-        _zhongshu(2, zs_low=11.5, zs_high=12.0, day=4),
-        _zhongshu(3, zs_low=11.8, zs_high=12.1, day=7),
-    ]
+    first = _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1)
+    second = _zhongshu(2, zs_low=11.5, zs_high=12.0, day=4)
+    third = _zhongshu(3, zs_low=11.8, zs_high=12.1, day=7)
+    second.is_terminated = True
+    second.exit_bi_id = 29
+    zhongshus = [first, second, third]
 
     state = build_structure_state([], zhongshus)
 
@@ -121,6 +127,68 @@ def test_build_structure_state_up_then_overlapping_return_becomes_new_range_ongo
     assert state["current_ongoing"]["zs_count_so_far"] == 1
     assert state["current_ongoing"]["confirmation_basis"] == "single_active_zhongshu"
     assert state["relationship"]["kind"] == "completed_then_new_type_ongoing"
+    assert state["current_structure_status"] == "candidate_completed_waiting_stability"
+
+
+def test_build_structure_state_unterminated_trend_tail_overlap_stays_same_trend_ongoing() -> None:
+    zhongshus = [
+        _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1),
+        _zhongshu(2, zs_low=11.5, zs_high=12.0, day=4),
+        _zhongshu(3, zs_low=11.8, zs_high=12.1, day=7),
+    ]
+
+    state = build_structure_state([], zhongshus)
+
+    assert state["last_completed"] is None
+    assert state["current_ongoing"]["type"] == "up"
+    assert state["current_ongoing"]["status"] == "ongoing"
+    assert state["current_ongoing"]["zs_count_so_far"] == 3
+    assert state["current_ongoing"]["confirmation_basis"] == "forming_next_same_level_zhongshu"
+    assert state["relationship"]["kind"] == "undetermined"
+    assert state["current_structure_status"] == "ongoing_same_type"
+
+
+def test_build_structure_state_terminated_tail_may_still_be_higher_level_expansion() -> None:
+    first = _zhongshu(1, zs_low=12.0, zs_high=13.0, day=1)
+    second = _zhongshu(2, zs_low=10.5, zs_high=11.5, day=4)
+    third = _zhongshu(3, zs_low=10.7, zs_high=11.4, day=7)
+    second.is_terminated = True
+    second.exit_bi_id = 29
+    second.superseded_by_zs_id = third.zs_id
+    second.is_reabsorbed_by_larger_expansion = True
+
+    state = build_structure_state([], [first, second, third])
+
+    assert state["last_completed"] is None
+    assert state["current_ongoing"]["type"] == "down"
+    assert state["relationship"]["kind"] == "undetermined"
+    assert state["current_structure_status"] == "ongoing_same_type"
+
+
+def test_build_structure_state_auto_detects_reabsorbed_tail_from_identified_zhongshus() -> None:
+    first = _zhongshu(100, zs_low=105.0, zs_high=106.0, day=1)
+    bis = [
+        _bi(0, BiDirection.DOWN, high=110.0, low=98.0, day=1),
+        _bi(1, BiDirection.UP, high=106.0, low=100.0, day=2),
+        _bi(2, BiDirection.DOWN, high=104.0, low=101.0, day=3),
+        _bi(3, BiDirection.UP, high=103.0, low=102.0, day=4),
+        _bi(4, BiDirection.DOWN, high=102.0, low=96.0, day=5),
+        _bi(5, BiDirection.UP, high=102.5, low=101.5, day=6),
+        _bi(6, BiDirection.DOWN, high=102.3, low=101.8, day=7),
+        _bi(7, BiDirection.UP, high=102.8, low=101.7, day=8),
+        _bi(8, BiDirection.DOWN, high=102.1, low=95.0, day=9),
+    ]
+
+    zhongshus = [first, *identify_zhongshu(bis)]
+    state = build_structure_state([], zhongshus)
+
+    assert len(zhongshus) == 3
+    assert zhongshus[1].is_reabsorbed_by_larger_expansion is True
+    assert zhongshus[1].superseded_by_zs_id == zhongshus[2].zs_id
+    assert state["last_completed"] is None
+    assert state["current_ongoing"]["type"] == "down"
+    assert state["relationship"]["kind"] == "undetermined"
+    assert state["current_structure_status"] == "ongoing_same_type"
 
 
 def test_build_structure_state_range_then_non_overlapping_up_marks_previous_range_completed() -> None:
@@ -140,6 +208,7 @@ def test_build_structure_state_range_then_non_overlapping_up_marks_previous_rang
     assert state["current_ongoing"]["status"] == "ongoing"
     assert state["current_ongoing"]["zs_count_so_far"] == 2
     assert state["relationship"]["kind"] == "completed_then_new_type_ongoing"
+    assert state["current_structure_status"] == "completed_then_new_type"
 
 
 def test_build_signal_summary_fields_preserves_catalog_slots() -> None:

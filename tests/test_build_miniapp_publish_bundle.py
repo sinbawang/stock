@@ -123,6 +123,34 @@ def test_generate_bundle_writes_index_groups_and_stock_payloads(tmp_path: Path) 
                     "generated_at": "2026-05-30T20:33:27",
                     "timeframe": "30m",
                     "source": "akshare.eastmoney",
+                    "structure": {
+                        "latest_zhongshu": {
+                            "zs_id": 3,
+                            "entering_bi_id": 29,
+                            "exit_bi_id": None,
+                            "is_terminated": False,
+                            "superseded_by_zs_id": None,
+                            "is_reabsorbed_by_larger_expansion": False,
+                        },
+                        "zhongshus": [
+                            {
+                                "zs_id": 2,
+                                "entering_bi_id": 18,
+                                "exit_bi_id": 29,
+                                "is_terminated": True,
+                                "superseded_by_zs_id": 3,
+                                "is_reabsorbed_by_larger_expansion": True,
+                            },
+                            {
+                                "zs_id": 3,
+                                "entering_bi_id": 29,
+                                "exit_bi_id": None,
+                                "is_terminated": False,
+                                "superseded_by_zs_id": None,
+                                "is_reabsorbed_by_larger_expansion": False,
+                            },
+                        ],
+                    },
                     "summary": {
                         "score": 78,
                         "rating": "B",
@@ -172,6 +200,7 @@ def test_generate_bundle_writes_index_groups_and_stock_payloads(tmp_path: Path) 
                                 "kind": "completed_then_new_type_ongoing",
                                 "note": "上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。",
                             },
+                            "current_structure_status": "candidate_completed_waiting_stability",
                         },
                         "precision_entry": {
                             "operation_level": "5M",
@@ -304,6 +333,13 @@ Generated at: 2026-05-30T20:05:52
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["mode"] == "engineering_summary"
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["is_strict_theory_equivalent"] is False
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["summary_note"].startswith("当前同级别走势输出为工程结构摘要")
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["current_structure_status"] == "candidate_completed_waiting_stability"
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["current_structure_status_label"] == "候选完成待确认"
+    assert "边界仍待右侧结构确认稳定" in summary_payload["cards"]["technical"]["same_level_decomposition"]["current_structure_status_note"]
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["debug_context"]["auto_reabsorption_detected"] is True
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["debug_context"]["latest_zhongshu"]["zs_id"] == 3
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["debug_context"]["reabsorbed_predecessor"]["zs_id"] == 2
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["debug_context"]["reabsorbed_predecessor"]["superseded_by_zs_id"] == 3
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["previous"]["type_label"] == "上涨"
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["current"]["type_label"] == "下跌"
     assert summary_payload["cards"]["technical"]["latest_signal_summary"]["latest_buy"]["label"] == "二买"
@@ -312,6 +348,8 @@ Generated at: 2026-05-30T20:05:52
         "上个已完成走势：上涨 2026-04-01T10:30:00 -> 2026-05-10T10:30:00",
         "当前进行走势：下跌 自 2026-05-15T10:30:00 起，最新 2026-05-29T10:30:00",
         "走势连接：上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。",
+        "切分状态：前段走势已具备完成候选，但边界仍待右侧结构确认稳定。",
+        "重写说明：前一中枢 ZS2 的走出笔 29 被当前中枢 ZS3 复用为进入笔 29，当前按更大级别扩展吸收处理。",
         "口径说明：当前同级别走势输出为工程结构摘要，非严格递归分解后的最终理论标签。",
         "最近买点：二买 2026-05-29T10:30:00，价格 10.25",
         "最近卖点：三卖 2026-05-27T14:30:00，价格 10.88",
@@ -343,10 +381,16 @@ Generated at: 2026-05-30T20:05:52
     assert detail_payload["sections"][1]["same_level_decomposition"]["mode"] == "engineering_summary"
     assert detail_payload["sections"][1]["same_level_decomposition"]["is_strict_theory_equivalent"] is False
     assert detail_payload["sections"][1]["same_level_decomposition"]["summary_note"].startswith("当前同级别走势输出为工程结构摘要")
+    assert detail_payload["sections"][1]["same_level_decomposition"]["current_structure_status"] == "candidate_completed_waiting_stability"
+    assert detail_payload["sections"][1]["same_level_decomposition"]["current_structure_status_label"] == "候选完成待确认"
+    assert detail_payload["sections"][1]["same_level_decomposition"]["debug_context"]["auto_reabsorption_detected"] is True
+    assert detail_payload["sections"][1]["same_level_decomposition"]["debug_context"]["reabsorbed_predecessor"]["zs_id"] == 2
     assert detail_payload["sections"][1]["same_level_decomposition"]["previous"]["type_label"] == "上涨"
     assert detail_payload["sections"][1]["same_level_decomposition"]["current"]["type_label"] == "下跌"
     assert detail_payload["sections"][1]["latest_signal_summary"]["latest_overall"]["label"] == "二买"
     assert detail_payload["sections"][1]["technical_focus_lines"][0].startswith("上个已完成走势：上涨")
+    assert any("重写说明：前一中枢 ZS2 的走出笔 29 被当前中枢 ZS3 复用为进入笔 29" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
+    assert any("候选完成待确认" in line or "边界仍待右侧结构确认稳定" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert any("工程结构摘要" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
 
     a_share_group = json.loads((latest_dir / "groups" / "a_share.json").read_text(encoding="utf-8"))

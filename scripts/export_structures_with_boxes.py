@@ -319,6 +319,8 @@ def serialize_zhongshu(zs: Zhongshu) -> dict[str, object]:
         "start_ts": zs.start_ts.isoformat(timespec="seconds"),
         "end_ts": zs.end_ts.isoformat(timespec="seconds"),
         "is_terminated": zs.is_terminated,
+        "superseded_by_zs_id": zs.superseded_by_zs_id,
+        "is_reabsorbed_by_larger_expansion": zs.is_reabsorbed_by_larger_expansion,
     }
 
 

@@ -23,6 +23,8 @@ from chanlun.analysis import (
     analyze_chanlun_signals,
     build_signal_explanation_lines,
     build_signal_summary_fields,
+    describe_reabsorbed_zhongshu_debug,
+    describe_structure_status,
     compute_bi_strengths as shared_compute_bi_strengths,
     format_signal_point_labels,
 )
@@ -178,6 +180,12 @@ def analyze_current_state(
         structure_lines.append(f"最新中枢结构：{format_zhongshu_structure_text(current_zs)}")
     if relationship.get("note"):
         structure_lines.append(f"走势连接判断：{relationship['note']}")
+    structure_status_note = describe_structure_status(structure_state.get("current_structure_status"))
+    if structure_status_note:
+        structure_lines.append(f"切分状态：{structure_status_note}")
+    reabsorption_note = describe_reabsorbed_zhongshu_debug(zhongshus, current_zs)
+    if reabsorption_note:
+        structure_lines.append(reabsorption_note)
 
     signal_lines = [
         "顶背驰：有" if top_divergence else "顶背驰：无",
