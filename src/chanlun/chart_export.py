@@ -5,6 +5,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
 
+from .analysis import build_structure_state
 from .fractal import Fractal
 from .models import Bar, Bi, NormalizedBar, Zhongshu
 from .segment import identify_segments
@@ -75,6 +76,7 @@ def save_structure_charts(
     _configure_matplotlib_cjk_font()
     plotter = Plotter(figsize=structure_chart_figsize(len(bars)))
     segments = identify_segments(bis)
+    structure_state = build_structure_state(bars, zhongshus)
     confirmed_fractal_ids = {
         fractal_id
         for bi in bis
@@ -89,6 +91,7 @@ def save_structure_charts(
         zhongshus,
         normalized_bars=normalized_bars,
         confirmed_fractal_ids=confirmed_fractal_ids,
+        structure_state=structure_state,
         title=title,
     )
     try:

@@ -204,6 +204,49 @@ def test_analyze_current_state_uses_human_readable_signal_names(monkeypatch) -> 
     assert "信号细化：二买，一买后回抽确认，低点未再跌破前低，参考价 10.25，关联中枢 ZS2" in text
 
 
+def test_analyze_current_state_labels_same_type_extension_as_confirmed_slice(monkeypatch) -> None:
+    monkeypatch.setattr(cn_report, "compute_bi_strengths", lambda bis, macd_points: {})
+    original_analyze = cn_report.analyze_chanlun_signals
+    raw_bars = [
+        SimpleNamespace(ts=datetime(2026, 5, 1, 10, 30), close=10.2),
+        SimpleNamespace(ts=datetime(2026, 5, 29, 14, 30), close=10.6),
+    ]
+    bis = [
+        FakeBi(7, "up", datetime(2026, 5, 1, 10, 30), datetime(2026, 5, 8, 14, 30), 10.9, 10.0),
+        FakeBi(12, "down", datetime(2026, 5, 9, 10, 30), datetime(2026, 5, 29, 14, 30), 10.8, 10.2, is_confirmed=False),
+    ]
+
+    def fake_analyze(raw_bars, bis, zhongshus, macd_points):
+        payload = original_analyze(raw_bars, bis, zhongshus, macd_points)
+        payload["structure_state"] = {
+            "last_completed": {
+                "type": "down",
+                "status": "completed",
+                "start_ts": "2026-05-01T10:30:00",
+                "end_ts": "2026-05-10T10:30:00",
+            },
+            "current_ongoing": {
+                "type": "down",
+                "status": "ongoing",
+                "start_ts": "2026-05-15T10:30:00",
+                "latest_ts": "2026-05-29T10:30:00",
+            },
+            "relationship": {
+                "kind": "same_type_extension",
+                "note": "当前结构更接近前一走势类型的同类延伸，暂未看到清晰的新类型完成边界。",
+            },
+            "current_structure_status": "ongoing_same_type",
+        }
+        return payload
+
+    monkeypatch.setattr(cn_report, "analyze_chanlun_signals", fake_analyze)
+
+    text = cn_report.analyze_current_state("示例标的", raw_bars, bis, [_sample_zhongshu(13)], [])
+
+    assert "前段已确认同型片段：down，起于 2026-05-01 10:30，止于 2026-05-10 10:30" in text
+    assert "上一个已完成走势类型：down" not in text
+
+
 def test_build_technical_summary_includes_action_value_score() -> None:
     signals = {
         "current_zs": _sample_zhongshu(),

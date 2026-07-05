@@ -407,3 +407,38 @@ Generated at: 2026-05-30T20:05:52
     assert (latest_dir / "stocks" / "000651" / "charts" / "30m.svg").exists()
     assert (snapshot_dir / "stocks" / "00700" / "charts" / "15m.svg").exists()
     assert (snapshot_dir / "stocks" / "00700" / "charts" / "5m.svg").exists()
+
+
+def test_build_same_level_decomposition_labels_same_type_extension_as_confirmed_slice() -> None:
+    decomposition = module.build_same_level_decomposition(
+        {
+            "summary": {
+                "structure_state": {
+                    "last_completed": {
+                        "type": "down",
+                        "status": "completed",
+                        "start_ts": "2026-06-01T10:30:00",
+                        "end_ts": "2026-06-10T10:30:00",
+                        "zs_count": 2,
+                    },
+                    "current_ongoing": {
+                        "type": "down",
+                        "status": "ongoing",
+                        "start_ts": "2026-06-15T10:30:00",
+                        "latest_ts": "2026-06-30T10:30:00",
+                        "zs_count_so_far": 1,
+                    },
+                    "relationship": {
+                        "kind": "same_type_extension",
+                        "note": "当前结构更接近前一走势类型的同类延伸，暂未看到清晰的新类型完成边界。",
+                    },
+                    "current_structure_status": "ongoing_same_type",
+                }
+            }
+        }
+    )
+
+    assert decomposition["previous"]["type_label"] == "下跌"
+    assert decomposition["current"]["type_label"] == "下跌"
+    assert decomposition["lines"][0].startswith("前段已确认同型片段：下跌")
+    assert all("上个已完成走势：下跌" not in line for line in decomposition["lines"])

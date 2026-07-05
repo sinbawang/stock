@@ -409,11 +409,20 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
     current_structure_status_note = describe_structure_status(current_structure_status)
     debug_context = build_same_level_debug_context(tech_payload)
     summary_note = "当前同级别走势输出为工程结构摘要，非严格递归分解后的最终理论标签。"
+    same_type_extension = (
+        relationship.get("kind") == "same_type_extension"
+        and previous.get("type")
+        and previous.get("type") == current.get("type")
+    )
 
     lines: list[str] = []
     if previous.get("type"):
         lines.append(
-            f"上个已完成走势：{previous['type_label']} {safe_text(previous.get('start_ts'))} -> {safe_text(previous.get('end_ts'))}"
+            (
+                f"前段已确认同型片段：{previous['type_label']} {safe_text(previous.get('start_ts'))} -> {safe_text(previous.get('end_ts'))}"
+                if same_type_extension
+                else f"上个已完成走势：{previous['type_label']} {safe_text(previous.get('start_ts'))} -> {safe_text(previous.get('end_ts'))}"
+            )
         )
     if current.get("type"):
         lines.append(

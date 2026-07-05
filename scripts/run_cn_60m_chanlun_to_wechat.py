@@ -145,6 +145,11 @@ def analyze_current_state(
     relationship = structure_state.get("relationship") or {}
     last_completed = structure_state.get("last_completed") or {}
     current_ongoing = structure_state.get("current_ongoing") or {}
+    same_type_extension = (
+        relationship.get("kind") == "same_type_extension"
+        and last_completed.get("type")
+        and last_completed.get("type") == current_ongoing.get("type")
+    )
 
     actual_start = raw_bars[0].ts.strftime("%Y-%m-%d %H:%M")
     actual_end = raw_bars[-1].ts.strftime("%Y-%m-%d %H:%M")
@@ -159,7 +164,11 @@ def analyze_current_state(
         )
     if last_completed:
         overview_lines.append(
-            f"上一个已完成走势类型：{last_completed.get('type')}，起于 {str(last_completed.get('start_ts') or '')[:16].replace('T', ' ')}，止于 {str(last_completed.get('end_ts') or '')[:16].replace('T', ' ')}"
+            (
+                f"前段已确认同型片段：{last_completed.get('type')}，起于 {str(last_completed.get('start_ts') or '')[:16].replace('T', ' ')}，止于 {str(last_completed.get('end_ts') or '')[:16].replace('T', ' ')}"
+                if same_type_extension
+                else f"上一个已完成走势类型：{last_completed.get('type')}，起于 {str(last_completed.get('start_ts') or '')[:16].replace('T', ' ')}，止于 {str(last_completed.get('end_ts') or '')[:16].replace('T', ' ')}"
+            )
         )
     if current_ongoing:
         overview_lines.append(

@@ -177,3 +177,35 @@ def test_plot_structure_can_draw_segment_level_zhongshu():
     labels = [text.get_text() for text in fig.axes[0].texts]
     assert any(label == 'S0' for label in labels)
     assert any(label.startswith('ZS0 [9.80, 11.30] S1,2,3') for label in labels)
+
+
+def test_plot_structure_draws_same_level_boundary_dashed_lines():
+    bars = _bars()
+    normalized_bars = _normalized(bars)
+    structure_state = {
+        "last_completed": {
+            "start_ts": bars[1].ts.isoformat(timespec="seconds"),
+            "end_ts": bars[3].ts.isoformat(timespec="seconds"),
+        },
+        "current_ongoing": {
+            "start_ts": bars[4].ts.isoformat(timespec="seconds"),
+        },
+    }
+
+    fig = Plotter().plot_structure(
+        bars,
+        [],
+        [],
+        [],
+        [],
+        normalized_bars=normalized_bars,
+        structure_state=structure_state,
+    )
+
+    price_verticals = [line for line in fig.axes[0].lines if line.get_linestyle() == '--' and len(set(line.get_xdata())) == 1]
+    macd_verticals = [line for line in fig.axes[1].lines if line.get_linestyle() == '--' and len(set(line.get_xdata())) == 1]
+
+    assert any(line.get_xdata()[0] == 1 for line in price_verticals)
+    assert any(line.get_xdata()[0] == 4 for line in price_verticals)
+    assert any(line.get_xdata()[0] == 1 for line in macd_verticals)
+    assert any(line.get_xdata()[0] == 4 for line in macd_verticals)

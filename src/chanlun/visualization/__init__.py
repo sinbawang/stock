@@ -4,6 +4,7 @@
 生成缠论结构叠加在 K 线图上。
 """
 
+from datetime import datetime
 from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
@@ -165,6 +166,62 @@ class Plotter:
             self._normalized_index_to_bar_index(bars, normalized_bars, start_idx),
             self._normalized_index_to_bar_index(bars, normalized_bars, end_idx),
         )
+
+    def _state_ts_to_bar_index(self, bars: List[Bar], value: datetime | str | None) -> int | None:
+        if value is None or not bars:
+            return None
+
+        if isinstance(value, str):
+            try:
+                target = datetime.fromisoformat(value)
+            except ValueError:
+                return None
+        else:
+            target = value
+
+        ts_to_index = self._build_ts_to_bar_index(bars)
+        if target in ts_to_index:
+            return ts_to_index[target]
+
+        for index, bar in enumerate(bars):
+            if bar.ts >= target:
+                return index
+        return len(bars) - 1
+
+    def _draw_structure_boundaries(
+        self,
+        price_ax,
+        macd_ax,
+        bars: List[Bar],
+        structure_state: Optional[dict],
+    ) -> None:
+        if not structure_state:
+            return
+
+        boundary_specs: list[tuple[int | None, str, str, float]] = []
+        last_completed = structure_state.get("last_completed") or {}
+        current_ongoing = structure_state.get("current_ongoing") or {}
+
+        boundary_specs.append((
+            self._state_ts_to_bar_index(bars, last_completed.get("start_ts")),
+            "last_completed_start",
+            "#9aa5b1",
+            0.45,
+        ))
+        boundary_specs.append((
+            self._state_ts_to_bar_index(bars, current_ongoing.get("start_ts")),
+            "current_ongoing_start",
+            "#ffd166",
+            0.85,
+        ))
+
+        seen_positions: set[int] = set()
+        for x_pos, _, color, alpha in boundary_specs:
+            if x_pos is None or x_pos in seen_positions:
+                continue
+            seen_positions.add(x_pos)
+            price_ax.axvline(x=x_pos, color=color, linestyle='--', linewidth=1.0, alpha=alpha, zorder=1)
+            macd_ax.axvline(x=x_pos, color=color, linestyle='--', linewidth=0.9, alpha=alpha, zorder=1)
 
     def _draw_bars(self, ax, bars: List[Bar]) -> None:
         for i, bar in enumerate(bars):
@@ -464,6 +521,7 @@ class Plotter:
         zhongshus: List[Zhongshu],
         normalized_bars: Optional[List[NormalizedBar]] = None,
         confirmed_fractal_ids: Optional[set[int]] = None,
+        structure_state: Optional[dict] = None,
         title: str = "Chanlun Structure"
     ):
         """
@@ -486,6 +544,7 @@ class Plotter:
         self._draw_bis(price_ax, bars, bis, normalized_bars)
         self._draw_fractals(price_ax, bars, fractals, normalized_bars, confirmed_fractal_ids)
         self._draw_macd(macd_ax, bars)
+        self._draw_structure_boundaries(price_ax, macd_ax, bars, structure_state)
 
         self._style_axis(price_ax, show_x=True)
         self._style_axis(macd_ax, show_x=False)

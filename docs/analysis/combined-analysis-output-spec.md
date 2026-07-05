@@ -229,6 +229,8 @@
 - `kind`: `same_type_extension`、`completed_then_new_type_ongoing`、`undetermined`
 - `note`: 面向解释层的短句说明
 
+补充解释：当 `relationship.kind == same_type_extension` 且 `last_completed.type == current_ongoing.type` 时，展示层不应把左侧文案理解为“严格理论上已经完成并切开的上一走势类型”。更合适的语义是“前段已确认同型片段”，表示右侧结构仍优先按同一走势类型内部延伸处理。
+
 兼容性要求：
 
 - 这组新增字段只能做增量扩展，不能替代现有 `analysis_text`
