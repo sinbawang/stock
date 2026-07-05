@@ -227,6 +227,12 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
     while current_start_relation > 0 and relations[current_start_relation - 1] == current_kind:
         current_start_relation -= 1
     current_start_index = current_start_relation
+    if current_kind == "range" and current_start_relation > 0:
+        # When a new overlap suffix appears after a finished up/down run,
+        # treat the latest zhongshu as the start of the new ongoing range
+        # instead of folding the prior trend tail back into the new group.
+        current_start_index = current_start_relation + 1
+    current_group_count = len(zhongshus) - current_start_index
     current_ongoing = _build_group_state(
         zhongshus,
         current_start_index,
@@ -236,7 +242,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
         confirmation_basis=(
             "forming_next_same_level_zhongshu"
             if current_kind in {"up", "down"}
-            else "still_inside_last_zs_extension"
+            else ("single_active_zhongshu" if current_group_count == 1 else "still_inside_last_zs_extension")
         ),
     )
 

@@ -92,6 +92,27 @@ class TestIdentifyZhongshu:
         ]
         assert identify_zhongshu(bis) == []
 
+    def test_fixed_zone_does_not_recompute_on_extension(self):
+        bis = [
+            _bi(0, BiDirection.DOWN, 110, 98),
+            _bi(1, BiDirection.UP, 106, 100),
+            _bi(2, BiDirection.DOWN, 104, 101),
+            _bi(3, BiDirection.UP, 103, 102),
+            _bi(4, BiDirection.DOWN, 103.2, 102.5),
+            _bi(5, BiDirection.DOWN, 101.8, 96),
+        ]
+
+        result = identify_zhongshu(bis)
+
+        assert len(result) == 1
+        zs = result[0]
+        assert zs.zs_low == 102
+        assert zs.zs_high == 103
+        assert zs.bi_ids == [1, 2, 3, 4]
+        assert zs.core_bi_ids == [1, 2, 3]
+        assert zs.render_end_bi_id == 4
+        assert zs.exit_bi_id == 5
+
     def test_next_center_reuses_previous_exit_as_entering(self):
         bis = [
             _bi(0, BiDirection.DOWN, 110, 98),

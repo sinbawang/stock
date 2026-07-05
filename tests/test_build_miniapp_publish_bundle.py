@@ -301,6 +301,9 @@ Generated at: 2026-05-30T20:05:52
         "5M窗口：中枢到锚点窗口",
         "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
     ]
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["mode"] == "engineering_summary"
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["is_strict_theory_equivalent"] is False
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["summary_note"].startswith("当前同级别走势输出为工程结构摘要")
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["previous"]["type_label"] == "上涨"
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["current"]["type_label"] == "下跌"
     assert summary_payload["cards"]["technical"]["latest_signal_summary"]["latest_buy"]["label"] == "二买"
@@ -309,6 +312,7 @@ Generated at: 2026-05-30T20:05:52
         "上个已完成走势：上涨 2026-04-01T10:30:00 -> 2026-05-10T10:30:00",
         "当前进行走势：下跌 自 2026-05-15T10:30:00 起，最新 2026-05-29T10:30:00",
         "走势连接：上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。",
+        "口径说明：当前同级别走势输出为工程结构摘要，非严格递归分解后的最终理论标签。",
         "最近买点：二买 2026-05-29T10:30:00，价格 10.25",
         "最近卖点：三卖 2026-05-27T14:30:00，价格 10.88",
     ]
@@ -336,10 +340,14 @@ Generated at: 2026-05-30T20:05:52
         "5M窗口：中枢到锚点窗口",
         "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
     ]
+    assert detail_payload["sections"][1]["same_level_decomposition"]["mode"] == "engineering_summary"
+    assert detail_payload["sections"][1]["same_level_decomposition"]["is_strict_theory_equivalent"] is False
+    assert detail_payload["sections"][1]["same_level_decomposition"]["summary_note"].startswith("当前同级别走势输出为工程结构摘要")
     assert detail_payload["sections"][1]["same_level_decomposition"]["previous"]["type_label"] == "上涨"
     assert detail_payload["sections"][1]["same_level_decomposition"]["current"]["type_label"] == "下跌"
     assert detail_payload["sections"][1]["latest_signal_summary"]["latest_overall"]["label"] == "二买"
     assert detail_payload["sections"][1]["technical_focus_lines"][0].startswith("上个已完成走势：上涨")
+    assert any("工程结构摘要" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
 
     a_share_group = json.loads((latest_dir / "groups" / "a_share.json").read_text(encoding="utf-8"))
     assert a_share_group["sections"][1]["items"][0]["symbol"] == "000651"

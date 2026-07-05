@@ -324,6 +324,7 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
         "zs_count": current_raw.get("zs_count") or current_raw.get("zs_count_so_far"),
         "status": current_raw.get("status"),
     }
+    summary_note = "当前同级别走势输出为工程结构摘要，非严格递归分解后的最终理论标签。"
 
     lines: list[str] = []
     if previous.get("type"):
@@ -337,8 +338,12 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
     note = safe_text(relationship.get("note"))
     if note:
         lines.append(f"走势连接：{note}")
+    lines.append(f"口径说明：{summary_note}")
 
     return {
+        "mode": "engineering_summary",
+        "is_strict_theory_equivalent": False,
+        "summary_note": summary_note,
         "previous": previous,
         "current": current,
         "relationship": relationship,
