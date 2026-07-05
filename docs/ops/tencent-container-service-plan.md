@@ -149,5 +149,5 @@ docker run --rm -p 8000:8000 \
 3. 腾讯云侧一键发布入口已经补上：
   - `scripts/deploy_tencent_container_service.py`
   - `bin/deploy_service.bat`
-  - 使用说明见 `docs/tencent-cloud-deploy-runbook.md`
+  - 使用说明见 [tencent-cloud-deploy-runbook.md](tencent-cloud-deploy-runbook.md)
 4. 把当前 `scripts/` 中的编排逻辑逐步下沉到 `src/` 服务模块，减少容器内脚本导入耦合。

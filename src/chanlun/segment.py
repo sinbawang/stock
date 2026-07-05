@@ -563,7 +563,7 @@ def identify_segments(bis: List[Bi]) -> List[Segment]:
     """
     识别线段。
 
-    第一阶段规则对应 docs/chanlun-rule-spec.md 6.1-6.5：
+    第一阶段规则对应 docs/chanlun/chanlun-rule-spec.md 6.1-6.5：
     - 输入可传入全量笔序列，但实现内部只使用已确认笔
     - 至少 3 笔，方向交替，首尾笔同向
     - 同向笔必须持续推进，反向笔不得破坏最近关键低/高点

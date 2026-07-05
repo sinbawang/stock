@@ -38,7 +38,7 @@
 - [fundamental-v1-minimum-fields.md](fundamental-v1-minimum-fields.md): 第一版字段边界，哪些必需、哪些可放宽、哪些推迟到 v2
 - [fundamental-data-source.md](fundamental-data-source.md): 港股 / A 股公开数据源如何映射成标准快照
 - [hk-financial-second-source-plan.md](hk-financial-second-source-plan.md): 港股保险 / 券商第二数据源方案，解释当前 public source 缺口和后续接入顺序
-- [hk-minute-data-source.md](hk-minute-data-source.md): 技术面侧港股分钟线抓取策略，供联合分析链路参考
+- [../data/hk-minute-data-source.md](../data/hk-minute-data-source.md): 技术面侧港股分钟线抓取策略，供联合分析链路参考
 
 读完这一层后，应该已经能回答：
 
@@ -71,9 +71,9 @@
 
 - [fundamental-roadmap.md](fundamental-roadmap.md): 实现优先级和阶段目标
 - [fundamental-snapshot-example.md](fundamental-snapshot-example.md): 标准输入样例
-- [combined-analysis-output-spec.md](combined-analysis-output-spec.md): 当前 `plus_60m` 联合文本与技术面产物的输出规格
-- [combined-analysis-service-interface.md](combined-analysis-service-interface.md): 当前联合分析链路应如何从脚本拼装收敛为公共服务接口
-- [miniapp-cloud-publish-schema.md](miniapp-cloud-publish-schema.md): 面向微信小程序原生渲染的云存储发布层协议
+- [../analysis/combined-analysis-output-spec.md](../analysis/combined-analysis-output-spec.md): 当前 `plus_60m` 联合文本与技术面产物的输出规格
+- [../analysis/combined-analysis-service-interface.md](../analysis/combined-analysis-service-interface.md): 当前联合分析链路应如何从脚本拼装收敛为公共服务接口
+- [../miniapp/miniapp-cloud-publish-schema.md](../miniapp/miniapp-cloud-publish-schema.md): 面向微信小程序原生渲染的云存储发布层协议
 
 读完这一层后，应该已经能回答：
 
@@ -95,9 +95,9 @@
 7. [fundamental-roadmap.md](fundamental-roadmap.md)
 8. [fundamental-interim-scoring-design.md](fundamental-interim-scoring-design.md)
 9. [fundamental-interim-scoring-interface.md](fundamental-interim-scoring-interface.md)
-10. [combined-analysis-output-spec.md](combined-analysis-output-spec.md)
-11. [combined-analysis-service-interface.md](combined-analysis-service-interface.md)
-12. [miniapp-cloud-publish-schema.md](miniapp-cloud-publish-schema.md)
+10. [../analysis/combined-analysis-output-spec.md](../analysis/combined-analysis-output-spec.md)
+11. [../analysis/combined-analysis-service-interface.md](../analysis/combined-analysis-service-interface.md)
+12. [../miniapp/miniapp-cloud-publish-schema.md](../miniapp/miniapp-cloud-publish-schema.md)
 
 ## 当前实现快照
 

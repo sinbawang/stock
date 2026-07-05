@@ -483,7 +483,7 @@ Invoke-WebRequest -UseBasicParsing \
 
 当真实 `publish-refresh` 已经成功后，下一步不要立刻怀疑小程序页面代码，先按下面顺序确认“云端发布物”本身已经可被前端消费。
 
-这部分路径和字段约定以 [docs/miniapp-cloud-publish-schema.md](c:/sandbox/sinba/stock/docs/miniapp-cloud-publish-schema.md) 为准。
+这部分路径和字段约定以 [../miniapp/miniapp-cloud-publish-schema.md](../miniapp/miniapp-cloud-publish-schema.md) 为准。
 
 ### 1. 先确认 latest 索引已经更新
 

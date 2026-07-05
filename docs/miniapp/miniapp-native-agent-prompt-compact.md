@@ -122,4 +122,4 @@
 ## 使用方式
 
 - 如果你要直接丢给 Claude/Cursor/Copilot，用这份精简版更合适。
-- 如果对方需要更多上下文，再补充参考 [docs/miniapp-native-agent-prompt.md](docs/miniapp-native-agent-prompt.md)。
+- 如果对方需要更多上下文，再补充参考 [miniapp-native-agent-prompt.md](miniapp-native-agent-prompt.md)。

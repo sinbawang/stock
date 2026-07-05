@@ -8,8 +8,8 @@
 
 关联文档：
 
-- [combined-analysis-output-spec.md](combined-analysis-output-spec.md): 当前原始报告落盘格式
-- [combined-analysis-service-interface.md](combined-analysis-service-interface.md): 当前联合分析公共接口边界
+- [../analysis/combined-analysis-output-spec.md](../analysis/combined-analysis-output-spec.md): 当前原始报告落盘格式
+- [../analysis/combined-analysis-service-interface.md](../analysis/combined-analysis-service-interface.md): 当前联合分析公共接口边界
 
 ## 1. 目标与边界
 

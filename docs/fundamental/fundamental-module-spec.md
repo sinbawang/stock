@@ -475,7 +475,7 @@
 - `fundamental_risks`
 - `combined_comment`
 
-如果要看当前仓库里已经落地的 `plus_60m` 联合文本到底如何组织、包含哪些区块、如何处理来源警告与技术面产物，直接看 [combined-analysis-output-spec.md](combined-analysis-output-spec.md)。
+如果要看当前仓库里已经落地的 `plus_60m` 联合文本到底如何组织、包含哪些区块、如何处理来源警告与技术面产物，直接看 [../analysis/combined-analysis-output-spec.md](../analysis/combined-analysis-output-spec.md)。
 
 ## 13. 第一阶段交付范围
 

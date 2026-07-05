@@ -40,41 +40,30 @@
 
 ## 文档索引
 
-建议按“总边界 -> 字段边界 -> 数据源与实现 -> 联动扩展”的顺序阅读基本面文档。
+文档已按主题拆分，先看总索引，再进入对应子目录：
 
-- [docs/chanlun-rule-spec.md](docs/chanlun-rule-spec.md): 缠论规则规格
-- [docs/capital-flow-module-spec.md](docs/capital-flow-module-spec.md): 资金面模块设计规格
-- [docs/hk-minute-data-source.md](docs/hk-minute-data-source.md): 港股分钟线数据源策略与调用约定
+- [docs/README.md](docs/README.md): 文档总索引
+- [docs/fundamental/README.md](docs/fundamental/README.md): 基本面建模、数据源、评分、路线图
+- [docs/capital/README.md](docs/capital/README.md): 资金面模块规格
+- [docs/chanlun/README.md](docs/chanlun/README.md): 缠论规则与线段说明
+- [docs/analysis/README.md](docs/analysis/README.md): 联合分析输出与服务接口
+- [docs/data/README.md](docs/data/README.md): 数据源策略与数据存储布局
+- [docs/miniapp/README.md](docs/miniapp/README.md): 小程序发布协议与提示词
+- [docs/ops/README.md](docs/ops/README.md): 部署、运维与执行手册
 
-基本面建议阅读顺序：
+常用直达：
 
-- [docs/fundamental-doc-map.md](docs/fundamental-doc-map.md): 基本面文档总导航，先看这份会更快进入主线
-- [docs/fundamental-module-spec.md](docs/fundamental-module-spec.md): 先看模块目标、边界、输入输出和总骨架
-- [docs/fundamental-v1-minimum-fields.md](docs/fundamental-v1-minimum-fields.md): 再看第一版必须支持哪些字段，哪些字段先放宽
-- [docs/fundamental-industry-layering.md](docs/fundamental-industry-layering.md): 再看行业怎么分层，哪些行业共用主模型
-- [docs/fundamental-tech-submodels.md](docs/fundamental-tech-submodels.md): 再看科技行业子模型的业务规则差异
-- [docs/fundamental-data-source.md](docs/fundamental-data-source.md): 然后看标准快照如何从港股 / A 股公开数据源进入公共层
-- [docs/fundamental-python-model.md](docs/fundamental-python-model.md): 然后看领域模型当前如何落到 Python 对象
-- [docs/fundamental-submodel-config.md](docs/fundamental-submodel-config.md): 再看子模型配置对象当前如何表达评分与解释规则
-- [docs/fundamental-code-layout.md](docs/fundamental-code-layout.md): 最后看代码目录当前如何落地到 `src/fundamental/`
-
-补充文档：
-
-- [docs/fundamental-roadmap.md](docs/fundamental-roadmap.md): 基本面模块落地路线图
-- [docs/fundamental-snapshot-example.md](docs/fundamental-snapshot-example.md): 基本面标准输入样例
-- [docs/fundamental-interim-scoring-design.md](docs/fundamental-interim-scoring-design.md): 年报锚定 + 季报刷新评分设计
-- [docs/fundamental-interim-scoring-interface.md](docs/fundamental-interim-scoring-interface.md): 跨报告期评分对象与服务接口说明
-- [docs/hk-financial-second-source-plan.md](docs/hk-financial-second-source-plan.md): 港股金融第二数据源与 fallback 方案
-- [docs/combined-analysis-output-spec.md](docs/combined-analysis-output-spec.md): 当前 `plus_60m` 联合文本与技术面产物规格
-- [docs/combined-analysis-service-interface.md](docs/combined-analysis-service-interface.md): 联合分析链路的公共服务接口说明
-- [docs/miniapp-cloud-publish-schema.md](docs/miniapp-cloud-publish-schema.md): 小程序云存储发布层协议
-- [docs/tencent-container-service-plan.md](docs/tencent-container-service-plan.md): 持仓分析 API / 腾讯云容器服务化方案
-- [docs/tencent-cloud-deploy-runbook.md](docs/tencent-cloud-deploy-runbook.md): 腾讯云容器一键发布步骤
-- [docs/miniapp-native-agent-prompt.md](docs/miniapp-native-agent-prompt.md): 小程序原生页生成提示词
-- [docs/miniapp-native-agent-prompt-compact.md](docs/miniapp-native-agent-prompt-compact.md): 小程序原生页精简提示词
+- [docs/fundamental/fundamental-doc-map.md](docs/fundamental/fundamental-doc-map.md): 基本面总导航
+- [docs/chanlun/chanlun-rule-spec.md](docs/chanlun/chanlun-rule-spec.md): 缠论规则规格
+- [docs/capital/capital-flow-module-spec.md](docs/capital/capital-flow-module-spec.md): 资金面模块设计规格
+- [docs/analysis/combined-analysis-output-spec.md](docs/analysis/combined-analysis-output-spec.md): 联合分析输出规格
+- [docs/miniapp/miniapp-cloud-publish-schema.md](docs/miniapp/miniapp-cloud-publish-schema.md): 小程序云存储发布协议
+- [docs/ops/tencent-cloud-deploy-runbook.md](docs/ops/tencent-cloud-deploy-runbook.md): 腾讯云部署操作手册
 - [.github/agents/chanlun-python.agent.md](.github/agents/chanlun-python.agent.md): 项目专用 agent 定义
 
 ## 当前公共入口
+
+如果你是在找文档入口，先看 [docs/README.md](docs/README.md)。
 
 当前建议直接复用这些公共入口，不要在脚本里重复拼源站请求：
 
@@ -95,8 +84,8 @@
 
 对应的数据源约定见：
 
-- [docs/hk-minute-data-source.md](docs/hk-minute-data-source.md)
-- [docs/fundamental-data-source.md](docs/fundamental-data-source.md)
+- [docs/data/hk-minute-data-source.md](docs/data/hk-minute-data-source.md)
+- [docs/fundamental/fundamental-data-source.md](docs/fundamental/fundamental-data-source.md)
 
 ## 批量刷新入口
 

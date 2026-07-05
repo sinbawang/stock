@@ -8,8 +8,8 @@
 
 它不重复定义基本面评分规则，也不重复定义缠论结构识别规则；这些分别看：
 
-- [fundamental-module-spec.md](fundamental-module-spec.md)
-- [chanlun-rule-spec.md](chanlun-rule-spec.md)
+- [../fundamental/fundamental-module-spec.md](../fundamental/fundamental-module-spec.md)
+- [../chanlun/chanlun-rule-spec.md](../chanlun/chanlun-rule-spec.md)
 
 ## 1. 当前适用范围
 
@@ -197,7 +197,7 @@
 
 ### 3.4 `tech.json` 建议新增的走势结构状态字段
 
-根据 [chanlun-rule-spec.md](chanlun-rule-spec.md) 中新增的走势类型口径，后续 `tech.json` 建议补一组结构化字段，用来表达“上一个已完成走势类型”和“当前正在进行走势类型”。
+根据 [../chanlun/chanlun-rule-spec.md](../chanlun/chanlun-rule-spec.md) 中新增的走势类型口径，后续 `tech.json` 建议补一组结构化字段，用来表达“上一个已完成走势类型”和“当前正在进行走势类型”。
 
 这组字段当前还不是已落地事实，因此本节只定义推荐协议，不应在文档或代码里假装它已经普遍存在。
 
@@ -312,7 +312,7 @@
 - 信号
 - 观察重点
 
-其中“结构”段在后续应向 [chanlun-rule-spec.md](chanlun-rule-spec.md) 的走势类型输出要求对齐，至少逐步补齐：
+其中“结构”段在后续应向 [../chanlun/chanlun-rule-spec.md](../chanlun/chanlun-rule-spec.md) 的走势类型输出要求对齐，至少逐步补齐：
 
 - 上一个已经完成的同级别走势类型
 - 当前正在进行的同级别走势类型

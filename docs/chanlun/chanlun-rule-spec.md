@@ -294,7 +294,7 @@
 
 当前项目中的 `src/chanlun/segment.py` 采用的是“工程化简化线段”规则，具体约束如下：
 
-如需一份更适合人工核图的短说明，见 `docs/segment-implementation-guide.md`。
+如需一份更适合人工核图的短说明，见 [segment-implementation-guide.md](segment-implementation-guide.md)。
 
 - 线段识别函数可接收全量笔序列，但实现内部只使用 `is_confirmed=True` 的已确认笔
 - 任意未确认尾笔都不参与线段起段、扩展或终结判定
