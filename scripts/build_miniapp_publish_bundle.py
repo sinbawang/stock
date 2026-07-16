@@ -30,6 +30,14 @@ DEFAULT_REPORTS_ROOT = REPORTS_DIR
 DEFAULT_PUBLISH_ROOT = ROOT / "build" / "miniapp-publish"
 PRIMARY_TECHNICAL_TIMEFRAME = "30m"
 PRIMARY_TECHNICAL_LABEL = "30M"
+DETAIL_TECHNICAL_TIMEFRAMES = ("day", "30m", "5m")
+TIMEFRAME_LABELS = {
+    "day": "DAY",
+    "60m": "60M",
+    "30m": "30M",
+    "15m": "15M",
+    "5m": "5M",
+}
 
 
 @dataclass(frozen=True)
@@ -593,6 +601,22 @@ def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_timeframe_technical_sections(stock_dir: Path, timeframes: tuple[str, ...]) -> list[dict[str, Any]]:
+    sections: list[dict[str, Any]] = []
+    for timeframe in timeframes:
+        tech_path = stock_dir / timeframe / "tech.json"
+        if not tech_path.exists():
+            continue
+        section = build_technical_section(read_json(tech_path))
+        label = TIMEFRAME_LABELS.get(timeframe, timeframe.upper())
+        section["key"] = "technical" if timeframe == PRIMARY_TECHNICAL_TIMEFRAME else f"technical_{timeframe}"
+        section["title"] = f"{label} 技术面"
+        section["timeframe"] = timeframe
+        section["operation_level"] = section.get("operation_level") or label
+        sections.append(section)
+    return sections
+
+
 def build_chart_specs(stock_dir: Path, publish_timeframes: tuple[str, ...] | None = None) -> list[dict[str, str]]:
     charts: list[dict[str, str]] = []
     timeframe_order = publish_timeframes or ("30m", "60m", "15m", "5m", "day")
@@ -705,7 +729,8 @@ def build_detail_payload(
     tech_payload = read_json(stock_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json")
     charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes)
     fundamental = build_fundamental_section(base_payload)
-    technical = build_technical_section(tech_payload)
+    technical_sections = build_timeframe_technical_sections(stock_dir, DETAIL_TECHNICAL_TIMEFRAMES)
+    technical = next((section for section in technical_sections if section.get("key") == "technical"), None) or build_technical_section(tech_payload)
     capital_flow = build_capital_flow_section(fund_payload)
     overview_bullets = [
         f"基本面 {safe_text(fundamental.get('score'), 'missing')}/{safe_text(fundamental.get('rating'), 'missing')}",
@@ -734,7 +759,7 @@ def build_detail_payload(
             "summary": group_item.get("comment") if group_item else first_non_empty(technical.get("conclusion"), fundamental.get("summary")),
             "bullets": overview_bullets,
         },
-        "sections": [fundamental, technical, capital_flow],
+        "sections": [fundamental, *technical_sections, capital_flow],
         "charts": [
             {"timeframe": chart["timeframe"], "path": f"stocks/{holding.symbol}/{chart['relative_path']}", "label": chart["label"]}
             for chart in charts

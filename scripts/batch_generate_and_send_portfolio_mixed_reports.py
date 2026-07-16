@@ -258,6 +258,7 @@ def generate_bundle(
     holding: Holding,
     *,
     skip_gen_base: bool = True,
+    trust_existing_base: bool = False,
     skip_gen_fund: bool = False,
     pending_reverse_mode: str = "any",
     day_bars: int = 600,
@@ -268,7 +269,7 @@ def generate_bundle(
     zhongshu_level: str = "bi",
     tech_timeframes: tuple[str, ...] = ("day", "60m", "15m"),
 ) -> GeneratedBundle:
-    reuse_existing_base = _should_reuse_existing_base(holding, skip_gen_base)
+    reuse_existing_base = bool(skip_gen_base and trust_existing_base) or _should_reuse_existing_base(holding, skip_gen_base)
     started_mixed = time.perf_counter()
     if holding.market == "CN":
         mixed_stdout = _run_command(

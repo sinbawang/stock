@@ -70,6 +70,7 @@ class PublishRefreshRequest(BaseModel):
     skip_build: bool = False
     skip_upload: bool = False
     skip_gen_base: bool = True
+    trust_existing_base: bool = False
     skip_gen_fund: bool = False
     fail_on_holding_error: bool = False
     parallelism: int = Field(default=max(1, min(4, os.cpu_count() or 1)), ge=1)
@@ -90,6 +91,7 @@ class PublishRefreshRequest(BaseModel):
     api_key_expire_in: int | None = Field(default=None, ge=1)
     delete_created_api_key: bool = False
     upload_dry_run: bool = False
+    client_request_id: str | None = None
 
 
 class TechnicalRefreshRequest(BaseModel):
@@ -287,6 +289,7 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
         skip_build=request.skip_build,
         skip_upload=request.skip_upload,
         skip_gen_base=request.skip_gen_base,
+        trust_existing_base=request.trust_existing_base,
         skip_gen_fund=request.skip_gen_fund,
         fail_on_holding_error=request.fail_on_holding_error,
         parallelism=request.parallelism,

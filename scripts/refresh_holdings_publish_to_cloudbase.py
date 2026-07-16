@@ -57,6 +57,13 @@ def parse_args() -> argparse.Namespace:
         help="Reuse an existing base.json instead of regenerating the fundamental report when possible. Use --no-skip-gen-base to force refresh.",
     )
     parser.add_argument(
+        "--trust-existing-base",
+        dest="trust_existing_base",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="When --skip-gen-base is enabled, reuse existing base.json without checking the latest report period.",
+    )
+    parser.add_argument(
         "--skip-gen-fund",
         "--skipGenFund",
         dest="skip_gen_fund",
@@ -141,7 +148,7 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
         raise RuntimeError("No holdings found for regeneration")
 
     worker_count = max(1, min(args.parallelism, len(holdings)))
-    print(f"regenerate_holdings={len(holdings)} parallelism={worker_count} skip_gen_base={args.skip_gen_base} skip_gen_fund={args.skip_gen_fund} tech_timeframes={','.join(args.tech_timeframes)}", flush=True)
+    print(f"regenerate_holdings={len(holdings)} parallelism={worker_count} skip_gen_base={args.skip_gen_base} trust_existing_base={args.trust_existing_base} skip_gen_fund={args.skip_gen_fund} tech_timeframes={','.join(args.tech_timeframes)}", flush=True)
 
     failures: list[dict[str, str]] = []
     generated_count = 0
@@ -152,6 +159,7 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                 bundle = generate_report_bundle(
                     holding,
                     skip_gen_base=args.skip_gen_base,
+                    trust_existing_base=args.trust_existing_base,
                     skip_gen_fund=args.skip_gen_fund,
                     pending_reverse_mode=args.pending_reverse_mode,
                     day_bars=args.day_bars,
@@ -185,6 +193,7 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                     generate_report_bundle,
                     holding,
                     skip_gen_base=args.skip_gen_base,
+                    trust_existing_base=args.trust_existing_base,
                     skip_gen_fund=args.skip_gen_fund,
                     pending_reverse_mode=args.pending_reverse_mode,
                     day_bars=args.day_bars,
