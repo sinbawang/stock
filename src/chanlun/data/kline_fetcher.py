@@ -2,7 +2,7 @@
 
 支持:
 - 股票代码: A 股/港股等腾讯可识别代码
-- 周期: day/week/month/m60/m30/m15/m5
+- 周期: day/week/month/m60/m30/m15/m5/m1
 - 时间范围过滤
 
 示例:
@@ -28,7 +28,7 @@ from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 import requests
 
 
-_ALLOWED_INTERVALS = {"day", "week", "month", "m60", "m30", "m15", "m5"}
+_ALLOWED_INTERVALS = {"day", "week", "month", "m60", "m30", "m15", "m5", "m1"}
 _LAST_FETCH_METADATA: dict[str, object] = {}
 
 
@@ -84,8 +84,9 @@ def _normalize_interval(interval: str) -> str:
         "1w": "week",
         "week": "week",
         "m": "month",
-        "1m": "month",
         "month": "month",
+        "mo": "month",
+        "1mo": "month",
         "60": "m60",
         "60m": "m60",
         "60k": "m60",
@@ -102,6 +103,10 @@ def _normalize_interval(interval: str) -> str:
         "5m": "m5",
         "5k": "m5",
         "m5": "m5",
+        "1": "m1",
+        "1m": "m1",
+        "1k": "m1",
+        "m1": "m1",
     }
     out = mapping.get(m)
     if not out:
@@ -227,6 +232,7 @@ def _tushare_freq(interval: str) -> str:
         "m30": "30min",
         "m15": "15min",
         "m5": "5min",
+        "m1": "1min",
     }
     freq = mapping.get(interval)
     if not freq:

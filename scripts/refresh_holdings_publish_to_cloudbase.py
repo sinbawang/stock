@@ -95,18 +95,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--m30-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 30M K-line fetch count.")
     parser.add_argument("--m15-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
     parser.add_argument("--m5-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 5M K-line fetch count.")
+    parser.add_argument("--m1-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 1M K-line fetch count.")
     parser.add_argument("--zhongshu-level", choices=("bi", "segment"), default="bi", help="Forwarded to batch_prepare_chanlun_reports.py to switch between bi and segment zhongshu rendering.")
     parser.add_argument(
         "--tech-timeframes",
         nargs="+",
-        choices=("day", "60m", "30m", "15m", "5m"),
-        default=["day", "60m", "15m"],
-        help="Technical levels to generate in addition to the mixed report path. Defaults to day/60m/15m because 30m is already produced by the mixed report and 5m precision is already embedded there.",
+        choices=("day", "60m", "30m", "15m", "5m", "1m"),
+        default=["day", "30m", "5m", "1m"],
+        help="Technical levels to generate in addition to the mixed report path. Defaults to day/30m/5m/1m.",
     )
     parser.add_argument(
         "--publish-timeframes",
         nargs="+",
-        choices=("day", "60m", "30m", "15m", "5m"),
+        choices=("day", "60m", "30m", "15m", "5m", "1m"),
         default=None,
         help="Optional chart timeframes to include in the publish bundle. Defaults to all available chart assets.",
     )
@@ -123,7 +124,25 @@ def parse_args() -> argparse.Namespace:
 
 def _run_command(command: list[str]) -> str:
     print("$ " + " ".join(shlex.quote(part) for part in command), flush=True)
-    completed = subprocess.run(command, check=True, capture_output=True, text=True)
+    try:
+        completed = subprocess.run(command, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as exc:
+        stdout = exc.stdout or ""
+        stderr = exc.stderr or ""
+        if stdout:
+            print(stdout, end="" if stdout.endswith("\n") else "\n", flush=True)
+        if stderr:
+            print(stderr, end="" if stderr.endswith("\n") else "\n", flush=True)
+        details = [
+            f"Command failed with exit code {exc.returncode}: {exc.cmd!r}",
+        ]
+        if stdout.strip():
+            details.append("stdout:")
+            details.append(stdout.strip())
+        if stderr.strip():
+            details.append("stderr:")
+            details.append(stderr.strip())
+        raise RuntimeError("\n".join(details)) from exc
     if completed.stdout:
         print(completed.stdout, end="" if completed.stdout.endswith("\n") else "\n", flush=True)
     if completed.stderr:
@@ -167,6 +186,7 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                     m30_bars=args.m30_bars,
                     m15_bars=args.m15_bars,
                     m5_bars=args.m5_bars,
+                    m1_bars=args.m1_bars,
                     zhongshu_level=args.zhongshu_level,
                     tech_timeframes=tuple(args.tech_timeframes),
                 )
@@ -201,6 +221,7 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                     m30_bars=args.m30_bars,
                     m15_bars=args.m15_bars,
                     m5_bars=args.m5_bars,
+                    m1_bars=args.m1_bars,
                     zhongshu_level=args.zhongshu_level,
                     tech_timeframes=tuple(args.tech_timeframes),
                 ): (index, holding, time.perf_counter())
@@ -282,7 +303,12 @@ def upload_publish_bundle(args: argparse.Namespace, source_dir: Path) -> None:
         command.append("--delete-created-api-key")
     if args.upload_dry_run:
         command.append("--dry-run")
-    _run_command(command)
+    try:
+        _run_command(command)
+    except RuntimeError as exc:
+        print(f"upload attempt 1 failed: {exc}", flush=True)
+        print("retrying upload once...", flush=True)
+        _run_command(command)
 
 
 def main() -> None:

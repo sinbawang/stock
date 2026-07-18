@@ -30,13 +30,14 @@ DEFAULT_REPORTS_ROOT = REPORTS_DIR
 DEFAULT_PUBLISH_ROOT = ROOT / "build" / "miniapp-publish"
 PRIMARY_TECHNICAL_TIMEFRAME = "30m"
 PRIMARY_TECHNICAL_LABEL = "30M"
-DETAIL_TECHNICAL_TIMEFRAMES = ("day", "30m", "5m")
+DETAIL_TECHNICAL_TIMEFRAMES = ("day", "30m", "5m", "1m")
 TIMEFRAME_LABELS = {
     "day": "DAY",
     "60m": "60M",
     "30m": "30M",
     "15m": "15M",
     "5m": "5M",
+    "1m": "1M",
 }
 
 
@@ -57,7 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--publish-timeframes",
         nargs="+",
-        choices=("day", "60m", "30m", "15m", "5m"),
+        choices=("day", "60m", "30m", "15m", "5m", "1m"),
         default=None,
         help="Optional chart timeframes to include in the publish bundle. Defaults to all available chart assets.",
     )
@@ -619,7 +620,7 @@ def build_timeframe_technical_sections(stock_dir: Path, timeframes: tuple[str, .
 
 def build_chart_specs(stock_dir: Path, publish_timeframes: tuple[str, ...] | None = None) -> list[dict[str, str]]:
     charts: list[dict[str, str]] = []
-    timeframe_order = publish_timeframes or ("30m", "60m", "15m", "5m", "day")
+    timeframe_order = publish_timeframes or ("30m", "5m", "1m", "day")
     for timeframe in timeframe_order:
         for extension in ("svg", "jpg", "png"):
             chart_path = stock_dir / timeframe / f"structure.{extension}"

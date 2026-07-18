@@ -32,10 +32,11 @@ from refresh_holdings_publish_to_cloudbase import rebuild_publish_bundle, regene
 from storage_layout import DATA_META_DIR, HOLDINGS_FILE, REPORTS_DIR
 
 
-Timeframe = Literal["day", "60m", "30m", "15m", "5m"]
+Timeframe = Literal["day", "60m", "30m", "15m", "5m", "1m"]
 Market = Literal["ALL", "CN", "HK"]
 PendingReverseMode = Literal["any", "effective_only", "tail_mixed"]
 ZhongshuLevel = Literal["bi", "segment"]
+TechnicalRefreshMode = Literal["m30_intraday", "m5_intraday"]
 JobKind = Literal["publish_refresh", "technical_refresh"]
 JobStatus = Literal["queued", "running", "succeeded", "failed"]
 
@@ -55,6 +56,14 @@ def _normalize_technical_publish_timeframes(publish_timeframes: list[Timeframe] 
     if "day" not in normalized:
         normalized.append("day")
     return normalized
+
+
+def _resolve_technical_timeframes(mode: TechnicalRefreshMode, timeframes: list[Timeframe] | None) -> list[Timeframe]:
+    if timeframes:
+        return _dedupe_timeframes(timeframes)
+    if mode == "m5_intraday":
+        return ["5m", "1m"]
+    return ["30m", "5m", "1m"]
 
 
 class PublishRefreshRequest(BaseModel):
@@ -80,8 +89,9 @@ class PublishRefreshRequest(BaseModel):
     m30_bars: int = Field(default=600, ge=1)
     m15_bars: int = Field(default=600, ge=1)
     m5_bars: int = Field(default=600, ge=1)
+    m1_bars: int = Field(default=600, ge=1)
     zhongshu_level: ZhongshuLevel = "bi"
-    tech_timeframes: list[Timeframe] = Field(default_factory=lambda: ["day", "60m", "30m", "15m", "5m"])
+    tech_timeframes: list[Timeframe] = Field(default_factory=lambda: ["day", "30m", "5m", "1m"])
     publish_timeframes: list[Timeframe] | None = None
     cloud_prefix: str = "miniapp-publish/latest"
     env_id: str | None = None
@@ -115,9 +125,12 @@ class TechnicalRefreshRequest(BaseModel):
     m15_bars: int = Field(default=600, ge=1)
     m5_start: str | None = None
     m5_bars: int = Field(default=600, ge=1)
+    m1_start: str | None = None
+    m1_bars: int = Field(default=600, ge=1)
     pending_reverse_mode: PendingReverseMode = "any"
     zhongshu_level: ZhongshuLevel = "bi"
-    tech_timeframes: list[Timeframe] = Field(default_factory=lambda: ["30m", "5m"])
+    refresh_mode: TechnicalRefreshMode = "m30_intraday"
+    tech_timeframes: list[Timeframe] | None = None
     publish_timeframes: list[Timeframe] | None = None
     cloud_prefix: str = "miniapp-publish/latest"
     env_id: str | None = None
@@ -299,6 +312,7 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
         m30_bars=request.m30_bars,
         m15_bars=request.m15_bars,
         m5_bars=request.m5_bars,
+        m1_bars=request.m1_bars,
         zhongshu_level=request.zhongshu_level,
         tech_timeframes=tuple(_dedupe_timeframes(request.tech_timeframes)),
         publish_timeframes=tuple(_dedupe_timeframes(request.publish_timeframes)) if request.publish_timeframes else None,
@@ -323,6 +337,7 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
 
 
 def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
+    tech_timeframes = _resolve_technical_timeframes(request.refresh_mode, request.tech_timeframes)
     publish_timeframes = _normalize_technical_publish_timeframes(request.publish_timeframes)
     with _filtered_holdings_file(
         holdings_file=Path(request.holdings_file),
@@ -343,9 +358,11 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             m15_bars=request.m15_bars,
             m5_start=request.m5_start,
             m5_bars=request.m5_bars,
+            m1_start=request.m1_start,
+            m1_bars=request.m1_bars,
             pending_reverse_mode=request.pending_reverse_mode,
             zhongshu_level=request.zhongshu_level,
-            timeframes=tuple(_dedupe_timeframes(request.tech_timeframes)),
+            timeframes=tuple(tech_timeframes),
         )
         publish_args = _build_publish_namespace(
             holdings_file=request.holdings_file,

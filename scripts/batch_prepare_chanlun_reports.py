@@ -89,6 +89,7 @@ INTRADAY_TIMEFRAME_SPECS = (
     ("30m", "30", "30M"),
     ("15m", "15", "15M"),
     ("5m", "5", "5M"),
+    ("1m", "1", "1M"),
 )
 
 
@@ -129,7 +130,7 @@ def _data_fetch_payload(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="批量生成最新日线、60M、30M、15M、5M 缠论图、分析文本、操作建议")
+    parser = argparse.ArgumentParser(description="批量生成最新日线、30M、5M、1M 缠论图、分析文本、操作建议")
     parser.add_argument("--day-start", default=None, help="日线起始日期；未指定时按日线根数自动回推")
     parser.add_argument("--day-bars", type=int, default=600, help="日线抓取目标根数，默认 600")
     parser.add_argument("--m60-start", default=None, help="60M 起始时间；未指定时按 60M 根数自动回推")
@@ -140,6 +141,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--m15-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="15M 抓取目标根数，默认 600")
     parser.add_argument("--m5-start", default=None, help="5M 起始时间；未指定时按 5M 根数自动回推")
     parser.add_argument("--m5-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="5M 抓取目标根数，默认 600")
+    parser.add_argument("--m1-start", default=None, help="1M 起始时间；未指定时按 1M 根数自动回推")
+    parser.add_argument("--m1-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="1M 抓取目标根数，默认 600")
     parser.add_argument(
         "--holdings-file",
         default=str(DEFAULT_HOLDINGS_FILE),
@@ -160,9 +163,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--timeframes",
         nargs="+",
-        choices=("day", "60m", "30m", "15m", "5m"),
-        default=["day", "60m", "30m", "15m", "5m"],
-        help="需要生成的技术级别；默认全部生成。",
+        choices=("day", "60m", "30m", "15m", "5m", "1m"),
+        default=["day", "30m", "5m", "1m"],
+        help="需要生成的技术级别；默认生成 day/30m/5m/1m。",
     )
     return parser.parse_args()
 
@@ -242,6 +245,7 @@ def fetch_intraday_rows(
             primary_source=primary_source,
             fallback_sources=fallback_sources,
             min_rows=bar_count,
+            stop_on_sufficient_rows=timeframe == "1m",
         )
         fetch_meta = get_last_hk_fetch_metadata()
         return rows, _data_fetch_payload(
@@ -817,9 +821,11 @@ def run_batch_prepare(
     m15_bars: int = INTRADAY_SOURCE_PROBE_ROWS,
     m5_start: str | None = None,
     m5_bars: int = INTRADAY_SOURCE_PROBE_ROWS,
+    m1_start: str | None = None,
+    m1_bars: int = INTRADAY_SOURCE_PROBE_ROWS,
     pending_reverse_mode: str = "any",
     zhongshu_level: str = "bi",
-    timeframes: tuple[str, ...] = ("day", "60m", "30m", "15m", "5m"),
+    timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
 ) -> BatchPrepareResult:
     selected_timeframes = tuple(dict.fromkeys(timeframes))
     resolved_day_start = day_start or default_day_start_for_bar_target(day_bars)
@@ -827,6 +833,7 @@ def run_batch_prepare(
     resolved_m30_start = m30_start or default_intraday_start_for_bar_target("30m", m30_bars)
     resolved_m15_start = m15_start or default_intraday_start_for_bar_target("15m", m15_bars)
     resolved_m5_start = m5_start or default_intraday_start_for_bar_target("5m", m5_bars)
+    resolved_m1_start = m1_start or default_intraday_start_for_bar_target("1m", m1_bars)
     securities = load_securities(holdings_path or DEFAULT_HOLDINGS_FILE)
     bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]] = []
     for security in securities:
@@ -852,8 +859,9 @@ def run_batch_prepare(
             "30m": ("30", resolved_m30_start, m30_bars),
             "15m": ("15", resolved_m15_start, m15_bars),
             "5m": ("5", resolved_m5_start, m5_bars),
+            "1m": ("1", resolved_m1_start, m1_bars),
         }
-        for timeframe in ("60m", "30m", "15m", "5m"):
+        for timeframe in ("60m", "30m", "15m", "5m", "1m"):
             if timeframe not in selected_timeframes:
                 continue
             period, start, bar_count = timeframe_specs[timeframe]
@@ -930,6 +938,8 @@ def main() -> None:
         m15_bars=args.m15_bars,
         m5_start=args.m5_start,
         m5_bars=args.m5_bars,
+        m1_start=args.m1_start,
+        m1_bars=args.m1_bars,
         pending_reverse_mode=args.pending_reverse_mode,
         zhongshu_level=args.zhongshu_level,
         timeframes=tuple(args.timeframes),

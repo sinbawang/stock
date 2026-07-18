@@ -79,10 +79,12 @@ def test_generate_bundle_writes_index_groups_and_stock_payloads(tmp_path: Path) 
         (stock_dir / "30m").mkdir(parents=True)
         (stock_dir / "15m").mkdir(parents=True)
         (stock_dir / "5m").mkdir(parents=True)
+        (stock_dir / "1m").mkdir(parents=True)
         (stock_dir / "60m" / "structure.svg").write_text("<svg>60m</svg>", encoding="utf-8")
         (stock_dir / "30m" / "structure.svg").write_text("<svg>30m</svg>", encoding="utf-8")
         (stock_dir / "15m" / "structure.svg").write_text("<svg>15m</svg>", encoding="utf-8")
         (stock_dir / "5m" / "structure.svg").write_text("<svg>5m</svg>", encoding="utf-8")
+        (stock_dir / "1m" / "structure.svg").write_text("<svg>1m</svg>", encoding="utf-8")
         (stock_dir / "base.json").write_text(
             json.dumps(
                 {
@@ -360,9 +362,8 @@ Generated at: 2026-05-30T20:05:52
     assert detail_payload["charts"][0]["path"] == "stocks/00700/charts/30m.svg"
     assert [chart["path"] for chart in detail_payload["charts"]] == [
         "stocks/00700/charts/30m.svg",
-        "stocks/00700/charts/60m.svg",
-        "stocks/00700/charts/15m.svg",
         "stocks/00700/charts/5m.svg",
+        "stocks/00700/charts/1m.svg",
     ]
     assert detail_payload["sections"][1]["buy_point_labels"] == ["二买"]
     assert detail_payload["sections"][1]["signal_descriptions"][0].startswith("二买，一买后回抽确认")
@@ -403,10 +404,14 @@ Generated at: 2026-05-30T20:05:52
     assert portfolio_group["sections"][0]["items"][0]["technical_rating"] == "B"
     assert portfolio_group["sections"][0]["items"][0]["technical_bias"] == "偏强"
 
-    assert (latest_dir / "stocks" / "000651" / "charts" / "60m.svg").exists()
     assert (latest_dir / "stocks" / "000651" / "charts" / "30m.svg").exists()
-    assert (snapshot_dir / "stocks" / "00700" / "charts" / "15m.svg").exists()
+    assert (latest_dir / "stocks" / "000651" / "charts" / "5m.svg").exists()
+    assert (latest_dir / "stocks" / "000651" / "charts" / "1m.svg").exists()
+    assert not (latest_dir / "stocks" / "000651" / "charts" / "60m.svg").exists()
+    assert not (snapshot_dir / "stocks" / "00700" / "charts" / "15m.svg").exists()
+    assert (snapshot_dir / "stocks" / "00700" / "charts" / "30m.svg").exists()
     assert (snapshot_dir / "stocks" / "00700" / "charts" / "5m.svg").exists()
+    assert (snapshot_dir / "stocks" / "00700" / "charts" / "1m.svg").exists()
 
 
 def test_build_same_level_decomposition_labels_same_type_extension_as_confirmed_slice() -> None:

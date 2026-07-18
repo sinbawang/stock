@@ -55,7 +55,7 @@ class ExistingBasePeriods:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate latest mixed reports and day/30M/15M/5M charts for all holdings.")
+    parser = argparse.ArgumentParser(description="Generate latest mixed reports and day/30M/5M/1M charts for all holdings.")
     parser.add_argument("--holdings-file", default=str(DEFAULT_HOLDINGS_FILE), help="Combined holdings JSON file")
     parser.add_argument("--limit", type=int, default=None, help="Optional max holding count for validation")
     parser.add_argument("--market", choices=["ALL", "CN", "HK"], default="ALL", help="Optional market filter")
@@ -86,13 +86,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--m30-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 30M K-line fetch count.")
     parser.add_argument("--m15-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
     parser.add_argument("--m5-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 5M K-line fetch count.")
+    parser.add_argument("--m1-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 1M K-line fetch count.")
     parser.add_argument("--zhongshu-level", choices=("bi", "segment"), default="bi", help="Forwarded to batch_prepare_chanlun_reports.py to switch between bi and segment zhongshu rendering.")
     parser.add_argument(
         "--tech-timeframes",
         nargs="+",
-        choices=("day", "60m", "30m", "15m", "5m"),
-        default=["day", "60m", "15m"],
-        help="Technical levels to generate through batch_prepare_chanlun_reports.py. Defaults to day/60m/15m because 30m is already produced by the mixed report path and 5m precision is already embedded in the mixed report.",
+        choices=("day", "60m", "30m", "15m", "5m", "1m"),
+        default=["day", "30m", "5m", "1m"],
+        help="Technical levels to generate through batch_prepare_chanlun_reports.py. Defaults to day/30m/5m/1m.",
     )
     return parser.parse_args()
 
@@ -177,8 +178,9 @@ def _generate_all_timeframe_charts(
     m30_bars: int = 600,
     m15_bars: int = 600,
     m5_bars: int = 600,
+    m1_bars: int = 600,
     zhongshu_level: str = "bi",
-    tech_timeframes: tuple[str, ...] = ("day", "60m", "15m", "5m"),
+    tech_timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
 ) -> None:
     if not tech_timeframes:
         return
@@ -208,6 +210,8 @@ def _generate_all_timeframe_charts(
                 str(m15_bars),
                 "--m5-bars",
                 str(m5_bars),
+                "--m1-bars",
+                str(m1_bars),
                 "--zhongshu-level",
                 zhongshu_level,
                 "--timeframes",
@@ -266,8 +270,9 @@ def generate_bundle(
     m30_bars: int = 600,
     m15_bars: int = 600,
     m5_bars: int = 600,
+    m1_bars: int = 600,
     zhongshu_level: str = "bi",
-    tech_timeframes: tuple[str, ...] = ("day", "60m", "15m"),
+    tech_timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
 ) -> GeneratedBundle:
     reuse_existing_base = bool(skip_gen_base and trust_existing_base) or _should_reuse_existing_base(holding, skip_gen_base)
     started_mixed = time.perf_counter()
@@ -312,6 +317,7 @@ def generate_bundle(
         m30_bars=m30_bars,
         m15_bars=m15_bars,
         m5_bars=m5_bars,
+        m1_bars=m1_bars,
         zhongshu_level=zhongshu_level,
         tech_timeframes=tech_timeframes,
     )
@@ -353,6 +359,7 @@ def main() -> None:
             m30_bars=args.m30_bars,
             m15_bars=args.m15_bars,
             m5_bars=args.m5_bars,
+            m1_bars=args.m1_bars,
             zhongshu_level=args.zhongshu_level,
             tech_timeframes=tuple(args.tech_timeframes),
         )

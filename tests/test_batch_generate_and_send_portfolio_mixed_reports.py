@@ -24,7 +24,7 @@ sys.modules[module_spec.name] = module
 module_spec.loader.exec_module(module)
 
 
-def test_generate_bundle_runs_three_timeframe_chart_pipeline(monkeypatch, tmp_path):
+def test_generate_bundle_runs_four_timeframe_chart_pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr(module, "ROOT", tmp_path)
     monkeypatch.setattr(module, "SCRIPTS", tmp_path / "scripts")
     (tmp_path / "scripts").mkdir(parents=True, exist_ok=True)
@@ -40,7 +40,7 @@ def test_generate_bundle_runs_three_timeframe_chart_pipeline(monkeypatch, tmp_pa
 
     def fake_run_command(command: list[str]) -> str:
         commands.append(command)
-        if command[1].endswith("generate_h_share_single_mixed_report.py"):
+        if any(part.endswith("generate_h_share_single_mixed_report.py") for part in command):
             mixed_report.parent.mkdir(parents=True, exist_ok=True)
             mixed_report.write_text("mixed", encoding="utf-8")
             technical_report.write_text("{}", encoding="utf-8")
@@ -56,8 +56,8 @@ def test_generate_bundle_runs_three_timeframe_chart_pipeline(monkeypatch, tmp_pa
                 ]
             )
 
-        if command[1].endswith("batch_prepare_chanlun_reports.py"):
-            holdings_path = Path(command[3])
+        if any(part.endswith("batch_prepare_chanlun_reports.py") for part in command):
+            holdings_path = Path(command[command.index("--holdings-file") + 1])
             payload = json.loads(holdings_path.read_text(encoding="utf-8"))
             assert payload == {
                 "markets": {
@@ -65,7 +65,7 @@ def test_generate_bundle_runs_three_timeframe_chart_pipeline(monkeypatch, tmp_pa
                     "HK": [{"symbol": "00728", "name": "中国电信"}],
                 }
             }
-            for timeframe in ("day", "60m", "30m", "15m", "5m"):
+            for timeframe in ("day", "60m", "30m", "15m", "5m", "1m"):
                 timeframe_dir = report_root / timeframe
                 timeframe_dir.mkdir(parents=True, exist_ok=True)
                 (timeframe_dir / "structure.jpg").write_text("jpg", encoding="utf-8")
@@ -80,16 +80,19 @@ def test_generate_bundle_runs_three_timeframe_chart_pipeline(monkeypatch, tmp_pa
     bundle = module.generate_bundle(module.Holding(market="HK", symbol="00728", name="中国电信"))
 
     assert len(commands) == 2
-    assert commands[0][1].endswith("generate_h_share_single_mixed_report.py")
-    assert commands[1][1].endswith("batch_prepare_chanlun_reports.py")
-    assert commands[1][2] == "--holdings-file"
+    assert any(part.endswith("generate_h_share_single_mixed_report.py") for part in commands[0])
+    assert any(part.endswith("batch_prepare_chanlun_reports.py") for part in commands[1])
+    assert "--holdings-file" in commands[1]
     assert "--zhongshu-level" in commands[1]
     assert commands[1][commands[1].index("--zhongshu-level") + 1] == "bi"
     assert "--m30-bars" in commands[1]
     assert "--m5-bars" in commands[1]
-    assert bundle.chart_jpg == report_root / "60m" / "structure.jpg"
-    assert bundle.chart_svg == report_root / "60m" / "structure.svg"
+    assert "--m1-bars" in commands[1]
+    assert commands[1][commands[1].index("--timeframes") + 1 :] == ["day", "30m", "5m", "1m"]
+    assert bundle.chart_jpg == report_root / "30m" / "structure.jpg"
+    assert bundle.chart_svg == report_root / "30m" / "structure.svg"
     assert (report_root / "day" / "structure.jpg").exists()
     assert (report_root / "30m" / "structure.jpg").exists()
     assert (report_root / "15m" / "structure.jpg").exists()
     assert (report_root / "5m" / "structure.jpg").exists()
+    assert (report_root / "1m" / "structure.jpg").exists()
