@@ -182,7 +182,12 @@ def _generate_all_timeframe_charts(
     zhongshu_level: str = "bi",
     tech_timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
 ) -> None:
-    if not tech_timeframes:
+    requested_timeframes = tuple(
+        timeframe
+        for timeframe in dict.fromkeys(tech_timeframes)
+        if timeframe != PRIMARY_TECHNICAL_TIMEFRAME
+    )
+    if not requested_timeframes:
         return
     with tempfile.TemporaryDirectory(prefix="single_holding_", dir=str(ROOT / "data" / "_meta")) as temp_dir:
         holdings_path = Path(temp_dir) / "holdings.json"
@@ -215,7 +220,7 @@ def _generate_all_timeframe_charts(
                 "--zhongshu-level",
                 zhongshu_level,
                 "--timeframes",
-                *tech_timeframes,
+                *requested_timeframes,
             ]
         )
 

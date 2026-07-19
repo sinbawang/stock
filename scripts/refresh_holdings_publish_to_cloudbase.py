@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+import json
 import shlex
 import os
 import subprocess
@@ -20,12 +22,100 @@ if str(SCRIPTS) not in sys.path:
 from batch_generate_and_send_portfolio_mixed_reports import generate_bundle as generate_report_bundle
 from batch_generate_and_send_portfolio_mixed_reports import load_holdings
 from build_miniapp_publish_bundle import generate_bundle as build_publish_bundle
-from storage_layout import REPORTS_DIR, holdings_file
+from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
 DEFAULT_PUBLISH_ROOT = ROOT / "build" / "miniapp-publish"
 DEFAULT_UPLOAD_SCRIPT = SCRIPTS / "upload_miniapp_publish_bundle.py"
+
+
+def _round_seconds(value: float) -> float:
+    return round(value, 2)
+
+
+def _write_json(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _summarize_holding_timings(per_holding: list[dict[str, object]]) -> list[dict[str, object]]:
+    by_market: dict[str, list[dict[str, object]]] = {}
+    for item in per_holding:
+        by_market.setdefault(str(item["market"]), []).append(item)
+
+    summaries: list[dict[str, object]] = []
+    for market, rows in sorted(by_market.items()):
+        successful = [float(row["seconds"]) for row in rows if row.get("status") == "generated" and isinstance(row.get("seconds"), (int, float))]
+        summaries.append(
+            {
+                "market": market,
+                "count": len(rows),
+                "generated_count": sum(1 for row in rows if row.get("status") == "generated"),
+                "failed_count": sum(1 for row in rows if row.get("status") != "generated"),
+                "avg_seconds": _round_seconds(sum(successful) / len(successful)) if successful else None,
+                "min_seconds": _round_seconds(min(successful)) if successful else None,
+                "max_seconds": _round_seconds(max(successful)) if successful else None,
+                "total_seconds": _round_seconds(sum(successful)),
+            }
+        )
+    return summaries
+
+
+def _write_timing_report(
+    args: argparse.Namespace,
+    *,
+    started_at: datetime,
+    completed_at: datetime,
+    stage_seconds: dict[str, float],
+    regeneration_summary: dict[str, object] | None,
+    latest_dir: Path,
+) -> Path:
+    REPORTS_META_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = completed_at.strftime("%Y%m%d_%H%M%S")
+    archive_path = REPORTS_META_DIR / f"holdings_refresh_timing_{stamp}.json"
+    latest_path = REPORTS_META_DIR / "holdings_refresh_timing_latest.json"
+
+    payload: dict[str, object] = {
+        "report_type": "holdings_refresh_timing",
+        "generated_at": completed_at.isoformat(timespec="seconds"),
+        "started_at": started_at.isoformat(timespec="seconds"),
+        "completed_at": completed_at.isoformat(timespec="seconds"),
+        "request": {
+            "holdings_file": str(args.holdings_file),
+            "market": args.market,
+            "symbols": list(args.symbols) if args.symbols else None,
+            "limit": args.limit,
+            "parallelism": args.parallelism,
+            "skip_regenerate": args.skip_regenerate,
+            "skip_build": args.skip_build,
+            "skip_upload": args.skip_upload,
+            "skip_gen_base": args.skip_gen_base,
+            "skip_gen_fund": args.skip_gen_fund,
+            "pending_reverse_mode": args.pending_reverse_mode,
+            "zhongshu_level": args.zhongshu_level,
+            "tech_timeframes": list(args.tech_timeframes),
+            "publish_timeframes": list(args.publish_timeframes) if args.publish_timeframes else None,
+        },
+        "stages": {name: _round_seconds(value) for name, value in stage_seconds.items()},
+        "artifacts": {
+            "latest_dir": str(latest_dir),
+        },
+    }
+    if regeneration_summary is not None:
+        per_holding = list(regeneration_summary.get("per_holding", []))
+        payload["regeneration"] = {
+            "requested_count": regeneration_summary.get("requested_count"),
+            "generated_count": regeneration_summary.get("generated_count"),
+            "failed_count": regeneration_summary.get("failed_count"),
+            "failed_holdings": regeneration_summary.get("failed_holdings"),
+            "per_market": _summarize_holding_timings(per_holding),
+            "per_holding": per_holding,
+        }
+
+    _write_json(archive_path, payload)
+    _write_json(latest_path, payload)
+    return archive_path
 
 
 def parse_args() -> argparse.Namespace:
@@ -170,11 +260,12 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
     print(f"regenerate_holdings={len(holdings)} parallelism={worker_count} skip_gen_base={args.skip_gen_base} trust_existing_base={args.trust_existing_base} skip_gen_fund={args.skip_gen_fund} tech_timeframes={','.join(args.tech_timeframes)}", flush=True)
 
     failures: list[dict[str, str]] = []
+    per_holding: list[dict[str, object]] = []
     generated_count = 0
     if worker_count == 1:
         for index, holding in enumerate(holdings, start=1):
+            started = time.perf_counter()
             try:
-                started = time.perf_counter()
                 bundle = generate_report_bundle(
                     holding,
                     skip_gen_base=args.skip_gen_base,
@@ -195,6 +286,18 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                     f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg} seconds={time.perf_counter() - started:.2f}",
                     flush=True,
                 )
+                per_holding.append(
+                    {
+                        "index": index,
+                        "market": holding.market,
+                        "symbol": holding.symbol,
+                        "name": holding.name,
+                        "status": "generated",
+                        "seconds": _round_seconds(time.perf_counter() - started),
+                        "combined_bucket": bundle.combined_bucket,
+                        "chart": str(bundle.chart_jpg) if bundle.chart_jpg else None,
+                    }
+                )
                 generated_count += 1
             except Exception as exc:  # pragma: no cover - operational batch script
                 failures.append(
@@ -202,6 +305,17 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                         "market": holding.market,
                         "symbol": holding.symbol,
                         "name": holding.name,
+                        "error": str(exc),
+                    }
+                )
+                per_holding.append(
+                    {
+                        "index": index,
+                        "market": holding.market,
+                        "symbol": holding.symbol,
+                        "name": holding.name,
+                        "status": "failed",
+                        "seconds": _round_seconds(time.perf_counter() - started),
                         "error": str(exc),
                     }
                 )
@@ -231,18 +345,43 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                 index, holding, started = future_map[future]
                 try:
                     bundle = future.result()
+                    elapsed_seconds = _round_seconds(time.perf_counter() - started)
                     print(
                         f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
-                        f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg} seconds={time.perf_counter() - started:.2f}",
+                        f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg} seconds={elapsed_seconds:.2f}",
                         flush=True,
+                    )
+                    per_holding.append(
+                        {
+                            "index": index,
+                            "market": holding.market,
+                            "symbol": holding.symbol,
+                            "name": holding.name,
+                            "status": "generated",
+                            "seconds": elapsed_seconds,
+                            "combined_bucket": bundle.combined_bucket,
+                            "chart": str(bundle.chart_jpg) if bundle.chart_jpg else None,
+                        }
                     )
                     generated_count += 1
                 except Exception as exc:  # pragma: no cover - operational batch script
+                    elapsed_seconds = _round_seconds(time.perf_counter() - started)
                     failures.append(
                         {
                             "market": holding.market,
                             "symbol": holding.symbol,
                             "name": holding.name,
+                            "error": str(exc),
+                        }
+                    )
+                    per_holding.append(
+                        {
+                            "index": index,
+                            "market": holding.market,
+                            "symbol": holding.symbol,
+                            "name": holding.name,
+                            "status": "failed",
+                            "seconds": elapsed_seconds,
                             "error": str(exc),
                         }
                     )
@@ -262,6 +401,7 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
         "generated_count": generated_count,
         "failed_count": len(failures),
         "failed_holdings": failures,
+        "per_holding": sorted(per_holding, key=lambda item: int(item["index"])),
     }
 
 
@@ -315,22 +455,39 @@ def main() -> None:
     args = parse_args()
 
     started_total = time.perf_counter()
+    started_at = datetime.now()
+    stage_seconds: dict[str, float] = {}
+    regeneration_summary: dict[str, object] | None = None
     if not args.skip_regenerate:
         started_regenerate = time.perf_counter()
-        regenerate_holdings(args)
-        print(f"timing regenerate_seconds={time.perf_counter() - started_regenerate:.2f}", flush=True)
+        regeneration_summary = regenerate_holdings(args)
+        stage_seconds["regenerate_seconds"] = time.perf_counter() - started_regenerate
+        print(f"timing regenerate_seconds={stage_seconds['regenerate_seconds']:.2f}", flush=True)
 
     latest_dir = Path(args.publish_root) / "latest"
     if not args.skip_build:
         started_build = time.perf_counter()
         latest_dir = rebuild_publish_bundle(args)
-        print(f"timing build_seconds={time.perf_counter() - started_build:.2f}", flush=True)
+        stage_seconds["build_seconds"] = time.perf_counter() - started_build
+        print(f"timing build_seconds={stage_seconds['build_seconds']:.2f}", flush=True)
 
     if not args.skip_upload:
         started_upload = time.perf_counter()
         upload_publish_bundle(args, latest_dir)
-        print(f"timing upload_seconds={time.perf_counter() - started_upload:.2f}", flush=True)
-    print(f"timing total_seconds={time.perf_counter() - started_total:.2f}", flush=True)
+        stage_seconds["upload_seconds"] = time.perf_counter() - started_upload
+        print(f"timing upload_seconds={stage_seconds['upload_seconds']:.2f}", flush=True)
+    stage_seconds["total_seconds"] = time.perf_counter() - started_total
+    print(f"timing total_seconds={stage_seconds['total_seconds']:.2f}", flush=True)
+
+    timing_report = _write_timing_report(
+        args,
+        started_at=started_at,
+        completed_at=datetime.now(),
+        stage_seconds=stage_seconds,
+        regeneration_summary=regeneration_summary,
+        latest_dir=latest_dir,
+    )
+    print(f"timing_report= {timing_report}", flush=True)
 
 
 if __name__ == "__main__":

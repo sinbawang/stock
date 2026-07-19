@@ -245,7 +245,7 @@ def fetch_intraday_rows(
             primary_source=primary_source,
             fallback_sources=fallback_sources,
             min_rows=bar_count,
-            stop_on_sufficient_rows=timeframe == "1m",
+            stop_on_sufficient_rows=timeframe in {"30m", "5m", "1m"},
         )
         fetch_meta = get_last_hk_fetch_metadata()
         return rows, _data_fetch_payload(
