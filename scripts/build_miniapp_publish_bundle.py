@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import re
 import shutil
@@ -22,6 +23,8 @@ from chanlun.analysis import (
     format_signal_point_labels,
     format_structure_status_label,
 )
+from chanlun.models import Bi, BiDirection
+from chanlun.segment import identify_segments
 from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
 
@@ -626,14 +629,165 @@ def build_chart_specs(stock_dir: Path, publish_timeframes: tuple[str, ...] | Non
             chart_path = stock_dir / timeframe / f"structure.{extension}"
             if not chart_path.exists():
                 continue
-            charts.append({
+            chart_spec = {
                 "timeframe": timeframe,
                 "source_path": str(chart_path),
                 "relative_path": f"charts/{timeframe}.{extension}",
                 "label": f"{timeframe.upper()} 结构图",
-            })
+            }
+            data_source_path = find_latest_chart_bars_csv(stock_dir / timeframe, timeframe)
+            if data_source_path:
+                chart_spec["data_source_path"] = str(data_source_path)
+                chart_spec["data_relative_path"] = f"charts/{timeframe}.json"
+            charts.append(chart_spec)
             break
     return charts
+
+
+def find_latest_chart_bars_csv(timeframe_dir: Path, timeframe: str) -> Path | None:
+    analyze_dir = timeframe_dir / "analyze"
+    if not analyze_dir.exists():
+        return None
+
+    candidates = [
+        path
+        for path in analyze_dir.glob(f"*_{timeframe}_*.csv")
+        if "_normalized" not in path.stem
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item.stat().st_mtime)
+
+
+def parse_csv_value(value: Any) -> Any:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if text == "":
+        return None
+    if text in ("True", "true"):
+        return True
+    if text in ("False", "false"):
+        return False
+    if re.fullmatch(r"[-+]?\d+", text):
+        try:
+            return int(text)
+        except ValueError:
+            return text
+    if re.fullmatch(r"[-+]?(?:\d+\.\d*|\d*\.\d+)(?:[eE][-+]?\d+)?", text) or re.fullmatch(r"[-+]?\d+[eE][-+]?\d+", text):
+        try:
+            return float(text)
+        except ValueError:
+            return text
+    return text
+
+
+def read_csv_records(path: Path | None) -> list[dict[str, Any]]:
+    if path is None or not path.exists():
+        return []
+
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        return [
+            {key: parse_csv_value(value) for key, value in row.items()}
+            for row in reader
+        ]
+
+
+def parse_report_datetime(value: Any) -> datetime:
+    text = safe_text(value)
+    if not text:
+        raise ValueError("empty datetime value")
+    return datetime.fromisoformat(text)
+
+
+def build_bis_from_records(records: list[dict[str, Any]]) -> list[Bi]:
+    bis: list[Bi] = []
+    for record in records:
+        direction = safe_text(record.get("direction"))
+        if not direction:
+            continue
+        bis.append(
+            Bi(
+                bi_id=int(record.get("bi_id") or 0),
+                direction=BiDirection(direction),
+                start_fx_id=int(record.get("start_fx_id") or 0),
+                end_fx_id=int(record.get("end_fx_id") or 0),
+                start_ts=parse_report_datetime(record.get("start_ts")),
+                end_ts=parse_report_datetime(record.get("end_ts")),
+                high=float(record.get("high") or 0.0),
+                low=float(record.get("low") or 0.0),
+                norm_bar_range=(int(record.get("start_norm_idx") or 0), int(record.get("end_norm_idx") or 0)),
+                is_confirmed=bool(record.get("is_confirmed")),
+            )
+        )
+    return bis
+
+
+def serialize_segment_record(segment: Any) -> dict[str, Any]:
+    return {
+        "segment_id": segment.segment_id,
+        "direction": segment.direction.value,
+        "start_bi_id": segment.start_bi_id,
+        "end_bi_id": segment.end_bi_id,
+        "start_ts": segment.start_ts.strftime("%Y-%m-%d %H:%M"),
+        "end_ts": segment.end_ts.strftime("%Y-%m-%d %H:%M"),
+        "start_price": segment.start_price,
+        "end_price": segment.end_price,
+        "high": segment.high,
+        "low": segment.low,
+        "start_norm_idx": segment.norm_bar_range[0],
+        "end_norm_idx": segment.norm_bar_range[1],
+        "bi_ids": ",".join(str(bi_id) for bi_id in segment.bi_ids),
+        "last_same_extreme": segment.last_same_extreme,
+        "last_reverse_extreme": segment.last_reverse_extreme,
+        "break_bi_id": segment.break_bi_id,
+        "stop_reason": segment.stop_reason,
+        "is_confirmed": segment.is_confirmed,
+        "status": "confirmed" if segment.is_confirmed else "preprocessing",
+        "note": "auto_generated",
+    }
+
+
+def build_segment_records(bis_records: list[dict[str, Any]], segment_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if segment_records:
+        return segment_records
+    bis = build_bis_from_records(bis_records)
+    if not bis:
+        return []
+    return [serialize_segment_record(segment) for segment in identify_segments(bis)]
+
+
+def sibling_analysis_csv(bars_csv: Path, suffix: str) -> Path:
+    return bars_csv.with_name(f"{bars_csv.stem}{suffix}.csv")
+
+
+def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | None:
+    source_value = chart_spec.get("data_source_path")
+    if not source_value:
+        return None
+
+    bars_csv = Path(source_value)
+    if not bars_csv.exists():
+        return None
+
+    return {
+        "schema_version": "chart-data-v1",
+        "timeframe": chart_spec.get("timeframe"),
+        "label": chart_spec.get("label"),
+        "source_csv": bars_csv.name,
+        "bars": read_csv_records(bars_csv),
+        "normalized_bars": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized")),
+        "macd": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_macd")),
+        "fractals": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_fractals")),
+        "confirmed_fractals": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_confirmed_fractals")),
+        "bis": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_bis")),
+        "segments": build_segment_records(
+            read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_bis")),
+            read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_segments")),
+        ),
+        "zhongshus": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_zhongshu")),
+    }
 
 
 def build_summary_payload(
@@ -762,7 +916,12 @@ def build_detail_payload(
         },
         "sections": [fundamental, *technical_sections, capital_flow],
         "charts": [
-            {"timeframe": chart["timeframe"], "path": f"stocks/{holding.symbol}/{chart['relative_path']}", "label": chart["label"]}
+            {
+                "timeframe": chart["timeframe"],
+                "path": f"stocks/{holding.symbol}/{chart['relative_path']}",
+                "data_path": f"stocks/{holding.symbol}/{chart['data_relative_path']}" if chart.get("data_relative_path") else None,
+                "label": chart["label"],
+            }
             for chart in charts
         ],
         "disclaimer": "本页面仅用于持仓跟踪与研究，不构成投资建议。",
@@ -788,6 +947,9 @@ def copy_chart_assets(chart_specs: list[dict[str, str]], stock_target_dir: Path)
         target_path = stock_target_dir / chart["relative_path"]
         target_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, target_path)
+        chart_data_payload = build_chart_data_payload(chart)
+        if chart_data_payload and chart.get("data_relative_path"):
+            write_json(stock_target_dir / chart["data_relative_path"], chart_data_payload)
 
 
 def build_portfolio_group(summary_payloads: list[dict[str, Any]], group_item_map: dict[str, dict[str, Any]]) -> dict[str, Any]:
