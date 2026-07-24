@@ -31,7 +31,7 @@ class TestIdentifyBis:
         assert result == []
 
     def test_identify_up_bi_requires_non_overlapping_windows(self):
-        """识别向上笔（两分型窗口不重叠，center idx 差至少为3）"""
+        """识别向上笔（两分型窗口不重叠，且中心间隔足够）"""
         fx_bottom = Fractal(
             fx_id=0,
             fx_type=FractalType.BOTTOM,
@@ -46,7 +46,7 @@ class TestIdentifyBis:
             fx_type=FractalType.TOP,
             ts=datetime(2024, 1, 2),
             price=105.0,
-            center_bar_idx=3,
+            center_bar_idx=4,
             high=105,
             low=103
         )
@@ -85,8 +85,8 @@ class TestIdentifyBis:
         """最后一笔在没有后续反向分型时应为未确认"""
         fractals = [
             Fractal(0, FractalType.TOP, datetime(2024, 1, 1), 10.0, 0, 10.0, 9.0),
-            Fractal(1, FractalType.BOTTOM, datetime(2024, 1, 2), 6.0, 3, 7.0, 6.0),
-            Fractal(2, FractalType.TOP, datetime(2024, 1, 3), 8.0, 6, 8.0, 7.0),
+            Fractal(1, FractalType.BOTTOM, datetime(2024, 1, 2), 6.0, 4, 7.0, 6.0),
+            Fractal(2, FractalType.TOP, datetime(2024, 1, 3), 8.0, 8, 8.0, 7.0),
         ]
 
         result = identify_bis(fractals)
@@ -158,7 +158,7 @@ class TestIdentifyBis:
         """向上笔不再要求突破起点底分型三K窗口最高点。"""
         fractals = [
             Fractal(0, FractalType.BOTTOM, datetime(2024, 1, 1, 10, 30), 78.84, 1, 79.47, 78.84),
-            Fractal(1, FractalType.TOP, datetime(2024, 1, 1, 15, 30), 80.98, 4, 80.98, 79.57),
+            Fractal(1, FractalType.TOP, datetime(2024, 1, 1, 15, 30), 80.98, 5, 80.98, 79.57),
         ]
 
         result = identify_bis(fractals)
@@ -180,7 +180,7 @@ class TestIdentifyBis:
         """向下笔不再要求跌破起点顶分型三K窗口最低点。"""
         fractals = [
             Fractal(0, FractalType.TOP, datetime(2024, 1, 1, 10, 30), 79.10, 1, 79.10, 78.40),
-            Fractal(1, FractalType.BOTTOM, datetime(2024, 1, 1, 15, 30), 77.70, 4, 78.60, 77.70),
+            Fractal(1, FractalType.BOTTOM, datetime(2024, 1, 1, 15, 30), 77.70, 5, 78.60, 77.70),
         ]
 
         result = identify_bis(fractals)
@@ -251,8 +251,7 @@ class TestIdentifyBis:
 
         assert [(bi.start_fx_id, bi.end_fx_id, bi.is_confirmed) for bi in effective_only_result] == [
             (0, 1, True),
-            (1, 4, True),
-            (4, 5, False),
+            (1, 4, False),
         ]
 
     def test_tail_mixed_only_rewrites_last_unconfirmed_suffix(self):
@@ -277,7 +276,6 @@ class TestIdentifyBis:
         assert [(bi.start_fx_id, bi.end_fx_id, bi.is_confirmed) for bi in mixed_result] == [
             (0, 1, True),
             (1, 2, True),
-            (2, 5, True),
-            (5, 6, False),
+            (2, 5, False),
         ]
 

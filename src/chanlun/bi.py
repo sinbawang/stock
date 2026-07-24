@@ -10,10 +10,9 @@ from typing import List, Literal, Optional
 from .models import Fractal, Bi, FractalType, BiDirection, NormalizedBar
 
 
-# 分型中心索引最小间隔：
-# - 未提供 normalized_bars 时，按历史约定允许 >=3（三K窗口不重叠）
-# - 提供 normalized_bars 时，默认 >=4，或在原始K线映射上满足独立K补偿
-MIN_CENTER_GAP = 4
+# 分型极值K线最小间隔：
+# 顶分型最高K线与底分型最低K线之间（不含两端）至少保留 3 根K。
+MIN_EXTREME_GAP = 4
 PENDING_REVERSE_MODE_ANY = "any"
 PENDING_REVERSE_MODE_EFFECTIVE_ONLY = "effective_only"
 PENDING_REVERSE_MODE_TAIL_MIXED = "tail_mixed"
@@ -27,11 +26,32 @@ def _is_more_extreme(base: Fractal, candidate: Fractal) -> bool:
     return candidate.price < base.price
 
 
+def _window_index_span(
+    fractal: Fractal,
+    normalized_bars: Optional[List[NormalizedBar]],
+) -> Optional[tuple[int, int]]:
+    """返回分型三K窗口覆盖范围(min_idx, max_idx)。"""
+    if not normalized_bars:
+        return None
+
+    left = max(0, fractal.center_bar_idx - 1)
+    right = min(len(normalized_bars), fractal.center_bar_idx + 2)
+    window = normalized_bars[left:right]
+    if not window:
+        return None
+
+    norm_indices = [bar.idx for bar in window]
+    if not norm_indices:
+        return None
+
+    return min(norm_indices), max(norm_indices)
+
+
 def _window_raw_index_span(
     fractal: Fractal,
     normalized_bars: Optional[List[NormalizedBar]],
 ) -> Optional[tuple[int, int]]:
-    """返回分型三K窗口在原始K线索引上的覆盖范围(min_idx, max_idx)。"""
+    """返回分型三K窗口在原始K线上的覆盖范围(min_idx, max_idx)。"""
     if not normalized_bars:
         return None
 
@@ -48,6 +68,45 @@ def _window_raw_index_span(
     return min(raw_indices), max(raw_indices)
 
 
+def _fractal_extreme_raw_idx(
+    fractal: Fractal,
+    normalized_bars: Optional[List[NormalizedBar]],
+    is_start: bool,
+) -> Optional[int]:
+    """
+    返回分型三K窗口中的“极值K线”索引（按原始K线 idx）。
+
+    为保证间隔判定保守可靠：
+    - 起点分型使用更靠右的极值K线（离终点更近）
+    - 终点分型使用更靠左的极值K线（离起点更近）
+    """
+    if not normalized_bars:
+        return fractal.center_bar_idx
+
+    left = max(0, fractal.center_bar_idx - 1)
+    right = min(len(normalized_bars), fractal.center_bar_idx + 2)
+    window = normalized_bars[left:right]
+    if not window:
+        return None
+
+    if fractal.fx_type == FractalType.TOP:
+        extreme_value = max(bar.high for bar in window)
+        candidate_bars = [bar for bar in window if bar.high == extreme_value]
+    else:
+        extreme_value = min(bar.low for bar in window)
+        candidate_bars = [bar for bar in window if bar.low == extreme_value]
+
+    candidate_raw_indices = [idx for bar in candidate_bars for idx in bar.src_indices]
+    if not candidate_raw_indices:
+        # 缺失映射时退回标准化索引近似。
+        candidate_raw_indices = [bar.idx for bar in candidate_bars]
+
+    if not candidate_raw_indices:
+        return None
+
+    return max(candidate_raw_indices) if is_start else min(candidate_raw_indices)
+
+
 def _has_enough_pen_gap(
     start_fx: Fractal,
     end_fx: Fractal,
@@ -56,31 +115,40 @@ def _has_enough_pen_gap(
     """
     成笔间隔判定。
 
-    默认要求 center 差值 >= MIN_CENTER_GAP(=4)，确保两个三K窗口之间有至少1根独立标准化K。
-    放宽特例：若差值==3（标准化后中间0根），但在原始K线映射上两个三K窗口之间仍有至少1根独立K，
-    则允许成笔（用于处理包含关系压缩导致的“视觉无间隔”）。
+    必须同时满足：
+    1) 顶分型与底分型三K窗口不重叠（不能共用K线）。
+    2) 顶分型最高K线与底分型最低K线之间（不含两端）在原始K线上至少 3 根K线。
     """
     center_gap = end_fx.center_bar_idx - start_fx.center_bar_idx
-
-    # 未提供标准化映射时，按基础规则仅要求两分型三K窗口不重叠。
     if not normalized_bars:
-        return center_gap >= MIN_CENTER_GAP - 1
+        # 无标准化K明细时，按中心索引保守近似：center 差值 >= 4。
+        return center_gap >= MIN_EXTREME_GAP
 
-    if center_gap >= MIN_CENTER_GAP:
-        return True
-
-    if center_gap != MIN_CENTER_GAP - 1:
-        return False
-
-    start_span = _window_raw_index_span(start_fx, normalized_bars)
-    end_span = _window_raw_index_span(end_fx, normalized_bars)
+    start_span = _window_index_span(start_fx, normalized_bars)
+    end_span = _window_index_span(end_fx, normalized_bars)
     if start_span is None or end_span is None:
         return False
 
     _, start_max = start_span
     end_min, _ = end_span
-    # 原始K线至少留出1根独立K: end_min - start_max >= 2
-    return end_min - start_max >= 2
+    # 条件1：分型窗口不能共用K线。
+    if end_min <= start_max:
+        return False
+
+    start_extreme_idx = _fractal_extreme_raw_idx(start_fx, normalized_bars, is_start=True)
+    end_extreme_idx = _fractal_extreme_raw_idx(end_fx, normalized_bars, is_start=False)
+    if start_extreme_idx is None or end_extreme_idx is None:
+        # 无法定位极值K时，退回原始窗口跨度近似。
+        start_raw_span = _window_raw_index_span(start_fx, normalized_bars)
+        end_raw_span = _window_raw_index_span(end_fx, normalized_bars)
+        if start_raw_span is None or end_raw_span is None:
+            return False
+        _, start_raw_max = start_raw_span
+        end_raw_min, _ = end_raw_span
+        return end_raw_min - start_raw_max >= MIN_EXTREME_GAP
+
+    # 条件2：极值K线之间（不含两端）在原始K线上至少 3 根。
+    return end_extreme_idx - start_extreme_idx >= MIN_EXTREME_GAP
 
 
 def _is_valid_pen_endpoint(
@@ -105,7 +173,7 @@ def _is_leading_boundary_start(
     if not normalized_bars:
         return False
 
-    return fractal.center_bar_idx < MIN_CENTER_GAP
+    return fractal.center_bar_idx < MIN_EXTREME_GAP
 
 
 def _find_first_opposite(
@@ -290,13 +358,13 @@ def identify_bis(
     
     规格文档 5.1-5.6:
     - 笔由类型相反的两个相邻分型构成
-    - 成笔条件：默认要求两个分型三K窗口在标准化后留出独立K，或在原始K映射上满足补偿
+    - 成笔条件：分型三K窗口不得重叠，且两端分型极值K线在原始K线上之间至少 3 根K线
     - 笔末端可能被更强同类分型替代，直到反向分型出现后确认
     - 反向确认支持 any / effective_only / tail_mixed 三种模式
     
     Args:
         fractals: 已去重的分型列表
-        normalized_bars: 标准化K线序列，用于更严格的成笔间隔判定
+        normalized_bars: 标准化K线序列，用于成笔间隔判定
         pending_reverse_mode: 尾部反向确认模式
     
     Returns:
