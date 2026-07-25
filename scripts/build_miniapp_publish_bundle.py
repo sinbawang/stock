@@ -25,6 +25,7 @@ from chanlun.analysis import (
 )
 from chanlun.models import Bi, BiDirection
 from chanlun.segment import identify_segments
+from chanlun.segment import describe_stop_reason
 from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
 
@@ -743,19 +744,80 @@ def serialize_segment_record(segment: Any) -> dict[str, Any]:
         "last_reverse_extreme": segment.last_reverse_extreme,
         "break_bi_id": segment.break_bi_id,
         "stop_reason": segment.stop_reason,
+        "stop_reason_label": describe_stop_reason(segment.stop_reason),
         "is_confirmed": segment.is_confirmed,
         "status": "confirmed" if segment.is_confirmed else "preprocessing",
         "note": "auto_generated",
     }
 
 
+def _normalize_segment_record(record: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(record)
+    stop_reason = safe_text(normalized.get("stop_reason"))
+    if not safe_text(normalized.get("stop_reason_label")):
+        normalized["stop_reason_label"] = describe_stop_reason(stop_reason)
+    return normalized
+
+
 def build_segment_records(bis_records: list[dict[str, Any]], segment_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if segment_records:
-        return segment_records
+        return [_normalize_segment_record(record) for record in segment_records]
     bis = build_bis_from_records(bis_records)
     if not bis:
         return []
     return [serialize_segment_record(segment) for segment in identify_segments(bis)]
+
+
+def build_segment_stop_reason_annotations(segment_records: list[dict[str, Any]], timeframe: str) -> dict[str, Any]:
+    annotations: list[dict[str, Any]] = []
+    timeframe_label = TIMEFRAME_LABELS.get(timeframe, timeframe.upper())
+    for record in segment_records:
+        stop_reason = safe_text(record.get("stop_reason"))
+        stop_reason_label = safe_text(record.get("stop_reason_label")) or describe_stop_reason(stop_reason)
+        if not stop_reason_label:
+            continue
+        segment_id = record.get("segment_id")
+        segment_hint = f"S{segment_id}" if segment_id is not None else "最新线段"
+        annotations.append(
+            {
+                "segment_id": segment_id,
+                "stop_reason": stop_reason,
+                "stop_reason_label": stop_reason_label,
+                "text": f"{timeframe_label} {segment_hint} 停驻原因：{stop_reason_label}",
+            }
+        )
+
+    return {
+        "latest": annotations[-1] if annotations else None,
+        "items": annotations,
+    }
+
+
+def build_latest_segment_stop_reason_line(stock_dir: Path, timeframe: str = PRIMARY_TECHNICAL_TIMEFRAME) -> str:
+    timeframe_dir = stock_dir / timeframe
+    bars_csv = find_latest_chart_bars_csv(timeframe_dir, timeframe)
+    if bars_csv is None:
+        return ""
+
+    bis_records = read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_bis"))
+    segment_records = build_segment_records(
+        bis_records,
+        read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_segments")),
+    )
+    if not segment_records:
+        return ""
+
+    latest = segment_records[-1]
+    stop_reason_label = safe_text(latest.get("stop_reason_label"))
+    if not stop_reason_label:
+        stop_reason_label = describe_stop_reason(safe_text(latest.get("stop_reason")))
+    if not stop_reason_label:
+        return ""
+
+    segment_id = latest.get("segment_id")
+    segment_hint = f"S{segment_id}" if segment_id is not None else "最新线段"
+    timeframe_label = TIMEFRAME_LABELS.get(timeframe, timeframe.upper())
+    return f"{timeframe_label} {segment_hint} 停驻原因：{stop_reason_label}"
 
 
 def sibling_analysis_csv(bars_csv: Path, suffix: str) -> Path:
@@ -771,9 +833,16 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
     if not bars_csv.exists():
         return None
 
+    timeframe = safe_text(chart_spec.get("timeframe"))
+    bis_records = read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_bis"))
+    segment_records = build_segment_records(
+        bis_records,
+        read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_segments")),
+    )
+
     return {
         "schema_version": "chart-data-v1",
-        "timeframe": chart_spec.get("timeframe"),
+        "timeframe": timeframe,
         "label": chart_spec.get("label"),
         "source_csv": bars_csv.name,
         "bars": read_csv_records(bars_csv),
@@ -781,11 +850,9 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
         "macd": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_macd")),
         "fractals": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_fractals")),
         "confirmed_fractals": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_confirmed_fractals")),
-        "bis": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_bis")),
-        "segments": build_segment_records(
-            read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_bis")),
-            read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_segments")),
-        ),
+        "bis": bis_records,
+        "segments": segment_records,
+        "segment_stop_reason_annotations": build_segment_stop_reason_annotations(segment_records, timeframe),
         "zhongshus": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_zhongshu")),
     }
 
@@ -806,6 +873,7 @@ def build_summary_payload(
     precision_window_display = build_precision_window_display(precision_entry)
     same_level_decomposition = build_same_level_decomposition(tech_payload)
     latest_signal_summary = build_latest_signal_summary(tech_payload)
+    segment_stop_line = build_latest_segment_stop_reason_line(stock_dir, PRIMARY_TECHNICAL_TIMEFRAME)
     charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes)
     cover_chart_path = chart_publish_path(charts, PRIMARY_TECHNICAL_TIMEFRAME)
     updated_at = max(
@@ -853,7 +921,10 @@ def build_summary_payload(
                 ),
                 "same_level_decomposition": same_level_decomposition,
                 "latest_signal_summary": latest_signal_summary,
-                "technical_focus_lines": build_technical_focus_lines(same_level_decomposition, latest_signal_summary),
+                "technical_focus_lines": [
+                    *build_technical_focus_lines(same_level_decomposition, latest_signal_summary),
+                    *([segment_stop_line] if segment_stop_line else []),
+                ],
                 "precision_entry": precision_entry,
                 "precision_note": precision_entry.get("note"),
                 "precision_window_basis_label": precision_entry.get("window_basis_label") or (precision_entry.get("nested_from") or {}).get("window_basis_label"),
@@ -886,6 +957,11 @@ def build_detail_payload(
     fundamental = build_fundamental_section(base_payload)
     technical_sections = build_timeframe_technical_sections(stock_dir, DETAIL_TECHNICAL_TIMEFRAMES)
     technical = next((section for section in technical_sections if section.get("key") == "technical"), None) or build_technical_section(tech_payload)
+    segment_stop_line = build_latest_segment_stop_reason_line(stock_dir, PRIMARY_TECHNICAL_TIMEFRAME)
+    if segment_stop_line:
+        technical_focus_lines = list(technical.get("technical_focus_lines") or [])
+        technical_focus_lines.append(segment_stop_line)
+        technical["technical_focus_lines"] = technical_focus_lines
     capital_flow = build_capital_flow_section(fund_payload)
     overview_bullets = [
         f"基本面 {safe_text(fundamental.get('score'), 'missing')}/{safe_text(fundamental.get('rating'), 'missing')}",

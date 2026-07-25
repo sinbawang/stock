@@ -18,6 +18,7 @@ if str(SRC) not in sys.path:
 from chanlun.bi import identify_bis
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.models import Bar, Fractal, NormalizedBar, Segment, Zhongshu
+from chanlun.segment import describe_stop_reason
 from chanlun.zhongshu import identify_zhongshu
 
 
@@ -263,6 +264,7 @@ def export_segments(path: Path, segments: list[Segment]) -> None:
             "last_reverse_extreme": segment.last_reverse_extreme,
             "break_bi_id": segment.break_bi_id,
             "stop_reason": segment.stop_reason,
+            "stop_reason_label": describe_stop_reason(segment.stop_reason),
             "is_confirmed": segment.is_confirmed,
             "status": "confirmed" if segment.is_confirmed else "preprocessing",
             "note": "auto_generated",
@@ -287,6 +289,7 @@ def export_segments(path: Path, segments: list[Segment]) -> None:
         "last_reverse_extreme",
         "break_bi_id",
         "stop_reason",
+        "stop_reason_label",
         "is_confirmed",
         "status",
         "note",

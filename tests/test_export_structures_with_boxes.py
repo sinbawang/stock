@@ -44,5 +44,5 @@ def test_export_segments_writes_expected_columns(tmp_path: Path) -> None:
     export_segments(path, segments)
 
     text = path.read_text(encoding="utf-8-sig")
-    assert "segment_id,direction,start_bi_id,end_bi_id,start_ts,end_ts,start_price,end_price,high,low,start_norm_idx,end_norm_idx,bi_ids,last_same_extreme,last_reverse_extreme,break_bi_id,stop_reason,is_confirmed,status,note" in text
-    assert "0,up,1,3,2024-01-01 10:30,2024-01-03 14:00,10.0,12.5,12.5,9.8,4,12,\"1,2,3\",12.5,10.8,4,same_direction_not_extending,False,preprocessing,auto_generated" in text
+    assert "segment_id,direction,start_bi_id,end_bi_id,start_ts,end_ts,start_price,end_price,high,low,start_norm_idx,end_norm_idx,bi_ids,last_same_extreme,last_reverse_extreme,break_bi_id,stop_reason,stop_reason_label,is_confirmed,status,note" in text
+    assert "0,up,1,3,2024-01-01 10:30,2024-01-03 14:00,10.0,12.5,12.5,9.8,4,12,\"1,2,3\",12.5,10.8,4,same_direction_not_extending,出现同向笔，但没有继续创新高或新低,False,preprocessing,auto_generated" in text

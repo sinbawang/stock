@@ -1,11 +1,6 @@
 from pathlib import Path
 
-from chanlun.bi import identify_bis
-from chanlun.data import read_bars_from_csv
-from chanlun.data.cleaner import clean_bars
-from chanlun.fractal import filter_consecutive_fractals, identify_fractals
-from chanlun.normalize import normalize_bars
-from chanlun.segment import identify_segments
+from tests.segment_regression_support import assert_landmarks_equal, identify_segments_from_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,11 +11,7 @@ SAMPLE_15M_CSV = ROOT / "data" / "reports" / "000591" / "15m" / "analyze" / "000
 
 
 def test_000591_day_segments_do_not_regress_to_oversized_single_leg() -> None:
-    bars = clean_bars(read_bars_from_csv(str(SAMPLE_DAY_CSV)))
-    normalized_bars = normalize_bars(bars)
-    fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
-    bis = identify_bis(fractals, normalized_bars, pending_reverse_mode="any")
-    segments = identify_segments(bis)
+    segments = identify_segments_from_csv(SAMPLE_DAY_CSV)
 
     assert segments
 
@@ -48,7 +39,7 @@ def test_000591_day_segments_do_not_regress_to_oversized_single_leg() -> None:
         if segment.start_bi_id in {20, 23, 26, 29, 34, 43, 46}
     ]
 
-    assert landmarks == [
+    expected = [
         ("up", 20, 22, "reverse_break_after_gap", True),
         ("down", 23, 25, "feature_sequence_gap_fractal", True),
         ("up", 26, 28, "feature_sequence_fractal", True),
@@ -58,13 +49,11 @@ def test_000591_day_segments_do_not_regress_to_oversized_single_leg() -> None:
         ("up", 46, 52, "exhausted_confirmed_bis", False),
     ]
 
+    assert_landmarks_equal(expected, landmarks)
+
 
 def test_000591_60m_segments_keep_current_landmarks() -> None:
-    bars = clean_bars(read_bars_from_csv(str(SAMPLE_60M_CSV)))
-    normalized_bars = normalize_bars(bars)
-    fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
-    bis = identify_bis(fractals, normalized_bars, pending_reverse_mode="any")
-    segments = identify_segments(bis)
+    segments = identify_segments_from_csv(SAMPLE_60M_CSV)
 
     assert len(segments) == 3
 
@@ -80,19 +69,17 @@ def test_000591_60m_segments_keep_current_landmarks() -> None:
         for segment in segments
     ]
 
-    assert landmarks == [
+    expected = [
         ("up", 0, 2, "feature_sequence_fractal", True, (1, 32)),
         ("down", 3, 5, "feature_sequence_gap_fractal", True, (32, 93)),
         ("up", 6, 12, "reverse_break", True, (93, 181)),
     ]
 
+    assert_landmarks_equal(expected, landmarks)
+
 
 def test_000591_60m_long_window_reclaims_middle_ground_breaks() -> None:
-    bars = clean_bars(read_bars_from_csv(str(SAMPLE_60M_LONG_CSV)))
-    normalized_bars = normalize_bars(bars)
-    fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
-    bis = identify_bis(fractals, normalized_bars, pending_reverse_mode="any")
-    segments = identify_segments(bis)
+    segments = identify_segments_from_csv(SAMPLE_60M_LONG_CSV)
 
     landmarks = [
         (
@@ -106,20 +93,18 @@ def test_000591_60m_long_window_reclaims_middle_ground_breaks() -> None:
         for segment in segments
     ]
 
-    assert landmarks == [
+    expected = [
         ("down", 0, 2, "reverse_break", True, (1, 15)),
         ("up", 3, 11, "feature_sequence_fractal", True, (15, 170)),
         ("down", 12, 14, "feature_sequence_gap_fractal", True, (170, 231)),
         ("up", 15, 21, "reverse_break", True, (231, 319)),
     ]
 
+    assert_landmarks_equal(expected, landmarks)
+
 
 def test_000591_15m_current_report_window_keeps_continuous_segments() -> None:
-    bars = clean_bars(read_bars_from_csv(str(SAMPLE_15M_CSV)))
-    normalized_bars = normalize_bars(bars)
-    fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
-    bis = identify_bis(fractals, normalized_bars, pending_reverse_mode="any")
-    segments = identify_segments(bis)
+    segments = identify_segments_from_csv(SAMPLE_15M_CSV)
 
     landmarks = [
         (
@@ -133,8 +118,10 @@ def test_000591_15m_current_report_window_keeps_continuous_segments() -> None:
         for segment in segments
     ]
 
-    assert landmarks == [
+    expected = [
         ("up", 0, 10, "reverse_break", True, (4, 164)),
         ("down", 11, 21, "reverse_break", True, (164, 293)),
         ("up", 22, 24, "exhausted_confirmed_bis", False, (293, 357)),
     ]
+
+    assert_landmarks_equal(expected, landmarks)

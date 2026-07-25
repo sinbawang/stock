@@ -393,6 +393,7 @@ Generated at: 2026-05-30T20:05:52
     assert any("重写说明：前一中枢 ZS2 的走出笔 29 被当前中枢 ZS3 复用为进入笔 29" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert any("候选完成待确认" in line or "边界仍待右侧结构确认稳定" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert any("工程结构摘要" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
+    assert any("停驻原因：" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
 
     a_share_group = json.loads((latest_dir / "groups" / "a_share.json").read_text(encoding="utf-8"))
     assert a_share_group["sections"][1]["items"][0]["symbol"] == "000651"
@@ -447,3 +448,95 @@ def test_build_same_level_decomposition_labels_same_type_extension_as_confirmed_
     assert decomposition["current"]["type_label"] == "下跌"
     assert decomposition["lines"][0].startswith("前段已确认同型片段：下跌")
     assert all("上个已完成走势：下跌" not in line for line in decomposition["lines"])
+
+
+def test_build_segment_records_backfills_stop_reason_label_when_missing() -> None:
+    segment_records = [
+        {
+            "segment_id": 0,
+            "direction": "up",
+            "start_bi_id": 1,
+            "end_bi_id": 3,
+            "start_ts": "2024-01-01 10:30",
+            "end_ts": "2024-01-03 14:00",
+            "start_price": 10.0,
+            "end_price": 12.5,
+            "high": 12.5,
+            "low": 9.8,
+            "start_norm_idx": 4,
+            "end_norm_idx": 12,
+            "bi_ids": "1,2,3",
+            "last_same_extreme": 12.5,
+            "last_reverse_extreme": 10.8,
+            "break_bi_id": 4,
+            "stop_reason": "same_direction_not_extending",
+            "is_confirmed": False,
+            "status": "preprocessing",
+            "note": "auto_generated",
+        }
+    ]
+
+    records = module.build_segment_records([], segment_records)
+
+    assert len(records) == 1
+    assert records[0]["stop_reason"] == "same_direction_not_extending"
+    assert records[0]["stop_reason_label"] == "出现同向笔，但没有继续创新高或新低"
+
+
+def test_build_latest_segment_stop_reason_line_from_csv_records(tmp_path: Path) -> None:
+    stock_dir = tmp_path / "000651"
+    analyze_dir = stock_dir / "30m" / "analyze"
+    analyze_dir.mkdir(parents=True, exist_ok=True)
+
+    bars_csv = analyze_dir / "000651_30m_20260101_to_20260131.csv"
+    bars_csv.write_text(
+        "ts,open,high,low,close,volume\n"
+        "2026-01-02 10:30,10.0,10.5,9.8,10.2,1000\n",
+        encoding="utf-8",
+    )
+
+    segments_csv = analyze_dir / "000651_30m_20260101_to_20260131_normalized_segments.csv"
+    segments_csv.write_text(
+        "segment_id,direction,start_bi_id,end_bi_id,start_ts,end_ts,start_price,end_price,high,low,start_norm_idx,end_norm_idx,bi_ids,last_same_extreme,last_reverse_extreme,break_bi_id,stop_reason,is_confirmed,status,note\n"
+        "0,up,1,3,2026-01-01 10:30,2026-01-03 14:00,10.0,12.5,12.5,9.8,4,12,\"1,2,3\",12.5,10.8,4,same_direction_not_extending,False,preprocessing,auto_generated\n",
+        encoding="utf-8",
+    )
+
+    line = module.build_latest_segment_stop_reason_line(stock_dir, "30m")
+
+    assert line.startswith("30M S0 停驻原因：")
+    assert "出现同向笔，但没有继续创新高或新低" in line
+
+
+def test_build_chart_data_payload_includes_segment_stop_reason_annotations(tmp_path: Path) -> None:
+    analyze_dir = tmp_path / "30m" / "analyze"
+    analyze_dir.mkdir(parents=True, exist_ok=True)
+
+    bars_csv = analyze_dir / "000651_30m_20260101_to_20260131.csv"
+    bars_csv.write_text(
+        "ts,open,high,low,close,volume\n"
+        "2026-01-02 10:30,10.0,10.5,9.8,10.2,1000\n",
+        encoding="utf-8",
+    )
+
+    segments_csv = analyze_dir / "000651_30m_20260101_to_20260131_normalized_segments.csv"
+    segments_csv.write_text(
+        "segment_id,direction,start_bi_id,end_bi_id,start_ts,end_ts,start_price,end_price,high,low,start_norm_idx,end_norm_idx,bi_ids,last_same_extreme,last_reverse_extreme,break_bi_id,stop_reason,is_confirmed,status,note\n"
+        "0,up,1,3,2026-01-01 10:30,2026-01-03 14:00,10.0,12.5,12.5,9.8,4,12,\"1,2,3\",12.5,10.8,4,same_direction_not_extending,False,preprocessing,auto_generated\n",
+        encoding="utf-8",
+    )
+
+    payload = module.build_chart_data_payload(
+        {
+            "timeframe": "30m",
+            "label": "30M 结构图",
+            "data_source_path": str(bars_csv),
+        }
+    )
+
+    assert payload is not None
+    annotations = payload["segment_stop_reason_annotations"]
+    assert annotations["latest"] is not None
+    assert annotations["latest"]["segment_id"] == 0
+    assert annotations["latest"]["stop_reason_label"] == "出现同向笔，但没有继续创新高或新低"
+    assert annotations["latest"]["text"].startswith("30M S0 停驻原因：")
