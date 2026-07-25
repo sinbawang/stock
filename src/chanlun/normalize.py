@@ -11,10 +11,13 @@ from .models import Bar, NormalizedBar
 def has_inclusion(bar_a: Bar, bar_b: Bar) -> bool:
     """
     检测 bar_a 是否包含 bar_b。
-    仅在严格包含时成立：a.high > b.high 且 a.low < b.low。
-    相等高点或相等低点不视为包含。
+    非严格包含：允许等高或等低，但不能高低点都完全相等。
     """
-    return bar_a.high > bar_b.high and bar_a.low < bar_b.low
+    return (
+        bar_a.high >= bar_b.high
+        and bar_a.low <= bar_b.low
+        and (bar_a.high > bar_b.high or bar_a.low < bar_b.low)
+    )
 
 
 def merge_bars(
@@ -76,7 +79,14 @@ def _fallback_direction(
         return current_direction
     if not normalized:
         return None
-    return normalized[-1].direction
+
+    # Prefer the latest concrete direction; do not let a transient None bar
+    # break inclusion-chain direction inheritance.
+    for bar in reversed(normalized):
+        if bar.direction is not None:
+            return bar.direction
+
+    return None
 
 
 def _resolve_pending_chain(pending_bars: List[Bar], direction: Optional[str]) -> tuple[float, float, object, object, object, object, List[int]]:
