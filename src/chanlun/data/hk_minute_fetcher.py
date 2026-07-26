@@ -25,9 +25,10 @@ import csv
 import multiprocessing as mp
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Sequence
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -39,6 +40,7 @@ _ALLOWED_SOURCES = {"xueqiu", "akshare"}
 _DEFAULT_PRIMARY_SOURCE = "xueqiu"
 _SOURCE_FETCH_TIMEOUT_SECONDS = 45
 _LAST_FETCH_METADATA: dict[str, object] = {}
+_HK_MARKET_TZ = ZoneInfo("Asia/Hong_Kong")
 ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_COOKIE_FILE_CANDIDATES = (
     ROOT / "data" / "_meta" / "xueqiu_cookie.env",
@@ -51,6 +53,11 @@ class XueqiuCookieError(RuntimeError):
     def __init__(self, message: str, cookie_source: str):
         super().__init__(message)
         self.cookie_source = cookie_source
+
+
+def _epoch_ms_to_hk_naive(ts_ms: int) -> datetime:
+    """Convert epoch milliseconds to Hong Kong market-local naive datetime."""
+    return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).astimezone(_HK_MARKET_TZ).replace(tzinfo=None)
 
 
 def _normalize_symbol(symbol: str) -> str:
@@ -320,7 +327,7 @@ def _fetch_hk_minute_xueqiu(
 
     rows: list[dict] = []
     for item in items:
-        ts = datetime.fromtimestamp(item[column_map["timestamp"]] / 1000)
+        ts = _epoch_ms_to_hk_naive(int(item[column_map["timestamp"]]))
         if ts < start_dt or ts > end_dt:
             continue
         rows.append(

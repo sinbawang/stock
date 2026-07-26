@@ -19,17 +19,27 @@ import os
 import random
 import re
 import ssl
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
+from zoneinfo import ZoneInfo
 
 import requests
 
 
 _ALLOWED_INTERVALS = {"day", "week", "month", "m60", "m30", "m15", "m5", "m1"}
 _LAST_FETCH_METADATA: dict[str, object] = {}
+_A_SHARE_MARKET_TZ = ZoneInfo("Asia/Shanghai")
+
+
+def _epoch_ms_to_market_naive(ts_ms: int, market_tz: ZoneInfo) -> datetime:
+    """Convert epoch milliseconds to a market-local naive datetime.
+
+    We explicitly convert from UTC first so output does not depend on server local timezone.
+    """
+    return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).astimezone(market_tz).replace(tzinfo=None)
 
 
 def _make_opener():
@@ -361,7 +371,7 @@ def _fetch_intraday_xueqiu(
         added = 0
         for item in items:
             ts_ms = int(item[column_map["timestamp"]])
-            ts_dt = datetime.fromtimestamp(ts_ms / 1000)
+            ts_dt = _epoch_ms_to_market_naive(ts_ms, _A_SHARE_MARKET_TZ)
             if oldest_ms is None or ts_ms < oldest_ms:
                 oldest_ms = ts_ms
             if ts_dt < actual_start or ts_dt > actual_end:
@@ -383,7 +393,7 @@ def _fetch_intraday_xueqiu(
             break
         if min_rows is not None and len(rows_by_ts) >= min_rows:
             break
-        if datetime.fromtimestamp(oldest_ms / 1000) <= actual_start:
+        if _epoch_ms_to_market_naive(oldest_ms, _A_SHARE_MARKET_TZ) <= actual_start:
             break
         begin_ms = oldest_ms - 1
 
