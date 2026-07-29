@@ -35,6 +35,7 @@ DEFAULT_PUBLISH_ROOT = ROOT / "build" / "miniapp-publish"
 PRIMARY_TECHNICAL_TIMEFRAME = "30m"
 PRIMARY_TECHNICAL_LABEL = "30M"
 DETAIL_TECHNICAL_TIMEFRAMES = ("day", "30m", "5m", "1m")
+PRIMARY_TECHNICAL_CANDIDATES = ("30m", "day", "60m", "15m", "5m", "1m")
 TIMEFRAME_LABELS = {
     "day": "DAY",
     "60m": "60M",
@@ -65,6 +66,29 @@ def parse_args() -> argparse.Namespace:
         choices=("day", "60m", "30m", "15m", "5m", "1m"),
         default=None,
         help="Optional chart timeframes to include in the publish bundle. Defaults to all available chart assets.",
+    )
+    parser.add_argument(
+        "--expected-tech-timeframes",
+        nargs="+",
+        choices=("day", "60m", "30m", "15m", "5m", "1m"),
+        default=None,
+        help="Optional expected technical timeframes used for missing-file alerts.",
+    )
+    parser.add_argument(
+        "--skip-regenerate-context",
+        action="store_true",
+        help="Mark missing files as potentially caused by skip-regenerate reuse.",
+    )
+    parser.add_argument(
+        "--skip-gen-fund-context",
+        action="store_true",
+        help="Mark missing fund.json as potentially caused by skip-gen-fund reuse.",
+    )
+    parser.add_argument(
+        "--failed-symbols",
+        nargs="+",
+        default=None,
+        help="Optional failed symbols from regeneration stage used for missing-file diagnosis.",
     )
     return parser.parse_args()
 
@@ -103,6 +127,141 @@ def read_json_if_exists(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     return read_json(path)
+
+
+def resolve_primary_technical_payload(stock_dir: Path) -> tuple[str, dict[str, Any]]:
+    for timeframe in PRIMARY_TECHNICAL_CANDIDATES:
+        tech_path = stock_dir / timeframe / "tech.json"
+        if tech_path.exists():
+            return timeframe, read_json(tech_path)
+    return PRIMARY_TECHNICAL_TIMEFRAME, {}
+
+
+def _missing_reason(
+    *,
+    symbol: str,
+    failed_symbols: set[str],
+    skip_regenerate_context: bool,
+    skip_gen_fund_context: bool,
+    kind: str,
+) -> str:
+    if symbol in failed_symbols:
+        return "holding_generation_failed"
+    if kind == "fund_json" and skip_gen_fund_context:
+        return "fund_generation_skipped"
+    if skip_regenerate_context:
+        return "skip_regenerate_reused_stale_reports"
+    return "requested_but_not_generated"
+
+
+def collect_missing_artifact_alerts(
+    *,
+    holding: Holding,
+    stock_dir: Path,
+    expected_tech_timeframes: tuple[str, ...] | None,
+    skip_regenerate_context: bool,
+    skip_gen_fund_context: bool,
+    failed_symbols: set[str],
+) -> list[dict[str, Any]]:
+    alerts: list[dict[str, Any]] = []
+    symbol = holding.symbol
+    expected = expected_tech_timeframes or (PRIMARY_TECHNICAL_TIMEFRAME,)
+
+    base_path = stock_dir / "base.json"
+    if not base_path.exists():
+        alerts.append(
+            {
+                "symbol": symbol,
+                "name": holding.name,
+                "market": holding.market,
+                "kind": "base_json",
+                "path": str(base_path),
+                "reason": _missing_reason(
+                    symbol=symbol,
+                    failed_symbols=failed_symbols,
+                    skip_regenerate_context=skip_regenerate_context,
+                    skip_gen_fund_context=skip_gen_fund_context,
+                    kind="base_json",
+                ),
+            }
+        )
+
+    fund_path = stock_dir / "fund.json"
+    if not fund_path.exists():
+        alerts.append(
+            {
+                "symbol": symbol,
+                "name": holding.name,
+                "market": holding.market,
+                "kind": "fund_json",
+                "path": str(fund_path),
+                "reason": _missing_reason(
+                    symbol=symbol,
+                    failed_symbols=failed_symbols,
+                    skip_regenerate_context=skip_regenerate_context,
+                    skip_gen_fund_context=skip_gen_fund_context,
+                    kind="fund_json",
+                ),
+            }
+        )
+
+    for timeframe in expected:
+        tech_path = stock_dir / timeframe / "tech.json"
+        if tech_path.exists():
+            continue
+        alerts.append(
+            {
+                "symbol": symbol,
+                "name": holding.name,
+                "market": holding.market,
+                "kind": "tech_json",
+                "timeframe": timeframe,
+                "path": str(tech_path),
+                "reason": _missing_reason(
+                    symbol=symbol,
+                    failed_symbols=failed_symbols,
+                    skip_regenerate_context=skip_regenerate_context,
+                    skip_gen_fund_context=skip_gen_fund_context,
+                    kind="tech_json",
+                ),
+            }
+        )
+
+    return alerts
+
+
+def build_missing_artifacts_payload(
+    *,
+    alerts: list[dict[str, Any]],
+    expected_tech_timeframes: tuple[str, ...] | None,
+    skip_regenerate_context: bool,
+    skip_gen_fund_context: bool,
+    failed_symbols: set[str],
+) -> dict[str, Any]:
+    by_reason: dict[str, int] = {}
+    by_kind: dict[str, int] = {}
+    for item in alerts:
+        reason = safe_text(item.get("reason"), "unknown")
+        kind = safe_text(item.get("kind"), "unknown")
+        by_reason[reason] = by_reason.get(reason, 0) + 1
+        by_kind[kind] = by_kind.get(kind, 0) + 1
+    return {
+        "schema_version": "missing-artifacts-v1",
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "counts": {
+            "total": len(alerts),
+            "by_reason": by_reason,
+            "by_kind": by_kind,
+            "affected_symbols": len({safe_text(item.get("symbol")) for item in alerts if safe_text(item.get("symbol"))}),
+        },
+        "context": {
+            "expected_tech_timeframes": list(expected_tech_timeframes) if expected_tech_timeframes else [PRIMARY_TECHNICAL_TIMEFRAME],
+            "skip_regenerate": skip_regenerate_context,
+            "skip_gen_fund": skip_gen_fund_context,
+            "failed_symbols": sorted(failed_symbols),
+        },
+        "alerts": alerts,
+    }
 
 
 def extract_section_lines(text: str, title: str) -> list[str]:
@@ -612,7 +771,11 @@ def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_timeframe_technical_sections(stock_dir: Path, timeframes: tuple[str, ...]) -> list[dict[str, Any]]:
+def build_timeframe_technical_sections(
+    stock_dir: Path,
+    timeframes: tuple[str, ...],
+    primary_timeframe: str = PRIMARY_TECHNICAL_TIMEFRAME,
+) -> list[dict[str, Any]]:
     sections: list[dict[str, Any]] = []
     for timeframe in timeframes:
         tech_path = stock_dir / timeframe / "tech.json"
@@ -620,7 +783,7 @@ def build_timeframe_technical_sections(stock_dir: Path, timeframes: tuple[str, .
             continue
         section = build_technical_section(read_json(tech_path))
         label = TIMEFRAME_LABELS.get(timeframe, timeframe.upper())
-        section["key"] = "technical" if timeframe == PRIMARY_TECHNICAL_TIMEFRAME else f"technical_{timeframe}"
+        section["key"] = "technical" if timeframe == primary_timeframe else f"technical_{timeframe}"
         section["title"] = f"{label} 技术面"
         section["timeframe"] = timeframe
         section["operation_level"] = section.get("operation_level") or label
@@ -869,9 +1032,9 @@ def build_summary_payload(
     group_item: dict[str, Any] | None,
     publish_timeframes: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
-    base_payload = read_json(stock_dir / "base.json")
+    base_payload = read_json_if_exists(stock_dir / "base.json")
     fund_payload = read_json_if_exists(stock_dir / "fund.json")
-    tech_payload = read_json(stock_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json")
+    primary_technical_timeframe, tech_payload = resolve_primary_technical_payload(stock_dir)
     base_summary = base_payload.get("summary") or {}
     fund_summary = fund_payload.get("summary") or {}
     tech_summary = tech_payload.get("summary") or {}
@@ -879,9 +1042,10 @@ def build_summary_payload(
     precision_window_display = build_precision_window_display(precision_entry)
     same_level_decomposition = build_same_level_decomposition(tech_payload)
     latest_signal_summary = build_latest_signal_summary(tech_payload)
-    segment_stop_line = build_latest_segment_stop_reason_line(stock_dir, PRIMARY_TECHNICAL_TIMEFRAME)
+    segment_stop_line = build_latest_segment_stop_reason_line(stock_dir, primary_technical_timeframe) if tech_payload else ""
     charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes)
-    cover_chart_path = chart_publish_path(charts, PRIMARY_TECHNICAL_TIMEFRAME)
+    cover_chart_path = chart_publish_path(charts, primary_technical_timeframe) or chart_publish_path(charts, PRIMARY_TECHNICAL_TIMEFRAME)
+    primary_technical_label = TIMEFRAME_LABELS.get(primary_technical_timeframe, primary_technical_timeframe.upper())
     updated_at = max(
         safe_text(base_payload.get("generated_at")),
         safe_text(fund_payload.get("generated_at")),
@@ -904,8 +1068,8 @@ def build_summary_payload(
                 "summary": first_non_empty(base_summary.get("comment"), (base_payload.get("blended") or {}).get("annual_anchor", {}).get("scorecard", {}).get("combined_comment")),
             },
             "technical": {
-                "timeframe": tech_payload.get("timeframe") or PRIMARY_TECHNICAL_TIMEFRAME,
-                "timeframe_label": PRIMARY_TECHNICAL_LABEL,
+                "timeframe": tech_payload.get("timeframe") or primary_technical_timeframe,
+                "timeframe_label": primary_technical_label,
                 "operation_level": tech_summary.get("operation_level"),
                 "score": tech_summary.get("score"),
                 "rating": tech_summary.get("rating"),
@@ -944,7 +1108,7 @@ def build_summary_payload(
                 "summary": first_non_empty(fund_summary.get("comment"), (fund_payload.get("scorecard") or {}).get("combined_comment")),
             },
         },
-        "cover_chart": {"timeframe": PRIMARY_TECHNICAL_TIMEFRAME, "path": f"stocks/{holding.symbol}/{cover_chart_path}"} if cover_chart_path else None,
+        "cover_chart": {"timeframe": primary_technical_timeframe, "path": f"stocks/{holding.symbol}/{cover_chart_path}"} if cover_chart_path else None,
         "jump": {"detail": f"stocks/{holding.symbol}/detail.json"},
         "tags": [value for value in [group_item.get("bucket") if group_item else None, group_item.get("priority") if group_item else None, group_item.get("action") if group_item else None] if value],
     }
@@ -956,22 +1120,28 @@ def build_detail_payload(
     group_item: dict[str, Any] | None,
     publish_timeframes: tuple[str, ...] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
-    base_payload = read_json(stock_dir / "base.json")
+    base_payload = read_json_if_exists(stock_dir / "base.json")
     fund_payload = read_json_if_exists(stock_dir / "fund.json")
-    tech_payload = read_json(stock_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json")
+    primary_technical_timeframe, tech_payload = resolve_primary_technical_payload(stock_dir)
     charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes)
     fundamental = build_fundamental_section(base_payload)
-    technical_sections = build_timeframe_technical_sections(stock_dir, DETAIL_TECHNICAL_TIMEFRAMES)
+    technical_sections = build_timeframe_technical_sections(
+        stock_dir,
+        DETAIL_TECHNICAL_TIMEFRAMES,
+        primary_timeframe=primary_technical_timeframe,
+    )
     technical = next((section for section in technical_sections if section.get("key") == "technical"), None) or build_technical_section(tech_payload)
-    segment_stop_line = build_latest_segment_stop_reason_line(stock_dir, PRIMARY_TECHNICAL_TIMEFRAME)
+    segment_stop_line = build_latest_segment_stop_reason_line(stock_dir, primary_technical_timeframe) if tech_payload else ""
     if segment_stop_line:
         technical_focus_lines = list(technical.get("technical_focus_lines") or [])
         technical_focus_lines.append(segment_stop_line)
         technical["technical_focus_lines"] = technical_focus_lines
     capital_flow = build_capital_flow_section(fund_payload)
+    technical_timeframe = safe_text(technical.get("timeframe")) or primary_technical_timeframe
+    technical_label = TIMEFRAME_LABELS.get(technical_timeframe, technical_timeframe.upper())
     overview_bullets = [
         f"基本面 {safe_text(fundamental.get('score'), 'missing')}/{safe_text(fundamental.get('rating'), 'missing')}",
-        f"{PRIMARY_TECHNICAL_LABEL} 技术面 {safe_text(technical.get('conclusion'), 'missing')}",
+        f"{technical_label} 技术面 {safe_text(technical.get('conclusion'), 'missing')}",
         f"资金面 {safe_text(capital_flow.get('score'), 'missing')}/{safe_text(capital_flow.get('rating'), 'missing')}",
     ]
     updated_at = max(
@@ -1096,7 +1266,11 @@ def generate_bundle(
     snapshot_stamp: str | None,
     latest_only: bool,
     publish_timeframes: tuple[str, ...] | None = None,
-) -> dict[str, Path]:
+    expected_tech_timeframes: tuple[str, ...] | None = None,
+    skip_regenerate_context: bool = False,
+    skip_gen_fund_context: bool = False,
+    failed_symbols: set[str] | None = None,
+) -> dict[str, Any]:
     stamp = snapshot_stamp or datetime.now().strftime("%Y%m%d_%H%M%S")
     latest_dir = publish_root / "latest"
     snapshot_dir = publish_root / "snapshots" / stamp
@@ -1110,10 +1284,22 @@ def generate_bundle(
         ensure_clean_dir(target)
 
     summary_payloads: list[dict[str, Any]] = []
+    missing_alerts: list[dict[str, Any]] = []
+    failed_symbol_set = failed_symbols or set()
     for holding in holdings:
         stock_dir = reports_root / holding.symbol
         if not stock_dir.exists():
             continue
+        missing_alerts.extend(
+            collect_missing_artifact_alerts(
+                holding=holding,
+                stock_dir=stock_dir,
+                expected_tech_timeframes=expected_tech_timeframes,
+                skip_regenerate_context=skip_regenerate_context,
+                skip_gen_fund_context=skip_gen_fund_context,
+                failed_symbols=failed_symbol_set,
+            )
+        )
         base_source_path = stock_dir / "base.json"
         summary_payload = build_summary_payload(holding, stock_dir, group_item_map.get(holding.symbol), publish_timeframes=publish_timeframes)
         detail_payload, chart_specs = build_detail_payload(holding, stock_dir, group_item_map.get(holding.symbol), publish_timeframes=publish_timeframes)
@@ -1128,6 +1314,13 @@ def generate_bundle(
     portfolio_payload = build_portfolio_group(summary_payloads, group_item_map)
     generated_at = datetime.now().isoformat(timespec="seconds")
     index_payload = build_index_payload(summary_payloads, generated_at)
+    missing_payload = build_missing_artifacts_payload(
+        alerts=missing_alerts,
+        expected_tech_timeframes=expected_tech_timeframes,
+        skip_regenerate_context=skip_regenerate_context,
+        skip_gen_fund_context=skip_gen_fund_context,
+        failed_symbols=failed_symbol_set,
+    )
     for target in targets:
         write_json(target / "index.json", index_payload)
         if "a_share" in group_payloads:
@@ -1135,7 +1328,20 @@ def generate_bundle(
         if "h_share" in group_payloads:
             write_json(target / "groups" / "h_share.json", group_payloads["h_share"])
         write_json(target / "groups" / "portfolio.json", portfolio_payload)
-    return {"latest": latest_dir, "snapshot": snapshot_dir}
+        write_json(target / "alerts" / "missing_artifacts.json", missing_payload)
+
+    if missing_alerts:
+        print(f"WARN missing_artifacts={len(missing_alerts)} affected_symbols={missing_payload['counts']['affected_symbols']}")
+        for item in missing_alerts[:30]:
+            timeframe = f"/{item['timeframe']}" if item.get("timeframe") else ""
+            print(f"WARN {item['symbol']}{timeframe} {item['kind']} reason={item['reason']}")
+
+    return {
+        "latest": latest_dir,
+        "snapshot": snapshot_dir,
+        "missing_artifact_alert_count": len(missing_alerts),
+        "missing_artifact_alert_path": latest_dir / "alerts" / "missing_artifacts.json",
+    }
 
 
 def main() -> None:
@@ -1147,8 +1353,14 @@ def main() -> None:
         snapshot_stamp=args.snapshot_stamp,
         latest_only=args.latest_only,
         publish_timeframes=tuple(args.publish_timeframes) if args.publish_timeframes else None,
+        expected_tech_timeframes=tuple(args.expected_tech_timeframes) if args.expected_tech_timeframes else None,
+        skip_regenerate_context=args.skip_regenerate_context,
+        skip_gen_fund_context=args.skip_gen_fund_context,
+        failed_symbols=set(args.failed_symbols or []),
     )
     print(f"latest= {outputs['latest']}")
+    print(f"missing_artifact_alert_count= {outputs['missing_artifact_alert_count']}")
+    print(f"missing_artifact_alert_path= {outputs['missing_artifact_alert_path']}")
     if not args.latest_only:
         print(f"snapshot= {outputs['snapshot']}")
 

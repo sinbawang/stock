@@ -40,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--api-key-name", default="miniapp-publish-uploader", help="Name for a temporary API key when created automatically")
     parser.add_argument("--api-key-expire-in", type=int, default=7200, help="Temporary API key lifetime in seconds")
     parser.add_argument("--delete-created-api-key", action="store_true", help="Delete the temporary API key after upload")
+    parser.add_argument("--force-upload", action="store_true", help="Upload all files and bypass manifest-diff skip logic")
     parser.add_argument("--dry-run", action="store_true", help="Only print what would be uploaded")
     return parser.parse_args()
 
@@ -104,7 +105,11 @@ def plan_uploads(
     env_id: str | None,
     region: str,
     cloud_prefix: str,
+    force_upload: bool = False,
 ) -> tuple[list[LocalFile], list[dict[str, Any]]]:
+    if force_upload:
+        return files, []
+
     previous_files = previous_upload_index(previous_manifest)
     same_target = bool(
         previous_manifest
@@ -374,6 +379,7 @@ def main() -> int:
         env_id=args.env_id,
         region=args.region,
         cloud_prefix=args.cloud_prefix,
+        force_upload=args.force_upload,
     )
 
     print(f"source={source_dir}")
@@ -381,6 +387,8 @@ def main() -> int:
     print(f"uploading={len(upload_plan)}")
     print(f"skipped={len(skipped_uploads)}")
     print(f"cloud_prefix={args.cloud_prefix}")
+    if args.force_upload:
+        print("force_upload=true; previous manifest diff skipping is disabled")
 
     if args.dry_run:
         manifest = build_manifest(

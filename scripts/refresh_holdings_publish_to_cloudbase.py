@@ -70,6 +70,7 @@ def _write_timing_report(
     stage_seconds: dict[str, float],
     regeneration_summary: dict[str, object] | None,
     latest_dir: Path,
+    build_summary: dict[str, object] | None,
 ) -> Path:
     REPORTS_META_DIR.mkdir(parents=True, exist_ok=True)
     stamp = completed_at.strftime("%Y%m%d_%H%M%S")
@@ -96,10 +97,13 @@ def _write_timing_report(
             "zhongshu_level": args.zhongshu_level,
             "tech_timeframes": list(args.tech_timeframes),
             "publish_timeframes": list(args.publish_timeframes) if args.publish_timeframes else None,
+            "force_upload": bool(getattr(args, "force_upload", False)),
         },
         "stages": {name: _round_seconds(value) for name, value in stage_seconds.items()},
         "artifacts": {
             "latest_dir": str(latest_dir),
+            "missing_artifact_alert_count": (build_summary or {}).get("missing_artifact_alert_count"),
+            "missing_artifact_alert_path": str((build_summary or {}).get("missing_artifact_alert_path")) if (build_summary or {}).get("missing_artifact_alert_path") else None,
         },
     }
     if regeneration_summary is not None:
@@ -208,6 +212,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--api-key-name", default=None, help="Temporary API key name forwarded to uploader")
     parser.add_argument("--api-key-expire-in", type=int, default=None, help="Temporary API key lifetime forwarded to uploader")
     parser.add_argument("--delete-created-api-key", action="store_true", help="Delete temporary API key after upload")
+    parser.add_argument(
+        "--force-upload",
+        action="store_true",
+        help="Force uploader to skip manifest-diff optimization and upload all files.",
+    )
     parser.add_argument("--upload-dry-run", action="store_true", help="Run upload script in dry-run mode")
     return parser.parse_args()
 
@@ -405,7 +414,12 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
     }
 
 
-def rebuild_publish_bundle(args: argparse.Namespace) -> Path:
+def rebuild_publish_bundle(args: argparse.Namespace, regeneration_summary: dict[str, object] | None = None) -> dict[str, object]:
+    failed_symbols = {
+        str(item.get("symbol") or "")
+        for item in (regeneration_summary or {}).get("failed_holdings", [])
+        if isinstance(item, dict) and str(item.get("symbol") or "").strip()
+    }
     outputs = build_publish_bundle(
         holdings_path=Path(args.holdings_file),
         reports_root=Path(args.reports_root),
@@ -413,11 +427,17 @@ def rebuild_publish_bundle(args: argparse.Namespace) -> Path:
         snapshot_stamp=args.snapshot_stamp,
         latest_only=args.latest_only,
         publish_timeframes=tuple(args.publish_timeframes) if args.publish_timeframes else None,
+        expected_tech_timeframes=tuple(getattr(args, "tech_timeframes", []) or []) or None,
+        skip_regenerate_context=bool(getattr(args, "skip_regenerate", False)),
+        skip_gen_fund_context=bool(getattr(args, "skip_gen_fund", False)),
+        failed_symbols=failed_symbols,
     )
     print(f"latest= {outputs['latest']}", flush=True)
+    print(f"missing_artifact_alert_count= {outputs['missing_artifact_alert_count']}", flush=True)
+    print(f"missing_artifact_alert_path= {outputs['missing_artifact_alert_path']}", flush=True)
     if not args.latest_only:
         print(f"snapshot= {outputs['snapshot']}", flush=True)
-    return outputs["latest"]
+    return outputs
 
 
 def upload_publish_bundle(args: argparse.Namespace, source_dir: Path) -> None:
@@ -441,6 +461,8 @@ def upload_publish_bundle(args: argparse.Namespace, source_dir: Path) -> None:
         command.extend(["--api-key-expire-in", str(args.api_key_expire_in)])
     if args.delete_created_api_key:
         command.append("--delete-created-api-key")
+    if bool(getattr(args, "force_upload", False)):
+        command.append("--force-upload")
     if args.upload_dry_run:
         command.append("--dry-run")
     try:
@@ -458,6 +480,7 @@ def main() -> None:
     started_at = datetime.now()
     stage_seconds: dict[str, float] = {}
     regeneration_summary: dict[str, object] | None = None
+    build_summary: dict[str, object] | None = None
     if not args.skip_regenerate:
         started_regenerate = time.perf_counter()
         regeneration_summary = regenerate_holdings(args)
@@ -467,7 +490,8 @@ def main() -> None:
     latest_dir = Path(args.publish_root) / "latest"
     if not args.skip_build:
         started_build = time.perf_counter()
-        latest_dir = rebuild_publish_bundle(args)
+        build_summary = rebuild_publish_bundle(args, regeneration_summary)
+        latest_dir = Path(str(build_summary["latest"]))
         stage_seconds["build_seconds"] = time.perf_counter() - started_build
         print(f"timing build_seconds={stage_seconds['build_seconds']:.2f}", flush=True)
 
@@ -486,6 +510,7 @@ def main() -> None:
         stage_seconds=stage_seconds,
         regeneration_summary=regeneration_summary,
         latest_dir=latest_dir,
+        build_summary=build_summary,
     )
     print(f"timing_report= {timing_report}", flush=True)
 

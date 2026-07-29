@@ -276,16 +276,22 @@ def _build_publish_namespace(
 
 def _publish_build_and_upload(args: Namespace) -> dict[str, Any]:
     latest_dir = Path(args.publish_root) / "latest"
+    build_summary: dict[str, Any] | None = None
     if not args.skip_build:
-        latest_dir = rebuild_publish_bundle(args)
+        build_summary = rebuild_publish_bundle(args)
+        latest_dir = Path(str(build_summary["latest"]))
     if not args.skip_upload:
         upload_publish_bundle(args, latest_dir)
-    return {
+    result = {
         "publish_root": str(args.publish_root),
         "latest_dir": str(latest_dir),
         "cloud_prefix": args.cloud_prefix,
         "published_timeframes": list(args.publish_timeframes) if args.publish_timeframes else None,
     }
+    if build_summary is not None:
+        result["missing_artifact_alert_count"] = build_summary.get("missing_artifact_alert_count")
+        result["missing_artifact_alert_path"] = str(build_summary.get("missing_artifact_alert_path")) if build_summary.get("missing_artifact_alert_path") else None
+    return result
 
 
 def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
