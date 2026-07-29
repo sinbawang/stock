@@ -99,6 +99,12 @@ def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def read_json_if_exists(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return read_json(path)
+
+
 def extract_section_lines(text: str, title: str) -> list[str]:
     pattern = rf"^{re.escape(title)}\s*\n(?P<body>.*?)(?=\n(?:[\u4e00-\u9fffA-Za-z0-9_ /]+[:：]|##\s)|\Z)"
     match = re.search(pattern, text, flags=re.MULTILINE | re.DOTALL)
@@ -864,7 +870,7 @@ def build_summary_payload(
     publish_timeframes: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     base_payload = read_json(stock_dir / "base.json")
-    fund_payload = read_json(stock_dir / "fund.json")
+    fund_payload = read_json_if_exists(stock_dir / "fund.json")
     tech_payload = read_json(stock_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json")
     base_summary = base_payload.get("summary") or {}
     fund_summary = fund_payload.get("summary") or {}
@@ -951,7 +957,7 @@ def build_detail_payload(
     publish_timeframes: tuple[str, ...] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
     base_payload = read_json(stock_dir / "base.json")
-    fund_payload = read_json(stock_dir / "fund.json")
+    fund_payload = read_json_if_exists(stock_dir / "fund.json")
     tech_payload = read_json(stock_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json")
     charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes)
     fundamental = build_fundamental_section(base_payload)
