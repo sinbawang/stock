@@ -11,6 +11,7 @@ DATA_DIR = ROOT / "data"
 REPORTS_DIR = DATA_DIR / "reports"
 REPORTS_META_DIR = REPORTS_DIR / "_meta"
 DATA_META_DIR = DATA_DIR / "_meta"
+KLINE_CACHE_DIR = DATA_DIR / "cache" / "kline"
 HOLDINGS_FILE = CONFIG_DIR / "stock_holdings.json"
 CAPITAL_FLOW_CACHE_DIR = DATA_META_DIR / "capital_flow_cache"
 

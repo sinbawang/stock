@@ -37,6 +37,7 @@ from chanlun.data.cleaner import clean_bars
 from chanlun.data.hk_fetcher import fetch_hk_daily, save_to_csv as save_hk_daily_csv
 from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, get_last_fetch_metadata as get_last_hk_fetch_metadata, save_to_csv as save_hk_minute_csv
 from chanlun.data.kline_fetcher import fetch_kline, get_last_fetch_metadata, save_to_csv as save_kline_csv
+from chanlun.data.local_bar_store import infer_incremental_start, load_local_rows, tail_rows, upsert_local_rows
 from chanlun.data.source_profiles import describe_source_chain, resolve_a_share_intraday_source_label, resolve_hk_minute_source_selection
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.normalize import normalize_bars
@@ -167,6 +168,29 @@ def parse_args() -> argparse.Namespace:
         default=["day", "30m", "5m", "1m"],
         help="需要生成的技术级别；默认生成 day/30m/5m/1m。",
     )
+    parser.add_argument(
+        "--use-local-store",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="是否启用本地历史 K 线仓库（默认启用）。启用后会增量抓取并合并到 data/cache/kline。",
+    )
+    parser.add_argument(
+        "--incremental-overlap-bars",
+        type=int,
+        default=120,
+        help="增量抓取时回看重叠根数，用于覆盖远端补数据场景；默认 120。",
+    )
+    parser.add_argument(
+        "--local-store-root",
+        default=None,
+        help="可选，本地 K 线仓库根目录覆盖。默认使用 data/cache/kline。",
+    )
+    parser.add_argument(
+        "--export-structure-images",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="是否导出结构图文件（svg/png/jpg）。默认 true；设为 false 可仅生成结构数据与文本，提升批量速度。",
+    )
     return parser.parse_args()
 
 
@@ -229,9 +253,11 @@ def fetch_intraday_rows(
     period: str,
     start: str,
     bar_count: int,
+    source_probe_min_rows: int | None = None,
 ) -> tuple[list[dict], dict[str, object]]:
     interval = f"m{period}"
     if security.market == "HK":
+        probe_min_rows = bar_count if source_probe_min_rows is None else source_probe_min_rows
         if timeframe == "5m":
             reused_rows = _load_reusable_hk_intraday_rows(security, timeframe, min(bar_count, HK_REUSABLE_5M_MIN_ROWS))
             if reused_rows is not None:
@@ -244,7 +270,7 @@ def fetch_intraday_rows(
             adjust="",
             primary_source=primary_source,
             fallback_sources=fallback_sources,
-            min_rows=bar_count,
+            min_rows=probe_min_rows,
             stop_on_sufficient_rows=timeframe in {"30m", "5m", "1m"},
         )
         fetch_meta = get_last_hk_fetch_metadata()
@@ -316,6 +342,61 @@ def save_rows(security: Security, timeframe: str, rows: list[dict], path: Path) 
         save_hk_minute_csv(rows, str(path))
     else:
         save_kline_csv(rows, str(path))
+
+
+def _fetch_with_optional_local_store(
+    security: Security,
+    *,
+    timeframe: str,
+    requested_start: str,
+    bar_count: int,
+    overlap_bars: int,
+    use_local_store: bool,
+    local_store_root: Path | None,
+    remote_fetcher,
+) -> tuple[list[dict], dict[str, object]]:
+    effective_start = requested_start
+    local_before = 0
+    if use_local_store:
+        local_rows = load_local_rows(security.symbol, security.market, timeframe, root=local_store_root)
+        local_before = len(local_rows)
+        if local_rows:
+            effective_start = infer_incremental_start(local_rows[-1]["ts"], timeframe, overlap_bars=overlap_bars)
+
+    remote_probe_min_rows = bar_count
+    if use_local_store and local_before > 0 and timeframe != "day":
+        # Incremental mode only needs recent deltas. Avoid forcing full-count
+        # remote rows, which can trigger costly fallback probing for HK minute data.
+        remote_probe_min_rows = 1
+
+    rows, fetch_meta = remote_fetcher(effective_start, remote_probe_min_rows)
+    if not use_local_store:
+        return rows, fetch_meta
+
+    merged_rows, merge_stats, store_path = upsert_local_rows(
+        security.symbol,
+        security.market,
+        timeframe,
+        rows,
+        root=local_store_root,
+    )
+    analysis_rows = tail_rows(merged_rows, bar_count)
+    payload = dict(fetch_meta)
+    payload["local_store"] = {
+        "enabled": True,
+        "store_path": str(store_path),
+        "requested_start": requested_start,
+        "effective_start": effective_start,
+        "overlap_bars": overlap_bars,
+        "local_rows_before": local_before,
+        "remote_rows": len(rows),
+        "merged_total_rows": merge_stats.total,
+        "added_rows": merge_stats.added,
+        "updated_rows": merge_stats.updated,
+        "analysis_rows": len(analysis_rows),
+    }
+    payload["actual_bar_count"] = len(analysis_rows)
+    return analysis_rows, payload
 
 
 def extract_signals(bis, zhongshus, macd_points, *, raw_bars=None) -> dict[str, object]:
@@ -548,6 +629,7 @@ def export_case(
     data_fetch: dict[str, object] | None = None,
     pending_reverse_mode: str = "any",
     zhongshu_level: str = "bi",
+    export_structure_images: bool = True,
 ) -> dict[str, Path]:
     layout = timeframe_report_paths(security.symbol, timeframe, rows)
     raw_csv = layout.raw_csv
@@ -559,7 +641,6 @@ def export_case(
     advice_path = layout.root_dir / "advice.txt"
     report_path = layout.root_dir / "report.txt"
     tech_json_path = layout.technical_report_json
-
     save_rows(security, timeframe, rows, raw_csv)
     raw_bars = clean_bars(read_bars_from_csv(str(raw_csv)))
     normalized_bars = normalize_bars(raw_bars)
@@ -592,17 +673,18 @@ def export_case(
     export_segments(layout.segments_csv, segments)
     export_zhongshus(layout.zhongshu_csv, zhongshus)
     export_macd(layout.macd_csv, macd_points)
-    save_structure_charts(
-        bars=raw_bars,
-        normalized_bars=normalized_bars,
-        fractals=fractals,
-        bis=bis,
-        zhongshus=zhongshus,
-        svg_path=svg,
-        png_path=png,
-        jpg_path=jpg,
-        title=title,
-    )
+    if export_structure_images:
+        save_structure_charts(
+            bars=raw_bars,
+            normalized_bars=normalized_bars,
+            fractals=fractals,
+            bis=bis,
+            zhongshus=zhongshus,
+            svg_path=svg,
+            png_path=png,
+            jpg_path=jpg,
+            title=title,
+        )
 
     analysis_text = analyze_current_state(security.name, raw_bars, bis, zhongshus, macd_points)
     timeframe_label = timeframe_display_label(timeframe)
@@ -826,6 +908,10 @@ def run_batch_prepare(
     pending_reverse_mode: str = "any",
     zhongshu_level: str = "bi",
     timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
+    use_local_store: bool = True,
+    incremental_overlap_bars: int = 120,
+    local_store_root: Path | None = None,
+    export_structure_images: bool = True,
 ) -> BatchPrepareResult:
     selected_timeframes = tuple(dict.fromkeys(timeframes))
     resolved_day_start = day_start or default_day_start_for_bar_target(day_bars)
@@ -842,7 +928,16 @@ def run_batch_prepare(
 
         if "day" in selected_timeframes:
             started = time.perf_counter()
-            day_rows, day_fetch = fetch_day_rows(security, resolved_day_start, day_bars)
+            day_rows, day_fetch = _fetch_with_optional_local_store(
+                security,
+                timeframe="day",
+                requested_start=resolved_day_start,
+                bar_count=day_bars,
+                overlap_bars=incremental_overlap_bars,
+                use_local_store=use_local_store,
+                local_store_root=local_store_root,
+                remote_fetcher=lambda start, _min_rows: fetch_day_rows(security, start, day_bars),
+            )
             day_case = export_case(
                 security,
                 "day",
@@ -851,6 +946,7 @@ def run_batch_prepare(
                 data_fetch=day_fetch,
                 pending_reverse_mode=pending_reverse_mode,
                 zhongshu_level=zhongshu_level,
+                export_structure_images=export_structure_images,
             )
             print(f"timing {security.symbol} day seconds={time.perf_counter() - started:.2f}", flush=True)
 
@@ -867,11 +963,36 @@ def run_batch_prepare(
             period, start, bar_count = timeframe_specs[timeframe]
             started = time.perf_counter()
             if timeframe == "60m":
-                rows, fetch_meta = fetch_m60_rows(security, start, bar_count)
+                remote_fetcher = lambda effective_start, min_rows: fetch_m60_rows(
+                    security,
+                    effective_start,
+                    bar_count,
+                )
             elif timeframe == "15m":
-                rows, fetch_meta = fetch_m15_rows(security, start, bar_count)
+                remote_fetcher = lambda effective_start, min_rows: fetch_m15_rows(
+                    security,
+                    effective_start,
+                    bar_count,
+                )
             else:
-                rows, fetch_meta = fetch_intraday_rows(security, timeframe=timeframe, period=period, start=start, bar_count=bar_count)
+                remote_fetcher = lambda effective_start, min_rows: fetch_intraday_rows(
+                    security,
+                    timeframe=timeframe,
+                    period=period,
+                    start=effective_start,
+                    bar_count=bar_count,
+                    source_probe_min_rows=min_rows,
+                )
+            rows, fetch_meta = _fetch_with_optional_local_store(
+                security,
+                timeframe=timeframe,
+                requested_start=start,
+                bar_count=bar_count,
+                overlap_bars=incremental_overlap_bars,
+                use_local_store=use_local_store,
+                local_store_root=local_store_root,
+                remote_fetcher=remote_fetcher,
+            )
             exported = None
             if timeframe == "5m":
                 exported = _reuse_existing_hk_5m_case(
@@ -891,6 +1012,7 @@ def run_batch_prepare(
                     data_fetch=fetch_meta,
                     pending_reverse_mode=pending_reverse_mode,
                     zhongshu_level=zhongshu_level,
+                    export_structure_images=export_structure_images,
                 )
             if timeframe == "60m":
                 m60_case = exported
@@ -943,6 +1065,10 @@ def main() -> None:
         pending_reverse_mode=args.pending_reverse_mode,
         zhongshu_level=args.zhongshu_level,
         timeframes=tuple(args.timeframes),
+        use_local_store=args.use_local_store,
+        incremental_overlap_bars=args.incremental_overlap_bars,
+        local_store_root=Path(args.local_store_root) if args.local_store_root else None,
+        export_structure_images=bool(args.export_structure_images),
     )
 
 

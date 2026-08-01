@@ -91,6 +91,27 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Reuse an existing fund.json instead of regenerating the capital-flow report when possible.",
     )
+    parser.add_argument(
+        "--export-structure-images",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether to export structure images (svg/png/jpg). Disable for JSON-first pipelines.",
+    )
+    parser.add_argument(
+        "--skip-gen-tech",
+        "--skipGenTech",
+        dest="skip_gen_tech",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Reuse existing 30M technical output and skip regenerating mixed technical analysis.",
+    )
+    parser.add_argument(
+        "--generate-lower-precision",
+        dest="generate_lower_precision",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether to generate 5M lower-precision entry under mixed 30M technical analysis.",
+    )
     return parser.parse_args()
 
 
@@ -153,6 +174,18 @@ def _load_existing_capital_flow_ref(fund_path: Path) -> CapitalFlowRef | None:
     return CapitalFlowRef(score=float(score), rating=str(rating), source=str(source or ""), bucket=str(bucket), path=fund_path)
 
 
+def _load_existing_technical_ref(tech_path: Path) -> TechnicalRef | None:
+    if not tech_path.exists():
+        return None
+    payload = json.loads(tech_path.read_text(encoding="utf-8"))
+    summary = payload.get("summary") or {}
+    conclusion = summary.get("conclusion")
+    suggestion = summary.get("suggestion")
+    if not conclusion and not suggestion:
+        return None
+    return TechnicalRef(conclusion=str(conclusion or ""), suggestion=str(suggestion or ""), path=tech_path)
+
+
 def _build_lower_precision_entry(
     *,
     symbol: str,
@@ -206,6 +239,8 @@ def _save_technical_report(
     end: str | None,
     adjust: str,
     source_profile: str | None = None,
+    export_structure_images: bool = True,
+    generate_lower_precision: bool = True,
 ) -> tuple[TechnicalRef, Path]:
     started_total = time.perf_counter()
     fetch_source, _ = resolve_a_share_intraday_source_label(source_profile)
@@ -254,31 +289,35 @@ def _save_technical_report(
     export_bis(paths["bis_csv"], bis)
     export_zhongshus(paths["zhongshu_csv"], zhongshus)
     export_macd(paths["macd_csv"], macd_points)
-    save_structure_charts(
-        bars=raw_bars,
-        normalized_bars=normalized_bars,
-        fractals=fractals,
-        bis=bis,
-        zhongshus=zhongshus,
-        svg_path=paths["svg"],
-        png_path=paths["png"],
-        jpg_path=paths["jpg"],
-        title=f"{normalized_symbol} {name} {PRIMARY_TECHNICAL_TIMEFRAME}",
-    )
+    if export_structure_images:
+        save_structure_charts(
+            bars=raw_bars,
+            normalized_bars=normalized_bars,
+            fractals=fractals,
+            bis=bis,
+            zhongshus=zhongshus,
+            svg_path=paths["svg"],
+            png_path=paths["png"],
+            jpg_path=paths["jpg"],
+            title=f"{normalized_symbol} {name} {PRIMARY_TECHNICAL_TIMEFRAME}",
+        )
 
     analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points)
     analysis_text = analysis_text.replace("60M", PRIMARY_TECHNICAL_LABEL)
     signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
-    started_precision = time.perf_counter()
-    precision_entry = _build_lower_precision_entry(
-        symbol=symbol,
-        start=start,
-        end=end,
-        adjust=adjust,
-        source_profile=source_profile,
-        signals=signals,
-    )
-    precision_seconds = time.perf_counter() - started_precision
+    precision_entry = None
+    precision_seconds = 0.0
+    if generate_lower_precision:
+        started_precision = time.perf_counter()
+        precision_entry = _build_lower_precision_entry(
+            symbol=symbol,
+            start=start,
+            end=end,
+            adjust=adjust,
+            source_profile=source_profile,
+            signals=signals,
+        )
+        precision_seconds = time.perf_counter() - started_precision
     precision_window_display = build_precision_window_display(precision_entry)
     advice_text = build_advice(name, PRIMARY_TECHNICAL_LABEL, raw_bars, signals)
     if precision_entry is not None:
@@ -450,16 +489,37 @@ def main() -> None:
         print(f"fundamental_reused= {fundamental_path}")
     fundamental_seconds = time.perf_counter() - started_fundamental
 
-    technical_result = _save_technical_report(
-        symbol=normalized_symbol,
-        name=args.name,
-        output_dir=output_dir,
-        start=args.start,
-        end=args.end,
-        adjust=args.adjust,
-        source_profile=getattr(args, "source_profile", None),
-    )
-    technical_ref, technical_path = technical_result[:2]
+    technical_path = output_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json"
+    if args.skip_gen_tech:
+        technical_ref = _load_existing_technical_ref(technical_path)
+        if technical_ref is None:
+            technical_ref = TechnicalRef(
+                conclusion="missing",
+                suggestion="未生成30M技术分析（skip_gen_tech=true，且不存在可复用tech.json）。",
+                path=technical_path,
+            )
+        print(f"technical_reused= {technical_path}")
+        LAST_TECHNICAL_TIMINGS.clear()
+        LAST_TECHNICAL_TIMINGS.update(
+            {
+                "technical_30m_seconds": 0.0,
+                "technical_5m_seconds": 0.0,
+                "technical_total_seconds": 0.0,
+            }
+        )
+    else:
+        technical_result = _save_technical_report(
+            symbol=normalized_symbol,
+            name=args.name,
+            output_dir=output_dir,
+            start=args.start,
+            end=args.end,
+            adjust=args.adjust,
+            source_profile=getattr(args, "source_profile", None),
+            export_structure_images=bool(args.export_structure_images),
+            generate_lower_precision=bool(args.generate_lower_precision),
+        )
+        technical_ref, technical_path = technical_result[:2]
     technical_timings = dict(LAST_TECHNICAL_TIMINGS)
 
     started_capital_flow = time.perf_counter()

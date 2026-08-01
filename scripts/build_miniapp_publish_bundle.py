@@ -68,6 +68,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional chart timeframes to include in the publish bundle. Defaults to all available chart assets.",
     )
     parser.add_argument(
+        "--publish-json-only",
+        action="store_true",
+        help="Publish chart JSON payloads only and skip copying image assets (svg/jpg/png).",
+    )
+    parser.add_argument(
         "--expected-tech-timeframes",
         nargs="+",
         choices=("day", "60m", "30m", "15m", "5m", "1m"),
@@ -791,26 +796,36 @@ def build_timeframe_technical_sections(
     return sections
 
 
-def build_chart_specs(stock_dir: Path, publish_timeframes: tuple[str, ...] | None = None) -> list[dict[str, str]]:
+def build_chart_specs(
+    stock_dir: Path,
+    publish_timeframes: tuple[str, ...] | None = None,
+    *,
+    include_chart_images: bool = True,
+) -> list[dict[str, str]]:
     charts: list[dict[str, str]] = []
     timeframe_order = publish_timeframes or ("30m", "5m", "1m", "day")
     for timeframe in timeframe_order:
-        for extension in ("svg", "jpg", "png"):
-            chart_path = stock_dir / timeframe / f"structure.{extension}"
-            if not chart_path.exists():
-                continue
-            chart_spec = {
-                "timeframe": timeframe,
-                "source_path": str(chart_path),
-                "relative_path": f"charts/{timeframe}.{extension}",
-                "label": f"{timeframe.upper()} 结构图",
-            }
-            data_source_path = find_latest_chart_bars_csv(stock_dir / timeframe, timeframe)
-            if data_source_path:
-                chart_spec["data_source_path"] = str(data_source_path)
-                chart_spec["data_relative_path"] = f"charts/{timeframe}.json"
+        chart_spec: dict[str, str] = {
+            "timeframe": timeframe,
+            "label": f"{timeframe.upper()} 结构图",
+        }
+
+        data_source_path = find_latest_chart_bars_csv(stock_dir / timeframe, timeframe)
+        if data_source_path:
+            chart_spec["data_source_path"] = str(data_source_path)
+            chart_spec["data_relative_path"] = f"charts/{timeframe}.json"
+
+        if include_chart_images:
+            for extension in ("svg", "jpg", "png"):
+                chart_path = stock_dir / timeframe / f"structure.{extension}"
+                if not chart_path.exists():
+                    continue
+                chart_spec["source_path"] = str(chart_path)
+                chart_spec["relative_path"] = f"charts/{timeframe}.{extension}"
+                break
+
+        if chart_spec.get("relative_path") or chart_spec.get("data_relative_path"):
             charts.append(chart_spec)
-            break
     return charts
 
 
@@ -1031,6 +1046,7 @@ def build_summary_payload(
     stock_dir: Path,
     group_item: dict[str, Any] | None,
     publish_timeframes: tuple[str, ...] | None = None,
+    include_chart_images: bool = True,
 ) -> dict[str, Any]:
     base_payload = read_json_if_exists(stock_dir / "base.json")
     fund_payload = read_json_if_exists(stock_dir / "fund.json")
@@ -1043,7 +1059,7 @@ def build_summary_payload(
     same_level_decomposition = build_same_level_decomposition(tech_payload)
     latest_signal_summary = build_latest_signal_summary(tech_payload)
     segment_stop_line = build_latest_segment_stop_reason_line(stock_dir, primary_technical_timeframe) if tech_payload else ""
-    charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes)
+    charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes, include_chart_images=include_chart_images)
     cover_chart_path = chart_publish_path(charts, primary_technical_timeframe) or chart_publish_path(charts, PRIMARY_TECHNICAL_TIMEFRAME)
     primary_technical_label = TIMEFRAME_LABELS.get(primary_technical_timeframe, primary_technical_timeframe.upper())
     updated_at = max(
@@ -1119,11 +1135,12 @@ def build_detail_payload(
     stock_dir: Path,
     group_item: dict[str, Any] | None,
     publish_timeframes: tuple[str, ...] | None = None,
+    include_chart_images: bool = True,
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
     base_payload = read_json_if_exists(stock_dir / "base.json")
     fund_payload = read_json_if_exists(stock_dir / "fund.json")
     primary_technical_timeframe, tech_payload = resolve_primary_technical_payload(stock_dir)
-    charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes)
+    charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes, include_chart_images=include_chart_images)
     fundamental = build_fundamental_section(base_payload)
     technical_sections = build_timeframe_technical_sections(
         stock_dir,
@@ -1170,7 +1187,7 @@ def build_detail_payload(
         "charts": [
             {
                 "timeframe": chart["timeframe"],
-                "path": f"stocks/{holding.symbol}/{chart['relative_path']}",
+                "path": (f"stocks/{holding.symbol}/{chart['relative_path']}" if chart.get("relative_path") else None),
                 "data_path": f"stocks/{holding.symbol}/{chart['data_relative_path']}" if chart.get("data_relative_path") else None,
                 "label": chart["label"],
             }
@@ -1195,10 +1212,11 @@ def copy_optional_json_asset(source_path: Path, target_path: Path) -> None:
 
 def copy_chart_assets(chart_specs: list[dict[str, str]], stock_target_dir: Path) -> None:
     for chart in chart_specs:
-        source_path = Path(chart["source_path"])
-        target_path = stock_target_dir / chart["relative_path"]
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, target_path)
+        if chart.get("source_path") and chart.get("relative_path"):
+            source_path = Path(chart["source_path"])
+            target_path = stock_target_dir / chart["relative_path"]
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, target_path)
         chart_data_payload = build_chart_data_payload(chart)
         if chart_data_payload and chart.get("data_relative_path"):
             write_json(stock_target_dir / chart["data_relative_path"], chart_data_payload)
@@ -1266,6 +1284,7 @@ def generate_bundle(
     snapshot_stamp: str | None,
     latest_only: bool,
     publish_timeframes: tuple[str, ...] | None = None,
+    include_chart_images: bool = True,
     expected_tech_timeframes: tuple[str, ...] | None = None,
     skip_regenerate_context: bool = False,
     skip_gen_fund_context: bool = False,
@@ -1301,8 +1320,20 @@ def generate_bundle(
             )
         )
         base_source_path = stock_dir / "base.json"
-        summary_payload = build_summary_payload(holding, stock_dir, group_item_map.get(holding.symbol), publish_timeframes=publish_timeframes)
-        detail_payload, chart_specs = build_detail_payload(holding, stock_dir, group_item_map.get(holding.symbol), publish_timeframes=publish_timeframes)
+        summary_payload = build_summary_payload(
+            holding,
+            stock_dir,
+            group_item_map.get(holding.symbol),
+            publish_timeframes=publish_timeframes,
+            include_chart_images=include_chart_images,
+        )
+        detail_payload, chart_specs = build_detail_payload(
+            holding,
+            stock_dir,
+            group_item_map.get(holding.symbol),
+            publish_timeframes=publish_timeframes,
+            include_chart_images=include_chart_images,
+        )
         summary_payloads.append(summary_payload)
         for target in targets:
             stock_target_dir = target / "stocks" / holding.symbol
@@ -1353,6 +1384,7 @@ def main() -> None:
         snapshot_stamp=args.snapshot_stamp,
         latest_only=args.latest_only,
         publish_timeframes=tuple(args.publish_timeframes) if args.publish_timeframes else None,
+        include_chart_images=not bool(args.publish_json_only),
         expected_tech_timeframes=tuple(args.expected_tech_timeframes) if args.expected_tech_timeframes else None,
         skip_regenerate_context=args.skip_regenerate_context,
         skip_gen_fund_context=args.skip_gen_fund_context,

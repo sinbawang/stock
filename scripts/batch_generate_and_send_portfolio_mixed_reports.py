@@ -27,6 +27,7 @@ DEFAULT_HOLDINGS_FILE = holdings_file()
 DEFAULT_TEXT_CHUNK_CHARS = 320
 PRIMARY_TECHNICAL_TIMEFRAME = "30m"
 PRIMARY_TECHNICAL_LABEL = "30M"
+LOWER_PRECISION_TIMEFRAME = "5m"
 
 
 @dataclass(frozen=True)
@@ -94,6 +95,12 @@ def parse_args() -> argparse.Namespace:
         choices=("day", "60m", "30m", "15m", "5m", "1m"),
         default=["day", "30m", "5m", "1m"],
         help="Technical levels to generate through batch_prepare_chanlun_reports.py. Defaults to day/30m/5m/1m.",
+    )
+    parser.add_argument(
+        "--export-structure-images",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether to export structure images for extra timeframes. Use --no-export-structure-images to speed up JSON-first pipelines.",
     )
     return parser.parse_args()
 
@@ -181,6 +188,7 @@ def _generate_all_timeframe_charts(
     m1_bars: int = 600,
     zhongshu_level: str = "bi",
     tech_timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
+    export_structure_images: bool = True,
 ) -> None:
     requested_timeframes = tuple(
         timeframe
@@ -196,33 +204,75 @@ def _generate_all_timeframe_charts(
             encoding="utf-8",
         )
 
-        _run_command(
-            [
-                sys.executable,
-                "-u",
-                str(SCRIPTS / "batch_prepare_chanlun_reports.py"),
-                "--holdings-file",
-                str(holdings_path),
-                "--pending-reverse-mode",
-                pending_reverse_mode,
-                "--day-bars",
-                str(day_bars),
-                "--m60-bars",
-                str(m60_bars),
-                "--m30-bars",
-                str(m30_bars),
-                "--m15-bars",
-                str(m15_bars),
-                "--m5-bars",
-                str(m5_bars),
-                "--m1-bars",
-                str(m1_bars),
-                "--zhongshu-level",
-                zhongshu_level,
-                "--timeframes",
-                *requested_timeframes,
-            ]
+        command = [
+            sys.executable,
+            "-u",
+            str(SCRIPTS / "batch_prepare_chanlun_reports.py"),
+            "--holdings-file",
+            str(holdings_path),
+            "--pending-reverse-mode",
+            pending_reverse_mode,
+            "--day-bars",
+            str(day_bars),
+            "--m60-bars",
+            str(m60_bars),
+            "--m30-bars",
+            str(m30_bars),
+            "--m15-bars",
+            str(m15_bars),
+            "--m5-bars",
+            str(m5_bars),
+            "--m1-bars",
+            str(m1_bars),
+            "--zhongshu-level",
+            zhongshu_level,
+            "--timeframes",
+            *requested_timeframes,
+        ]
+        if not export_structure_images:
+            command.append("--no-export-structure-images")
+        _run_command(command)
+
+
+def _symbol_reports_dir(holding: Holding) -> Path:
+    symbol = holding.symbol.zfill(5) if holding.market == "HK" else holding.symbol
+    return ROOT / "data" / "reports" / symbol
+
+
+def _validate_generated_artifacts(
+    holding: Holding,
+    *,
+    reuse_existing_base: bool,
+    skip_gen_fund: bool,
+    tech_timeframes: tuple[str, ...],
+) -> Path:
+    symbol_dir = _symbol_reports_dir(holding)
+    missing: list[str] = []
+
+    base_json = symbol_dir / "base.json"
+    if not base_json.exists():
+        missing.append("base.json")
+
+    if not skip_gen_fund:
+        fund_json = symbol_dir / "fund.json"
+        if not fund_json.exists():
+            missing.append("fund.json")
+
+    for timeframe in dict.fromkeys(tech_timeframes):
+        tech_json = symbol_dir / timeframe / "tech.json"
+        if not tech_json.exists():
+            missing.append(f"{timeframe}/tech.json")
+
+    if missing:
+        mode = "reuse_existing_base" if reuse_existing_base else "regenerate_base"
+        raise RuntimeError(
+            "Missing required generated artifacts for "
+            f"{holding.market} {holding.symbol} {holding.name} "
+            f"(base_mode={mode}, skip_gen_fund={skip_gen_fund}, tech_timeframes={','.join(dict.fromkeys(tech_timeframes))}): "
+            + ", ".join(missing)
         )
+
+    return symbol_dir
 
 
 def _existing_base_path(holding: Holding) -> Path:
@@ -278,38 +328,53 @@ def generate_bundle(
     m1_bars: int = 600,
     zhongshu_level: str = "bi",
     tech_timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
+    export_structure_images: bool = True,
 ) -> GeneratedBundle:
+    requested_timeframes = set(tech_timeframes)
+    run_primary_technical = PRIMARY_TECHNICAL_TIMEFRAME in requested_timeframes
+    run_lower_precision = run_primary_technical and (LOWER_PRECISION_TIMEFRAME in requested_timeframes)
+
     reuse_existing_base = bool(skip_gen_base and trust_existing_base) or _should_reuse_existing_base(holding, skip_gen_base)
     started_mixed = time.perf_counter()
     if holding.market == "CN":
+        mixed_command = [
+            sys.executable,
+            "-u",
+            str(SCRIPTS / "generate_a_share_single_mixed_report.py"),
+            holding.symbol,
+            "--name",
+            holding.name,
+            f"--{'skip-gen-base' if reuse_existing_base else 'no-skip-gen-base'}",
+            f"--{'skip-gen-fund' if skip_gen_fund else 'no-skip-gen-fund'}",
+            f"--{'skip-gen-tech' if not run_primary_technical else 'no-skip-gen-tech'}",
+            f"--{'generate-lower-precision' if run_lower_precision else 'no-generate-lower-precision'}",
+        ]
+        if not export_structure_images:
+            mixed_command.append("--no-export-structure-images")
         mixed_stdout = _run_command(
-            [
-                sys.executable,
-                "-u",
-                str(SCRIPTS / "generate_a_share_single_mixed_report.py"),
-                holding.symbol,
-                "--name",
-                holding.name,
-                f"--{'skip-gen-base' if reuse_existing_base else 'no-skip-gen-base'}",
-                f"--{'skip-gen-fund' if skip_gen_fund else 'no-skip-gen-fund'}",
-            ]
+            mixed_command
         )
     else:
+        mixed_command = [
+            sys.executable,
+            "-u",
+            str(SCRIPTS / "generate_h_share_single_mixed_report.py"),
+            holding.symbol,
+            "--name",
+            holding.name,
+            "--source",
+            "xueqiu",
+            "--fallback-source",
+            "akshare",
+            f"--{'skip-gen-base' if reuse_existing_base else 'no-skip-gen-base'}",
+            f"--{'skip-gen-fund' if skip_gen_fund else 'no-skip-gen-fund'}",
+            f"--{'skip-gen-tech' if not run_primary_technical else 'no-skip-gen-tech'}",
+            f"--{'generate-lower-precision' if run_lower_precision else 'no-generate-lower-precision'}",
+        ]
+        if not export_structure_images:
+            mixed_command.append("--no-export-structure-images")
         mixed_stdout = _run_command(
-            [
-                sys.executable,
-                "-u",
-                str(SCRIPTS / "generate_h_share_single_mixed_report.py"),
-                holding.symbol,
-                "--name",
-                holding.name,
-                "--source",
-                "xueqiu",
-                "--fallback-source",
-                "akshare",
-                f"--{'skip-gen-base' if reuse_existing_base else 'no-skip-gen-base'}",
-                f"--{'skip-gen-fund' if skip_gen_fund else 'no-skip-gen-fund'}",
-            ]
+            mixed_command
         )
     print(f"timing {holding.symbol} mixed seconds={time.perf_counter() - started_mixed:.2f}", flush=True)
 
@@ -325,10 +390,16 @@ def generate_bundle(
         m1_bars=m1_bars,
         zhongshu_level=zhongshu_level,
         tech_timeframes=tech_timeframes,
+        export_structure_images=export_structure_images,
     )
     print(f"timing {holding.symbol} extra_charts seconds={time.perf_counter() - started_charts:.2f}", flush=True)
 
-    symbol_dir = ROOT / "data" / "reports" / (holding.symbol.zfill(5) if holding.market == "HK" else holding.symbol)
+    symbol_dir = _validate_generated_artifacts(
+        holding,
+        reuse_existing_base=reuse_existing_base,
+        skip_gen_fund=skip_gen_fund,
+        tech_timeframes=tech_timeframes,
+    )
     primary_chart_dir = symbol_dir / PRIMARY_TECHNICAL_TIMEFRAME
 
     return GeneratedBundle(
@@ -338,8 +409,8 @@ def generate_bundle(
         capital_flow_report=Path(_extract_value(mixed_stdout, "capital_flow_report=")),
         combined_report=Path(_extract_value(mixed_stdout, "combined_report=")),
         combined_bucket=_extract_value(mixed_stdout, "combined_bucket="),
-        chart_svg=(primary_chart_dir / "structure.svg") if (primary_chart_dir / "structure.svg").exists() else None,
-        chart_jpg=(primary_chart_dir / "structure.jpg") if (primary_chart_dir / "structure.jpg").exists() else None,
+        chart_svg=(primary_chart_dir / "structure.svg") if export_structure_images and (primary_chart_dir / "structure.svg").exists() else None,
+        chart_jpg=(primary_chart_dir / "structure.jpg") if export_structure_images and (primary_chart_dir / "structure.jpg").exists() else None,
     )
 
 
@@ -367,6 +438,7 @@ def main() -> None:
             m1_bars=args.m1_bars,
             zhongshu_level=args.zhongshu_level,
             tech_timeframes=tuple(args.tech_timeframes),
+            export_structure_images=bool(args.export_structure_images),
         )
         print(
             f"generated {holding.symbol} bucket={bundle.combined_bucket} chart_svg={bundle.chart_svg} chart_jpg={bundle.chart_jpg}",

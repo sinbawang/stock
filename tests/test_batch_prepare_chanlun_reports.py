@@ -120,3 +120,53 @@ def test_fetch_intraday_rows_reuses_local_hk_5m_cache_before_remote_fetch(monkey
     assert rows == cached_rows
     assert payload["source"] == "local.hk_5m_cache"
     assert payload["actual_source"] == "local.hk_5m_cache"
+
+
+def test_fetch_with_optional_local_store_uses_incremental_start_and_tail(monkeypatch, tmp_path: Path) -> None:
+    security = module.Security("00700", "腾讯", "HK")
+    local_rows = [
+        {"ts": "2026-07-01 09:30", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+        {"ts": "2026-07-01 10:00", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+    ]
+    remote_rows = [
+        {"ts": "2026-07-01 09:55", "open": 1.1, "high": 1.2, "low": 1.0, "close": 1.1, "volume": 2},
+        {"ts": "2026-07-01 10:05", "open": 1.2, "high": 1.3, "low": 1.1, "close": 1.2, "volume": 3},
+    ]
+    captured = {}
+
+    def fake_remote_fetcher(start: str):
+        captured["start"] = start
+        return remote_rows, {"source": "xueqiu", "actual_bar_count": len(remote_rows)}
+
+    monkeypatch.setattr(module, "load_local_rows", lambda *args, **kwargs: local_rows)
+    monkeypatch.setattr(
+        module,
+        "upsert_local_rows",
+        lambda *args, **kwargs: (
+            [
+                {"ts": "2026-07-01 09:30", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+                {"ts": "2026-07-01 09:55", "open": 1.1, "high": 1.2, "low": 1.0, "close": 1.1, "volume": 2},
+                {"ts": "2026-07-01 10:00", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+                {"ts": "2026-07-01 10:05", "open": 1.2, "high": 1.3, "low": 1.1, "close": 1.2, "volume": 3},
+            ],
+            SimpleNamespace(added=1, updated=1, total=4),
+            tmp_path / "kline.csv",
+        ),
+    )
+
+    rows, payload = module._fetch_with_optional_local_store(
+        security,
+        timeframe="5m",
+        requested_start="2026-06-20 09:30",
+        bar_count=3,
+        overlap_bars=2,
+        use_local_store=True,
+        local_store_root=tmp_path,
+        remote_fetcher=fake_remote_fetcher,
+    )
+
+    assert captured["start"] == "2026-07-01 09:50"
+    assert len(rows) == 3
+    assert payload["local_store"]["merged_total_rows"] == 4
+    assert payload["local_store"]["analysis_rows"] == 3
+    assert payload["actual_bar_count"] == 3

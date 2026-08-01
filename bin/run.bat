@@ -34,6 +34,9 @@ set "RUN_PROFILE_ARGS="
 if /I "%~1"=="help" goto :usage
 if /I "%~1"=="/?" goto :usage
 if /I "%~1"=="checkxq" goto :checkxq
+if /I "%~1"=="opsday" goto :opsday
+if /I "%~1"=="probe_day_batch" goto :probe_day_batch
+if /I "%~1"=="observability" goto :observability
 if /I "%~1"=="intraday" (
 	set "RUN_PROFILE_ARGS=--skip-gen-base --skip-gen-fund --tech-timeframes 5m --publish-timeframes 30m 5m day"
 	shift
@@ -58,6 +61,77 @@ pushd "%ROOT_DIR%" >nul
 set "EXIT_CODE=%ERRORLEVEL%"
 popd >nul
 
+goto :exit_with_elapsed
+
+:opsday
+call :ensure_runtime_deps pandas numpy pydantic matplotlib mplfinance typer requests akshare browser_cookie3 pypdf
+if errorlevel 1 (
+	set "EXIT_CODE=1"
+	goto :exit_with_elapsed
+)
+
+if not defined DAY_PROBE_MARKET set "DAY_PROBE_MARKET=ALL"
+if not defined DAY_PROBE_LIMIT set "DAY_PROBE_LIMIT=20"
+if not defined DAY_PROBE_DAY_BARS set "DAY_PROBE_DAY_BARS=1200"
+if not defined DAY_PROBE_OVERLAP_BARS set "DAY_PROBE_OVERLAP_BARS=120"
+if not defined DAY_PROBE_HISTORY_WINDOW set "DAY_PROBE_HISTORY_WINDOW=10"
+if not defined OBS_TIMING_WINDOW set "OBS_TIMING_WINDOW=7"
+
+pushd "%ROOT_DIR%" >nul
+echo [opsday] Running day batch probe with execute-run ...
+"%PYTHON_BIN%" "%ROOT_DIR%\scripts\run_day_incremental_probe_batch.py" --holdings-file "%ROOT_DIR%\data\stock_holdings.json" --market %DAY_PROBE_MARKET% --limit %DAY_PROBE_LIMIT% --day-bars %DAY_PROBE_DAY_BARS% --incremental-overlap-bars %DAY_PROBE_OVERLAP_BARS% --history-window %DAY_PROBE_HISTORY_WINDOW% --execute-run
+set "EXIT_CODE=%ERRORLEVEL%"
+if not "%EXIT_CODE%"=="0" (
+	popd >nul
+	goto :exit_with_elapsed
+)
+
+echo [opsday] Generating incremental observability report ...
+"%PYTHON_BIN%" "%ROOT_DIR%\scripts\generate_incremental_observability_report.py" --timing-window %OBS_TIMING_WINDOW%
+set "EXIT_CODE=%ERRORLEVEL%"
+popd >nul
+goto :exit_with_elapsed
+
+:probe_day_batch
+call :ensure_runtime_deps pandas numpy pydantic matplotlib mplfinance typer requests akshare browser_cookie3 pypdf
+if errorlevel 1 (
+	set "EXIT_CODE=1"
+	goto :exit_with_elapsed
+)
+
+set "DAY_PROBE_FORWARD_ARGS="
+:collect_day_probe_args
+if "%~2"=="" goto after_collect_day_probe_args
+set "DAY_PROBE_FORWARD_ARGS=!DAY_PROBE_FORWARD_ARGS! "%~2""
+shift
+goto collect_day_probe_args
+:after_collect_day_probe_args
+
+pushd "%ROOT_DIR%" >nul
+"%PYTHON_BIN%" "%ROOT_DIR%\scripts\run_day_incremental_probe_batch.py" !DAY_PROBE_FORWARD_ARGS!
+set "EXIT_CODE=%ERRORLEVEL%"
+popd >nul
+goto :exit_with_elapsed
+
+:observability
+call :ensure_runtime_deps pandas numpy pydantic matplotlib mplfinance typer requests akshare browser_cookie3 pypdf
+if errorlevel 1 (
+	set "EXIT_CODE=1"
+	goto :exit_with_elapsed
+)
+
+set "OBS_FORWARD_ARGS="
+:collect_obs_args
+if "%~2"=="" goto after_collect_obs_args
+set "OBS_FORWARD_ARGS=!OBS_FORWARD_ARGS! "%~2""
+shift
+goto collect_obs_args
+:after_collect_obs_args
+
+pushd "%ROOT_DIR%" >nul
+"%PYTHON_BIN%" "%ROOT_DIR%\scripts\generate_incremental_observability_report.py" !OBS_FORWARD_ARGS!
+set "EXIT_CODE=%ERRORLEVEL%"
+popd >nul
 goto :exit_with_elapsed
 
 :checkxq
@@ -103,6 +177,18 @@ echo.
 echo Recommended templates:
 echo   Daily publish:
 echo     %~n0 --skip-gen-base --skip-gen-fund --parallelism 4
+echo.
+echo   Daily ops pipeline ^(batch day probe + observability^):
+echo     %~n0 opsday
+echo.
+echo   Daily ops with env overrides:
+echo     set DAY_PROBE_LIMIT=30 ^&^& set DAY_PROBE_MARKET=ALL ^&^& set DAY_PROBE_DAY_BARS=1200 ^&^& %~n0 opsday
+echo.
+echo   Run batch day probe only:
+echo     %~n0 probe_day_batch --holdings-file data\stock_holdings.json --market ALL --limit 20 --execute-run
+echo.
+echo   Run observability only:
+echo     %~n0 observability --timing-window 7
 echo.
 echo   Intraday refresh (30M + standalone 5M only):
 echo     %~n0 intraday --parallelism 4

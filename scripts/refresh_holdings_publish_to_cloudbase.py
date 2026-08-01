@@ -96,7 +96,9 @@ def _write_timing_report(
             "pending_reverse_mode": args.pending_reverse_mode,
             "zhongshu_level": args.zhongshu_level,
             "tech_timeframes": list(args.tech_timeframes),
+            "export_structure_images": bool(args.export_structure_images),
             "publish_timeframes": list(args.publish_timeframes) if args.publish_timeframes else None,
+            "publish_json_only": bool(args.publish_json_only),
             "force_upload": bool(getattr(args, "force_upload", False)),
         },
         "stages": {name: _round_seconds(value) for name, value in stage_seconds.items()},
@@ -199,11 +201,22 @@ def parse_args() -> argparse.Namespace:
         help="Technical levels to generate in addition to the mixed report path. Defaults to day/30m/5m/1m.",
     )
     parser.add_argument(
+        "--export-structure-images",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether to export structure images for extra timeframe generation. Use --no-export-structure-images for JSON-first publishing.",
+    )
+    parser.add_argument(
         "--publish-timeframes",
         nargs="+",
         choices=("day", "60m", "30m", "15m", "5m", "1m"),
         default=None,
         help="Optional chart timeframes to include in the publish bundle. Defaults to all available chart assets.",
+    )
+    parser.add_argument(
+        "--publish-json-only",
+        action="store_true",
+        help="Build/upload chart JSON payloads only and skip chart image assets in miniapp publish bundle.",
     )
     parser.add_argument("--cloud-prefix", default="miniapp-publish/latest", help="Cloud storage prefix for upload")
     parser.add_argument("--env-id", default=None, help="CloudBase env id forwarded to uploader")
@@ -266,7 +279,13 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
         raise RuntimeError("No holdings found for regeneration")
 
     worker_count = max(1, min(args.parallelism, len(holdings)))
-    print(f"regenerate_holdings={len(holdings)} parallelism={worker_count} skip_gen_base={args.skip_gen_base} trust_existing_base={args.trust_existing_base} skip_gen_fund={args.skip_gen_fund} tech_timeframes={','.join(args.tech_timeframes)}", flush=True)
+    print(
+        f"regenerate_holdings={len(holdings)} parallelism={worker_count} "
+        f"skip_gen_base={args.skip_gen_base} trust_existing_base={args.trust_existing_base} "
+        f"skip_gen_fund={args.skip_gen_fund} tech_timeframes={','.join(args.tech_timeframes)} "
+        f"export_structure_images={bool(args.export_structure_images)}",
+        flush=True,
+    )
 
     failures: list[dict[str, str]] = []
     per_holding: list[dict[str, object]] = []
@@ -289,6 +308,7 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                     m1_bars=args.m1_bars,
                     zhongshu_level=args.zhongshu_level,
                     tech_timeframes=tuple(args.tech_timeframes),
+                    export_structure_images=bool(args.export_structure_images),
                 )
                 print(
                     f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
@@ -347,6 +367,7 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                     m1_bars=args.m1_bars,
                     zhongshu_level=args.zhongshu_level,
                     tech_timeframes=tuple(args.tech_timeframes),
+                    export_structure_images=bool(args.export_structure_images),
                 ): (index, holding, time.perf_counter())
                 for index, holding in enumerate(holdings, start=1)
             }
@@ -427,6 +448,7 @@ def rebuild_publish_bundle(args: argparse.Namespace, regeneration_summary: dict[
         snapshot_stamp=args.snapshot_stamp,
         latest_only=args.latest_only,
         publish_timeframes=tuple(args.publish_timeframes) if args.publish_timeframes else None,
+        include_chart_images=not bool(args.publish_json_only),
         expected_tech_timeframes=tuple(getattr(args, "tech_timeframes", []) or []) or None,
         skip_regenerate_context=bool(getattr(args, "skip_regenerate", False)),
         skip_gen_fund_context=bool(getattr(args, "skip_gen_fund", False)),
