@@ -10,3 +10,4 @@
 - [incremental-observability-runbook.md](incremental-observability-runbook.md): 本地历史仓库增量命中率与耗时趋势观测
 - [day-incremental-probe-runbook.md](day-incremental-probe-runbook.md): day 级别单标增量抓取/分析探针
 - [day-incremental-probe-batch-runbook.md](day-incremental-probe-batch-runbook.md): day 级别持仓批量增量探针榜单
+- [kline-cache-cloud-backup-runbook.md](kline-cache-cloud-backup-runbook.md): 本地 K 线缓存备份到 CloudBase/COS 与新实例恢复手册

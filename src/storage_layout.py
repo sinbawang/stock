@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -11,7 +12,21 @@ DATA_DIR = ROOT / "data"
 REPORTS_DIR = DATA_DIR / "reports"
 REPORTS_META_DIR = REPORTS_DIR / "_meta"
 DATA_META_DIR = DATA_DIR / "_meta"
-KLINE_CACHE_DIR = DATA_DIR / "cache" / "kline"
+
+
+def _resolve_kline_cache_dir() -> Path:
+    for env_key in ("STOCK_LOCAL_STORE_ROOT", "STOCK_KLINE_CACHE_DIR"):
+        candidate = os.getenv(env_key, "").strip()
+        if not candidate:
+            continue
+        path = Path(candidate).expanduser()
+        if not path.is_absolute():
+            path = ROOT / path
+        return path
+    return DATA_DIR / "cache" / "kline"
+
+
+KLINE_CACHE_DIR = _resolve_kline_cache_dir()
 HOLDINGS_FILE = CONFIG_DIR / "stock_holdings.json"
 CAPITAL_FLOW_CACHE_DIR = DATA_META_DIR / "capital_flow_cache"
 

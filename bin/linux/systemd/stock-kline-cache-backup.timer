@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily backup of stock kline cache to CloudBase storage
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=stock-kline-cache-backup.service
+
+[Install]
+WantedBy=timers.target

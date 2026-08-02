@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 import sys
 
@@ -38,6 +39,18 @@ def test_timeframe_report_paths_uses_reports_symbol_timeframe_layout() -> None:
 
 def test_holdings_file_points_to_canonical_stock_holdings_json() -> None:
     assert holdings_file() == ROOT / "data" / "stock_holdings.json"
+
+
+def test_kline_cache_dir_honors_local_store_root_env(monkeypatch) -> None:
+    override_dir = ROOT / "build" / "persistent-cache"
+    monkeypatch.setenv("STOCK_LOCAL_STORE_ROOT", str(override_dir))
+    monkeypatch.delenv("STOCK_KLINE_CACHE_DIR", raising=False)
+
+    import storage_layout
+
+    reloaded = importlib.reload(storage_layout)
+
+    assert reloaded.KLINE_CACHE_DIR == override_dir
 
 
 def test_cn_build_paths_routes_analysis_outputs_under_analyze_dir() -> None:

@@ -61,6 +61,11 @@ def parse_args() -> argparse.Namespace:
         help="Local image tag used for the validation build",
     )
     parser.add_argument(
+        "--persistent-data-dir",
+        default=os.environ.get("STOCK_LOCAL_STORE_ROOT") or os.environ.get("STOCK_KLINE_CACHE_DIR") or "/data/stock-kline-cache",
+        help="Persistent directory for the local K-line cache inside the container; defaults to /data/stock-kline-cache.",
+    )
+    parser.add_argument(
         "--container-port",
         type=int,
         default=8000,
@@ -148,6 +153,9 @@ def build_runtime_env(args: argparse.Namespace) -> dict[str, str]:
         "CLOUDBASE_ENV_ID": args.env_id,
         "CLOUDBASE_REGION": args.region,
     }
+    if args.persistent_data_dir:
+        env_map.setdefault("STOCK_LOCAL_STORE_ROOT", args.persistent_data_dir)
+        env_map.setdefault("STOCK_KLINE_CACHE_DIR", args.persistent_data_dir)
     if args.api_key:
         if "&" in args.api_key:
             raise SystemExit("CLOUDBASE_APIKEY cannot contain '&' when passed through --envParams.")

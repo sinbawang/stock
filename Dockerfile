@@ -4,6 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV MPLCONFIGDIR=/tmp/matplotlib
 ENV PYTHONPATH=/app/src:/app/scripts
+ENV STOCK_LOCAL_STORE_ROOT=/data/stock-kline-cache
+ENV STOCK_KLINE_CACHE_DIR=/data/stock-kline-cache
 
 WORKDIR /app
 
@@ -17,7 +19,7 @@ COPY src /app/src
 COPY scripts /app/scripts
 COPY docs /app/docs
 
-RUN mkdir -p /app/data /app/data/_meta /app/data/reports /app/data/reports/_meta
+RUN mkdir -p /app/data /app/data/_meta /app/data/reports /app/data/reports/_meta /data/stock-kline-cache
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .

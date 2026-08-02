@@ -1,0 +1,16 @@
+[Unit]
+Description=Backup local stock kline cache to CloudBase storage
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/opt/stock
+EnvironmentFile=-/etc/default/stock-kline-cache
+ExecStartPre=/usr/bin/env bash /opt/stock/bin/linux/check_kline_cache_cloudbase.sh --cloud-prefix ${CLOUD_PREFIX:-stock-kline-cache/latest}
+ExecStart=/usr/bin/env bash /opt/stock/bin/linux/backup_kline_cache_to_cloudbase.sh --cloud-prefix ${CLOUD_PREFIX:-stock-kline-cache/latest} --manifest-path ${MANIFEST_PATH:-/opt/stock/build/stock-kline-cache/cloudbase-upload-manifest.json}
+TimeoutStartSec=20min
+
+[Install]
+WantedBy=multi-user.target
