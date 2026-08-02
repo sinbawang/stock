@@ -117,6 +117,36 @@ sudo bash bin/linux/install_kline_cache_backup_systemd.sh
 sudo SERVICE_USER=ubuntu WORKING_DIR=/opt/stock CLOUD_PREFIX=stock-kline-cache/latest MANIFEST_PATH=/opt/stock/build/stock-kline-cache/cloudbase-upload-manifest.json bash bin/linux/install_kline_cache_backup_systemd.sh
 ```
 
+## 新实例自动化（cloud-init）
+
+如果你不想在每台新实例手工执行安装，可在创建 CVM 时直接使用 cloud-init。
+
+模板文件：
+
+- `bin/linux/cloud-init/install-kline-cache-backup.yaml`
+
+使用步骤：
+
+1. 把模板中的 `<YOUR_REPO_URL>`、`<YOUR_BRANCH>`、`CLOUDBASE_APIKEY` 替换为真实值。
+2. 在腾讯云创建实例时，把该 YAML 作为 user-data 注入。
+3. 实例首启后 cloud-init 会自动：
+  - 拉取代码到 `/opt/stock`
+  - 写入 `/etc/default/stock-kline-cache`
+  - 执行 systemd 一键安装脚本
+  - 触发一次首轮备份
+
+验证命令：
+
+```bash
+systemctl status stock-kline-cache-backup.timer --no-pager
+journalctl -u stock-kline-cache-backup.service -n 200 --no-pager
+```
+
+注意：
+
+1. 模板里默认把 `CLOUDBASE_APIKEY` 写入 `/etc/default/stock-kline-cache`，权限是 `0600`。
+2. 更高安全要求场景建议改为实例启动后从密钥管理服务注入，而不是在模板里明文保存。
+
 说明：
 
 1. `stock-kline-cache-backup.service` 已内置 `ExecStartPre`，会先跑健康检查。

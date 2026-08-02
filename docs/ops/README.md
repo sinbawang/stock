@@ -11,3 +11,7 @@
 - [day-incremental-probe-runbook.md](day-incremental-probe-runbook.md): day 级别单标增量抓取/分析探针
 - [day-incremental-probe-batch-runbook.md](day-incremental-probe-batch-runbook.md): day 级别持仓批量增量探针榜单
 - [kline-cache-cloud-backup-runbook.md](kline-cache-cloud-backup-runbook.md): 本地 K 线缓存备份到 CloudBase/COS 与新实例恢复手册
+
+相关模板：
+
+- `bin/linux/cloud-init/install-kline-cache-backup.yaml`: 新实例首启自动安装 kline 备份服务的 cloud-init 模板
