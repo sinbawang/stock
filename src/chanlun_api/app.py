@@ -92,7 +92,9 @@ class PublishRefreshRequest(BaseModel):
     m1_bars: int = Field(default=600, ge=1)
     zhongshu_level: ZhongshuLevel = "bi"
     tech_timeframes: list[Timeframe] = Field(default_factory=lambda: ["day", "30m", "5m", "1m"])
+    export_structure_images: bool = True
     publish_timeframes: list[Timeframe] | None = None
+    publish_json_only: bool = False
     cloud_prefix: str = "miniapp-publish/latest"
     env_id: str | None = None
     region: str | None = None
@@ -100,6 +102,7 @@ class PublishRefreshRequest(BaseModel):
     api_key_name: str | None = None
     api_key_expire_in: int | None = Field(default=None, ge=1)
     delete_created_api_key: bool = False
+    force_upload: bool = False
     upload_dry_run: bool = False
     client_request_id: str | None = None
 
@@ -132,6 +135,7 @@ class TechnicalRefreshRequest(BaseModel):
     refresh_mode: TechnicalRefreshMode = "m30_intraday"
     tech_timeframes: list[Timeframe] | None = None
     publish_timeframes: list[Timeframe] | None = None
+    publish_json_only: bool = False
     cloud_prefix: str = "miniapp-publish/latest"
     env_id: str | None = None
     region: str | None = None
@@ -139,6 +143,7 @@ class TechnicalRefreshRequest(BaseModel):
     api_key_name: str | None = None
     api_key_expire_in: int | None = Field(default=None, ge=1)
     delete_created_api_key: bool = False
+    force_upload: bool = False
     upload_dry_run: bool = False
 
 
@@ -252,6 +257,8 @@ def _build_publish_namespace(
     api_key_name: str | None,
     api_key_expire_in: int | None,
     delete_created_api_key: bool,
+    force_upload: bool,
+    publish_json_only: bool,
     upload_dry_run: bool,
 ) -> Namespace:
     return Namespace(
@@ -270,6 +277,8 @@ def _build_publish_namespace(
         api_key_name=api_key_name,
         api_key_expire_in=api_key_expire_in,
         delete_created_api_key=delete_created_api_key,
+        force_upload=force_upload,
+        publish_json_only=publish_json_only,
         upload_dry_run=upload_dry_run,
     )
 
@@ -321,7 +330,9 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
         m1_bars=request.m1_bars,
         zhongshu_level=request.zhongshu_level,
         tech_timeframes=tuple(_dedupe_timeframes(request.tech_timeframes)),
+        export_structure_images=request.export_structure_images,
         publish_timeframes=tuple(_dedupe_timeframes(request.publish_timeframes)) if request.publish_timeframes else None,
+        publish_json_only=request.publish_json_only,
         cloud_prefix=request.cloud_prefix,
         env_id=request.env_id,
         region=request.region,
@@ -329,6 +340,7 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
         api_key_name=request.api_key_name,
         api_key_expire_in=request.api_key_expire_in,
         delete_created_api_key=request.delete_created_api_key,
+        force_upload=request.force_upload,
         upload_dry_run=request.upload_dry_run,
     )
     regeneration_result: dict[str, Any] | None = None
@@ -386,6 +398,8 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             api_key_name=request.api_key_name,
             api_key_expire_in=request.api_key_expire_in,
             delete_created_api_key=request.delete_created_api_key,
+            force_upload=request.force_upload,
+            publish_json_only=request.publish_json_only,
             upload_dry_run=request.upload_dry_run,
         )
         publish_result = _publish_build_and_upload(publish_args)
