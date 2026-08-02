@@ -356,6 +356,8 @@ Generated at: 2026-05-30T20:05:52
         "最近买点：二买 2026-05-29T10:30:00，价格 10.25",
         "最近卖点：三卖 2026-05-27T14:30:00，价格 10.88",
     ]
+    assert summary_payload["cards"]["technical"]["segment_tail_interpretations"]
+    assert summary_payload["cards"]["technical"]["segment_tail_interpretations"][-1]["kind"] == "pending_confirmation"
 
     detail_payload = json.loads((latest_dir / "stocks" / "00700" / "detail.json").read_text(encoding="utf-8"))
     assert detail_payload["headline"]["priority"] == "P1"
@@ -391,6 +393,8 @@ Generated at: 2026-05-30T20:05:52
     assert detail_payload["sections"][1]["latest_signal_summary"]["latest_overall"]["label"] == "二买"
     assert detail_payload["sections"][1]["technical_focus_lines"][0].startswith("上个已完成走势：上涨")
     assert any("重写说明：前一中枢 ZS2 的走出笔 29 被当前中枢 ZS3 复用为进入笔 29" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
+    assert detail_payload["sections"][1]["segment_tail_interpretations"]
+    assert detail_payload["sections"][1]["segment_tail_interpretations"][-1]["kind"] == "pending_confirmation"
     assert any("候选完成待确认" in line or "边界仍待右侧结构确认稳定" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert any("工程结构摘要" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert any("停驻原因：" in line for line in detail_payload["sections"][1]["technical_focus_lines"])

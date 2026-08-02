@@ -168,6 +168,54 @@ def test_gap_candidate_weak_reverse_then_late_strong_same_dir_confirms_break() -
     assert delayed_long is True
 
 
+def test_immediate_strong_break_is_not_treated_as_delayed_true() -> None:
+    """没有经历弱轮次时，即时强推进应返回 True 但不标记为 delayed True。"""
+    immediate_bis = [
+        _bi(0, BiDirection.UP, 120, 100),
+        _bi(1, BiDirection.DOWN, 108, 104),
+        _bi(2, BiDirection.UP, 125, 106),
+        _bi(3, BiDirection.DOWN, 112, 109),
+        _bi(4, BiDirection.UP, 111.2, 108.8),
+        _bi(5, BiDirection.DOWN, 111.0, 108.6),
+    ]
+    delayed_bis = [
+        _bi(0, BiDirection.UP, 120, 100),
+        _bi(1, BiDirection.DOWN, 108, 104),
+        _bi(2, BiDirection.UP, 125, 106),
+        _bi(3, BiDirection.DOWN, 112, 109),
+        _bi(4, BiDirection.UP, 111.2, 108.8),
+        _bi(5, BiDirection.DOWN, 111.0, 109.2),
+        _bi(6, BiDirection.UP, 111.8, 108.8),
+        _bi(7, BiDirection.DOWN, 111.0, 108.3),
+    ]
+
+    outcome, delayed = _rediscriminate_gap_break_detail(immediate_bis, 3)
+    assert outcome is True
+    assert delayed is False
+
+    outcome_with_weak_round, delayed_with_weak_round = _rediscriminate_gap_break_detail(delayed_bis, 3)
+    assert outcome_with_weak_round is True
+    assert delayed_with_weak_round is True
+
+
+def test_multiple_weak_rounds_still_emit_delayed_true() -> None:
+    """多轮弱信号穿插后，后续强推进仍应判为 delayed True。"""
+    bis = [
+        _bi(0, BiDirection.UP, 120, 100),
+        _bi(1, BiDirection.DOWN, 108, 104),
+        _bi(2, BiDirection.UP, 125, 106),
+        _bi(3, BiDirection.DOWN, 112, 109),
+        _bi(4, BiDirection.UP, 111.2, 108.8),
+        _bi(5, BiDirection.DOWN, 110.6, 109.2),
+        _bi(6, BiDirection.UP, 111.4, 109.0),
+        _bi(7, BiDirection.DOWN, 110.8, 108.7),
+    ]
+
+    outcome, delayed = _rediscriminate_gap_break_detail(bis, 3)
+    assert outcome is True
+    assert delayed is True
+
+
 def test_multiple_gap_candidates_switch_priority_deterministically() -> None:
     """连续缺口候选出现时，当前策略应稳定地以后候选覆盖前候选。"""
     pending = None

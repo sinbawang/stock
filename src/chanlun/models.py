@@ -116,6 +116,17 @@ class Bi:
 
 
 @dataclass
+class SegmentTailInterpretation:
+    """尾部未确认线段的解释层结果。"""
+    segment_id: int
+    kind: str = "pending_confirmation"
+    confidence: str = "low"
+    uncertainty: str = ""
+    evidence: str = ""
+    suggested_catalyst: str = ""
+
+
+@dataclass
 class Segment:
     """
     线段（由至少 3 笔组成的同向推进结构）。

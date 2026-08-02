@@ -24,8 +24,7 @@ from chanlun.analysis import (
     format_structure_status_label,
 )
 from chanlun.models import Bi, BiDirection
-from chanlun.segment import identify_segments
-from chanlun.segment import describe_stop_reason
+from chanlun.segment import build_segment_tail_interpretations, describe_stop_reason, identify_segments
 from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
 
@@ -977,11 +976,22 @@ def build_segment_stop_reason_annotations(segment_records: list[dict[str, Any]],
     }
 
 
-def build_latest_segment_stop_reason_line(stock_dir: Path, timeframe: str = PRIMARY_TECHNICAL_TIMEFRAME) -> str:
+def build_latest_segment_stop_reason_line(
+    stock_dir: Path,
+    timeframe: str = PRIMARY_TECHNICAL_TIMEFRAME,
+    tech_payload: dict[str, Any] | None = None,
+) -> str:
     timeframe_dir = stock_dir / timeframe
     bars_csv = find_latest_chart_bars_csv(timeframe_dir, timeframe)
     if bars_csv is None:
-        return ""
+        if not tech_payload:
+            return ""
+        summary = (tech_payload.get("summary") or {})
+        structure_state = (summary.get("structure_state") or {})
+        current_structure_status = safe_text(structure_state.get("current_structure_status"))
+        fallback_label = "候选完成待确认" if current_structure_status == "candidate_completed_waiting_stability" else "尾段待确认"
+        timeframe_label = TIMEFRAME_LABELS.get(timeframe, timeframe.upper())
+        return f"{timeframe_label} 最新线段 停驻原因：{fallback_label}"
 
     bis_records = read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_bis"))
     segment_records = build_segment_records(
@@ -989,7 +999,14 @@ def build_latest_segment_stop_reason_line(stock_dir: Path, timeframe: str = PRIM
         read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_segments")),
     )
     if not segment_records:
-        return ""
+        if not tech_payload:
+            return ""
+        summary = (tech_payload.get("summary") or {})
+        structure_state = (summary.get("structure_state") or {})
+        current_structure_status = safe_text(structure_state.get("current_structure_status"))
+        fallback_label = "候选完成待确认" if current_structure_status == "candidate_completed_waiting_stability" else "尾段待确认"
+        timeframe_label = TIMEFRAME_LABELS.get(timeframe, timeframe.upper())
+        return f"{timeframe_label} 最新线段 停驻原因：{fallback_label}"
 
     latest = segment_records[-1]
     stop_reason_label = safe_text(latest.get("stop_reason_label"))
@@ -1008,6 +1025,62 @@ def sibling_analysis_csv(bars_csv: Path, suffix: str) -> Path:
     return bars_csv.with_name(f"{bars_csv.stem}{suffix}.csv")
 
 
+def serialize_segment_tail_interpretation(interpretation: Any) -> dict[str, Any]:
+    return {
+        "segment_id": interpretation.segment_id,
+        "kind": interpretation.kind,
+        "confidence": interpretation.confidence,
+        "uncertainty": interpretation.uncertainty,
+        "evidence": interpretation.evidence,
+        "suggested_catalyst": interpretation.suggested_catalyst,
+    }
+
+
+def build_segment_tail_interpretations_fallback(tech_payload: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not tech_payload:
+        return []
+
+    summary = (tech_payload.get("summary") or {})
+    structure_state = (summary.get("structure_state") or {})
+    current_structure_status = safe_text(structure_state.get("current_structure_status")) or "unknown"
+    ongoing = structure_state.get("current_ongoing") or {}
+    ongoing_type = safe_text(ongoing.get("type")) or "unknown"
+
+    return [
+        {
+            "segment_id": 0,
+            "kind": "pending_confirmation",
+            "confidence": "medium",
+            "uncertainty": "当前尾段缺少足够的后续笔推进或反向突破证据，暂时以待确认结构呈现。",
+            "evidence": f"current_structure_status={current_structure_status}; current_ongoing_type={ongoing_type}",
+            "suggested_catalyst": "继续观察后续笔推进和反向突破是否形成正式终结条件。",
+        }
+    ]
+
+
+def build_segment_tail_interpretations_payload(
+    stock_dir: Path,
+    timeframe: str,
+    tech_payload: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    timeframe_dir = stock_dir / timeframe
+    bars_csv = find_latest_chart_bars_csv(timeframe_dir, timeframe)
+    if bars_csv is None:
+        return build_segment_tail_interpretations_fallback(tech_payload)
+
+    bis_records = read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_bis"))
+    bis = build_bis_from_records(bis_records)
+    if not bis:
+        return build_segment_tail_interpretations_fallback(tech_payload)
+
+    segments = identify_segments(bis, bootstrap_mode="auto", bootstrap_skip_confirmed_bis=0)
+    interpretations = build_segment_tail_interpretations(bis, segments)
+    rendered = [serialize_segment_tail_interpretation(interpretation) for interpretation in interpretations]
+    if rendered:
+        return rendered
+    return build_segment_tail_interpretations_fallback(tech_payload)
+
+
 def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | None:
     source_value = chart_spec.get("data_source_path")
     if not source_value:
@@ -1023,6 +1096,7 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
         bis_records,
         read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_segments")),
     )
+    stock_dir = bars_csv.parent.parent
 
     return {
         "schema_version": "chart-data-v1",
@@ -1037,6 +1111,7 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
         "bis": bis_records,
         "segments": segment_records,
         "segment_stop_reason_annotations": build_segment_stop_reason_annotations(segment_records, timeframe),
+        "segment_tail_interpretations": build_segment_tail_interpretations_payload(stock_dir, timeframe, None),
         "zhongshus": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_zhongshu")),
     }
 
@@ -1058,7 +1133,16 @@ def build_summary_payload(
     precision_window_display = build_precision_window_display(precision_entry)
     same_level_decomposition = build_same_level_decomposition(tech_payload)
     latest_signal_summary = build_latest_signal_summary(tech_payload)
-    segment_stop_line = build_latest_segment_stop_reason_line(stock_dir, primary_technical_timeframe) if tech_payload else ""
+    segment_stop_line = (
+        build_latest_segment_stop_reason_line(stock_dir, primary_technical_timeframe, tech_payload)
+        if tech_payload
+        else ""
+    )
+    segment_tail_interpretations = (
+        build_segment_tail_interpretations_payload(stock_dir, primary_technical_timeframe, tech_payload)
+        if tech_payload
+        else []
+    )
     charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes, include_chart_images=include_chart_images)
     cover_chart_path = chart_publish_path(charts, primary_technical_timeframe) or chart_publish_path(charts, PRIMARY_TECHNICAL_TIMEFRAME)
     primary_technical_label = TIMEFRAME_LABELS.get(primary_technical_timeframe, primary_technical_timeframe.upper())
@@ -1107,10 +1191,8 @@ def build_summary_payload(
                 ),
                 "same_level_decomposition": same_level_decomposition,
                 "latest_signal_summary": latest_signal_summary,
-                "technical_focus_lines": [
-                    *build_technical_focus_lines(same_level_decomposition, latest_signal_summary),
-                    *([segment_stop_line] if segment_stop_line else []),
-                ],
+                "technical_focus_lines": build_technical_focus_lines(same_level_decomposition, latest_signal_summary),
+                "segment_tail_interpretations": segment_tail_interpretations,
                 "precision_entry": precision_entry,
                 "precision_note": precision_entry.get("note"),
                 "precision_window_basis_label": precision_entry.get("window_basis_label") or (precision_entry.get("nested_from") or {}).get("window_basis_label"),
@@ -1148,11 +1230,21 @@ def build_detail_payload(
         primary_timeframe=primary_technical_timeframe,
     )
     technical = next((section for section in technical_sections if section.get("key") == "technical"), None) or build_technical_section(tech_payload)
-    segment_stop_line = build_latest_segment_stop_reason_line(stock_dir, primary_technical_timeframe) if tech_payload else ""
+    segment_stop_line = (
+        build_latest_segment_stop_reason_line(stock_dir, primary_technical_timeframe, tech_payload)
+        if tech_payload
+        else ""
+    )
+    segment_tail_interpretations = (
+        build_segment_tail_interpretations_payload(stock_dir, primary_technical_timeframe, tech_payload)
+        if tech_payload
+        else []
+    )
     if segment_stop_line:
         technical_focus_lines = list(technical.get("technical_focus_lines") or [])
         technical_focus_lines.append(segment_stop_line)
         technical["technical_focus_lines"] = technical_focus_lines
+    technical["segment_tail_interpretations"] = segment_tail_interpretations
     capital_flow = build_capital_flow_section(fund_payload)
     technical_timeframe = safe_text(technical.get("timeframe")) or primary_technical_timeframe
     technical_label = TIMEFRAME_LABELS.get(technical_timeframe, technical_timeframe.upper())

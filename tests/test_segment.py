@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 
 from chanlun.models import Bar, Bi, BiDirection, NormalizedBar
-from chanlun.segment import identify_segments
+from chanlun.segment import build_segment_tail_interpretations, identify_segments
 from chanlun.visualization import Plotter
 
 
@@ -224,6 +224,28 @@ class TestIdentifySegments:
         assert result[0].direction == BiDirection.DOWN
         assert result[-1].direction == BiDirection.UP
         assert result[-1].stop_reason == "exhausted_confirmed_bis"
+
+    def test_tail_interpretation_is_emitted_for_unconfirmed_tail_segment(self):
+        bis = [
+            _bi(0, BiDirection.UP, 110, 100),
+            _bi(1, BiDirection.DOWN, 108, 103),
+            _bi(2, BiDirection.UP, 115, 104),
+            _bi(3, BiDirection.DOWN, 114, 105),
+            _bi(4, BiDirection.UP, 113, 106),
+            _bi(5, BiDirection.DOWN, 112, 106.5),
+            _bi(6, BiDirection.UP, 116, 107),
+        ]
+
+        segments = identify_segments(bis)
+        interpretations = build_segment_tail_interpretations(bis, segments)
+
+        assert interpretations
+        interpretation = interpretations[-1]
+        assert interpretation.segment_id == segments[-1].segment_id
+        assert interpretation.kind == "pending_confirmation"
+        assert interpretation.confidence in {"low", "medium", "high"}
+        assert interpretation.uncertainty
+        assert interpretation.suggested_catalyst
 
     def test_reverse_break_can_be_reclaimed_by_prior_segment(self):
         bis = [

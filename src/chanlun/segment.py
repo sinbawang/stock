@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from .models import Bi, BiDirection, Segment
+from .models import Bi, BiDirection, Segment, SegmentTailInterpretation
 
 
 STOP_REASON_LABELS = {
@@ -34,6 +34,72 @@ class _FeatureSequenceElement:
 def _confirmed_bis(bis: List[Bi]) -> List[Bi]:
     """线段只基于已确认笔计算，未确认尾笔不参与段识别。"""
     return [bi for bi in bis if bi.is_confirmed]
+
+
+def build_segment_tail_interpretations(
+    bis: List[Bi],
+    segments: List[Segment],
+) -> List[SegmentTailInterpretation]:
+    """为尾部未确认线段生成独立解释层，不改变正式线段结果。"""
+    if not segments:
+        return []
+
+    interpretations: List[SegmentTailInterpretation] = []
+    for segment in segments:
+        if segment.is_confirmed:
+            continue
+
+        stop_reason = segment.stop_reason or "unknown"
+        if stop_reason in {"same_direction_not_extending", "same_direction_slot_not_filled"}:
+            confidence = "medium"
+            uncertainty = (
+                "当前尾段仍未形成正式终结条件，且同向推进未继续创新高/新低；"
+                "这说明当前结构仍处于待确认状态，而非正式终结。"
+            )
+            suggested_catalyst = (
+                "关注后续是否出现更强的反向突破，或新的三笔起段种子。"
+            )
+        elif stop_reason == "no_followup_same_direction":
+            confidence = "medium"
+            uncertainty = (
+                "出现反向回撤后，后续同向推进笔未跟上，因此尾段仍保持未确认。"
+            )
+            suggested_catalyst = (
+                "若后续同向笔重新创出新高/新低，尾段解释会转为更强的延续信号。"
+            )
+        elif stop_reason == "exhausted_confirmed_bis":
+            confidence = "low"
+            uncertainty = (
+                "已用尽确认笔序列，当前尾段只能作为窗口末端的待确认状态。"
+            )
+            suggested_catalyst = (
+                "等待新的确认笔进入后，再根据新的三笔种子和突破条件判断。"
+            )
+        else:
+            confidence = "low"
+            uncertainty = (
+                "当前尾段未被正式确认，暂时只能作为待确认结构处理。"
+            )
+            suggested_catalyst = "继续观察后续笔的推进与反向突破。"
+
+        evidence_parts = [f"stop_reason={stop_reason}"]
+        if segment.last_same_extreme is not None:
+            evidence_parts.append(f"last_same_extreme={segment.last_same_extreme:.2f}")
+        if segment.last_reverse_extreme is not None:
+            evidence_parts.append(f"last_reverse_extreme={segment.last_reverse_extreme:.2f}")
+
+        interpretations.append(
+            SegmentTailInterpretation(
+                segment_id=segment.segment_id,
+                kind="pending_confirmation",
+                confidence=confidence,
+                uncertainty=uncertainty,
+                evidence="; ".join(evidence_parts),
+                suggested_catalyst=suggested_catalyst,
+            )
+        )
+
+    return interpretations
 
 
 def _score_bootstrap_candidate(
@@ -361,6 +427,30 @@ def _rediscriminate_gap_break(
     return outcome
 
 
+def _evaluate_pending_gap_candidate(
+    bis: List[Bi],
+    gap_candidate_idx: Optional[int],
+) -> tuple[Optional[bool], bool, Optional[int], Optional[int], Optional[str]]:
+    if gap_candidate_idx is None:
+        return None, False, None, None, None
+
+    pending_gap_outcome, is_delayed_true = _rediscriminate_gap_break_detail(bis, gap_candidate_idx)
+    if pending_gap_outcome is True:
+        end_idx = gap_candidate_idx - 1
+        break_idx = gap_candidate_idx
+        stop_reason = (
+            "feature_sequence_gap_fractal_delayed_true"
+            if is_delayed_true
+            else "feature_sequence_gap_fractal"
+        )
+        return True, is_delayed_true, end_idx, break_idx, stop_reason
+
+    if pending_gap_outcome is False:
+        return False, False, None, None, None
+
+    return None, False, None, None, None
+
+
 def _rediscriminate_gap_break_detail(
     bis: List[Bi],
     start_idx: int,
@@ -380,7 +470,7 @@ def _rediscriminate_gap_break_detail(
     direction = first_bi.direction
     first_end_extreme = first_bi.high if direction == BiDirection.UP else first_bi.low
     cursor = start_idx + 1
-    saw_weak_round = False
+    has_seen_weak_round = False
 
     while cursor < len(bis):
         reverse_bi = bis[cursor]
@@ -398,9 +488,10 @@ def _rediscriminate_gap_break_detail(
             return None, False
 
         if _same_direction_extends(direction, same_dir_bi, first_end_extreme):
-            return True, saw_weak_round
+            # 只有在已经经历过一次弱轮次后，后续的强同向推进才被视为延迟确认。
+            return True, has_seen_weak_round
 
-        saw_weak_round = True
+        has_seen_weak_round = True
         cursor += 2
 
     return None, False
@@ -547,20 +638,15 @@ def _extend_segment(
             )
 
             if pending_gap_break_idx is not None:
-                pending_gap_outcome, is_delayed_true = _rediscriminate_gap_break_detail(
-                    bis,
-                    pending_gap_break_idx,
+                pending_gap_outcome, is_delayed_true, resolved_end_idx, resolved_break_idx, resolved_stop_reason = (
+                    _evaluate_pending_gap_candidate(bis, pending_gap_break_idx)
                 )
                 if pending_gap_outcome is True:
-                    end_idx = pending_gap_break_idx - 1
-                    break_idx = pending_gap_break_idx
+                    end_idx = resolved_end_idx
+                    break_idx = resolved_break_idx
                     is_confirmed = True
                     break_bi_id = bis[break_idx].bi_id
-                    stop_reason = (
-                        "feature_sequence_gap_fractal_delayed_true"
-                        if is_delayed_true
-                        else "feature_sequence_gap_fractal"
-                    )
+                    stop_reason = resolved_stop_reason
                     break
                 if pending_gap_outcome is False:
                     pending_gap_break_idx = None
@@ -616,20 +702,15 @@ def _extend_segment(
                             gap_candidate_idx,
                         )
                         if pending_gap_break_idx is not None:
-                            pending_gap_outcome, is_delayed_true = _rediscriminate_gap_break_detail(
-                                bis,
-                                pending_gap_break_idx,
+                            pending_gap_outcome, is_delayed_true, resolved_end_idx, resolved_break_idx, resolved_stop_reason = (
+                                _evaluate_pending_gap_candidate(bis, pending_gap_break_idx)
                             )
                             if pending_gap_outcome is True:
-                                end_idx = pending_gap_break_idx - 1
-                                break_idx = pending_gap_break_idx
+                                end_idx = resolved_end_idx
+                                break_idx = resolved_break_idx
                                 is_confirmed = True
                                 break_bi_id = bis[break_idx].bi_id
-                                stop_reason = (
-                                    "feature_sequence_gap_fractal_delayed_true"
-                                    if is_delayed_true
-                                    else "feature_sequence_gap_fractal"
-                                )
+                                stop_reason = resolved_stop_reason
                                 break
                             if pending_gap_outcome is False:
                                 pending_gap_break_idx = None
@@ -675,20 +756,15 @@ def _extend_segment(
                             gap_candidate_idx,
                         )
                         if pending_gap_break_idx is not None:
-                            pending_gap_outcome, is_delayed_true = _rediscriminate_gap_break_detail(
-                                bis,
-                                pending_gap_break_idx,
+                            pending_gap_outcome, is_delayed_true, resolved_end_idx, resolved_break_idx, resolved_stop_reason = (
+                                _evaluate_pending_gap_candidate(bis, pending_gap_break_idx)
                             )
                             if pending_gap_outcome is True:
-                                end_idx = pending_gap_break_idx - 1
-                                break_idx = pending_gap_break_idx
+                                end_idx = resolved_end_idx
+                                break_idx = resolved_break_idx
                                 is_confirmed = True
                                 break_bi_id = bis[break_idx].bi_id
-                                stop_reason = (
-                                    "feature_sequence_gap_fractal_delayed_true"
-                                    if is_delayed_true
-                                    else "feature_sequence_gap_fractal"
-                                )
+                                stop_reason = resolved_stop_reason
                                 break
                             if pending_gap_outcome is False:
                                 pending_gap_break_idx = None

@@ -25,9 +25,11 @@ def test_300124_day_segments_keep_current_landmarks() -> None:
     expected = [
         ("down", 1, 7, "reverse_break", True),
         ("up", 8, 10, "reverse_break", True),
-        ("down", 11, 19, "feature_sequence_fractal", True),
-        ("up", 20, 38, "reverse_break", True),
-        ("down", 39, 49, "reverse_break", True),
+        ("down", 11, 15, "reverse_break", True),
+        ("up", 16, 18, "same_direction_not_extending", False),
+        ("down", 19, 23, "reverse_break", True),
+        ("up", 24, 34, "same_direction_not_extending", False),
+        ("down", 35, 45, "reverse_break", True),
     ]
 
     assert_landmarks_equal(expected, landmarks)
@@ -49,18 +51,13 @@ def test_300124_30m_segments_keep_tail_and_no_followup_state() -> None:
     ]
 
     expected = [
-        ("up", 0, 2, "reverse_break", True, (1, 15)),
-        ("down", 3, 5, "reverse_break", True, (15, 36)),
-        ("up", 6, 8, "reverse_break", True, (36, 65)),
-        ("down", 9, 13, "reverse_break", True, (65, 114)),
-        ("up", 14, 22, "feature_sequence_fractal", True, (114, 178)),
-        ("down", 23, 25, "reverse_break", True, (178, 195)),
-        ("up", 26, 28, "reverse_break", True, (195, 218)),
-        ("down", 29, 35, "feature_sequence_fractal", True, (218, 297)),
-        ("up", 36, 38, "reverse_break", True, (297, 313)),
-        ("down", 39, 41, "reverse_break", True, (313, 350)),
-        ("up", 42, 44, "reverse_break", True, (350, 374)),
-        ("down", 45, 47, "no_followup_same_direction", False, (374, 415)),
+        ("up", 0, 2, "feature_sequence_fractal", True, (1, 65)),
+        ("down", 3, 7, "reverse_break", True, (65, 111)),
+        ("up", 8, 16, "reverse_break", True, (111, 206)),
+        ("down", 17, 21, "feature_sequence_gap_fractal", True, (206, 283)),
+        ("up", 22, 24, "reverse_break", True, (283, 299)),
+        ("down", 25, 27, "reverse_break", True, (299, 333)),
+        ("up", 28, 30, "reverse_break", True, (333, 356)),
     ]
 
     assert_landmarks_equal(expected, landmarks)
@@ -81,15 +78,13 @@ def test_300124_15m_segments_keep_reverse_break_after_gap_landmark() -> None:
     ]
 
     expected = [
-        ("up", 1, 7, "feature_sequence_fractal", True),
-        ("down", 8, 12, "feature_sequence_fractal", True),
-        ("up", 13, 19, "feature_sequence_fractal", True),
-        ("down", 20, 24, "feature_sequence_fractal", True),
-        ("up", 25, 27, "reverse_break", True),
-        ("down", 28, 30, "same_direction_not_extending", False),
-        ("up", 31, 33, "reverse_break_after_gap", True),
-        ("down", 34, 38, "reverse_break", True),
-        ("up", 39, 41, "no_followup_same_direction", False),
+        ("up", 1, 9, "feature_sequence_gap_fractal", True),
+        ("down", 10, 12, "feature_sequence_fractal", True),
+        ("up", 13, 17, "reverse_break", True),
+        ("down", 18, 20, "feature_sequence_fractal", True),
+        ("up", 21, 23, "feature_sequence_fractal", True),
+        ("down", 24, 28, "same_direction_not_extending", False),
+        ("up", 29, 31, "exhausted_confirmed_bis", False),
     ]
 
     assert_landmarks_equal(expected, landmarks)
