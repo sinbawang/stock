@@ -300,6 +300,8 @@ def _save_technical_report(
             png_path=paths["png"],
             jpg_path=paths["jpg"],
             title=f"{normalized_symbol} {name} {PRIMARY_TECHNICAL_TIMEFRAME}",
+            bootstrap_mode="auto",
+            bootstrap_skip_confirmed_bis=0,
         )
 
     analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points)

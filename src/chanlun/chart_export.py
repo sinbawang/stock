@@ -71,11 +71,17 @@ def save_structure_charts(
     png_path: Path,
     jpg_path: Path,
     title: str,
+    bootstrap_mode: str = "auto",
+    bootstrap_skip_confirmed_bis: int = 0,
 ) -> None:
     """Render the unified structure chart to svg/png/jpg artifacts."""
     _configure_matplotlib_cjk_font()
     plotter = Plotter(figsize=structure_chart_figsize(len(bars)))
-    segments = identify_segments(bis)
+    segments = identify_segments(
+        bis,
+        bootstrap_mode=bootstrap_mode,
+        bootstrap_skip_confirmed_bis=bootstrap_skip_confirmed_bis,
+    )
     structure_state = build_structure_state(bars, zhongshus)
     confirmed_fractal_ids = {
         fractal_id

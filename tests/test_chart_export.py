@@ -88,3 +88,37 @@ def test_structure_chart_figsize_scales_width_with_bar_count() -> None:
     assert chart_export.structure_chart_figsize(90) == (18.799999999999997, 10.0)
     assert chart_export.structure_chart_figsize(120) == (22.4, 10.0)
     assert chart_export.structure_chart_figsize(400) == (32.0, 10.0)
+
+
+def test_save_structure_charts_passes_bootstrap_options_to_segments(monkeypatch, tmp_path: Path) -> None:
+    seen = {}
+
+    def fake_identify_segments(bis, **kwargs):
+        seen["kwargs"] = kwargs
+        return []
+
+    monkeypatch.setattr(chart_export, "identify_segments", fake_identify_segments)
+    monkeypatch.setattr(chart_export, "build_structure_state", lambda bars, zhongshus: None)
+
+    svg_path = tmp_path / "structure.svg"
+    png_path = tmp_path / "structure.png"
+    jpg_path = tmp_path / "structure.jpg"
+
+    save_structure_charts(
+        bars=[],
+        normalized_bars=[],
+        fractals=[],
+        bis=[],
+        zhongshus=[],
+        svg_path=svg_path,
+        png_path=png_path,
+        jpg_path=jpg_path,
+        title="demo",
+        bootstrap_mode="skip_left_edge",
+        bootstrap_skip_confirmed_bis=3,
+    )
+
+    assert seen["kwargs"] == {
+        "bootstrap_mode": "skip_left_edge",
+        "bootstrap_skip_confirmed_bis": 3,
+    }

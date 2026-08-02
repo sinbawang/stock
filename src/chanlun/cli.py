@@ -9,7 +9,12 @@ from .models import Bar
 from .normalize import normalize_bars
 from .fractal import identify_fractals, filter_consecutive_fractals
 from .bi import identify_bis
-from .segment import identify_segments
+from .segment import (
+    SEGMENT_BOOTSTRAP_AUTO,
+    SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
+    SEGMENT_BOOTSTRAP_SKIP_LEFT_EDGE,
+    identify_segments,
+)
 from .zhongshu import identify_zhongshu
 from .data import read_bars_from_csv
 from .data.cleaner import clean_bars
@@ -21,7 +26,15 @@ app = typer.Typer()
 @app.command()
 def analyze(
     filepath: str = typer.Argument(..., help="CSV 文件路径"),
-    output_dir: Optional[str] = typer.Option(None, help="输出目录")
+    output_dir: Optional[str] = typer.Option(None, help="输出目录"),
+    bootstrap_mode: str = typer.Option(
+        SEGMENT_BOOTSTRAP_AUTO,
+        help="线段起点锚定模式，默认 auto；可选 first_valid_seed 或 skip_left_edge",
+    ),
+    bootstrap_skip_confirmed_bis: int = typer.Option(
+        0,
+        help="skip_left_edge 模式下，先跳过左侧多少根已确认笔",
+    ),
 ):
     """
     完整分析流程：读取 -> 清洗 -> 去包含 -> 识别分型/笔/线段/中枢 -> 输出结果
@@ -61,7 +74,11 @@ def analyze(
 
     # 线段识别
     typer.echo("识别线段...")
-    segments = identify_segments(bis)
+    segments = identify_segments(
+        bis,
+        bootstrap_mode=bootstrap_mode,
+        bootstrap_skip_confirmed_bis=bootstrap_skip_confirmed_bis,
+    )
     typer.echo(f"识别 {len(segments)} 线段")
 
     # 中枢识别

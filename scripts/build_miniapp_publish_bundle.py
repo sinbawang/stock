@@ -949,7 +949,7 @@ def build_segment_records(bis_records: list[dict[str, Any]], segment_records: li
     bis = build_bis_from_records(bis_records)
     if not bis:
         return []
-    return [serialize_segment_record(segment) for segment in identify_segments(bis)]
+    return [serialize_segment_record(segment) for segment in identify_segments(bis, bootstrap_mode="auto", bootstrap_skip_confirmed_bis=0)]
 
 
 def build_segment_stop_reason_annotations(segment_records: list[dict[str, Any]], timeframe: str) -> dict[str, Any]:

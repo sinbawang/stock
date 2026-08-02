@@ -249,6 +249,29 @@ def test_delayed_true_path_emits_dedicated_stop_reason() -> None:
     assert delayed_segments[0].is_confirmed is True
 
 
+def test_gap_false_outcome_has_priority_over_late_true_candidate() -> None:
+    """R3 冲突锁定：先破起点触发 False 后，不应再被后续候选翻案为 gap True。"""
+    bis = [
+        _bi(0, BiDirection.UP, 120, 100),
+        _bi(1, BiDirection.DOWN, 108, 104),
+        _bi(2, BiDirection.UP, 125, 106),
+        _bi(3, BiDirection.DOWN, 112, 109),
+        _bi(4, BiDirection.UP, 113, 110),
+        _bi(5, BiDirection.DOWN, 110, 107),
+        _bi(6, BiDirection.UP, 114, 108),
+        _bi(7, BiDirection.DOWN, 109, 103),
+        _bi(8, BiDirection.UP, 116, 109),
+    ]
+
+    result = identify_segments(bis)
+
+    assert len(result) >= 1
+    assert result[0].direction == BiDirection.UP
+    assert result[0].stop_reason == "reverse_break"
+    assert result[0].break_bi_id == 7
+    assert result[0].is_confirmed is True
+
+
 def test_describe_stop_reason_covers_known_codes_and_fallback() -> None:
     for code, label in STOP_REASON_LABELS.items():
         assert describe_stop_reason(code) == label

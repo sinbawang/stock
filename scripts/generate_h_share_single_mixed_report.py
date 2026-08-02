@@ -58,6 +58,7 @@ DEFAULT_MANUAL_SUPPLEMENT_DIRS = (
     ROOT / "config" / "manual_supplements",
     ROOT / "data" / "_meta" / "manual_supplements",
 )
+DEFAULT_MANUAL_SUPPLEMENT_DIR = DEFAULT_MANUAL_SUPPLEMENT_DIRS[0]
 INTRADAY_SOURCE_PROBE_ROWS = 600
 BAR_COUNT_POLICY = "feasible_maximum"
 PRIMARY_TECHNICAL_TIMEFRAME = "30m"
@@ -128,7 +129,12 @@ def parse_args() -> argparse.Namespace:
 def _resolve_manual_supplement_path(symbol: str, explicit_path: str | None) -> str | None:
     if explicit_path:
         return explicit_path
-    for supplement_dir in DEFAULT_MANUAL_SUPPLEMENT_DIRS:
+    single_dir = globals().get("DEFAULT_MANUAL_SUPPLEMENT_DIR")
+    if single_dir is not None:
+        supplement_dirs = [Path(single_dir)]
+    else:
+        supplement_dirs = list(DEFAULT_MANUAL_SUPPLEMENT_DIRS)
+    for supplement_dir in supplement_dirs:
         candidates = sorted(supplement_dir.glob(f"{symbol}_*.*"))
         if candidates:
             return str(candidates[0])
@@ -312,6 +318,8 @@ def _write_lower_precision_report(
             png_path=layout.chart_png,
             jpg_path=layout.chart_jpg,
             title=f"{symbol} {name} {LOWER_PRECISION_TIMEFRAME}",
+            bootstrap_mode="auto",
+            bootstrap_skip_confirmed_bis=0,
         )
 
     analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points).replace("60M", LOWER_PRECISION_LABEL)
@@ -459,6 +467,8 @@ def _save_technical_report(
             png_path=paths["png"],
             jpg_path=paths["jpg"],
             title=f"{symbol} {name} {PRIMARY_TECHNICAL_TIMEFRAME}",
+            bootstrap_mode="auto",
+            bootstrap_skip_confirmed_bis=0,
         )
 
     analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points)

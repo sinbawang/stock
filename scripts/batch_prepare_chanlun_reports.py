@@ -684,6 +684,8 @@ def export_case(
             png_path=png,
             jpg_path=jpg,
             title=title,
+            bootstrap_mode="auto",
+            bootstrap_skip_confirmed_bis=0,
         )
 
     analysis_text = analyze_current_state(security.name, raw_bars, bis, zhongshus, macd_points)

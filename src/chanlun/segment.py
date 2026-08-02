@@ -19,6 +19,10 @@ STOP_REASON_LABELS = {
     "exhausted_confirmed_bis": "已用尽确认笔序列，线段尾部暂时停住",
 }
 
+SEGMENT_BOOTSTRAP_FIRST_VALID_SEED = "first_valid_seed"
+SEGMENT_BOOTSTRAP_SKIP_LEFT_EDGE = "skip_left_edge"
+SEGMENT_BOOTSTRAP_AUTO = "auto"
+
 
 @dataclass
 class _FeatureSequenceElement:
@@ -30,6 +34,76 @@ class _FeatureSequenceElement:
 def _confirmed_bis(bis: List[Bi]) -> List[Bi]:
     """线段只基于已确认笔计算，未确认尾笔不参与段识别。"""
     return [bi for bi in bis if bi.is_confirmed]
+
+
+def _score_bootstrap_candidate(
+    bis: List[Bi],
+    start_idx: int,
+    result: Optional[Tuple[int, bool, Optional[int], str, Optional[int]]],
+) -> Optional[int]:
+    if result is None:
+        return None
+
+    end_idx, is_confirmed, _break_idx, stop_reason, _break_bi_id = result
+    segment_len = end_idx - start_idx + 1
+    score = segment_len * 3
+
+    if is_confirmed:
+        score += 80
+
+    if stop_reason in {
+        "feature_sequence_fractal",
+        "feature_sequence_gap_fractal",
+        "feature_sequence_gap_fractal_delayed_true",
+        "reverse_break",
+        "reverse_break_after_gap",
+    }:
+        score += 40
+    elif stop_reason in {
+        "unexpected_same_direction",
+        "same_direction_slot_not_filled",
+        "same_direction_not_extending",
+        "no_followup_same_direction",
+    }:
+        score -= 50
+
+    if stop_reason == "exhausted_confirmed_bis":
+        score -= 20
+
+    return score
+
+
+def _resolve_bootstrap_start_index(
+    bis: List[Bi],
+    *,
+    bootstrap_mode: str,
+    bootstrap_skip_confirmed_bis: int,
+) -> int:
+    total_bis = len(bis)
+    if total_bis <= 0:
+        return 0
+
+    if bootstrap_mode == SEGMENT_BOOTSTRAP_SKIP_LEFT_EDGE:
+        max_start = max(0, total_bis - 3)
+        return min(max(0, int(bootstrap_skip_confirmed_bis)), max_start)
+
+    if bootstrap_mode != SEGMENT_BOOTSTRAP_AUTO:
+        return 0
+
+    max_start = max(0, total_bis - 3)
+    best_start = 0
+    best_score: Optional[int] = None
+
+    for candidate_idx in range(max_start + 1):
+        candidate_result = _extend_segment(bis, candidate_idx)
+        candidate_score = _score_bootstrap_candidate(bis, candidate_idx, candidate_result)
+        if candidate_score is None:
+            continue
+        if best_score is None or candidate_score > best_score:
+            best_score = candidate_score
+            best_start = candidate_idx
+
+    return best_start
 
 
 def describe_stop_reason(stop_reason: Optional[str]) -> str:
@@ -200,6 +274,10 @@ def _gap_feature_sequence_candidate(
 ) -> Optional[int]:
     standard_sequence = _build_standard_feature_sequence(bis, reverse_indices)
     if len(standard_sequence) < 3:
+        if len(reverse_indices) == 2:
+            left_idx, right_idx = reverse_indices[-2], reverse_indices[-1]
+            if _feature_sequence_has_gap(bis[left_idx], bis[right_idx]):
+                return right_idx
         return None
 
     left_element, middle_element, right_element = standard_sequence[-3:]
@@ -302,17 +380,17 @@ def _rediscriminate_gap_break_detail(
     while cursor < len(bis):
         reverse_bi = bis[cursor]
         if reverse_bi.direction == direction:
-            return None, saw_weak_round
+            return None, False
 
         if _breaks_first_bi_start(direction, reverse_bi, first_bi):
-            return False, saw_weak_round
+            return False, False
 
         if cursor + 1 >= len(bis):
-            return None, saw_weak_round
+            return None, False
 
         same_dir_bi = bis[cursor + 1]
         if same_dir_bi.direction != direction:
-            return None, saw_weak_round
+            return None, False
 
         if _same_direction_extends(direction, same_dir_bi, first_end_extreme):
             return True, saw_weak_round
@@ -320,7 +398,7 @@ def _rediscriminate_gap_break_detail(
         saw_weak_round = True
         cursor += 2
 
-    return None, saw_weak_round
+    return None, False
 
 
 def _segment_extremes(
@@ -432,6 +510,9 @@ def _extend_segment(
 
     last_same_extreme, last_reverse_extreme = _segment_extremes(bis, start_idx, end_idx)
     pending_gap_break_idx: Optional[int] = None
+    # 冲突规则：一旦缺口再分辨先触发 False（先破第一笔起点），
+    # 当前线段后续不再接受 gap 候选的 True 翻案，避免同形态窗口漂移。
+    gap_false_locked = False
 
     while cursor < len(bis):
         reverse_bi = bis[cursor]
@@ -453,30 +534,32 @@ def _extend_segment(
             continue
 
         reverse_indices.append(cursor)
-        gap_candidate_idx = _gap_feature_sequence_candidate(bis, reverse_indices, direction)
-        pending_gap_break_idx = _replace_gap_candidate(
-            pending_gap_break_idx,
-            gap_candidate_idx,
-        )
-
-        if pending_gap_break_idx is not None:
-            pending_gap_outcome, is_delayed_true = _rediscriminate_gap_break_detail(
-                bis,
+        if not gap_false_locked:
+            gap_candidate_idx = _gap_feature_sequence_candidate(bis, reverse_indices, direction)
+            pending_gap_break_idx = _replace_gap_candidate(
                 pending_gap_break_idx,
+                gap_candidate_idx,
             )
-            if pending_gap_outcome is True:
-                end_idx = pending_gap_break_idx - 1
-                break_idx = pending_gap_break_idx
-                is_confirmed = True
-                break_bi_id = bis[break_idx].bi_id
-                stop_reason = (
-                    "feature_sequence_gap_fractal_delayed_true"
-                    if is_delayed_true
-                    else "feature_sequence_gap_fractal"
+
+            if pending_gap_break_idx is not None:
+                pending_gap_outcome, is_delayed_true = _rediscriminate_gap_break_detail(
+                    bis,
+                    pending_gap_break_idx,
                 )
-                break
-            if pending_gap_outcome is False:
-                pending_gap_break_idx = None
+                if pending_gap_outcome is True:
+                    end_idx = pending_gap_break_idx - 1
+                    break_idx = pending_gap_break_idx
+                    is_confirmed = True
+                    break_bi_id = bis[break_idx].bi_id
+                    stop_reason = (
+                        "feature_sequence_gap_fractal_delayed_true"
+                        if is_delayed_true
+                        else "feature_sequence_gap_fractal"
+                    )
+                    break
+                if pending_gap_outcome is False:
+                    pending_gap_break_idx = None
+                    gap_false_locked = True
 
         feature_break = _feature_sequence_break(bis, reverse_indices, direction)
         if feature_break is not None:
@@ -517,38 +600,37 @@ def _extend_segment(
                         is_confirmed = True
                         break_bi_id = bis[break_idx].bi_id
                         break
-                    gap_candidate_idx = _gap_feature_sequence_candidate(
-                        bis,
-                        reverse_indices + [cursor + 2],
-                        direction,
-                    )
-                    pending_gap_break_idx = _replace_gap_candidate(
-                        pending_gap_break_idx,
-                        gap_candidate_idx,
-                    )
-                    if pending_gap_break_idx is not None:
-                        pending_gap_outcome, is_delayed_true = _rediscriminate_gap_break_detail(
+                    if not gap_false_locked:
+                        gap_candidate_idx = _gap_feature_sequence_candidate(
                             bis,
-                            pending_gap_break_idx,
+                            reverse_indices + [cursor + 2],
+                            direction,
                         )
-                        if pending_gap_outcome is True:
-                            end_idx = pending_gap_break_idx - 1
-                            break_idx = pending_gap_break_idx
-                            is_confirmed = True
-                            break_bi_id = bis[break_idx].bi_id
-                            stop_reason = (
-                                "feature_sequence_gap_fractal_delayed_true"
-                                if is_delayed_true
-                                else "feature_sequence_gap_fractal"
+                        pending_gap_break_idx = _replace_gap_candidate(
+                            pending_gap_break_idx,
+                            gap_candidate_idx,
+                        )
+                        if pending_gap_break_idx is not None:
+                            pending_gap_outcome, is_delayed_true = _rediscriminate_gap_break_detail(
+                                bis,
+                                pending_gap_break_idx,
                             )
-                            break
-                        if pending_gap_outcome is False:
-                            pending_gap_break_idx = None
-                            cursor += 2
-                            continue
-                        else:
-                            cursor += 2
-                            continue
+                            if pending_gap_outcome is True:
+                                end_idx = pending_gap_break_idx - 1
+                                break_idx = pending_gap_break_idx
+                                is_confirmed = True
+                                break_bi_id = bis[break_idx].bi_id
+                                stop_reason = (
+                                    "feature_sequence_gap_fractal_delayed_true"
+                                    if is_delayed_true
+                                    else "feature_sequence_gap_fractal"
+                                )
+                                break
+                            if pending_gap_outcome is False:
+                                pending_gap_break_idx = None
+                                gap_false_locked = True
+                                cursor += 2
+                                continue
                     if (
                         next_reverse_bi.direction != direction
                         and _reverse_breaks_last_reverse_extreme(direction, next_reverse_bi, last_reverse_extreme)
@@ -577,38 +659,37 @@ def _extend_segment(
                         is_confirmed = True
                         break_bi_id = bis[break_idx].bi_id
                         break
-                    gap_candidate_idx = _gap_feature_sequence_candidate(
-                        bis,
-                        reverse_indices + [cursor + 2],
-                        direction,
-                    )
-                    pending_gap_break_idx = _replace_gap_candidate(
-                        pending_gap_break_idx,
-                        gap_candidate_idx,
-                    )
-                    if pending_gap_break_idx is not None:
-                        pending_gap_outcome, is_delayed_true = _rediscriminate_gap_break_detail(
+                    if not gap_false_locked:
+                        gap_candidate_idx = _gap_feature_sequence_candidate(
                             bis,
-                            pending_gap_break_idx,
+                            reverse_indices + [cursor + 2],
+                            direction,
                         )
-                        if pending_gap_outcome is True:
-                            end_idx = pending_gap_break_idx - 1
-                            break_idx = pending_gap_break_idx
-                            is_confirmed = True
-                            break_bi_id = bis[break_idx].bi_id
-                            stop_reason = (
-                                "feature_sequence_gap_fractal_delayed_true"
-                                if is_delayed_true
-                                else "feature_sequence_gap_fractal"
+                        pending_gap_break_idx = _replace_gap_candidate(
+                            pending_gap_break_idx,
+                            gap_candidate_idx,
+                        )
+                        if pending_gap_break_idx is not None:
+                            pending_gap_outcome, is_delayed_true = _rediscriminate_gap_break_detail(
+                                bis,
+                                pending_gap_break_idx,
                             )
-                            break
-                        if pending_gap_outcome is False:
-                            pending_gap_break_idx = None
-                            cursor += 2
-                            continue
-                        else:
-                            cursor += 2
-                            continue
+                            if pending_gap_outcome is True:
+                                end_idx = pending_gap_break_idx - 1
+                                break_idx = pending_gap_break_idx
+                                is_confirmed = True
+                                break_bi_id = bis[break_idx].bi_id
+                                stop_reason = (
+                                    "feature_sequence_gap_fractal_delayed_true"
+                                    if is_delayed_true
+                                    else "feature_sequence_gap_fractal"
+                                )
+                                break
+                            if pending_gap_outcome is False:
+                                pending_gap_break_idx = None
+                                gap_false_locked = True
+                                cursor += 2
+                                continue
                     if (
                         next_reverse_bi.direction != direction
                         and _reverse_breaks_last_reverse_extreme(direction, next_reverse_bi, last_reverse_extreme)
@@ -634,7 +715,12 @@ def _extend_segment(
     return end_idx, is_confirmed, break_idx, stop_reason, break_bi_id
 
 
-def identify_segments(bis: List[Bi]) -> List[Segment]:
+def identify_segments(
+    bis: List[Bi],
+    *,
+    bootstrap_mode: str = SEGMENT_BOOTSTRAP_AUTO,
+    bootstrap_skip_confirmed_bis: int = 0,
+) -> List[Segment]:
     """
     识别线段。
 
@@ -644,6 +730,11 @@ def identify_segments(bis: List[Bi]) -> List[Segment]:
     - 同向笔必须持续推进，反向笔不得破坏最近关键低/高点
     - 被反向笔有效破坏时，线段终结并确认为已完成线段
     - 若尾部尚未被有效反向笔破坏，则保留一个未确认尾段
+
+    可选锚定参数：
+    - bootstrap_mode=auto（默认）：扫描候选起点并选择最连贯的首个线段种子
+    - bootstrap_mode=first_valid_seed：从最左侧开始寻找首个合法三笔种子
+    - bootstrap_mode=skip_left_edge：先跳过左侧若干已确认笔，再寻找首个合法三笔种子
     """
     bis = _confirmed_bis(bis)
 
@@ -652,7 +743,11 @@ def identify_segments(bis: List[Bi]) -> List[Segment]:
 
     segments: List[Segment] = []
     segment_id = 0
-    index = 0
+    index = _resolve_bootstrap_start_index(
+        bis,
+        bootstrap_mode=bootstrap_mode,
+        bootstrap_skip_confirmed_bis=bootstrap_skip_confirmed_bis,
+    )
 
     while index <= len(bis) - 3:
         result = _extend_segment(bis, index)

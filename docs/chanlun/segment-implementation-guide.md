@@ -153,6 +153,26 @@
 6. 如果一条线段结束了，是否存在直接特征序列分型，或一笔反向笔破坏了最近关键低点或高点。
 7. 如果最后一条线段没有结束，它是否应当是一个未确认尾段。
 
+### 7.1 600 根窗口的起点锚定（可选）
+
+默认口径（兼容旧行为）：
+
+- `identify_segments(..., bootstrap_mode="first_valid_seed")`
+- 含义：从窗口最左侧开始，寻找第一个合法三笔种子。
+
+可选实验口径（左侧预热）：
+
+- `identify_segments(..., bootstrap_mode="skip_left_edge", bootstrap_skip_confirmed_bis=N)`
+- 含义：先跳过左侧 `N` 根已确认笔，再从该位置开始寻找第一个合法三笔种子。
+- 适用：当你怀疑 600 根窗口最左侧处于“截断中的旧结构”时，可做 A/B 对照观察起段稳定性。
+
+A/B 最小验证命令：
+
+- `pytest -q tests/test_segment_bootstrap_anchor.py`
+- 该测试会同时锁定：
+  - 默认模式不受 `bootstrap_skip_confirmed_bis` 影响（向后兼容）
+  - `skip_left_edge` 模式可把首个起段种子右移
+
 ## 8. 当前实现边界
 
 这份实现是工程化简化版本，不代表已经完整落实严格缠论线段定义。当前已知边界包括：
@@ -193,7 +213,7 @@
 |---|---|---|---|---|---|
 | R1 | 多候选连续出现（A 后 B）且 A/B 都可在后续触发 | 固定“后候选覆盖前候选” | 增加可切换策略并固定默认优先级（后候选覆盖或首次有效优先二选一） | `feature_sequence_gap_fractal` 或新增细分码 | `test_multiple_gap_candidates_switch_priority_deterministically` |
 | R2 | 先弱同向、再弱反向、再同向强突破（多轮弱信号穿插） | 已覆盖部分路径，仍有分支空白 | 明确多轮序列的判决顺序与终止条件，避免同型样本出现不同结论 | `feature_sequence_gap_fractal_delayed_true` | `test_gap_candidate_weak_reverse_then_late_strong_same_dir_confirms_break` |
-| R3 | 先出现可判 False 信号，后续又出现可判 True 信号（冲突） | 依赖当前扫描顺序，口径隐含 | 固定“先破起点优先”或“后续强突破可翻案”单一规则并文档化 | `reverse_break` 或 `feature_sequence_gap_fractal` | 新增冲突样本：False/True 冲突对照组 |
+| R3 | 先出现可判 False 信号，后续又出现可判 True 信号（冲突） | 已固定为“先破起点优先” | 一旦缺口再分辨先触发 False（先破第一笔起点），当前线段后续不再接受 gap 候选 True 翻案，改由后续常规终结规则确认 | `reverse_break`（优先）或后续常规终结码 | `test_gap_false_outcome_has_priority_over_late_true_candidate` |
 | R4 | 候选跨段边界，后续三笔同时可作为旧段再分辨与新段起段种子 | 主路径已防吞并，但边界口径散落 | 统一边界裁剪规则：旧段判决窗口与新段起段窗口互斥 | `feature_sequence_gap_fractal` + 新段正常起段 | `test_next_segment_waits_for_fresh_three_bi_seed_after_break` |
 | R5 | 特征序列在包含合并后，候选索引与原始索引错位 | 已有稳定性基线 | 固化“候选索引映射不回退”规则，明确映射优先级 | `feature_sequence_gap_fractal` | `test_gap_candidate_stays_stable_when_feature_sequence_is_merged` |
 | R6 | 不同级别窗口（day/60m/15m）对同类形态给出不同终结时点 | 通过样本回归观察，不可解释项仍存在 | 增加级别一致性约束（允许偏差但要求可解释） | 同状态码，边界偏移受限 | `tests/test_segment_regression_suite.py` 场景扩展 |

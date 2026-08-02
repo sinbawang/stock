@@ -1,0 +1,257 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "pytest-segment-rediscrimination",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment_rediscrimination_matrix.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-rediscrimination",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment_rediscrimination_matrix.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-rediscrimination",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment_rediscrimination_matrix.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-suite",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_bootstrap_anchor.py tests/test_segment_rediscrimination_matrix.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-cli-bootstrap",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_chanlun_cli.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pip-install-typer",
+			"type": "shell",
+			"command": "python -m pip install typer",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-cli-bootstrap",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_chanlun_cli.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-cli-bootstrap",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_chanlun_cli.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-cli-bootstrap",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_chanlun_cli.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-cli-bootstrap",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_chanlun_cli.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-and-cli",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_bootstrap_anchor.py tests/test_segment_rediscrimination_matrix.py tests/test_chanlun_cli.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-chart-export-bootstrap",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_chart_export.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-chart-export-bootstrap",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_chart_export.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-and-export-suite",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_bootstrap_anchor.py tests/test_segment_rediscrimination_matrix.py tests/test_chanlun_cli.py tests/test_chart_export.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-bootstrap-script-args",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_run_cn_60m_chanlun_report.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-bootstrap-script-args",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_run_cn_60m_chanlun_report.py tests/test_chart_export.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-and-export-suite",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_bootstrap_anchor.py tests/test_segment_rediscrimination_matrix.py tests/test_chanlun_cli.py tests/test_chart_export.py tests/test_run_cn_60m_chanlun_report.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-bootstrap-and-export-tests",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_chart_export.py tests/test_run_cn_60m_chanlun_report.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-bootstrap-anchor-auto",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment_bootstrap_anchor.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-bootstrap-auto",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment_bootstrap_anchor.py tests/test_run_cn_60m_chanlun_report.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-bootstrap-auto",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment_bootstrap_anchor.py tests/test_run_cn_60m_chanlun_report.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-and-export-suite",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_bootstrap_anchor.py tests/test_segment_rediscrimination_matrix.py tests/test_chanlun_cli.py tests/test_chart_export.py tests/test_run_cn_60m_chanlun_report.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-and-export-suite",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_bootstrap_anchor.py tests/test_segment_rediscrimination_matrix.py tests/test_chanlun_cli.py tests/test_chart_export.py tests/test_run_cn_60m_chanlun_report.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-regression",
+			"type": "shell",
+			"command": "py -3 -m pytest -q tests/test_generate_a_share_single_mixed_report.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-auto-bootstrap",
+			"type": "shell",
+			"command": "py -3 -m pytest -q tests/test_generate_a_share_single_mixed_report.py tests/test_generate_h_share_single_mixed_report.py tests/test_chart_export.py tests/test_segment_bootstrap_anchor.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-auto-bootstrap",
+			"type": "shell",
+			"command": "py -3 -m pytest -q tests/test_generate_a_share_single_mixed_report.py tests/test_generate_h_share_single_mixed_report.py tests/test_chart_export.py tests/test_segment_bootstrap_anchor.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-auto-bootstrap",
+			"type": "shell",
+			"command": "py -3 -m pytest -q tests/test_generate_a_share_single_mixed_report.py tests/test_generate_h_share_single_mixed_report.py tests/test_chart_export.py tests/test_segment_bootstrap_anchor.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-auto-bootstrap",
+			"type": "shell",
+			"command": "py -3 -m pytest -q tests/test_generate_a_share_single_mixed_report.py tests/test_generate_h_share_single_mixed_report.py tests/test_chart_export.py tests/test_segment_bootstrap_anchor.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-auto-bootstrap",
+			"type": "shell",
+			"command": "py -3 -m pytest -q tests/test_generate_a_share_single_mixed_report.py tests/test_generate_h_share_single_mixed_report.py tests/test_chart_export.py tests/test_segment_bootstrap_anchor.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-auto-bootstrap",
+			"type": "shell",
+			"command": "py -3 -m pytest -q tests/test_generate_a_share_single_mixed_report.py tests/test_generate_h_share_single_mixed_report.py tests/test_chart_export.py tests/test_segment_bootstrap_anchor.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-bootstrap",
+			"type": "shell",
+			"command": "py -3 -m pytest -q tests/test_segment_bootstrap_anchor.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-bootstrap-help",
+			"type": "shell",
+			"command": "py -3 -m pytest -q tests/test_chanlun_cli.py tests/test_run_cn_60m_chanlun_report.py tests/test_run_hk_60m_chanlun_report.py tests/test_generate_a_share_single_mixed_report.py tests/test_generate_h_share_single_mixed_report.py tests/test_segment_bootstrap_anchor.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-bootstrap-help",
+			"type": "shell",
+			"command": "py -3 -m pytest -q tests/test_chanlun_cli.py tests/test_run_cn_60m_chanlun_report.py tests/test_generate_a_share_single_mixed_report.py tests/test_generate_h_share_single_mixed_report.py tests/test_segment_bootstrap_anchor.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-bootstrap-help-2",
+			"type": "shell",
+			"command": "py -3 -m pytest -q tests/test_chanlun_cli.py tests/test_run_cn_60m_chanlun_report.py tests/test_generate_a_share_single_mixed_report.py tests/test_generate_h_share_single_mixed_report.py tests/test_segment_bootstrap_anchor.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "run-a-share-mixed-report",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; py -3 scripts/generate_a_share_single_mixed_report.py 300124 --name \"汇川技术\" --output-dir data/_meta --skip-gen-base --skip-gen-tech --no-generate-lower-precision",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "run-a-share-mixed-report-full",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; py -3 scripts/generate_a_share_single_mixed_report.py 300124 --name \"汇川技术\" --output-dir data/_meta --skip-gen-base --no-generate-lower-precision",
+			"problemMatcher": [],
+			"group": "test"
+		}
+	]
+}

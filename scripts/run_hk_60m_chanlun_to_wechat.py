@@ -63,6 +63,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-profile", default=None, choices=available_source_profiles(), help="港股分钟线数据源配置；默认读取 CHANLUN_SOURCE_PROFILE 或 mainland")
     parser.add_argument("--source", default=None, choices=["xueqiu", "akshare"], help="港股分钟数据源；默认跟随 source profile")
     parser.add_argument("--fallback-source", action="append", choices=["xueqiu", "akshare"], default=None, help="显式允许的回退数据源，可重复指定；默认跟随 source profile")
+    parser.add_argument(
+        "--bootstrap-mode",
+        default="auto",
+        choices=["auto", "first_valid_seed", "skip_left_edge"],
+        help="线段起点锚定模式，默认 auto；可选 first_valid_seed 或 skip_left_edge",
+    )
+    parser.add_argument(
+        "--bootstrap-skip-confirmed-bis",
+        type=int,
+        default=0,
+        help="skip_left_edge 模式下，先跳过左侧多少根已确认笔",
+    )
     parser.add_argument("--render-only", action="store_true", help="保留兼容参数；当前始终只抓取、分析、出图")
     return parser.parse_args()
 
@@ -356,7 +368,11 @@ def main() -> None:
 
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
     bis = identify_bis(fractals, normalized_bars)
-    segments = identify_segments(bis)
+    segments = identify_segments(
+        bis,
+        bootstrap_mode=args.bootstrap_mode,
+        bootstrap_skip_confirmed_bis=args.bootstrap_skip_confirmed_bis,
+    )
     confirmed_bis = [bi for bi in bis if bi.is_confirmed]
     zhongshus = identify_zhongshu(confirmed_bis)
     macd_points = calculate_macd(raw_bars)
