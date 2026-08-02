@@ -2,11 +2,47 @@
 
 本手册用于把本地 `data/cache/kline` 缓存目录备份到 CloudBase/COS 目录 `stock-kline-cache/latest`，并支持新实例恢复。
 
+适用说明：
+
+1. 本文中的 cloud-init 与 systemd 章节仅适用于自管 CVM / 传统 Linux 机器。
+2. CloudBase 托管容器实例不会执行 cloud-init，也不会使用 systemd；请直接使用容器启动脚本方案。
+
 ## 目标
 
 - 热缓存仍在本地磁盘，保证分析读写速度。
 - 云存储目录做备份和灾备恢复。
 - 支持定时备份和停机前备份。
+
+## 托管容器模式（CloudBase Run）
+
+如果你使用的是 CloudBase 托管容器服务，推荐使用容器入口脚本：
+
+- `scripts/container_bootstrap_and_run.sh`
+
+该脚本会在容器启动时执行：
+
+1. 可选启动恢复（默认关闭）
+2. 可选启动即备份（默认关闭）
+3. 周期备份（默认每 1800 秒）
+4. 最后启动主进程（uvicorn）
+
+关键环境变量：
+
+- `KLINE_SYNC_ENABLED=true|false`
+- `KLINE_SYNC_CLOUD_PREFIX=stock-kline-cache/latest`
+- `KLINE_SYNC_RESTORE_ON_START=true|false`
+- `KLINE_SYNC_RESTORE_STRICT=true|false`
+- `KLINE_SYNC_BACKUP_ON_START=true|false`
+- `KLINE_SYNC_BACKUP_INTERVAL_SECONDS=1800`
+- `KLINE_SYNC_BACKUP_ON_STOP=true|false`
+- `KLINE_SYNC_MANIFEST_PATH=/tmp/stock-kline-cache/cloudbase-upload-manifest.json`
+- `KLINE_SYNC_POINTER_PATH=/tmp/stock-kline-cache/manifest-pointer.json`
+
+容器环境还需要：
+
+- `CLOUDBASE_ENV_ID`
+- `CLOUDBASE_REGION`
+- `CLOUDBASE_APIKEY`
 
 ## 前置条件
 
@@ -58,7 +94,7 @@ python3 scripts/sync_kline_cache_cloudbase.py backup \
   --manifest-path build/stock-kline-cache/cloudbase-upload-manifest.json
 ```
 
-首次备份建议加 `--force-upload`，保证所有文件都上传。
+当前实现会把本地缓存打包成一个 `snapshot.tar.gz` 快照，并把快照路径、大小、SHA-256 以及文件清单写入本地 manifest；备份阶段只上传这一个归档文件。
 
 ## 一次性恢复到本地缓存
 
@@ -71,10 +107,10 @@ python3 scripts/sync_kline_cache_cloudbase.py restore \
 
 说明：
 
-1. 默认走 `tcb storage download ... --dir`，整目录恢复，不依赖本地 manifest。
+1. 恢复时先通过 `tcb storage download ... --dir` 拉取云端快照包到临时目录，再解包恢复到目标缓存目录。
 2. 如需只看命令不执行，可加 `--dry-run`。
 
-## Linux 包装脚本
+## Linux 包装脚本（自管 CVM / 传统机器，可选）
 
 - 备份脚本: `bin/linux/backup_kline_cache_to_cloudbase.sh`
 - 恢复脚本: `bin/linux/restore_kline_cache_from_cloudbase.sh`
@@ -84,11 +120,11 @@ python3 scripts/sync_kline_cache_cloudbase.py restore \
 示例：
 
 ```bash
-bash bin/linux/backup_kline_cache_to_cloudbase.sh --force-upload
+bash bin/linux/backup_kline_cache_to_cloudbase.sh
 bash bin/linux/restore_kline_cache_from_cloudbase.sh --fetch-manifest
 ```
 
-## systemd 定时备份
+## systemd 定时备份（自管 CVM / 传统机器，可选）
 
 模板文件：
 
@@ -117,7 +153,7 @@ sudo bash bin/linux/install_kline_cache_backup_systemd.sh
 sudo SERVICE_USER=ubuntu WORKING_DIR=/opt/stock CLOUD_PREFIX=stock-kline-cache/latest MANIFEST_PATH=/opt/stock/build/stock-kline-cache/cloudbase-upload-manifest.json bash bin/linux/install_kline_cache_backup_systemd.sh
 ```
 
-## 新实例自动化（cloud-init）
+## 新实例自动化（cloud-init，自管 CVM / 传统机器，可选）
 
 如果你不想在每台新实例手工执行安装，可在创建 CVM 时直接使用 cloud-init。
 
@@ -152,7 +188,7 @@ journalctl -u stock-kline-cache-backup.service -n 200 --no-pager
 1. `stock-kline-cache-backup.service` 已内置 `ExecStartPre`，会先跑健康检查。
 2. 健康检查失败时不会执行上传，错误会写入 journald。
 
-## systemd 停机前备份
+## systemd 停机前备份（自管 CVM / 传统机器，可选）
 
 模板文件：
 

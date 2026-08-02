@@ -39,13 +39,13 @@ sed -i "s|WorkingDirectory=/opt/stock|WorkingDirectory=${WORKING_DIR}|g" "${SYST
 if [[ ! -f "${ENV_FILE_PATH}" ]]; then
   cat > "${ENV_FILE_PATH}" <<EOF
 # CloudBase runtime settings for kline cache backup
+# Optional: provide credentials via the runtime environment or Tencent secret variables.
 CLOUDBASE_ENV_ID=
 CLOUDBASE_REGION=ap-shanghai
-CLOUDBASE_APIKEY=
 CLOUD_PREFIX=${CLOUD_PREFIX}
 MANIFEST_PATH=${MANIFEST_PATH}
 EOF
-  echo "created ${ENV_FILE_PATH}; please fill CLOUDBASE_ENV_ID/CLOUDBASE_APIKEY"
+  echo "created ${ENV_FILE_PATH}; please fill CLOUDBASE_ENV_ID and provide credentials via the runtime environment if needed"
 else
   echo "found ${ENV_FILE_PATH}; keep existing values"
 fi

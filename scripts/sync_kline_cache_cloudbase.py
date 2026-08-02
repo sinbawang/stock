@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import io
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +41,83 @@ DEFAULT_CLOUD_PREFIX = "stock-kline-cache/latest"
 
 class CloudBaseSyncError(RuntimeError):
     pass
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def build_snapshot_manifest(source_dir: Path) -> dict[str, Any]:
+    files: list[dict[str, Any]] = []
+    for path in sorted(source_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        rel_path = path.relative_to(source_dir).as_posix()
+        files.append(
+            {
+                "path": rel_path,
+                "sha256": sha256_file(path),
+                "size": path.stat().st_size,
+            }
+        )
+    return {
+        "version": 1,
+        "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "source_dir": source_dir.name,
+        "file_count": len(files),
+        "files": files,
+    }
+
+
+def create_snapshot_archive(source_dir: Path, archive_path: Path) -> dict[str, Any]:
+    if not source_dir.exists():
+        raise CloudBaseSyncError(f"source dir does not exist: {source_dir}")
+    if not source_dir.is_dir():
+        raise CloudBaseSyncError(f"source dir is not a directory: {source_dir}")
+
+    manifest = build_snapshot_manifest(source_dir)
+    archive_path.parent.mkdir(parents=True, exist_ok=True)
+
+    payload = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
+    with tarfile.open(archive_path, "w:gz") as tar_handle:
+        for path in sorted(source_dir.rglob("*")):
+            if not path.is_file():
+                continue
+            relative_path = path.relative_to(source_dir).as_posix()
+            tar_handle.add(path, arcname=relative_path)
+
+        manifest_info = tarfile.TarInfo("manifest.json")
+        manifest_info.size = len(payload)
+        tar_handle.addfile(manifest_info, io.BytesIO(payload))
+
+    return manifest
+
+
+def restore_snapshot_archive(archive_path: Path, target_dir: Path) -> dict[str, Any]:
+    if not archive_path.exists():
+        raise CloudBaseSyncError(f"snapshot archive not found: {archive_path}")
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(archive_path, "r:gz") as tar_handle:
+        tar_handle.extractall(target_dir)
+
+    manifest_path = target_dir / "manifest.json"
+    if not manifest_path.exists():
+        return {"version": 1, "file_count": 0, "files": []}
+
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        return payload
+    raise CloudBaseSyncError(f"Invalid snapshot manifest: {manifest_path}")
+
+
+def write_local_manifest(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def parse_args() -> argparse.Namespace:
@@ -325,6 +407,8 @@ def restore_with_cli(args: argparse.Namespace, target_dir: Path) -> int:
     target_dir.mkdir(parents=True, exist_ok=True)
 
     cloud_dir = args.cloud_prefix.strip("/") + "/"
+    temp_dir = target_dir.parent / f".{target_dir.name}-restore-preview"
+    temp_dir.mkdir(parents=True, exist_ok=True)
     command = [
         tcb_command,
         "--env-id",
@@ -334,7 +418,7 @@ def restore_with_cli(args: argparse.Namespace, target_dir: Path) -> int:
         "storage",
         "download",
         cloud_dir,
-        str(target_dir),
+        str(temp_dir),
         "--dir",
     ]
     print("restore_command=" + " ".join(command))
@@ -344,6 +428,11 @@ def restore_with_cli(args: argparse.Namespace, target_dir: Path) -> int:
     completed = subprocess.run(command, check=False)
     if completed.returncode != 0:
         raise CloudBaseSyncError(f"CloudBase CLI restore failed with exit code {completed.returncode}")
+
+    archive_candidates = sorted(temp_dir.rglob("*.tar.gz"))
+    if not archive_candidates:
+        raise CloudBaseSyncError(f"CloudBase CLI restore did not yield a snapshot archive under {temp_dir}")
+    restore_snapshot_archive(archive_candidates[0], target_dir)
     return 0
 
 
@@ -544,102 +633,62 @@ def command_backup(args: argparse.Namespace) -> int:
     source_dir = Path(args.source_dir).resolve()
     if not source_dir.exists():
         raise CloudBaseSyncError(f"source dir does not exist: {source_dir}")
+    if not source_dir.is_dir():
+        raise CloudBaseSyncError(f"source dir is not a directory: {source_dir}")
+
     manifest_path = Path(args.manifest_path).resolve()
     pointer_path = Path(args.pointer_path).resolve()
 
-    files = iter_local_files(source_dir, args.cloud_prefix)
-    if not files:
+    snapshot_files = [path for path in source_dir.rglob("*") if path.is_file()]
+    if not snapshot_files:
         raise CloudBaseSyncError(f"No files found under {source_dir}")
 
-    previous_manifest = load_previous_manifest(manifest_path)
-    upload_plan, skipped_uploads = plan_uploads(
-        files,
-        previous_manifest,
-        env_id=args.env_id,
-        region=args.region,
-        cloud_prefix=args.cloud_prefix,
-        force_upload=args.force_upload,
-    )
-
+    archive_path = manifest_path.parent / "snapshot.tar.gz"
     print(f"source={source_dir}")
-    print(f"files={len(files)}")
-    print(f"uploading={len(upload_plan)}")
-    print(f"skipped={len(skipped_uploads)}")
+    print(f"files={len(snapshot_files)}")
     print(f"cloud_prefix={args.cloud_prefix}")
-    if args.force_upload:
-        print("force_upload=true")
+
+    snapshot_manifest = create_snapshot_archive(source_dir, archive_path)
+    manifest_payload = {
+        "version": 1,
+        "env_id": args.env_id or "",
+        "region": args.region,
+        "source_dir": str(source_dir),
+        "cloud_prefix": args.cloud_prefix,
+        "archive_cloud_path": f"{args.cloud_prefix.strip('/')}/snapshot.tar.gz",
+        "archive_path": str(archive_path),
+        "archive_size": archive_path.stat().st_size,
+        "archive_sha256": sha256_file(archive_path),
+        "file_count": snapshot_manifest["file_count"],
+        "files": snapshot_manifest["files"],
+    }
+    write_local_manifest(manifest_path, manifest_payload)
+    print(f"manifest={manifest_path}")
 
     if args.dry_run:
-        manifest = build_manifest(
-            env_id=args.env_id or "",
-            region=args.region,
-            source_dir=source_dir,
-            cloud_prefix=args.cloud_prefix,
-            uploads=skipped_uploads
-            + [
-                {
-                    "relative_path": item.relative_path,
-                    "cloud_path": item.cloud_path,
-                    "file_id": None,
-                    "size": item.size,
-                    "sha256": item.sha256,
-                    "status": "planned",
-                }
-                for item in upload_plan
-            ],
-        )
-        write_manifest(manifest_path, manifest)
-        print(f"dry_run_manifest={manifest_path}")
+        print(f"dry_run_archive={archive_path}")
         return 0
 
     api_key, created_api_key = ensure_api_key(args)
     session = new_session()
-    uploads: list[dict[str, Any]] = list(skipped_uploads)
     try:
-        for item in upload_plan:
-            metadata = get_upload_metadata(
-                session,
-                env_id=args.env_id,
-                region=args.region,
-                api_key=api_key,
-                cloud_path=item.cloud_path,
-            )
-            upload_bytes(session, cloud_path=item.cloud_path, local_path=item.local_path, metadata=metadata)
-            uploads.append(
-                {
-                    "relative_path": item.relative_path,
-                    "cloud_path": item.cloud_path,
-                    "file_id": metadata["fileId"],
-                    "size": item.size,
-                    "sha256": item.sha256,
-                    "status": "uploaded",
-                }
-            )
-            print(f"uploaded {item.relative_path}")
-
-        manifest = build_manifest(
-            env_id=args.env_id,
-            region=args.region,
-            source_dir=source_dir,
-            cloud_prefix=args.cloud_prefix,
-            uploads=uploads,
-        )
-        write_manifest(manifest_path, manifest)
-        print(f"manifest={manifest_path}")
-        manifest_cloud_path, manifest_file_id = upload_manifest_file(
+        cloud_path = f"{args.cloud_prefix.strip('/')}/snapshot.tar.gz"
+        metadata = get_upload_metadata(
             session,
             env_id=args.env_id,
             region=args.region,
             api_key=api_key,
-            cloud_prefix=args.cloud_prefix,
-            manifest_path=manifest_path,
+            cloud_path=cloud_path,
         )
+        upload_bytes(session, cloud_path=cloud_path, local_path=archive_path, metadata=metadata)
+        print(f"uploaded_snapshot={cloud_path}")
+
         pointer_payload = {
             "env_id": args.env_id,
             "region": args.region,
             "cloud_prefix": args.cloud_prefix,
-            "manifest_cloud_path": manifest_cloud_path,
-            "manifest_file_id": manifest_file_id,
+            "snapshot_cloud_path": cloud_path,
+            "snapshot_file_id": metadata.get("fileId"),
             "manifest_path": str(manifest_path),
         }
         write_pointer(pointer_path, pointer_payload)
@@ -718,75 +767,48 @@ def command_restore(args: argparse.Namespace) -> int:
     pointer_path = Path(args.pointer_path).resolve()
     pointer = read_pointer(pointer_path)
 
-    manifest_file_id = str(args.manifest_file_id or "").strip() or None
-    if manifest_file_id is None and pointer:
-        value = str(pointer.get("manifest_file_id") or "").strip()
-        if value:
-            manifest_file_id = value
-
     if args.use_cli_download:
         return restore_with_cli(args, target_dir)
 
-    if args.dry_run and not manifest_path.exists() and not args.fetch_manifest:
-        raise CloudBaseSyncError(
-            "manifest file is missing for dry-run restore. Use --fetch-manifest or provide --manifest-path."
-        )
+    if args.clean_target and target_dir.exists():
+        shutil.rmtree(target_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    archive_path = manifest_path.parent / "snapshot.tar.gz"
+    snapshot_cloud_path = None
+    if pointer:
+        snapshot_cloud_path = str(pointer.get("snapshot_cloud_path") or "").strip() or None
+    if not snapshot_cloud_path:
+        snapshot_cloud_path = f"{args.cloud_prefix.strip('/')}/snapshot.tar.gz"
+
+    print(f"target_dir={target_dir}")
+    print(f"snapshot_cloud_path={snapshot_cloud_path}")
+
+    if args.dry_run:
+        return 0
 
     api_key: str | None = None
     created_api_key: CreatedApiKey | None = None
     session: requests.Session | None = None
     try:
-        if args.fetch_manifest or not manifest_path.exists():
+        if args.fetch_manifest or not archive_path.exists():
             api_key, created_api_key = ensure_api_key(args)
             session = new_session()
-            fetch_manifest_from_cloud(
-                session=session,
-                env_id=args.env_id,
-                region=args.region,
-                api_key=api_key,
-                cloud_prefix=args.cloud_prefix,
-                manifest_file_id=manifest_file_id,
-                manifest_path=manifest_path,
-            )
-
-        manifest = read_manifest(manifest_path)
-        files = [item for item in manifest.get("files") if isinstance(item, dict)]
-        planned = [item for item in files if str(item.get("relative_path") or "").strip()]
-        print(f"manifest={manifest_path}")
-        print(f"restore_files={len(planned)}")
-        print(f"target_dir={target_dir}")
-
-        if args.dry_run:
-            return 0
-
-        if args.clean_target and target_dir.exists():
-            shutil.rmtree(target_dir)
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        if session is None:
-            api_key, created_api_key = ensure_api_key(args)
-            session = new_session()
-
-        restored = 0
-        for item in planned:
-            relative = str(item.get("relative_path") or "").strip()
-            file_id = str(item.get("file_id") or "").strip()
-            cloud_path = str(item.get("cloud_path") or "").strip()
-            identifier = file_id or cloud_path
-            if not relative or not identifier:
-                continue
             url = get_download_url(
                 session,
                 env_id=args.env_id,
                 region=args.region,
                 api_key=api_key,
-                cloud_path=identifier,
+                cloud_path=snapshot_cloud_path,
             )
-            local_path = target_dir / relative
-            download_file(url, local_path)
-            restored += 1
-            print(f"restored {relative}")
-        print(f"restored_files={restored}")
+            download_file(url, archive_path)
+            print(f"downloaded_snapshot={archive_path}")
+
+        manifest = restore_snapshot_archive(archive_path, target_dir)
+        files = [item for item in manifest.get("files", []) if isinstance(item, dict)]
+        print(f"manifest={manifest_path}")
+        print(f"restore_files={len(files)}")
+        print(f"restored_snapshot={archive_path}")
         return 0
     finally:
         if session is not None:
