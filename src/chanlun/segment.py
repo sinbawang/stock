@@ -65,7 +65,7 @@ def _score_bootstrap_candidate(
         "same_direction_not_extending",
         "no_followup_same_direction",
     }:
-        score -= 50
+        score -= 20
 
     if stop_reason == "exhausted_confirmed_bis":
         score -= 20
@@ -91,7 +91,7 @@ def _resolve_bootstrap_start_index(
         return 0
 
     max_start = max(0, total_bis - 3)
-    best_start = 0
+    best_start: Optional[int] = None
     best_score: Optional[int] = None
 
     for candidate_idx in range(max_start + 1):
@@ -99,9 +99,14 @@ def _resolve_bootstrap_start_index(
         candidate_score = _score_bootstrap_candidate(bis, candidate_idx, candidate_result)
         if candidate_score is None:
             continue
-        if best_score is None or candidate_score > best_score:
+        if best_score is None or candidate_score > best_score or (
+            candidate_score == best_score and best_start is not None and candidate_idx < best_start
+        ):
             best_score = candidate_score
             best_start = candidate_idx
+
+    if best_start is None:
+        return 0
 
     return best_start
 

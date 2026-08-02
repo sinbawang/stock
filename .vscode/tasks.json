@@ -252,6 +252,132 @@
 			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; py -3 scripts/generate_a_share_single_mixed_report.py 300124 --name \"汇川技术\" --output-dir data/_meta --skip-gen-base --no-generate-lower-precision",
 			"problemMatcher": [],
 			"group": "test"
+		},
+		{
+			"label": "pytest-full-suite",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python -m pytest -q",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "install-fastapi",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python -m pip install fastapi",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-full-suite-rerun",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python -m pytest -q",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "inspect-bootstrap-scores",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python - <<'PY'\nfrom pathlib import Path\nfrom chanlun.segment import _extend_segment, _score_bootstrap_candidate, SEGMENT_BOOTSTRAP_AUTO\nfrom tests.segment_regression_support import identify_segments_from_csv\n\nfor path in [Path('data/reports/00700/day/analyze/00700_day_20230925_to_20260618.csv'), Path('data/reports/03690/day/analyze/03690_day_20230925_to_20260618.csv')]:\n    print('FILE', path)\n    bars = identify_segments_from_csv.__globals__['clean_bars'](identify_segments_from_csv.__globals__['read_bars_from_csv'](str(path)))\n    normalized = identify_segments_from_csv.__globals__['normalize_bars'](bars)\n    fractals = identify_segments_from_csv.__globals__['filter_consecutive_fractals'](identify_segments_from_csv.__globals__['identify_fractals'](normalized))\n    bis = identify_segments_from_csv.__globals__['identify_bis'](fractals, normalized, pending_reverse_mode='any')\n    # confirmed bis only\n    bis = [bi for bi in bis if bi.is_confirmed]\n    print('confirmed bis', len(bis))\n    for idx in range(max(0, len(bis)-2)):\n        result = _extend_segment(bis, idx)\n        if result is None:\n            continue\n        score = _score_bootstrap_candidate(bis, idx, result)\n        end_idx, is_confirmed, break_idx, stop_reason, break_bi_id = result\n        print(idx, '->', end_idx, 'confirmed', is_confirmed, 'stop', stop_reason, 'score', score)\n    print()\nPY",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "inspect-bootstrap-scores",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; @'\nfrom pathlib import Path\nfrom chanlun.segment import _extend_segment, _score_bootstrap_candidate\nfrom tests.segment_regression_support import identify_segments_from_csv\n\nfor path in [Path('data/reports/00700/day/analyze/00700_day_20230925_to_20260618.csv'), Path('data/reports/03690/day/analyze/03690_day_20230925_to_20260618.csv')]:\n    print('FILE', path)\n    bars = identify_segments_from_csv.__globals__['clean_bars'](identify_segments_from_csv.__globals__['read_bars_from_csv'](str(path)))\n    normalized = identify_segments_from_csv.__globals__['normalize_bars'](bars)\n    fractals = identify_segments_from_csv.__globals__['filter_consecutive_fractals'](identify_segments_from_csv.__globals__['identify_fractals'](normalized))\n    bis = identify_segments_from_csv.__globals__['identify_bis'](fractals, normalized, pending_reverse_mode='any')\n    bis = [bi for bi in bis if bi.is_confirmed]\n    print('confirmed bis', len(bis))\n    for idx in range(max(0, len(bis)-2)):\n        result = _extend_segment(bis, idx)\n        if result is None:\n            continue\n        score = _score_bootstrap_candidate(bis, idx, result)\n        end_idx, is_confirmed, break_idx, stop_reason, break_bi_id = result\n        print(idx, '->', end_idx, 'confirmed', is_confirmed, 'stop', stop_reason, 'score', score)\n    print()\n'@ | python -",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "inspect-bootstrap-scores",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python build/inspect_bootstrap.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-full-suite-rerun",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python -m pytest -q",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-full-suite-rerun",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python -m pytest -q",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-regression-fixtures",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python -m pytest -q tests/test_segment_regression_00700.py tests/test_segment_regression_03690.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "print-actual-landmarks",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python -c \"from pathlib import Path; from tests.segment_regression_support import identify_segments_from_csv; path = Path('data/reports/00700/30m/analyze/00700_30m_20260511_to_20260717.csv'); segments = identify_segments_from_csv(path); print([(s.direction.value, s.start_bi_id, s.end_bi_id, s.stop_reason, s.is_confirmed, s.norm_bar_range) for s in segments])\"",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-regression-fixtures",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python -m pytest -q tests/test_segment_regression_00700.py tests/test_segment_regression_03690.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-regression-fixtures",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python -m pytest -q tests/test_segment_regression_00700.py tests/test_segment_regression_03690.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-regression-fixtures",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python -m pytest -q tests/test_segment_regression_00700.py tests/test_segment_regression_03690.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-full-suite-rerun",
+			"type": "shell",
+			"command": "Set-Location 'c:\\sandbox\\sinba\\stock'; python -m pytest -q",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-regressions",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_rediscrimination_matrix.py tests/test_segment_regression_000591.py tests/test_segment_regression_00700.py tests/test_segment_regression_03690.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-regressions",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_rediscrimination_matrix.py tests/test_segment_regression_000591.py tests/test_segment_regression_00700.py tests/test_segment_regression_03690.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-regressions",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_rediscrimination_matrix.py tests/test_segment_regression_000591.py tests/test_segment_regression_00700.py tests/test_segment_regression_03690.py",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-regressions",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_rediscrimination_matrix.py tests/test_segment_regression_000591.py tests/test_segment_regression_00700.py tests/test_segment_regression_03690.py",
+			"problemMatcher": [],
+			"group": "test"
 		}
 	]
 }
