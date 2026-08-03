@@ -486,6 +486,18 @@
 			"type": "shell",
 			"command": "python build/inspect_feature_case.py",
 			"group": "test"
+		},
+		{
+			"label": "cleanup-pyc",
+			"type": "shell",
+			"command": "del /q src\\chanlun\\data\\__pycache__\\*.pyc && del /q tests\\__pycache__\\*.pyc",
+			"group": "test"
+		},
+		{
+			"label": "cleanup-pyc",
+			"type": "shell",
+			"command": "del /q src\\chanlun\\data\\__pycache__\\*.pyc; del /q tests\\__pycache__\\*.pyc",
+			"group": "test"
 		}
 	]
 }

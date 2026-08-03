@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -20,6 +22,18 @@ def _bar(ts: str) -> dict:
         "low": 1.0,
         "volume": 1,
     }
+
+
+def test_datetime_to_epoch_ms_interprets_naive_dt_as_market_local_time() -> None:
+    dt = datetime(2026, 8, 3, 14, 3, 0)
+    expected = int(
+        datetime(2026, 8, 3, 14, 3, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+        .astimezone(timezone.utc)
+        .timestamp()
+        * 1000
+    )
+
+    assert kline_fetcher._datetime_to_epoch_ms(dt, kline_fetcher._A_SHARE_MARKET_TZ) == expected
 
 
 def test_fetch_kline_intraday_uses_limit_as_target_min_rows(monkeypatch) -> None:

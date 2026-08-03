@@ -42,6 +42,15 @@ def _epoch_ms_to_market_naive(ts_ms: int, market_tz: ZoneInfo) -> datetime:
     return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).astimezone(market_tz).replace(tzinfo=None)
 
 
+def _datetime_to_epoch_ms(value: datetime, market_tz: ZoneInfo) -> int:
+    """Convert a naive/aware datetime to epoch milliseconds in the given market timezone."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=market_tz)
+    else:
+        value = value.astimezone(market_tz)
+    return int(value.astimezone(timezone.utc).timestamp() * 1000)
+
+
 def _make_opener():
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
@@ -325,9 +334,9 @@ def _fetch_intraday_xueqiu(
         session.get(f"https://xueqiu.com/S/{xueqiu_symbol}", timeout=15)
 
     actual_start = start_dt or datetime(1990, 1, 1)
-    actual_end = end_dt or datetime.now()
+    actual_end = end_dt or datetime.now(_A_SHARE_MARKET_TZ).replace(tzinfo=None)
     rows_by_ts: dict[str, dict] = {}
-    begin_ms = int(actual_end.timestamp() * 1000)
+    begin_ms = _datetime_to_epoch_ms(actual_end, _A_SHARE_MARKET_TZ)
     period = interval.removeprefix("m") + "m"
 
     for _ in range(20):

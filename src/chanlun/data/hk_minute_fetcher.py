@@ -60,6 +60,15 @@ def _epoch_ms_to_hk_naive(ts_ms: int) -> datetime:
     return datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).astimezone(_HK_MARKET_TZ).replace(tzinfo=None)
 
 
+def _datetime_to_epoch_ms(value: datetime, market_tz: ZoneInfo) -> int:
+    """Convert a naive/aware datetime to epoch milliseconds in the given market timezone."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=market_tz)
+    else:
+        value = value.astimezone(market_tz)
+    return int(value.astimezone(timezone.utc).timestamp() * 1000)
+
+
 def _normalize_symbol(symbol: str) -> str:
     """统一为 5 位数字（AKShare 东方财富港股要求，例如 '03690'、'00700'）。"""
     s = symbol.strip().lower()
@@ -284,16 +293,18 @@ def _fetch_hk_minute_xueqiu(
     code = _normalize_symbol(symbol)
     start_dt = datetime.strptime(_parse_dt(start, "1990-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
     end_dt = datetime.strptime(
-        _parse_dt(end, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        _parse_dt(end, datetime.now(_HK_MARKET_TZ).strftime("%Y-%m-%d %H:%M:%S")),
         "%Y-%m-%d %H:%M:%S",
     )
+    start_dt = start_dt.replace(tzinfo=_HK_MARKET_TZ).astimezone(_HK_MARKET_TZ).replace(tzinfo=None)
+    end_dt = end_dt.replace(tzinfo=_HK_MARKET_TZ).astimezone(_HK_MARKET_TZ).replace(tzinfo=None)
 
     session, cookie_source = _build_xueqiu_session(code)
     response = session.get(
         "https://stock.xueqiu.com/v5/stock/chart/kline.json",
         params={
             "symbol": code,
-            "begin": str(int(end_dt.timestamp() * 1000)),
+            "begin": str(_datetime_to_epoch_ms(end_dt, _HK_MARKET_TZ)),
             "period": _map_xueqiu_period(period),
             "type": "before",
             "count": "-5000",

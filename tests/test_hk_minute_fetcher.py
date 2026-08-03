@@ -3,10 +3,24 @@ from __future__ import annotations
 import argparse
 import sys
 import types
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from chanlun.data import hk_minute_fetcher as module
+
+
+def test_datetime_to_epoch_ms_interprets_naive_dt_as_hk_local_time():
+    dt = datetime(2026, 8, 3, 14, 3, 0)
+    expected = int(
+        datetime(2026, 8, 3, 14, 3, 0, tzinfo=ZoneInfo("Asia/Hong_Kong"))
+        .astimezone(timezone.utc)
+        .timestamp()
+        * 1000
+    )
+
+    assert module._datetime_to_epoch_ms(dt, module._HK_MARKET_TZ) == expected
 
 
 def test_hk_minute_main_parser_defaults_adjust_to_raw(monkeypatch):
