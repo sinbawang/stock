@@ -49,6 +49,23 @@ def _dedupe_timeframes(values: list[Timeframe]) -> list[Timeframe]:
     return list(dict.fromkeys(values))
 
 
+def _expand_precision_timeframes(timeframes: list[Timeframe]) -> list[Timeframe]:
+    expanded = _dedupe_timeframes(timeframes)
+    dependencies: dict[Timeframe, tuple[Timeframe, ...]] = {
+        "day": ("30m", "5m", "1m"),
+        "30m": ("5m", "1m"),
+        "5m": ("1m",),
+        "60m": (),
+        "15m": (),
+        "1m": (),
+    }
+    for timeframe in list(expanded):
+        for child in dependencies.get(timeframe, ()):  # pragma: no cover - exhaustive mapping
+            if child not in expanded:
+                expanded.append(child)
+    return expanded
+
+
 def _normalize_technical_publish_timeframes(publish_timeframes: list[Timeframe] | None) -> list[Timeframe] | None:
     if not publish_timeframes:
         return None
@@ -60,14 +77,14 @@ def _normalize_technical_publish_timeframes(publish_timeframes: list[Timeframe] 
 
 def _resolve_technical_timeframes(mode: TechnicalRefreshMode, timeframes: list[Timeframe] | None) -> list[Timeframe]:
     if timeframes:
-        return _dedupe_timeframes(timeframes)
+        return _expand_precision_timeframes(timeframes)
     if mode == "m5_intraday":
         return ["5m", "1m"]
     return ["30m", "5m", "1m"]
 
 
 def _should_reroute_publish_refresh(request: "PublishRefreshRequest") -> bool:
-    requested = _dedupe_timeframes(request.tech_timeframes)
+    requested = _expand_precision_timeframes(request.tech_timeframes)
     return bool(requested) and "30m" not in requested
 
 
@@ -92,7 +109,7 @@ def _build_intraday_request_from_publish(request: "PublishRefreshRequest") -> "T
         pending_reverse_mode=request.pending_reverse_mode,
         zhongshu_level=request.zhongshu_level,
         refresh_mode="m5_intraday",
-        tech_timeframes=_dedupe_timeframes(request.tech_timeframes),
+        tech_timeframes=_expand_precision_timeframes(request.tech_timeframes),
         publish_timeframes=request.publish_timeframes,
         publish_json_only=request.publish_json_only,
         cloud_prefix=request.cloud_prefix,
@@ -376,7 +393,7 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
         m5_bars=request.m5_bars,
         m1_bars=request.m1_bars,
         zhongshu_level=request.zhongshu_level,
-        tech_timeframes=tuple(_dedupe_timeframes(request.tech_timeframes)),
+        tech_timeframes=tuple(_expand_precision_timeframes(request.tech_timeframes)),
         export_structure_images=request.export_structure_images,
         publish_timeframes=tuple(_dedupe_timeframes(request.publish_timeframes)) if request.publish_timeframes else None,
         publish_json_only=request.publish_json_only,

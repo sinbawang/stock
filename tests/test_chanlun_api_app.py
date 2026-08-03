@@ -16,6 +16,22 @@ def test_normalize_technical_publish_timeframes_allows_default_bundle() -> None:
     assert _normalize_technical_publish_timeframes(None) is None
 
 
+def test_resolve_technical_timeframes_adds_1m_when_5m_requested() -> None:
+    assert module._resolve_technical_timeframes("m30_intraday", ["day", "30m", "5m"]) == ["day", "30m", "5m", "1m"]
+
+
+def test_resolve_technical_timeframes_preserves_explicit_1m() -> None:
+    assert module._resolve_technical_timeframes("m30_intraday", ["30m", "5m", "1m"]) == ["30m", "5m", "1m"]
+
+
+def test_resolve_technical_timeframes_expands_day_chain() -> None:
+    assert module._resolve_technical_timeframes("m30_intraday", ["day"]) == ["day", "30m", "5m", "1m"]
+
+
+def test_resolve_technical_timeframes_expands_30m_chain() -> None:
+    assert module._resolve_technical_timeframes("m30_intraday", ["30m"]) == ["30m", "5m", "1m"]
+
+
 def test_publish_refresh_request_defaults_to_1200_bars() -> None:
     request = module.PublishRefreshRequest()
 
@@ -93,3 +109,29 @@ def test_run_publish_refresh_keeps_full_path_when_primary_timeframe_requested(mo
     assert result["regenerated"] is True
     assert result["generated_timeframes"] == ["30m", "5m", "1m"]
     assert result["regeneration_summary"] == {"generated_count": 1}
+
+
+def test_run_publish_refresh_expands_day_request_to_lower_timeframes(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_regenerate_holdings(args):
+        captured["tech_timeframes"] = args.tech_timeframes
+        return {"generated_count": 1}
+
+    def fake_publish_build_and_upload(args):
+        return {
+            "publish_root": args.publish_root,
+            "latest_dir": "latest",
+            "cloud_prefix": args.cloud_prefix,
+            "published_timeframes": None,
+        }
+
+    monkeypatch.setattr(module, "regenerate_holdings", fake_regenerate_holdings)
+    monkeypatch.setattr(module, "_publish_build_and_upload", fake_publish_build_and_upload)
+
+    request = module.PublishRefreshRequest(skip_build=True, skip_upload=True, tech_timeframes=["day"])
+
+    result = module._run_publish_refresh(request)
+
+    assert captured["tech_timeframes"] == ("day", "30m", "5m", "1m")
+    assert result["generated_timeframes"] == ["day", "30m", "5m", "1m"]
