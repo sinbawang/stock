@@ -28,6 +28,11 @@ from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 DEFAULT_HOLDINGS_FILE = holdings_file()
 DEFAULT_PUBLISH_ROOT = ROOT / "build" / "miniapp-publish"
 DEFAULT_UPLOAD_SCRIPT = SCRIPTS / "upload_miniapp_publish_bundle.py"
+DEFAULT_SYNC_KLINE_SCRIPT = SCRIPTS / "sync_kline_cache_cloudbase.py"
+DEFAULT_KLINE_CACHE_SOURCE_DIR = ROOT / "data" / "cache" / "kline"
+DEFAULT_KLINE_CACHE_MANIFEST_PATH = ROOT / "build" / "stock-kline-cache" / "cloudbase-upload-manifest.json"
+DEFAULT_KLINE_CACHE_POINTER_PATH = ROOT / "build" / "stock-kline-cache" / "manifest-pointer.json"
+DEFAULT_KLINE_CACHE_CLOUD_PREFIX = "stock-kline-cache/latest"
 
 
 def _round_seconds(value: float) -> float:
@@ -100,6 +105,8 @@ def _write_timing_report(
             "publish_timeframes": list(args.publish_timeframes) if args.publish_timeframes else None,
             "publish_json_only": bool(args.publish_json_only),
             "force_upload": bool(getattr(args, "force_upload", False)),
+            "sync_kline_cache": bool(getattr(args, "sync_kline_cache", False)),
+            "kline_cache_cloud_prefix": str(getattr(args, "kline_cache_cloud_prefix", "")),
         },
         "stages": {name: _round_seconds(value) for name, value in stage_seconds.items()},
         "artifacts": {
@@ -186,12 +193,12 @@ def parse_args() -> argparse.Namespace:
         default="any",
         help="Forwarded to batch_prepare_chanlun_reports.py to control pending reverse fractal handling.",
     )
-    parser.add_argument("--day-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
-    parser.add_argument("--m60-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 60M K-line fetch count.")
-    parser.add_argument("--m30-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 30M K-line fetch count.")
-    parser.add_argument("--m15-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
-    parser.add_argument("--m5-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 5M K-line fetch count.")
-    parser.add_argument("--m1-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 1M K-line fetch count.")
+    parser.add_argument("--day-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
+    parser.add_argument("--m60-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 60M K-line fetch count.")
+    parser.add_argument("--m30-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 30M K-line fetch count.")
+    parser.add_argument("--m15-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
+    parser.add_argument("--m5-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 5M K-line fetch count.")
+    parser.add_argument("--m1-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 1M K-line fetch count.")
     parser.add_argument("--zhongshu-level", choices=("bi", "segment"), default="bi", help="Forwarded to batch_prepare_chanlun_reports.py to switch between bi and segment zhongshu rendering.")
     parser.add_argument(
         "--tech-timeframes",
@@ -231,6 +238,37 @@ def parse_args() -> argparse.Namespace:
         help="Force uploader to skip manifest-diff optimization and upload all files.",
     )
     parser.add_argument("--upload-dry-run", action="store_true", help="Run upload script in dry-run mode")
+    parser.add_argument(
+        "--sync-kline-cache",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Sync local data/cache/kline to CloudBase stock-kline-cache/latest via backup command.",
+    )
+    parser.add_argument(
+        "--sync-kline-cache-script",
+        default=str(DEFAULT_SYNC_KLINE_SCRIPT),
+        help="Path to sync_kline_cache_cloudbase.py",
+    )
+    parser.add_argument(
+        "--kline-cache-source-dir",
+        default=str(DEFAULT_KLINE_CACHE_SOURCE_DIR),
+        help="Local kline cache root for sync backup.",
+    )
+    parser.add_argument(
+        "--kline-cache-cloud-prefix",
+        default=DEFAULT_KLINE_CACHE_CLOUD_PREFIX,
+        help="Cloud prefix for expanded kline CSV backup.",
+    )
+    parser.add_argument(
+        "--kline-cache-manifest-path",
+        default=str(DEFAULT_KLINE_CACHE_MANIFEST_PATH),
+        help="Local manifest path for kline cache sync backup.",
+    )
+    parser.add_argument(
+        "--kline-cache-pointer-path",
+        default=str(DEFAULT_KLINE_CACHE_POINTER_PATH),
+        help="Local pointer path for kline cache sync backup.",
+    )
     return parser.parse_args()
 
 
@@ -495,6 +533,39 @@ def upload_publish_bundle(args: argparse.Namespace, source_dir: Path) -> None:
         _run_command(command)
 
 
+def sync_kline_cache_backup(args: argparse.Namespace) -> None:
+    command = [
+        sys.executable,
+        str(Path(args.sync_kline_cache_script)),
+        "backup",
+        "--source-dir",
+        str(Path(args.kline_cache_source_dir)),
+        "--cloud-prefix",
+        args.kline_cache_cloud_prefix,
+        "--manifest-path",
+        str(Path(args.kline_cache_manifest_path)),
+        "--pointer-path",
+        str(Path(args.kline_cache_pointer_path)),
+    ]
+    if args.env_id:
+        command.extend(["--env-id", args.env_id])
+    if args.region:
+        command.extend(["--region", args.region])
+    if args.api_key:
+        command.extend(["--api-key", args.api_key])
+    if args.api_key_name:
+        command.extend(["--api-key-name", args.api_key_name])
+    if args.api_key_expire_in is not None:
+        command.extend(["--api-key-expire-in", str(args.api_key_expire_in)])
+    if args.delete_created_api_key:
+        command.append("--delete-created-api-key")
+    if bool(getattr(args, "force_upload", False)):
+        command.append("--force-upload")
+    if args.upload_dry_run:
+        command.append("--dry-run")
+    _run_command(command)
+
+
 def main() -> None:
     args = parse_args()
 
@@ -518,6 +589,11 @@ def main() -> None:
         print(f"timing build_seconds={stage_seconds['build_seconds']:.2f}", flush=True)
 
     if not args.skip_upload:
+        if bool(getattr(args, "sync_kline_cache", False)):
+            started_sync_kline = time.perf_counter()
+            sync_kline_cache_backup(args)
+            stage_seconds["sync_kline_cache_seconds"] = time.perf_counter() - started_sync_kline
+            print(f"timing sync_kline_cache_seconds={stage_seconds['sync_kline_cache_seconds']:.2f}", flush=True)
         started_upload = time.perf_counter()
         upload_publish_bundle(args, latest_dir)
         stage_seconds["upload_seconds"] = time.perf_counter() - started_upload
