@@ -289,24 +289,38 @@ def get_download_url(
         {"fileList": [cloud_path]},
         {"fileid_list": [cloud_path]},
         {"fileIdList": [cloud_path]},
+        {"file_list": [{"fileid": cloud_path}]},
+        {"fileList": [{"fileid": cloud_path}]},
+        {"fileList": [{"fileId": cloud_path}]},
+        {"fileList": [{"fileID": cloud_path}]},
+        {"fileid_list": [{"fileid": cloud_path}]},
+        {"fileIdList": [{"fileID": cloud_path}]},
+    ]
+    actions = [
+        "storage.batchGetDownloadUrl",
+        "storage.batchGetTempFileURL",
+        "storage.getTempFileURL",
     ]
 
     response: dict[str, Any] | None = None
     last_error: Exception | None = None
-    for payload in payload_candidates:
-        try:
-            response = admin_request(
-                session,
-                env_id=env_id,
-                region=region,
-                api_key=api_key,
-                action="storage.batchGetDownloadUrl",
-                payload=payload,
-            )
+    for action in actions:
+        for payload in payload_candidates:
+            try:
+                response = admin_request(
+                    session,
+                    env_id=env_id,
+                    region=region,
+                    api_key=api_key,
+                    action=action,
+                    payload=payload,
+                )
+                break
+            except CloudBaseSyncError as exc:
+                last_error = exc
+                continue
+        if response is not None:
             break
-        except CloudBaseSyncError as exc:
-            last_error = exc
-            continue
 
     if response is None:
         if last_error is not None:
