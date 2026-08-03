@@ -32,7 +32,13 @@ CAPITAL_FLOW_CACHE_DIR = DATA_META_DIR / "capital_flow_cache"
 
 
 def holdings_file() -> Path:
-    return DATA_DIR / "stock_holdings.json"
+    preferred = DATA_DIR / "stock_holdings.json"
+    fallback = CONFIG_DIR / "stock_holdings.json"
+    if preferred.exists():
+        return preferred
+    if fallback.exists():
+        return fallback
+    return preferred
 
 
 def ensure_reports_meta_dir() -> Path:

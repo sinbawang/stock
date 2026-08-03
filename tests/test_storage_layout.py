@@ -14,6 +14,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from storage_layout import REPORTS_DIR, holdings_file, timeframe_report_paths
+import storage_layout
 import run_cn_60m_chanlun_report as cn_module
 import run_hk_60m_chanlun_report as hk_module
 
@@ -39,6 +40,20 @@ def test_timeframe_report_paths_uses_reports_symbol_timeframe_layout() -> None:
 
 def test_holdings_file_points_to_canonical_stock_holdings_json() -> None:
     assert holdings_file() == ROOT / "data" / "stock_holdings.json"
+
+
+def test_holdings_file_falls_back_to_config_when_data_file_missing(tmp_path, monkeypatch) -> None:
+    data_dir = tmp_path / "data"
+    config_dir = tmp_path / "config"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
+    fallback = config_dir / "stock_holdings.json"
+    fallback.write_text('{"markets": {"CN": [], "HK": []}}', encoding="utf-8")
+
+    monkeypatch.setattr(storage_layout, "DATA_DIR", data_dir)
+    monkeypatch.setattr(storage_layout, "CONFIG_DIR", config_dir)
+
+    assert storage_layout.holdings_file() == fallback
 
 
 def test_kline_cache_dir_honors_local_store_root_env(monkeypatch) -> None:

@@ -98,6 +98,12 @@ def _write_timing_report(
             "skip_upload": args.skip_upload,
             "skip_gen_base": args.skip_gen_base,
             "skip_gen_fund": args.skip_gen_fund,
+            "day_bars": args.day_bars,
+            "m60_bars": args.m60_bars,
+            "m30_bars": args.m30_bars,
+            "m15_bars": args.m15_bars,
+            "m5_bars": args.m5_bars,
+            "m1_bars": args.m1_bars,
             "pending_reverse_mode": args.pending_reverse_mode,
             "zhongshu_level": args.zhongshu_level,
             "tech_timeframes": list(args.tech_timeframes),
@@ -533,13 +539,40 @@ def upload_publish_bundle(args: argparse.Namespace, source_dir: Path) -> None:
         _run_command(command)
 
 
+def _resolve_kline_cache_source_dir(args: argparse.Namespace) -> Path:
+    requested = Path(args.kline_cache_source_dir)
+    candidates = [
+        requested,
+        ROOT / "data" / "cache" / "kline",
+        ROOT / "data" / "stock-kline-cache",
+        Path("/data/stock-kline-cache"),
+    ]
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized = str(candidate.resolve()) if candidate.is_absolute() else str((ROOT / candidate).resolve())
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        path = Path(normalized)
+        if path.exists() and path.is_dir():
+            if path != requested:
+                print(f"kline_cache_source_dir_fallback={path}", flush=True)
+            return path
+    raise RuntimeError(
+        "No available kline cache source dir found. "
+        f"Tried: {', '.join(sorted(seen))}. "
+        "Provide --kline-cache-source-dir explicitly."
+    )
+
+
 def sync_kline_cache_backup(args: argparse.Namespace) -> None:
+    source_dir = _resolve_kline_cache_source_dir(args)
     command = [
         sys.executable,
         str(Path(args.sync_kline_cache_script)),
         "backup",
         "--source-dir",
-        str(Path(args.kline_cache_source_dir)),
+        str(source_dir),
         "--cloud-prefix",
         args.kline_cache_cloud_prefix,
         "--manifest-path",

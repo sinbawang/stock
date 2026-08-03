@@ -169,7 +169,7 @@ echo.
 echo Default behavior:
 echo   - Always forwards --latest-only to refresh_holdings_publish_to_cloudbase.py
 echo   - skipGenBase defaults to true, but base.json will still refresh automatically when a newer report period is detected
-echo   - day-bars now defaults to 600
+echo   - day-bars now defaults to 1200
 echo   - mixed report generation already covers 30M and embeds 5M precision, so the default extra tech-timeframes are day 60m 15m
 echo   - parallelism defaults to min(4, CPU count)
 echo   - special profile: %~n0 intraday = only regenerate 30M main analysis + standalone 5M chart layer, and publish 30M/5M/day charts
