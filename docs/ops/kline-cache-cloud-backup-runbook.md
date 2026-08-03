@@ -94,7 +94,17 @@ python3 scripts/sync_kline_cache_cloudbase.py backup \
   --manifest-path build/stock-kline-cache/cloudbase-upload-manifest.json
 ```
 
-当前实现会把本地缓存打包成一个 `snapshot.tar.gz` 快照，并把快照路径、大小、SHA-256 以及文件清单写入本地 manifest；备份阶段只上传这一个归档文件。
+当前实现会把本地缓存打包成一个 `snapshot.tar.gz` 快照，并把快照路径、大小、SHA-256 以及文件清单写入本地 manifest；同时默认也会按 manifest 差异增量上传展开后的 `A|H/<symbol>/<timeframe>.csv` 文件，保证 `stock-kline-cache/latest` 下的明细文件持续更新。
+
+如需只上传快照可显式关闭展开文件上传：
+
+```bash
+python3 scripts/sync_kline_cache_cloudbase.py backup \
+  --source-dir data/cache/kline \
+  --cloud-prefix stock-kline-cache/latest \
+  --manifest-path build/stock-kline-cache/cloudbase-upload-manifest.json \
+  --no-upload-expanded-files
+```
 
 ## 一次性恢复到本地缓存
 

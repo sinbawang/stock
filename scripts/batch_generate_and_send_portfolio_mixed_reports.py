@@ -82,12 +82,12 @@ def parse_args() -> argparse.Namespace:
         default="any",
         help="Forwarded to batch_prepare_chanlun_reports.py to control pending reverse fractal handling.",
     )
-    parser.add_argument("--day-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
-    parser.add_argument("--m60-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 60M K-line fetch count.")
-    parser.add_argument("--m30-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 30M K-line fetch count.")
-    parser.add_argument("--m15-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
-    parser.add_argument("--m5-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 5M K-line fetch count.")
-    parser.add_argument("--m1-bars", type=int, default=600, help="Forwarded to batch_prepare_chanlun_reports.py for 1M K-line fetch count.")
+    parser.add_argument("--day-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
+    parser.add_argument("--m60-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 60M K-line fetch count.")
+    parser.add_argument("--m30-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 30M K-line fetch count.")
+    parser.add_argument("--m15-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
+    parser.add_argument("--m5-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 5M K-line fetch count.")
+    parser.add_argument("--m1-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 1M K-line fetch count.")
     parser.add_argument("--zhongshu-level", choices=("bi", "segment"), default="bi", help="Forwarded to batch_prepare_chanlun_reports.py to switch between bi and segment zhongshu rendering.")
     parser.add_argument(
         "--tech-timeframes",
@@ -180,12 +180,12 @@ def _generate_all_timeframe_charts(
     holding: Holding,
     *,
     pending_reverse_mode: str = "any",
-    day_bars: int = 600,
-    m60_bars: int = 600,
-    m30_bars: int = 600,
-    m15_bars: int = 600,
-    m5_bars: int = 600,
-    m1_bars: int = 600,
+    day_bars: int = 1200,
+    m60_bars: int = 1200,
+    m30_bars: int = 1200,
+    m15_bars: int = 1200,
+    m5_bars: int = 1200,
+    m1_bars: int = 1200,
     zhongshu_level: str = "bi",
     tech_timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
     export_structure_images: bool = True,
@@ -304,12 +304,12 @@ def generate_bundle(
     trust_existing_base: bool = False,
     skip_gen_fund: bool = False,
     pending_reverse_mode: str = "any",
-    day_bars: int = 600,
-    m60_bars: int = 600,
-    m30_bars: int = 600,
-    m15_bars: int = 600,
-    m5_bars: int = 600,
-    m1_bars: int = 600,
+    day_bars: int = 1200,
+    m60_bars: int = 1200,
+    m30_bars: int = 1200,
+    m15_bars: int = 1200,
+    m5_bars: int = 1200,
+    m1_bars: int = 1200,
     zhongshu_level: str = "bi",
     tech_timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
     export_structure_images: bool = True,

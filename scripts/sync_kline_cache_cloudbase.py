@@ -134,6 +134,12 @@ def parse_args() -> argparse.Namespace:
         default=str(DEFAULT_POINTER_PATH),
         help="Local path to write manifest pointer metadata",
     )
+    backup_parser.add_argument(
+        "--upload-expanded-files",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Upload expanded CSV files under the cloud prefix in addition to snapshot.tar.gz",
+    )
     backup_parser.add_argument("--force-upload", action="store_true", help="Upload all files and ignore manifest diff")
     backup_parser.add_argument("--dry-run", action="store_true", help="Only build upload plan and manifest")
 
@@ -649,30 +655,66 @@ def command_backup(args: argparse.Namespace) -> int:
     print(f"cloud_prefix={args.cloud_prefix}")
 
     snapshot_manifest = create_snapshot_archive(source_dir, archive_path)
-    manifest_payload = {
-        "version": 1,
-        "env_id": args.env_id or "",
-        "region": args.region,
-        "source_dir": str(source_dir),
-        "cloud_prefix": args.cloud_prefix,
-        "archive_cloud_path": f"{args.cloud_prefix.strip('/')}/snapshot.tar.gz",
-        "archive_path": str(archive_path),
-        "archive_size": archive_path.stat().st_size,
-        "archive_sha256": sha256_file(archive_path),
-        "file_count": snapshot_manifest["file_count"],
-        "files": snapshot_manifest["files"],
-    }
-    write_local_manifest(manifest_path, manifest_payload)
-    print(f"manifest={manifest_path}")
+    archive_cloud_path = f"{args.cloud_prefix.strip('/')}/snapshot.tar.gz"
+
+    files = iter_local_files(source_dir, args.cloud_prefix) if args.upload_expanded_files else []
+    previous_manifest = load_previous_manifest(manifest_path)
+    upload_plan: list[Any] = []
+    skipped_uploads: list[dict[str, Any]] = []
+    if args.upload_expanded_files:
+        upload_plan, skipped_uploads = plan_uploads(
+            files,
+            previous_manifest,
+            env_id=args.env_id,
+            region=args.region,
+            cloud_prefix=args.cloud_prefix,
+            force_upload=args.force_upload,
+        )
+        print(f"expanded_files={len(files)}")
+        print(f"expanded_uploading={len(upload_plan)}")
+        print(f"expanded_skipped={len(skipped_uploads)}")
+        if args.force_upload:
+            print("force_upload=true; previous manifest diff skipping is disabled")
+    else:
+        print("expanded_upload=false")
 
     if args.dry_run:
+        uploads = list(skipped_uploads)
+        uploads.extend(
+            {
+                "relative_path": item.relative_path,
+                "cloud_path": item.cloud_path,
+                "file_id": None,
+                "size": item.size,
+                "sha256": item.sha256,
+                "status": "planned",
+            }
+            for item in upload_plan
+        )
+        manifest_payload = build_manifest(
+            env_id=args.env_id or "",
+            region=args.region,
+            source_dir=source_dir,
+            cloud_prefix=args.cloud_prefix,
+            uploads=uploads,
+        )
+        manifest_payload["snapshot"] = {
+            "archive_cloud_path": archive_cloud_path,
+            "archive_path": str(archive_path),
+            "archive_size": archive_path.stat().st_size,
+            "archive_sha256": sha256_file(archive_path),
+            "file_count": snapshot_manifest["file_count"],
+            "files": snapshot_manifest["files"],
+        }
+        write_manifest(manifest_path, manifest_payload)
+        print(f"manifest={manifest_path}")
         print(f"dry_run_archive={archive_path}")
         return 0
 
     api_key, created_api_key = ensure_api_key(args)
     session = new_session()
     try:
-        cloud_path = f"{args.cloud_prefix.strip('/')}/snapshot.tar.gz"
+        cloud_path = archive_cloud_path
         metadata = get_upload_metadata(
             session,
             env_id=args.env_id,
@@ -682,6 +724,47 @@ def command_backup(args: argparse.Namespace) -> int:
         )
         upload_bytes(session, cloud_path=cloud_path, local_path=archive_path, metadata=metadata)
         print(f"uploaded_snapshot={cloud_path}")
+
+        uploads: list[dict[str, Any]] = list(skipped_uploads)
+        for item in upload_plan:
+            item_metadata = get_upload_metadata(
+                session,
+                env_id=args.env_id,
+                region=args.region,
+                api_key=api_key,
+                cloud_path=item.cloud_path,
+            )
+            upload_bytes(session, cloud_path=item.cloud_path, local_path=item.local_path, metadata=item_metadata)
+            uploads.append(
+                {
+                    "relative_path": item.relative_path,
+                    "cloud_path": item.cloud_path,
+                    "file_id": item_metadata.get("fileId"),
+                    "size": item.size,
+                    "sha256": item.sha256,
+                    "status": "uploaded",
+                }
+            )
+            print(f"uploaded {item.relative_path} -> {item_metadata.get('fileId')}")
+
+        manifest_payload = build_manifest(
+            env_id=args.env_id or "",
+            region=args.region,
+            source_dir=source_dir,
+            cloud_prefix=args.cloud_prefix,
+            uploads=uploads,
+        )
+        manifest_payload["snapshot"] = {
+            "archive_cloud_path": archive_cloud_path,
+            "archive_path": str(archive_path),
+            "archive_size": archive_path.stat().st_size,
+            "archive_sha256": sha256_file(archive_path),
+            "file_count": snapshot_manifest["file_count"],
+            "files": snapshot_manifest["files"],
+            "file_id": metadata.get("fileId"),
+        }
+        write_manifest(manifest_path, manifest_payload)
+        print(f"manifest={manifest_path}")
 
         pointer_payload = {
             "env_id": args.env_id,

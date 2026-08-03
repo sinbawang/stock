@@ -83,7 +83,7 @@ SECURITIES = [
 ]
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
-INTRADAY_SOURCE_PROBE_ROWS = 600
+INTRADAY_SOURCE_PROBE_ROWS = 1200
 BAR_COUNT_POLICY = "feasible_maximum"
 HK_REUSABLE_5M_MIN_ROWS = 480
 INTRADAY_TIMEFRAME_SPECS = (
@@ -134,17 +134,17 @@ def _data_fetch_payload(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="批量生成最新日线、30M、5M、1M 缠论图、分析文本、操作建议")
     parser.add_argument("--day-start", default=None, help="日线起始日期；未指定时按日线根数自动回推")
-    parser.add_argument("--day-bars", type=int, default=600, help="日线抓取目标根数，默认 600")
+    parser.add_argument("--day-bars", type=int, default=1200, help="日线抓取目标根数，默认 1200")
     parser.add_argument("--m60-start", default=None, help="60M 起始时间；未指定时按 60M 根数自动回推")
-    parser.add_argument("--m60-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="60M 抓取目标根数，默认 600")
+    parser.add_argument("--m60-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="60M 抓取目标根数，默认 1200")
     parser.add_argument("--m30-start", default=None, help="30M 起始时间；未指定时按 30M 根数自动回推")
-    parser.add_argument("--m30-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="30M 抓取目标根数，默认 600")
+    parser.add_argument("--m30-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="30M 抓取目标根数，默认 1200")
     parser.add_argument("--m15-start", default=None, help="15M 起始时间；未指定时按 15M 根数自动回推")
-    parser.add_argument("--m15-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="15M 抓取目标根数，默认 600")
+    parser.add_argument("--m15-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="15M 抓取目标根数，默认 1200")
     parser.add_argument("--m5-start", default=None, help="5M 起始时间；未指定时按 5M 根数自动回推")
-    parser.add_argument("--m5-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="5M 抓取目标根数，默认 600")
+    parser.add_argument("--m5-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="5M 抓取目标根数，默认 1200")
     parser.add_argument("--m1-start", default=None, help="1M 起始时间；未指定时按 1M 根数自动回推")
-    parser.add_argument("--m1-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="1M 抓取目标根数，默认 600")
+    parser.add_argument("--m1-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="1M 抓取目标根数，默认 1200")
     parser.add_argument(
         "--holdings-file",
         default=str(DEFAULT_HOLDINGS_FILE),
@@ -901,7 +901,7 @@ def run_batch_prepare(
     *,
     holdings_path: Path | None = None,
     day_start: str | None = None,
-    day_bars: int = 600,
+    day_bars: int = 1200,
     m60_start: str | None = None,
     m60_bars: int = INTRADAY_SOURCE_PROBE_ROWS,
     m30_start: str | None = None,
