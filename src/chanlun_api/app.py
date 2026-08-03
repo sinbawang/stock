@@ -66,6 +66,47 @@ def _resolve_technical_timeframes(mode: TechnicalRefreshMode, timeframes: list[T
     return ["30m", "5m", "1m"]
 
 
+def _should_reroute_publish_refresh(request: "PublishRefreshRequest") -> bool:
+    requested = _dedupe_timeframes(request.tech_timeframes)
+    return bool(requested) and "30m" not in requested
+
+
+def _build_intraday_request_from_publish(request: "PublishRefreshRequest") -> "TechnicalRefreshRequest":
+    return TechnicalRefreshRequest(
+        holdings_file=request.holdings_file,
+        market=request.market,
+        symbols=request.symbols,
+        limit=request.limit,
+        reports_root=request.reports_root,
+        publish_root=request.publish_root,
+        snapshot_stamp=request.snapshot_stamp,
+        latest_only=request.latest_only,
+        skip_build=request.skip_build,
+        skip_upload=request.skip_upload,
+        day_bars=request.day_bars,
+        m60_bars=request.m60_bars,
+        m30_bars=request.m30_bars,
+        m15_bars=request.m15_bars,
+        m5_bars=request.m5_bars,
+        m1_bars=request.m1_bars,
+        pending_reverse_mode=request.pending_reverse_mode,
+        zhongshu_level=request.zhongshu_level,
+        refresh_mode="m5_intraday",
+        tech_timeframes=_dedupe_timeframes(request.tech_timeframes),
+        publish_timeframes=request.publish_timeframes,
+        publish_json_only=request.publish_json_only,
+        cloud_prefix=request.cloud_prefix,
+        env_id=request.env_id,
+        region=request.region,
+        api_key=request.api_key,
+        api_key_name=request.api_key_name,
+        api_key_expire_in=request.api_key_expire_in,
+        delete_created_api_key=request.delete_created_api_key,
+        force_upload=request.force_upload,
+        upload_dry_run=request.upload_dry_run,
+    )
+
+
 class PublishRefreshRequest(BaseModel):
     holdings_file: str = Field(default=str(HOLDINGS_FILE))
     market: Market = "ALL"
@@ -304,6 +345,12 @@ def _publish_build_and_upload(args: Namespace) -> dict[str, Any]:
 
 
 def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
+    if _should_reroute_publish_refresh(request):
+        result = _run_technical_refresh(_build_intraday_request_from_publish(request))
+        result["rerouted_from_publish_refresh"] = True
+        result["generated_timeframes"] = _dedupe_timeframes(request.tech_timeframes)
+        return result
+
     args = Namespace(
         holdings_file=request.holdings_file,
         market=request.market,
