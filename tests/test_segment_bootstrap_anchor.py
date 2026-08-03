@@ -2,6 +2,8 @@
 
 from datetime import datetime, timedelta
 
+import pytest
+
 from chanlun.models import Bi, BiDirection
 from chanlun.segment import (
     SEGMENT_BOOTSTRAP_AUTO,
@@ -55,6 +57,20 @@ def test_default_bootstrap_mode_keeps_existing_behavior() -> None:
 
     assert baseline
     assert [segment.bi_ids for segment in baseline] == [segment.bi_ids for segment in explicit_auto]
+
+
+def test_invalid_bootstrap_mode_raises_value_error() -> None:
+    bis = _sample_bis()
+
+    with pytest.raises(ValueError, match="Unsupported bootstrap_mode"):
+        identify_segments(bis, bootstrap_mode="invalid_mode")
+
+
+def test_negative_bootstrap_skip_count_raises_value_error() -> None:
+    bis = _sample_bis()
+
+    with pytest.raises(ValueError, match="bootstrap_skip_confirmed_bis"):
+        identify_segments(bis, bootstrap_skip_confirmed_bis=-1)
 
 
 def test_skip_left_edge_bootstrap_moves_first_seed_right() -> None:

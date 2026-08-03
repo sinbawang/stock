@@ -134,9 +134,24 @@ def _score_bootstrap_candidate(
         score -= 20
 
     if stop_reason == "exhausted_confirmed_bis":
-        score -= 20
+        score -= 120
 
     return score
+
+
+def _validate_bootstrap_config(
+    bootstrap_mode: str,
+    bootstrap_skip_confirmed_bis: int,
+) -> None:
+    supported_modes = {
+        SEGMENT_BOOTSTRAP_AUTO,
+        SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
+        SEGMENT_BOOTSTRAP_SKIP_LEFT_EDGE,
+    }
+    if bootstrap_mode not in supported_modes:
+        raise ValueError(f"Unsupported bootstrap_mode: {bootstrap_mode}")
+    if bootstrap_skip_confirmed_bis < 0:
+        raise ValueError("bootstrap_skip_confirmed_bis must be >= 0")
 
 
 def _resolve_bootstrap_start_index(
@@ -585,24 +600,49 @@ def _build_segment(
     )
 
 
+def _find_later_initial_segment_window(
+    bis: List[Bi],
+    start_idx: int,
+) -> Optional[Tuple[int, int]]:
+    for candidate_start_idx in range(start_idx + 1, len(bis) - 2):
+        candidate_window = bis[candidate_start_idx:candidate_start_idx + 3]
+        if _forms_initial_segment(candidate_window):
+            return candidate_start_idx, candidate_start_idx + 2
+    return None
+
+
 def _extend_segment(
     bis: List[Bi],
     start_idx: int,
+    *,
+    anchor_idx: Optional[int] = None,
 ) -> Optional[Tuple[int, bool, Optional[int], str, Optional[int]]]:
     if start_idx + 2 >= len(bis):
         return None
 
     initial = bis[start_idx:start_idx + 3]
-    direction = initial[0].direction
     break_idx: Optional[int] = None
     is_confirmed = False
 
     if _forms_initial_segment(initial):
-        end_idx = start_idx + 2
-        reverse_indices = [start_idx + 1]
+        seed_start_idx = start_idx
+        seed_end_idx = start_idx + 2
+        direction = initial[0].direction
         cursor = start_idx + 3
     else:
-        return None
+        if anchor_idx is None or anchor_idx != start_idx:
+            return None
+
+        fallback_seed = _find_later_initial_segment_window(bis, start_idx)
+        if fallback_seed is None:
+            return None
+
+        seed_start_idx, seed_end_idx = fallback_seed
+        direction = bis[seed_start_idx].direction
+        cursor = seed_start_idx + 3
+
+    end_idx = seed_end_idx
+    reverse_indices = [seed_start_idx + 1]
 
     last_same_extreme, last_reverse_extreme = _segment_extremes(bis, start_idx, end_idx)
     pending_gap_break_idx: Optional[int] = None
@@ -617,19 +657,32 @@ def _extend_segment(
             stop_reason = "unexpected_same_direction"
             break
 
-        reclaimed_idx = _reclaims_transition_back_to_prior_segment(bis, cursor, direction)
-        if reclaimed_idx is not None:
-            end_idx = reclaimed_idx
-            last_same_extreme, last_reverse_extreme = _segment_extremes(bis, start_idx, end_idx)
-            reverse_indices = [
-                idx
-                for idx in range(start_idx, end_idx + 1)
-                if bis[idx].direction != direction
-            ]
-            cursor = reclaimed_idx + 1
-            continue
-
         reverse_indices.append(cursor)
+        if cursor + 1 >= len(bis):
+            feature_break = _feature_sequence_break(bis, reverse_indices, direction)
+            if feature_break is not None:
+                end_idx, break_idx, stop_reason = feature_break
+                is_confirmed = True
+                break_bi_id = bis[break_idx].bi_id
+                break
+
+            if _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
+                break_idx = cursor
+                is_confirmed = True
+                break_bi_id = reverse_bi.bi_id
+                stop_reason = "reverse_break"
+                break
+
+            break_bi_id = reverse_bi.bi_id
+            stop_reason = "exhausted_confirmed_bis"
+            break
+
+        same_dir_bi = bis[cursor + 1]
+        if same_dir_bi.direction != direction:
+            break_bi_id = same_dir_bi.bi_id
+            stop_reason = "same_direction_slot_not_filled"
+            break
+
         if not gap_false_locked:
             gap_candidate_idx = _gap_feature_sequence_candidate(bis, reverse_indices, direction)
             pending_gap_break_idx = _replace_gap_candidate(
@@ -651,6 +704,38 @@ def _extend_segment(
                 if pending_gap_outcome is False:
                     pending_gap_break_idx = None
                     gap_false_locked = True
+                    if _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
+                        break_idx = cursor
+                        is_confirmed = True
+                        break_bi_id = reverse_bi.bi_id
+                        stop_reason = "reverse_break"
+                        break
+                    if cursor + 4 < len(bis):
+                        if direction == BiDirection.UP:
+                            last_reverse_extreme = reverse_bi.low
+                            last_same_extreme = same_dir_bi.high
+                        else:
+                            last_reverse_extreme = reverse_bi.high
+                            last_same_extreme = same_dir_bi.low
+                        cursor += 2
+                        continue
+                    break_bi_id = same_dir_bi.bi_id
+                    stop_reason = "same_direction_not_extending"
+                    break
+
+        reclaimed_idx = _reclaims_transition_back_to_prior_segment(bis, cursor, direction)
+        if reclaimed_idx is not None:
+            end_idx = reclaimed_idx
+            last_same_extreme, last_reverse_extreme = _segment_extremes(bis, start_idx, end_idx)
+            reverse_indices = [
+                idx
+                for idx in range(start_idx, end_idx + 1)
+                if bis[idx].direction != direction
+            ]
+            pending_gap_break_idx = None
+            gap_false_locked = False
+            cursor = reclaimed_idx + 1
+            continue
 
         feature_break = _feature_sequence_break(bis, reverse_indices, direction)
         if feature_break is not None:
@@ -664,17 +749,6 @@ def _extend_segment(
             is_confirmed = True
             break_bi_id = reverse_bi.bi_id
             stop_reason = "reverse_break"
-            break
-
-        if cursor + 1 >= len(bis):
-            break_bi_id = reverse_bi.bi_id
-            stop_reason = "no_followup_same_direction"
-            break
-
-        same_dir_bi = bis[cursor + 1]
-        if same_dir_bi.direction != direction:
-            break_bi_id = same_dir_bi.bi_id
-            stop_reason = "same_direction_slot_not_filled"
             break
 
         if direction == BiDirection.UP:
@@ -715,6 +789,12 @@ def _extend_segment(
                             if pending_gap_outcome is False:
                                 pending_gap_break_idx = None
                                 gap_false_locked = True
+                                if _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
+                                    break_idx = cursor
+                                    is_confirmed = True
+                                    break_bi_id = reverse_bi.bi_id
+                                    stop_reason = "reverse_break"
+                                    break
                                 cursor += 2
                                 continue
                     if (
@@ -769,6 +849,12 @@ def _extend_segment(
                             if pending_gap_outcome is False:
                                 pending_gap_break_idx = None
                                 gap_false_locked = True
+                                if _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
+                                    break_idx = cursor
+                                    is_confirmed = True
+                                    break_bi_id = reverse_bi.bi_id
+                                    stop_reason = "reverse_break"
+                                    break
                                 cursor += 2
                                 continue
                     if (
@@ -817,6 +903,7 @@ def identify_segments(
     - bootstrap_mode=first_valid_seed：从最左侧开始寻找首个合法三笔种子
     - bootstrap_mode=skip_left_edge：先跳过左侧若干已确认笔，再寻找首个合法三笔种子
     """
+    _validate_bootstrap_config(bootstrap_mode, bootstrap_skip_confirmed_bis)
     bis = _confirmed_bis(bis)
 
     if len(bis) < 3:
@@ -830,10 +917,12 @@ def identify_segments(
         bootstrap_skip_confirmed_bis=bootstrap_skip_confirmed_bis,
     )
 
+    anchor_idx: Optional[int] = None
     while index <= len(bis) - 3:
-        result = _extend_segment(bis, index)
+        result = _extend_segment(bis, index, anchor_idx=anchor_idx)
         if result is None:
             index += 1
+            anchor_idx = None
             continue
 
         end_idx, is_confirmed, break_idx, stop_reason, break_bi_id = result
@@ -855,7 +944,9 @@ def identify_segments(
 
         if break_idx is not None:
             index = break_idx
+            anchor_idx = break_idx
         else:
             index = end_idx + 1
+            anchor_idx = None
 
     return segments

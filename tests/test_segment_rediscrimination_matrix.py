@@ -168,6 +168,31 @@ def test_gap_candidate_weak_reverse_then_late_strong_same_dir_confirms_break() -
     assert delayed_long is True
 
 
+def test_late_reverse_break_starts_next_segment_at_confirming_bi() -> None:
+    """延迟确认的反向破坏，下一段应从真正确认破坏的那一笔开始。"""
+    bis = [
+        _bi(0, BiDirection.UP, 120, 100),
+        _bi(1, BiDirection.DOWN, 108, 104),
+        _bi(2, BiDirection.UP, 125, 106),
+        _bi(3, BiDirection.DOWN, 112, 109),
+        _bi(4, BiDirection.UP, 110.4, 109.4),
+        _bi(5, BiDirection.DOWN, 109.6, 109.0),
+        _bi(6, BiDirection.UP, 112.2, 108.4),
+        _bi(7, BiDirection.DOWN, 109.0, 107.8),
+        _bi(8, BiDirection.UP, 116, 109),
+        _bi(9, BiDirection.DOWN, 114.5, 108.0),
+        _bi(10, BiDirection.UP, 117.0, 109.2),
+        _bi(11, BiDirection.DOWN, 115.0, 108.2),
+    ]
+
+    result = identify_segments(bis)
+
+    assert len(result) >= 2
+    assert result[0].stop_reason == "reverse_break"
+    assert result[1].start_bi_id == 7
+    assert result[1].bi_ids[0] == 7
+
+
 def test_immediate_strong_break_is_not_treated_as_delayed_true() -> None:
     """没有经历弱轮次时，即时强推进应返回 True 但不标记为 delayed True。"""
     immediate_bis = [

@@ -190,11 +190,7 @@ def _generate_all_timeframe_charts(
     tech_timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
     export_structure_images: bool = True,
 ) -> None:
-    requested_timeframes = tuple(
-        timeframe
-        for timeframe in dict.fromkeys(tech_timeframes)
-        if timeframe != PRIMARY_TECHNICAL_TIMEFRAME
-    )
+    requested_timeframes = tuple(dict.fromkeys(tech_timeframes))
     if not requested_timeframes:
         return
     with tempfile.TemporaryDirectory(prefix="single_holding_", dir=str(ROOT / "data" / "_meta")) as temp_dir:
@@ -242,33 +238,21 @@ def _symbol_reports_dir(holding: Holding) -> Path:
 def _validate_generated_artifacts(
     holding: Holding,
     *,
-    reuse_existing_base: bool,
-    skip_gen_fund: bool,
-    tech_timeframes: tuple[str, ...],
+    technical_report: Path,
 ) -> Path:
     symbol_dir = _symbol_reports_dir(holding)
     missing: list[str] = []
 
-    base_json = symbol_dir / "base.json"
-    if not base_json.exists():
-        missing.append("base.json")
-
-    if not skip_gen_fund:
-        fund_json = symbol_dir / "fund.json"
-        if not fund_json.exists():
-            missing.append("fund.json")
-
-    for timeframe in dict.fromkeys(tech_timeframes):
-        tech_json = symbol_dir / timeframe / "tech.json"
-        if not tech_json.exists():
-            missing.append(f"{timeframe}/tech.json")
+    if not symbol_dir.exists():
+        missing.append(str(symbol_dir))
+    if not technical_report.exists():
+        missing.append(str(technical_report))
 
     if missing:
-        mode = "reuse_existing_base" if reuse_existing_base else "regenerate_base"
         raise RuntimeError(
             "Missing required generated artifacts for "
             f"{holding.market} {holding.symbol} {holding.name} "
-            f"(base_mode={mode}, skip_gen_fund={skip_gen_fund}, tech_timeframes={','.join(dict.fromkeys(tech_timeframes))}): "
+            "(required bundle outputs): "
             + ", ".join(missing)
         )
 
@@ -394,18 +378,18 @@ def generate_bundle(
     )
     print(f"timing {holding.symbol} extra_charts seconds={time.perf_counter() - started_charts:.2f}", flush=True)
 
+    technical_report = Path(_extract_value(mixed_stdout, "technical_report="))
+
     symbol_dir = _validate_generated_artifacts(
         holding,
-        reuse_existing_base=reuse_existing_base,
-        skip_gen_fund=skip_gen_fund,
-        tech_timeframes=tech_timeframes,
+        technical_report=technical_report,
     )
     primary_chart_dir = symbol_dir / PRIMARY_TECHNICAL_TIMEFRAME
 
     return GeneratedBundle(
         holding=holding,
         fundamental_brief=Path(_extract_value(mixed_stdout, "fundamental_brief=")),
-        technical_report=Path(_extract_value(mixed_stdout, "technical_report=")),
+        technical_report=technical_report,
         capital_flow_report=Path(_extract_value(mixed_stdout, "capital_flow_report=")),
         combined_report=Path(_extract_value(mixed_stdout, "combined_report=")),
         combined_bucket=_extract_value(mixed_stdout, "combined_bucket="),

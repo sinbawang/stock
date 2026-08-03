@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import inspect
 import json
 import sys
 from dataclasses import dataclass
@@ -369,7 +370,11 @@ def _fetch_with_optional_local_store(
         # remote rows, which can trigger costly fallback probing for HK minute data.
         remote_probe_min_rows = 1
 
-    rows, fetch_meta = remote_fetcher(effective_start, remote_probe_min_rows)
+    remote_fetcher_params = inspect.signature(remote_fetcher).parameters
+    if len(remote_fetcher_params) <= 1:
+        rows, fetch_meta = remote_fetcher(effective_start)
+    else:
+        rows, fetch_meta = remote_fetcher(effective_start, remote_probe_min_rows)
     if not use_local_store:
         return rows, fetch_meta
 

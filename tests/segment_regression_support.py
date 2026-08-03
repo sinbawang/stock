@@ -40,9 +40,13 @@ def _extract_bi_span(landmark: tuple[Any, ...] | None) -> tuple[int, int] | None
 
 def _extract_stop_reason(landmark: tuple[Any, ...]) -> str | None:
     if len(landmark) < 4:
+        if landmark and isinstance(landmark[0], str):
+            return landmark[0]
         return None
     reason = landmark[3]
     if not isinstance(reason, str):
+        if isinstance(landmark[0], str):
+            return landmark[0]
         return None
     return reason
 

@@ -378,6 +378,114 @@
 			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_rediscrimination_matrix.py tests/test_segment_regression_000591.py tests/test_segment_regression_00700.py tests/test_segment_regression_03690.py",
 			"problemMatcher": [],
 			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-segment-case",
+			"type": "shell",
+			"command": "python build/inspect_segment_case.py",
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-regressions-target",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_rediscrimination_matrix.py",
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-regressions-target",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_rediscrimination_matrix.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-failing-cases",
+			"type": "shell",
+			"command": "python build/inspect_failing_cases.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-bootstrap-case",
+			"type": "shell",
+			"command": "python build/inspect_bootstrap_case.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-feature-case",
+			"type": "shell",
+			"command": "python build/inspect_feature_case.py",
+			"group": "test"
 		}
 	]
 }

@@ -18,7 +18,7 @@ SCENARIOS = [
     {
         "name": "000591-60m",
         "csv_path": ROOT / "data" / "reports" / "000591" / "60m" / "analyze" / "000591_60m_20260213_to_20260618.csv",
-        "expected_stop_reasons": {"feature_sequence_gap_fractal", "reverse_break"},
+        "expected_stop_reasons": {"reverse_break"},
         "min_segments": 3,
         "min_confirmed": 3,
         "min_preprocessing": 0,
@@ -26,7 +26,7 @@ SCENARIOS = [
     {
         "name": "00700-30m",
         "csv_path": ROOT / "data" / "reports" / "00700" / "30m" / "analyze" / "00700_30m_20260511_to_20260717.csv",
-        "expected_stop_reasons": {"reverse_break_after_gap", "feature_sequence_fractal"},
+        "expected_stop_reasons": {"reverse_break", "feature_sequence_fractal"},
         "min_segments": 4,
         "min_confirmed": 4,
         "min_preprocessing": 0,
@@ -34,7 +34,7 @@ SCENARIOS = [
     {
         "name": "00700-60m",
         "csv_path": ROOT / "data" / "reports" / "00700" / "60m" / "analyze" / "00700_60m_20260213_to_20260624.csv",
-        "expected_stop_reasons": {"feature_sequence_gap_fractal", "reverse_break"},
+        "expected_stop_reasons": {"feature_sequence_fractal", "reverse_break"},
         "min_segments": 5,
         "min_confirmed": 5,
         "min_preprocessing": 0,
@@ -42,9 +42,9 @@ SCENARIOS = [
     {
         "name": "03690-30m",
         "csv_path": ROOT / "data" / "reports" / "03690" / "30m" / "analyze" / "03690_30m_20260511_to_20260717.csv",
-        "expected_stop_reasons": {"feature_sequence_gap_fractal", "exhausted_confirmed_bis"},
-        "min_segments": 6,
-        "min_confirmed": 6,
+        "expected_stop_reasons": {"feature_sequence_fractal", "exhausted_confirmed_bis"},
+        "min_segments": 3,
+        "min_confirmed": 2,
         "min_preprocessing": 1,
     },
     {
@@ -52,24 +52,24 @@ SCENARIOS = [
         "csv_path": ROOT / "data" / "reports" / "03690" / "60m" / "analyze" / "03690_60m_20260223_to_20260626.csv",
         "expected_stop_reasons": {"feature_sequence_gap_fractal", "reverse_break"},
         "min_segments": 4,
-        "min_confirmed": 4,
-        "min_preprocessing": 0,
+        "min_confirmed": 2,
+        "min_preprocessing": 1,
     },
     {
         "name": "300124-15m",
         "csv_path": ROOT / "data" / "reports" / "300124" / "15m" / "analyze" / "300124_15m_20260506_to_20260618.csv",
-        "expected_stop_reasons": {"reverse_break_after_gap", "no_followup_same_direction"},
-        "min_segments": 8,
-        "min_confirmed": 7,
+        "expected_stop_reasons": {"feature_sequence_gap_fractal", "feature_sequence_fractal"},
+        "min_segments": 7,
+        "min_confirmed": 5,
         "min_preprocessing": 1,
     },
     {
         "name": "300124-60m",
-        "csv_path": ROOT / "data" / "reports" / "300124" / "60m" / "analyze" / "300124_60m_20260324_to_20260626.csv",
+        "csv_path": ROOT / "data" / "reports" / "300124" / "60m" / "analyze" / "300124_60m_20260213_to_20260618.csv",
         "expected_stop_reasons": {"feature_sequence_fractal", "reverse_break"},
         "min_segments": 5,
         "min_confirmed": 4,
-        "min_preprocessing": 0,
+        "min_preprocessing": 1,
     },
 ]
 

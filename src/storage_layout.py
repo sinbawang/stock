@@ -32,7 +32,7 @@ CAPITAL_FLOW_CACHE_DIR = DATA_META_DIR / "capital_flow_cache"
 
 
 def holdings_file() -> Path:
-    return HOLDINGS_FILE
+    return DATA_DIR / "stock_holdings.json"
 
 
 def ensure_reports_meta_dir() -> Path:

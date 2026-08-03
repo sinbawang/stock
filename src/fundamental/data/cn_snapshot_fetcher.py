@@ -617,6 +617,28 @@ def _estimate_cn_latest_close_from_pb(pb: Optional[float], latest_abstract: pd.S
     return round(float(pb) * float(book_value_per_share), 4)
 
 
+def _resolve_cn_pb_fallback_trade_date(
+    pb_series: pd.DataFrame,
+    dividend_df: pd.DataFrame,
+) -> str:
+    candidate_dates: list[pd.Timestamp] = []
+
+    if not pb_series.empty and "date" in pb_series.columns:
+        pb_dates = pd.to_datetime(pb_series["date"], errors="coerce").dropna()
+        if not pb_dates.empty:
+            candidate_dates.append(pb_dates.max())
+
+    if not dividend_df.empty and "除权日" in dividend_df.columns:
+        dividend_dates = pd.to_datetime(dividend_df["除权日"], errors="coerce").dropna()
+        if not dividend_dates.empty:
+            candidate_dates.append(dividend_dates.max())
+
+    if not candidate_dates:
+        return datetime.now().date().isoformat()
+
+    return max(candidate_dates).date().isoformat()
+
+
 def _should_include_financial_indicators(symbol: str) -> bool:
     submodel = get_submodel_for_symbol(symbol)
     return submodel is not None and submodel.industry_bucket == "financial"
@@ -836,8 +858,9 @@ def fetch_cn_fundamental_snapshot(
             if derived_dividend_yield is None:
                 pb_implied_price = _estimate_cn_latest_close_from_pb(pb, latest_abstract)
                 if pb_implied_price is not None:
+                    pb_fallback_trade_date = _resolve_cn_pb_fallback_trade_date(pb_series, dividend_history_df)
                     pb_implied_price_df = pd.DataFrame(
-                        [{"日期": datetime.now().date().isoformat(), "收盘": pb_implied_price}]
+                        [{"日期": pb_fallback_trade_date, "收盘": pb_implied_price}]
                     )
                     derived_dividend_yield = _derive_cn_dividend_yield_from_history(
                         dividend_history_df,

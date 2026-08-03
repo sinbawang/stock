@@ -212,7 +212,7 @@ def normalize_bars(bars: List[Bar]) -> List[NormalizedBar]:
             else:
                 if bar.high <= current_high:
                     current_ts_high = bar.ts
-                if bar.low < current_low:
+                if bar.low <= current_low:
                     current_ts_low = bar.ts
 
             current_high = h

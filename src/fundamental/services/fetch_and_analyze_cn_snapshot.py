@@ -20,6 +20,12 @@ from .source_warning_helpers import (
 )
 
 
+_CN_DIVIDEND_FALLBACK_SOURCES = {
+    "cninfo.dividend_history+eastmoney.daily_price",
+    "cninfo.dividend_history+baidu.pb+ths.abstract.book_value_per_share",
+}
+
+
 @dataclass(frozen=True)
 class FetchedCnFundamentalAnalysis:
     fetched: FundamentalSnapshotFetchResult
@@ -68,6 +74,16 @@ def _analyze_cn_fetched_snapshot(
         submodel_config,
         resolve_manual_supplement(manual_supplement, manual_supplement_path),
     )
+    dividend_source = (fetched.field_sources or {}).get("dividend_yield")
+    if (
+        submodel_config.submodel_id == "bank_v1"
+        and fetched.snapshot.dividend_yield is not None
+        and dividend_source in _CN_DIVIDEND_FALLBACK_SOURCES
+    ):
+        fetched = replace(
+            fetched,
+            snapshot=fetched.snapshot.model_copy(update={"dividend_yield": None}),
+        )
     analyzed_submodel, runtime_assumptions = _relax_missing_peg(
         submodel_config,
         missing_peg=fetched.snapshot.peg is None,

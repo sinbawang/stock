@@ -61,6 +61,7 @@ PRIMARY_TECHNICAL_LABEL = "30M"
 LOWER_PRECISION_TIMEFRAME = "5m"
 LOWER_PRECISION_LABEL = "5M"
 LOWER_PRECISION_PENDING_REVERSE_MODE = "effective_only"
+DEFAULT_REPORT_SOURCE_LABEL = "tencent->xueqiu->eastmoney->tushare"
 LAST_TECHNICAL_TIMINGS: dict[str, float] = {}
 
 
@@ -247,6 +248,7 @@ def _save_technical_report(
     rows = fetch_kline(symbol, start=start, end=end, interval=PRIMARY_TECHNICAL_TIMEFRAME, adjust=adjust, limit=5000, min_rows=INTRADAY_SOURCE_PROBE_ROWS, source_profile=source_profile)
     fetch_meta = get_last_fetch_metadata()
     actual_source = str(fetch_meta.get("actual_source") or fetch_source)
+    report_source = DEFAULT_REPORT_SOURCE_LABEL if source_profile is None else fetch_source
     if not rows:
         raise RuntimeError("未抓到任何30M数据")
 
@@ -350,10 +352,10 @@ def _save_technical_report(
             "name": name,
             "timeframe": PRIMARY_TECHNICAL_TIMEFRAME,
             "generated_at": datetime.now().isoformat(timespec="seconds"),
-            "source": fetch_source,
+            "source": report_source,
             "source_actual": actual_source,
             "data_fetch": {
-                "source": fetch_source,
+                "source": report_source,
                 "actual_source": actual_source,
                 "source_attempts": fetch_meta.get("source_attempts") or [],
                 "actual_bar_count": len(raw_bars),
