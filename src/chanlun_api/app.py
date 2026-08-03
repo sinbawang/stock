@@ -125,12 +125,12 @@ class PublishRefreshRequest(BaseModel):
     fail_on_holding_error: bool = False
     parallelism: int = Field(default=max(1, min(4, os.cpu_count() or 1)), ge=1)
     pending_reverse_mode: PendingReverseMode = "any"
-    day_bars: int = Field(default=600, ge=1)
-    m60_bars: int = Field(default=600, ge=1)
-    m30_bars: int = Field(default=600, ge=1)
-    m15_bars: int = Field(default=600, ge=1)
-    m5_bars: int = Field(default=600, ge=1)
-    m1_bars: int = Field(default=600, ge=1)
+    day_bars: int = Field(default=1200, ge=1)
+    m60_bars: int = Field(default=1200, ge=1)
+    m30_bars: int = Field(default=1200, ge=1)
+    m15_bars: int = Field(default=1200, ge=1)
+    m5_bars: int = Field(default=1200, ge=1)
+    m1_bars: int = Field(default=1200, ge=1)
     zhongshu_level: ZhongshuLevel = "bi"
     tech_timeframes: list[Timeframe] = Field(default_factory=lambda: ["day", "30m", "5m", "1m"])
     export_structure_images: bool = True
@@ -160,17 +160,17 @@ class TechnicalRefreshRequest(BaseModel):
     skip_build: bool = False
     skip_upload: bool = False
     day_start: str | None = None
-    day_bars: int = Field(default=600, ge=1)
+    day_bars: int = Field(default=1200, ge=1)
     m60_start: str | None = None
-    m60_bars: int = Field(default=600, ge=1)
+    m60_bars: int = Field(default=1200, ge=1)
     m30_start: str | None = None
-    m30_bars: int = Field(default=600, ge=1)
+    m30_bars: int = Field(default=1200, ge=1)
     m15_start: str | None = None
-    m15_bars: int = Field(default=600, ge=1)
+    m15_bars: int = Field(default=1200, ge=1)
     m5_start: str | None = None
-    m5_bars: int = Field(default=600, ge=1)
+    m5_bars: int = Field(default=1200, ge=1)
     m1_start: str | None = None
-    m1_bars: int = Field(default=600, ge=1)
+    m1_bars: int = Field(default=1200, ge=1)
     pending_reverse_mode: PendingReverseMode = "any"
     zhongshu_level: ZhongshuLevel = "bi"
     refresh_mode: TechnicalRefreshMode = "m30_intraday"

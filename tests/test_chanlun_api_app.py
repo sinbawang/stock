@@ -16,6 +16,28 @@ def test_normalize_technical_publish_timeframes_allows_default_bundle() -> None:
     assert _normalize_technical_publish_timeframes(None) is None
 
 
+def test_publish_refresh_request_defaults_to_1200_bars() -> None:
+    request = module.PublishRefreshRequest()
+
+    assert request.day_bars == 1200
+    assert request.m60_bars == 1200
+    assert request.m30_bars == 1200
+    assert request.m15_bars == 1200
+    assert request.m5_bars == 1200
+    assert request.m1_bars == 1200
+
+
+def test_technical_refresh_request_defaults_to_1200_bars() -> None:
+    request = module.TechnicalRefreshRequest()
+
+    assert request.day_bars == 1200
+    assert request.m60_bars == 1200
+    assert request.m30_bars == 1200
+    assert request.m15_bars == 1200
+    assert request.m5_bars == 1200
+    assert request.m1_bars == 1200
+
+
 def test_run_publish_refresh_reroutes_intraday_only_request(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
@@ -44,6 +66,10 @@ def test_run_publish_refresh_reroutes_intraday_only_request(monkeypatch) -> None
     assert rerouted.refresh_mode == "m5_intraday"
     assert rerouted.tech_timeframes == ["5m", "1m"]
     assert rerouted.publish_timeframes == ["5m", "1m"]
+    assert rerouted.day_bars == 1200
+    assert rerouted.m30_bars == 1200
+    assert rerouted.m5_bars == 1200
+    assert rerouted.m1_bars == 1200
 
 
 def test_run_publish_refresh_keeps_full_path_when_primary_timeframe_requested(monkeypatch) -> None:
