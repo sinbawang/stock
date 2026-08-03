@@ -843,6 +843,32 @@ def read_manifest(manifest_path: Path) -> dict[str, Any]:
     return payload
 
 
+def resolve_snapshot_locator(
+    *,
+    pointer: dict[str, Any] | None,
+    manifest_payload: dict[str, Any] | None,
+    cloud_prefix: str,
+) -> tuple[str | None, str]:
+    snapshot_file_id = None
+    snapshot_cloud_path = None
+
+    if pointer:
+        snapshot_file_id = str(pointer.get("snapshot_file_id") or "").strip() or None
+        snapshot_cloud_path = str(pointer.get("snapshot_cloud_path") or "").strip() or None
+
+    if manifest_payload:
+        snapshot = manifest_payload.get("snapshot") or {}
+        if snapshot_file_id is None:
+            snapshot_file_id = str(snapshot.get("file_id") or "").strip() or None
+        if snapshot_cloud_path is None:
+            snapshot_cloud_path = str(snapshot.get("archive_cloud_path") or "").strip() or None
+
+    if not snapshot_cloud_path:
+        snapshot_cloud_path = f"{cloud_prefix.strip('/')}/snapshot.tar.gz"
+
+    return snapshot_file_id, snapshot_cloud_path
+
+
 def command_restore(args: argparse.Namespace) -> int:
     ensure_env_id(args.env_id, dry_run=args.dry_run)
     target_dir = Path(args.target_dir).resolve()
@@ -858,13 +884,16 @@ def command_restore(args: argparse.Namespace) -> int:
     target_dir.mkdir(parents=True, exist_ok=True)
 
     archive_path = manifest_path.parent / "snapshot.tar.gz"
-    snapshot_cloud_path = None
-    if pointer:
-        snapshot_cloud_path = str(pointer.get("snapshot_cloud_path") or "").strip() or None
-    if not snapshot_cloud_path:
-        snapshot_cloud_path = f"{args.cloud_prefix.strip('/')}/snapshot.tar.gz"
+    manifest_payload: dict[str, Any] | None = None
+    snapshot_file_id, snapshot_cloud_path = resolve_snapshot_locator(
+        pointer=pointer,
+        manifest_payload=None,
+        cloud_prefix=args.cloud_prefix,
+    )
 
     print(f"target_dir={target_dir}")
+    if snapshot_file_id:
+        print(f"snapshot_file_id={snapshot_file_id}")
     print(f"snapshot_cloud_path={snapshot_cloud_path}")
 
     if args.dry_run:
@@ -874,16 +903,73 @@ def command_restore(args: argparse.Namespace) -> int:
     created_api_key: CreatedApiKey | None = None
     session: requests.Session | None = None
     try:
-        if args.fetch_manifest or not archive_path.exists():
+        if args.fetch_manifest:
             api_key, created_api_key = ensure_api_key(args)
             session = new_session()
-            url = get_download_url(
-                session,
+            fetch_manifest_from_cloud(
+                session=session,
                 env_id=args.env_id,
                 region=args.region,
                 api_key=api_key,
-                cloud_path=snapshot_cloud_path,
+                cloud_prefix=args.cloud_prefix,
+                manifest_file_id=args.manifest_file_id,
+                manifest_path=manifest_path,
             )
+            manifest_payload = read_manifest(manifest_path)
+            snapshot_file_id, snapshot_cloud_path = resolve_snapshot_locator(
+                pointer=pointer,
+                manifest_payload=manifest_payload,
+                cloud_prefix=args.cloud_prefix,
+            )
+            if snapshot_file_id:
+                print(f"resolved_snapshot_file_id={snapshot_file_id}")
+            print(f"resolved_snapshot_cloud_path={snapshot_cloud_path}")
+
+        if args.fetch_manifest or not archive_path.exists():
+            if session is None:
+                api_key, created_api_key = ensure_api_key(args)
+                session = new_session()
+
+            locator = snapshot_file_id or snapshot_cloud_path
+            try:
+                url = get_download_url(
+                    session,
+                    env_id=args.env_id,
+                    region=args.region,
+                    api_key=api_key,
+                    cloud_path=locator,
+                )
+            except CloudBaseSyncError:
+                if not manifest_payload:
+                    fetch_manifest_from_cloud(
+                        session=session,
+                        env_id=args.env_id,
+                        region=args.region,
+                        api_key=api_key,
+                        cloud_prefix=args.cloud_prefix,
+                        manifest_file_id=args.manifest_file_id,
+                        manifest_path=manifest_path,
+                    )
+                    manifest_payload = read_manifest(manifest_path)
+                    snapshot_file_id, snapshot_cloud_path = resolve_snapshot_locator(
+                        pointer=pointer,
+                        manifest_payload=manifest_payload,
+                        cloud_prefix=args.cloud_prefix,
+                    )
+                    if snapshot_file_id:
+                        locator = snapshot_file_id
+                    else:
+                        locator = snapshot_cloud_path
+                    print(f"retry_snapshot_locator={locator}")
+                    url = get_download_url(
+                        session,
+                        env_id=args.env_id,
+                        region=args.region,
+                        api_key=api_key,
+                        cloud_path=locator,
+                    )
+                else:
+                    raise
             download_file(url, archive_path)
             print(f"downloaded_snapshot={archive_path}")
 

@@ -76,3 +76,33 @@ def test_backup_dry_run_writes_expanded_manifest_with_snapshot(tmp_path):
     snapshot = payload.get("snapshot") or {}
     assert snapshot.get("archive_cloud_path") == "stock-kline-cache/latest/snapshot.tar.gz"
     assert snapshot.get("file_count") == 2
+
+
+def test_resolve_snapshot_locator_prefers_pointer_file_id():
+    file_id, cloud_path = sync_module.resolve_snapshot_locator(
+        pointer={
+            "snapshot_file_id": "cloud://env.bucket/path/snapshot.tar.gz",
+            "snapshot_cloud_path": "stock-kline-cache/latest/snapshot.tar.gz",
+        },
+        manifest_payload=None,
+        cloud_prefix="stock-kline-cache/latest",
+    )
+
+    assert file_id == "cloud://env.bucket/path/snapshot.tar.gz"
+    assert cloud_path == "stock-kline-cache/latest/snapshot.tar.gz"
+
+
+def test_resolve_snapshot_locator_uses_manifest_when_pointer_missing():
+    file_id, cloud_path = sync_module.resolve_snapshot_locator(
+        pointer=None,
+        manifest_payload={
+            "snapshot": {
+                "file_id": "cloud://env.bucket/path/snapshot.tar.gz",
+                "archive_cloud_path": "stock-kline-cache/latest/snapshot.tar.gz",
+            }
+        },
+        cloud_prefix="stock-kline-cache/latest",
+    )
+
+    assert file_id == "cloud://env.bucket/path/snapshot.tar.gz"
+    assert cloud_path == "stock-kline-cache/latest/snapshot.tar.gz"
