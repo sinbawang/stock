@@ -848,12 +848,18 @@ def resolve_snapshot_locator(
     pointer: dict[str, Any] | None,
     manifest_payload: dict[str, Any] | None,
     cloud_prefix: str,
+    explicit_snapshot_file_id: str | None = None,
 ) -> tuple[str | None, str]:
     snapshot_file_id = None
     snapshot_cloud_path = None
 
+    if explicit_snapshot_file_id:
+        snapshot_file_id = str(explicit_snapshot_file_id).strip() or None
+
     if pointer:
-        snapshot_file_id = str(pointer.get("snapshot_file_id") or "").strip() or None
+        pointer_snapshot_file_id = str(pointer.get("snapshot_file_id") or "").strip() or None
+        if snapshot_file_id is None:
+            snapshot_file_id = pointer_snapshot_file_id
         snapshot_cloud_path = str(pointer.get("snapshot_cloud_path") or "").strip() or None
 
     if manifest_payload:
@@ -885,10 +891,14 @@ def command_restore(args: argparse.Namespace) -> int:
 
     archive_path = manifest_path.parent / "snapshot.tar.gz"
     manifest_payload: dict[str, Any] | None = None
+    explicit_snapshot_file_id = (args.manifest_file_id or "").strip() or None
+    if explicit_snapshot_file_id and not explicit_snapshot_file_id.startswith("cloud://"):
+        explicit_snapshot_file_id = None
     snapshot_file_id, snapshot_cloud_path = resolve_snapshot_locator(
         pointer=pointer,
         manifest_payload=None,
         cloud_prefix=args.cloud_prefix,
+        explicit_snapshot_file_id=explicit_snapshot_file_id,
     )
 
     print(f"target_dir={target_dir}")
@@ -920,6 +930,7 @@ def command_restore(args: argparse.Namespace) -> int:
                 pointer=pointer,
                 manifest_payload=manifest_payload,
                 cloud_prefix=args.cloud_prefix,
+                explicit_snapshot_file_id=explicit_snapshot_file_id,
             )
             if snapshot_file_id:
                 print(f"resolved_snapshot_file_id={snapshot_file_id}")

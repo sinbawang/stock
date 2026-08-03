@@ -106,3 +106,18 @@ def test_resolve_snapshot_locator_uses_manifest_when_pointer_missing():
 
     assert file_id == "cloud://env.bucket/path/snapshot.tar.gz"
     assert cloud_path == "stock-kline-cache/latest/snapshot.tar.gz"
+
+
+def test_resolve_snapshot_locator_honors_explicit_snapshot_file_id():
+    file_id, cloud_path = sync_module.resolve_snapshot_locator(
+        pointer={
+            "snapshot_file_id": "cloud://pointer.bucket/path/snapshot.tar.gz",
+            "snapshot_cloud_path": "stock-kline-cache/latest/snapshot.tar.gz",
+        },
+        manifest_payload=None,
+        cloud_prefix="stock-kline-cache/latest",
+        explicit_snapshot_file_id="cloud://env.bucket/path/snapshot.tar.gz",
+    )
+
+    assert file_id == "cloud://env.bucket/path/snapshot.tar.gz"
+    assert cloud_path == "stock-kline-cache/latest/snapshot.tar.gz"
