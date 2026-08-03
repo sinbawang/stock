@@ -19,6 +19,7 @@ KLINE_SYNC_MANIFEST_PATH="${KLINE_SYNC_MANIFEST_PATH:-/tmp/stock-kline-cache/clo
 KLINE_SYNC_POINTER_PATH="${KLINE_SYNC_POINTER_PATH:-/tmp/stock-kline-cache/manifest-pointer.json}"
 KLINE_SYNC_RESTORE_ON_START="${KLINE_SYNC_RESTORE_ON_START:-false}"
 KLINE_SYNC_RESTORE_STRICT="${KLINE_SYNC_RESTORE_STRICT:-false}"
+KLINE_SYNC_RESTORE_FILE_ID="${KLINE_SYNC_RESTORE_FILE_ID:-}"
 KLINE_SYNC_BACKUP_ON_START="${KLINE_SYNC_BACKUP_ON_START:-false}"
 KLINE_SYNC_BACKUP_INTERVAL_SECONDS="${KLINE_SYNC_BACKUP_INTERVAL_SECONDS:-1800}"
 KLINE_SYNC_BACKUP_ON_STOP="${KLINE_SYNC_BACKUP_ON_STOP:-true}"
@@ -40,13 +41,24 @@ run_backup_once() {
 
 run_restore_once() {
   log "running restore from ${KLINE_SYNC_CLOUD_PREFIX}"
-  python /app/scripts/sync_kline_cache_cloudbase.py restore \
-    --target-dir "${KLINE_SYNC_LOCAL_ROOT}" \
-    --cloud-prefix "${KLINE_SYNC_CLOUD_PREFIX}" \
-    --manifest-path "${KLINE_SYNC_MANIFEST_PATH}" \
-    --pointer-path "${KLINE_SYNC_POINTER_PATH}" \
-    --fetch-manifest \
-    --no-use-cli-download
+  if [ -n "${KLINE_SYNC_RESTORE_FILE_ID}" ]; then
+    log "using explicit restore file id"
+    python /app/scripts/sync_kline_cache_cloudbase.py restore \
+      --target-dir "${KLINE_SYNC_LOCAL_ROOT}" \
+      --cloud-prefix "${KLINE_SYNC_CLOUD_PREFIX}" \
+      --manifest-path "${KLINE_SYNC_MANIFEST_PATH}" \
+      --pointer-path "${KLINE_SYNC_POINTER_PATH}" \
+      --manifest-file-id "${KLINE_SYNC_RESTORE_FILE_ID}" \
+      --no-use-cli-download
+  else
+    python /app/scripts/sync_kline_cache_cloudbase.py restore \
+      --target-dir "${KLINE_SYNC_LOCAL_ROOT}" \
+      --cloud-prefix "${KLINE_SYNC_CLOUD_PREFIX}" \
+      --manifest-path "${KLINE_SYNC_MANIFEST_PATH}" \
+      --pointer-path "${KLINE_SYNC_POINTER_PATH}" \
+      --fetch-manifest \
+      --no-use-cli-download
+  fi
 }
 
 start_backup_loop() {
