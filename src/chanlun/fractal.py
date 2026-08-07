@@ -9,15 +9,11 @@ from .models import NormalizedBar, Fractal, FractalType
 
 
 def _dominates_for_top(curr: NormalizedBar, side: NormalizedBar) -> bool:
-    return curr.high >= side.high and curr.low >= side.low and (
-        curr.high > side.high or curr.low > side.low
-    )
+    return curr.high > side.high and curr.low > side.low
 
 
 def _dominates_for_bottom(curr: NormalizedBar, side: NormalizedBar) -> bool:
-    return curr.high <= side.high and curr.low <= side.low and (
-        curr.high < side.high or curr.low < side.low
-    )
+    return curr.high < side.high and curr.low < side.low
 
 
 def identify_fractals(normalized_bars: List[NormalizedBar]) -> List[Fractal]:
@@ -25,10 +21,8 @@ def identify_fractals(normalized_bars: List[NormalizedBar]) -> List[Fractal]:
     识别分型。
     
     规格文档 4.1, 4.2:
-    - 顶分型: 当前 K 线相对左右两侧都更高，允许一侧高点或低点相等，
-             但至少一项严格更高
-    - 底分型: 当前 K 线相对左右两侧都更低，允许一侧高点或低点相等，
-             但至少一项严格更低
+    - 顶分型: 当前 K 线相对左右两侧都必须严格更高
+    - 底分型: 当前 K 线相对左右两侧都必须严格更低
     
     Args:
         normalized_bars: 标准化 K 线序列

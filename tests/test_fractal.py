@@ -41,8 +41,8 @@ class TestIdentifyFractals:
         result = identify_fractals([bar])
         assert result == []
 
-    def test_bottom_fractal_allows_equal_low_with_lower_high(self):
-        """等低但高点更低时，仍可构成有效底分型。"""
+    def test_equal_low_with_lower_high_is_not_a_strict_bottom_fractal(self):
+        """等低且高点更低，不满足严格底分型定义。"""
         bars = [
             NormalizedBar(0, 68.26, 65.0, datetime(2026, 3, 23), datetime(2026, 3, 23), src_indices=[0]),
             NormalizedBar(1, 67.10, 65.0, datetime(2026, 3, 24), datetime(2026, 3, 24), src_indices=[1]),
@@ -50,9 +50,18 @@ class TestIdentifyFractals:
         ]
 
         fractals = identify_fractals(bars)
-        assert len(fractals) == 1
-        assert fractals[0].fx_type == FractalType.BOTTOM
-        assert fractals[0].ts.date().isoformat() == "2026-03-24"
+        assert fractals == []
+
+    def test_equal_high_with_higher_low_is_not_a_strict_top_fractal(self):
+        """等高且低点更高，不满足严格顶分型定义。"""
+        bars = [
+            NormalizedBar(0, 66.0, 63.0, datetime(2026, 3, 23), datetime(2026, 3, 23), src_indices=[0]),
+            NormalizedBar(1, 66.0, 64.0, datetime(2026, 3, 24), datetime(2026, 3, 24), src_indices=[1]),
+            NormalizedBar(2, 68.0, 64.0, datetime(2026, 3, 25), datetime(2026, 3, 25), src_indices=[2]),
+        ]
+
+        fractals = identify_fractals(bars)
+        assert fractals == []
 
 
 class TestFilterConsecutiveFractals:
