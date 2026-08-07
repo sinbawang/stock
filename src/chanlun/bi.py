@@ -13,6 +13,7 @@ from .models import Fractal, Bi, FractalType, BiDirection, NormalizedBar
 # 分型极值K线最小间隔：
 # 顶分型最高K线与底分型最低K线之间（不含两端）至少保留 3 根K。
 MIN_EXTREME_GAP = 4
+MAX_INITIAL_START_SCAN = 8
 PENDING_REVERSE_MODE_ANY = "any"
 PENDING_REVERSE_MODE_EFFECTIVE_ONLY = "effective_only"
 PENDING_REVERSE_MODE_TAIL_MIXED = "tail_mixed"
@@ -248,18 +249,54 @@ def _extend_until_reversal(
     return best_idx, False
 
 
-def _identify_bis_core(
+def _score_bi_sequence(bis: List[Bi]) -> tuple[int, int]:
+    """返回可比较的笔序列评分：(确认笔数, 总笔数)。"""
+    if not bis:
+        return -1, -1
+
+    confirmed_count = sum(1 for bi in bis if bi.is_confirmed)
+    return confirmed_count, len(bis)
+
+
+def _is_better_initial_bis(
+    current: List[Bi],
+    candidate: List[Bi],
+    current_start_idx: int,
+    candidate_start_idx: int,
+) -> bool:
+    """首笔候选比较：仅在质量明确提升时允许右移起点。"""
+    if not candidate:
+        return False
+    if not current:
+        return True
+
+    current_score = _score_bi_sequence(current)
+    candidate_score = _score_bi_sequence(candidate)
+    if candidate_score != current_score:
+        return candidate_score > current_score
+
+    if candidate[0].is_confirmed and not current[0].is_confirmed:
+        return True
+    if current[0].is_confirmed and not candidate[0].is_confirmed:
+        return False
+
+    # 评分完全一致时保持更靠左的起点，减少无谓漂移。
+    return candidate_start_idx < current_start_idx
+
+
+def _identify_bis_from_start(
     fractals: List[Fractal],
     normalized_bars: Optional[List[NormalizedBar]],
     pending_reverse_mode: Literal["any", "effective_only"],
+    start_idx: int,
 ) -> List[Bi]:
-    if len(fractals) < 2:
+    """从指定分型索引开始识别笔。"""
+    if start_idx >= len(fractals) - 1:
         return []
 
     bis: List[Bi] = []
     bi_id = 0
-
-    i = 0
+    i = start_idx
 
     while i < len(fractals) - 1:
         start_fx = fractals[i]
@@ -311,6 +348,46 @@ def _identify_bis_core(
     return bis
 
 
+def _identify_bis_core(
+    fractals: List[Fractal],
+    normalized_bars: Optional[List[NormalizedBar]],
+    pending_reverse_mode: Literal["any", "effective_only"],
+    bootstrap_initial_start: bool = True,
+) -> List[Bi]:
+    if len(fractals) < 2:
+        return []
+
+    best_bis = _identify_bis_from_start(
+        fractals,
+        normalized_bars,
+        pending_reverse_mode,
+        start_idx=0,
+    )
+
+    if not bootstrap_initial_start or len(fractals) <= 3:
+        return best_bis
+
+    best_start_idx = 0
+    scan_end = min(len(fractals) - 1, MAX_INITIAL_START_SCAN)
+    for candidate_start_idx in range(1, scan_end):
+        candidate_bis = _identify_bis_from_start(
+            fractals,
+            normalized_bars,
+            pending_reverse_mode,
+            start_idx=candidate_start_idx,
+        )
+        if _is_better_initial_bis(
+            best_bis,
+            candidate_bis,
+            best_start_idx,
+            candidate_start_idx,
+        ):
+            best_bis = candidate_bis
+            best_start_idx = candidate_start_idx
+
+    return best_bis
+
+
 def _tail_mixed_bis(
     fractals: List[Fractal],
     normalized_bars: Optional[List[NormalizedBar]],
@@ -335,6 +412,7 @@ def _tail_mixed_bis(
         fractals[tail_start_idx:],
         normalized_bars,
         PENDING_REVERSE_MODE_EFFECTIVE_ONLY,
+        bootstrap_initial_start=False,
     )
     if not suffix_bis:
         return base_bis

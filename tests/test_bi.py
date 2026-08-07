@@ -260,6 +260,24 @@ class TestIdentifyBis:
         assert result[0].start_fx_id >= 2
         assert result[0].start_fx_id not in {0, 1}
 
+    def test_first_bi_bootstrap_avoids_wrong_initial_type_lock(self):
+        """首分型方向选反时，应允许右移起点避免长笔吞没中间结构。"""
+        fractals = [
+            Fractal(0, FractalType.TOP, datetime(2024, 1, 1, 9, 30), 100.0, 0, 100.0, 98.8),
+            Fractal(1, FractalType.BOTTOM, datetime(2024, 1, 1, 9, 31), 96.0, 2, 96.8, 96.0),
+            Fractal(2, FractalType.TOP, datetime(2024, 1, 1, 9, 32), 98.0, 4, 98.0, 97.2),
+            Fractal(3, FractalType.BOTTOM, datetime(2024, 1, 1, 9, 33), 95.0, 6, 95.7, 95.0),
+            Fractal(4, FractalType.TOP, datetime(2024, 1, 1, 9, 34), 99.5, 8, 99.5, 98.3),
+            Fractal(5, FractalType.BOTTOM, datetime(2024, 1, 1, 9, 35), 94.0, 10, 94.9, 94.0),
+            Fractal(6, FractalType.TOP, datetime(2024, 1, 1, 9, 36), 100.5, 12, 100.5, 99.2),
+        ]
+
+        result = identify_bis(fractals)
+
+        assert len(result) >= 1
+        assert result[0].start_fx_id != 0
+        assert result[0].direction == BiDirection.UP
+
     def test_effective_only_pending_reverse_allows_later_valid_confirmation(self):
         """过近反向分型不应长期占住 pending_reverse，后续满足间隔的反向分型可以确认前笔。"""
         fractals = [
