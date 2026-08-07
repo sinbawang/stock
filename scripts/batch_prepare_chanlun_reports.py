@@ -4,6 +4,7 @@ import argparse
 import csv
 import inspect
 import json
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -93,6 +94,13 @@ INTRADAY_TIMEFRAME_SPECS = (
     ("5m", "5", "5M"),
     ("1m", "1", "1M"),
 )
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass(frozen=True)
@@ -185,6 +193,12 @@ def parse_args() -> argparse.Namespace:
         "--local-store-root",
         default=None,
         help="可选，本地 K 线仓库根目录覆盖。默认使用 data/cache/kline。",
+    )
+    parser.add_argument(
+        "--local-store-read-only",
+        action=argparse.BooleanOptionalAction,
+        default=_env_flag("CHANLUN_LOCAL_STORE_READ_ONLY", False),
+        help="仅使用本地 K 线仓库尾部数据，不执行远端增量抓取（可通过 CHANLUN_LOCAL_STORE_READ_ONLY=1 启用）。",
     )
     parser.add_argument(
         "--export-structure-images",
@@ -353,6 +367,7 @@ def _fetch_with_optional_local_store(
     bar_count: int,
     overlap_bars: int,
     use_local_store: bool,
+    local_store_read_only: bool,
     local_store_root: Path | None,
     remote_fetcher,
 ) -> tuple[list[dict], dict[str, object]]:
@@ -363,6 +378,32 @@ def _fetch_with_optional_local_store(
         local_before = len(local_rows)
         if local_rows:
             effective_start = infer_incremental_start(local_rows[-1]["ts"], timeframe, overlap_bars=overlap_bars)
+
+    if use_local_store and local_store_read_only and local_before > 0:
+        analysis_rows = tail_rows(local_rows, bar_count)
+        return analysis_rows, {
+            "source": "local_store_read_only",
+            "actual_source": "local_store_read_only",
+            "source_attempts": [],
+            "actual_bar_count": len(analysis_rows),
+            "requested_min_rows": bar_count,
+            "fulfilled_min_rows": len(analysis_rows) >= bar_count,
+            "bar_count_policy": BAR_COUNT_POLICY,
+            "source_probe_min_rows": 1,
+            "local_store": {
+                "enabled": True,
+                "read_only": True,
+                "requested_start": requested_start,
+                "effective_start": effective_start,
+                "overlap_bars": overlap_bars,
+                "local_rows_before": local_before,
+                "remote_rows": 0,
+                "merged_total_rows": local_before,
+                "added_rows": 0,
+                "updated_rows": 0,
+                "analysis_rows": len(analysis_rows),
+            },
+        }
 
     remote_probe_min_rows = bar_count
     if use_local_store and local_before > 0 and timeframe != "day":
@@ -916,6 +957,7 @@ def run_batch_prepare(
     zhongshu_level: str = "bi",
     timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
     use_local_store: bool = True,
+    local_store_read_only: bool = False,
     incremental_overlap_bars: int = 120,
     local_store_root: Path | None = None,
     export_structure_images: bool = True,
@@ -942,6 +984,7 @@ def run_batch_prepare(
                 bar_count=day_bars,
                 overlap_bars=incremental_overlap_bars,
                 use_local_store=use_local_store,
+                local_store_read_only=local_store_read_only,
                 local_store_root=local_store_root,
                 remote_fetcher=lambda start, _min_rows: fetch_day_rows(security, start, day_bars),
             )
@@ -997,6 +1040,7 @@ def run_batch_prepare(
                 bar_count=bar_count,
                 overlap_bars=incremental_overlap_bars,
                 use_local_store=use_local_store,
+                local_store_read_only=local_store_read_only,
                 local_store_root=local_store_root,
                 remote_fetcher=remote_fetcher,
             )
@@ -1073,6 +1117,7 @@ def main() -> None:
         zhongshu_level=args.zhongshu_level,
         timeframes=tuple(args.timeframes),
         use_local_store=args.use_local_store,
+        local_store_read_only=args.local_store_read_only,
         incremental_overlap_bars=args.incremental_overlap_bars,
         local_store_root=Path(args.local_store_root) if args.local_store_root else None,
         export_structure_images=bool(args.export_structure_images),

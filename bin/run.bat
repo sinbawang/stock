@@ -57,7 +57,7 @@ if errorlevel 1 (
 )
 
 pushd "%ROOT_DIR%" >nul
-"%PYTHON_BIN%" "%ROOT_DIR%\scripts\refresh_holdings_publish_to_cloudbase.py" --latest-only %RUN_PROFILE_ARGS% !RUN_FORWARD_ARGS!
+"%PYTHON_BIN%" "%ROOT_DIR%\scripts\refresh_holdings_publish_to_cloudbase.py" --latest-only --sync-kline-cache-restore-before-regenerate --local-store-read-only %RUN_PROFILE_ARGS% !RUN_FORWARD_ARGS!
 set "EXIT_CODE=%ERRORLEVEL%"
 popd >nul
 
@@ -168,6 +168,8 @@ echo Usage: %~n0 [refresh_holdings_publish_to_cloudbase args]
 echo.
 echo Default behavior:
 echo   - Always forwards --latest-only to refresh_holdings_publish_to_cloudbase.py
+echo   - Defaults to --sync-kline-cache-restore-before-regenerate before local regeneration
+echo   - Defaults to --local-store-read-only so analysis uses restored cache tail without extra remote fetch
 echo   - skipGenBase defaults to true, but base.json will still refresh automatically when a newer report period is detected
 echo   - day-bars now defaults to 1200
 echo   - mixed report generation already covers 30M and embeds 5M precision, so the default extra tech-timeframes are day 60m 15m
