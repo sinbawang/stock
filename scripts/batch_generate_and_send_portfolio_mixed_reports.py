@@ -79,7 +79,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pending-reverse-mode",
         choices=("any", "effective_only", "tail_mixed"),
-        default="any",
+        default="effective_only",
         help="Forwarded to batch_prepare_chanlun_reports.py to control pending reverse fractal handling.",
     )
     parser.add_argument("--day-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for daily K-line fetch count.")
@@ -179,7 +179,7 @@ def _single_holding_payload(holding: Holding) -> dict:
 def _generate_all_timeframe_charts(
     holding: Holding,
     *,
-    pending_reverse_mode: str = "any",
+    pending_reverse_mode: str = "effective_only",
     day_bars: int = 1200,
     m60_bars: int = 1200,
     m30_bars: int = 1200,
@@ -303,7 +303,7 @@ def generate_bundle(
     skip_gen_base: bool = True,
     trust_existing_base: bool = False,
     skip_gen_fund: bool = False,
-    pending_reverse_mode: str = "any",
+    pending_reverse_mode: str = "effective_only",
     day_bars: int = 1200,
     m60_bars: int = 1200,
     m30_bars: int = 1200,

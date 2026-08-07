@@ -161,6 +161,7 @@ def test_fetch_with_optional_local_store_uses_incremental_start_and_tail(monkeyp
         bar_count=3,
         overlap_bars=2,
         use_local_store=True,
+        local_store_read_only=False,
         local_store_root=tmp_path,
         remote_fetcher=fake_remote_fetcher,
     )

@@ -1091,6 +1091,9 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
         return None
 
     timeframe = safe_text(chart_spec.get("timeframe"))
+    timeframe_dir = bars_csv.parent.parent
+    tech_payload = read_json_if_exists(timeframe_dir / "tech.json")
+    pending_reverse_mode = safe_text(tech_payload.get("pending_reverse_mode")) or "effective_only"
     bis_records = read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_bis"))
     segment_records = build_segment_records(
         bis_records,
@@ -1101,6 +1104,7 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
     return {
         "schema_version": "chart-data-v1",
         "timeframe": timeframe,
+        "pending_reverse_mode": pending_reverse_mode,
         "label": chart_spec.get("label"),
         "source_csv": bars_csv.name,
         "bars": read_csv_records(bars_csv),

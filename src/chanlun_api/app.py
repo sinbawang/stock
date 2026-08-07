@@ -142,7 +142,7 @@ class PublishRefreshRequest(BaseModel):
     local_store_read_only: bool = False
     fail_on_holding_error: bool = False
     parallelism: int = Field(default=max(1, min(4, os.cpu_count() or 1)), ge=1)
-    pending_reverse_mode: PendingReverseMode = "any"
+    pending_reverse_mode: PendingReverseMode = "effective_only"
     day_bars: int = Field(default=1200, ge=1)
     m60_bars: int = Field(default=1200, ge=1)
     m30_bars: int = Field(default=1200, ge=1)
@@ -189,7 +189,7 @@ class TechnicalRefreshRequest(BaseModel):
     m5_bars: int = Field(default=1200, ge=1)
     m1_start: str | None = None
     m1_bars: int = Field(default=1200, ge=1)
-    pending_reverse_mode: PendingReverseMode = "any"
+    pending_reverse_mode: PendingReverseMode = "effective_only"
     zhongshu_level: ZhongshuLevel = "bi"
     refresh_mode: TechnicalRefreshMode = "m30_intraday"
     tech_timeframes: list[Timeframe] | None = None

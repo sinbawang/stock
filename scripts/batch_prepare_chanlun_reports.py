@@ -161,7 +161,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--pending-reverse-mode",
         choices=("any", "effective_only", "tail_mixed"),
-        default="any",
+        default="effective_only",
         help="笔尾部反向分型占位口径：any=当前保守口径，effective_only=全局仅允许满足间隔的反向分型占位，tail_mixed=仅对最后未确认尾笔链路启用 effective_only。",
     )
     parser.add_argument(
@@ -673,7 +673,7 @@ def export_case(
     rows: list[dict],
     title: str,
     data_fetch: dict[str, object] | None = None,
-    pending_reverse_mode: str = "any",
+    pending_reverse_mode: str = "effective_only",
     zhongshu_level: str = "bi",
     export_structure_images: bool = True,
 ) -> dict[str, Path]:
@@ -953,7 +953,7 @@ def run_batch_prepare(
     m5_bars: int = INTRADAY_SOURCE_PROBE_ROWS,
     m1_start: str | None = None,
     m1_bars: int = INTRADAY_SOURCE_PROBE_ROWS,
-    pending_reverse_mode: str = "any",
+    pending_reverse_mode: str = "effective_only",
     zhongshu_level: str = "bi",
     timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
     use_local_store: bool = True,

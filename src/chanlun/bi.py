@@ -426,7 +426,7 @@ def _tail_mixed_bis(
 def identify_bis(
     fractals: List[Fractal],
     normalized_bars: Optional[List[NormalizedBar]] = None,
-    pending_reverse_mode: PendingReverseMode = PENDING_REVERSE_MODE_ANY,
+    pending_reverse_mode: PendingReverseMode = PENDING_REVERSE_MODE_EFFECTIVE_ONLY,
 ) -> List[Bi]:
     """
     识别笔。
@@ -435,7 +435,7 @@ def identify_bis(
     - 笔由类型相反的两个相邻分型构成
     - 成笔条件：分型三K窗口不得重叠，且两端分型极值K线在原始K线上之间至少 3 根K线
     - 笔末端可能被更强同类分型替代，直到反向分型出现后确认
-    - 反向确认支持 any / effective_only / tail_mixed 三种模式
+    - 反向确认支持 any / effective_only / tail_mixed 三种模式（默认 effective_only）
     
     Args:
         fractals: 已去重的分型列表

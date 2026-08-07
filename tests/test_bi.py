@@ -291,11 +291,16 @@ class TestIdentifyBis:
 
         default_result = identify_bis(fractals)
         effective_only_result = identify_bis(fractals, pending_reverse_mode="effective_only")
+        any_result = identify_bis(fractals, pending_reverse_mode="any")
 
-        assert len(default_result) == 1
-        assert default_result[0].start_fx_id == 0
-        assert default_result[0].end_fx_id == 5
-        assert default_result[0].is_confirmed is False
+        assert [(bi.start_fx_id, bi.end_fx_id, bi.is_confirmed) for bi in default_result] == [
+            (0, 1, True),
+            (1, 4, False),
+        ]
+        assert len(any_result) == 1
+        assert any_result[0].start_fx_id == 0
+        assert any_result[0].end_fx_id == 5
+        assert any_result[0].is_confirmed is False
 
         assert [(bi.start_fx_id, bi.end_fx_id, bi.is_confirmed) for bi in effective_only_result] == [
             (0, 1, True),
@@ -315,9 +320,15 @@ class TestIdentifyBis:
         ]
 
         default_result = identify_bis(fractals)
+        any_result = identify_bis(fractals, pending_reverse_mode="any")
         mixed_result = identify_bis(fractals, pending_reverse_mode="tail_mixed")
 
         assert [(bi.start_fx_id, bi.end_fx_id, bi.is_confirmed) for bi in default_result] == [
+            (0, 1, True),
+            (1, 2, True),
+            (2, 5, False),
+        ]
+        assert [(bi.start_fx_id, bi.end_fx_id, bi.is_confirmed) for bi in any_result] == [
             (0, 1, True),
             (1, 6, False),
         ]

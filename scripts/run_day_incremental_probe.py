@@ -93,7 +93,7 @@ def _run_day_prepare(*, symbol: str, name: str, market: str, day_bars: int, over
         result = batch.run_batch_prepare(
             holdings_path=holdings_file,
             day_bars=day_bars,
-            pending_reverse_mode="any",
+            pending_reverse_mode="effective_only",
             zhongshu_level="bi",
             timeframes=("day",),
             use_local_store=True,
