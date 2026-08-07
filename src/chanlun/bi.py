@@ -182,13 +182,14 @@ def _find_first_opposite(
     start_fx: Fractal,
     normalized_bars: Optional[List[NormalizedBar]],
 ) -> int:
-    """从 start_idx 之后寻找第一个满足间隔条件的反向分型索引。"""
+    """从 start_idx 之后寻找第一个满足成笔约束的反向分型索引。"""
     j = start_idx + 1
     while j < len(fractals):
         fx = fractals[j]
         if (
             fx.fx_type != start_fx.fx_type
             and _has_enough_pen_gap(start_fx, fx, normalized_bars)
+            and _is_valid_pen_endpoint(start_fx, fx, normalized_bars)
         ):
             return j
         j += 1
@@ -269,10 +270,6 @@ def _identify_bis_core(
 
         end_idx = _find_first_opposite(fractals, i, start_fx, normalized_bars)
         if end_idx < 0:
-            i += 1
-            continue
-
-        if not _is_valid_pen_endpoint(start_fx, fractals[end_idx], normalized_bars):
             i += 1
             continue
 

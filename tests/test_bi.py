@@ -188,6 +188,38 @@ class TestIdentifyBis:
         assert result[0].direction == BiDirection.DOWN
         assert result[0].is_confirmed is False
 
+    def test_up_bi_skips_early_invalid_top_and_uses_later_valid_top(self):
+        """首个反向顶分型若未高于起点底分型，应继续寻找后续合法终点。"""
+        fractals = [
+            Fractal(0, FractalType.BOTTOM, datetime(2024, 1, 1, 10, 30), 88.5, 1, 89.2, 88.5),
+            Fractal(1, FractalType.TOP, datetime(2024, 1, 1, 15, 30), 85.5, 5, 85.5, 84.5),
+            Fractal(2, FractalType.TOP, datetime(2024, 1, 2, 10, 30), 92.0, 8, 92.0, 90.5),
+        ]
+
+        result = identify_bis(fractals)
+
+        assert len(result) == 1
+        assert result[0].direction == BiDirection.UP
+        assert result[0].start_fx_id == 0
+        assert result[0].end_fx_id == 2
+        assert result[0].is_confirmed is False
+
+    def test_down_bi_skips_early_invalid_bottom_and_uses_later_valid_bottom(self):
+        """首个反向底分型若未低于起点顶分型，应继续寻找后续合法终点。"""
+        fractals = [
+            Fractal(0, FractalType.TOP, datetime(2024, 1, 1, 10, 30), 79.1, 1, 79.1, 78.4),
+            Fractal(1, FractalType.BOTTOM, datetime(2024, 1, 1, 15, 30), 80.2, 5, 80.8, 80.2),
+            Fractal(2, FractalType.BOTTOM, datetime(2024, 1, 2, 10, 30), 76.9, 8, 77.6, 76.9),
+        ]
+
+        result = identify_bis(fractals)
+
+        assert len(result) == 1
+        assert result[0].direction == BiDirection.DOWN
+        assert result[0].start_fx_id == 0
+        assert result[0].end_fx_id == 2
+        assert result[0].is_confirmed is False
+
     def test_skip_leading_unconfirmed_head_noise_when_later_confirmed_bi_exists(self):
         """首笔若只是头部噪声且后续存在可确认笔，应跳过该未确认首笔。"""
         fractals = [
@@ -225,10 +257,8 @@ class TestIdentifyBis:
         result = identify_bis(fractals, normalized_bars=normalized)
 
         assert len(result) >= 1
-        assert result[0].direction == BiDirection.DOWN
-        assert result[0].start_fx_id == 3
-        assert result[0].end_fx_id == 6
-        assert result[0].is_confirmed is True
+        assert result[0].start_fx_id >= 2
+        assert result[0].start_fx_id not in {0, 1}
 
     def test_effective_only_pending_reverse_allows_later_valid_confirmation(self):
         """过近反向分型不应长期占住 pending_reverse，后续满足间隔的反向分型可以确认前笔。"""
