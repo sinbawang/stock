@@ -366,8 +366,9 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
     failures: list[dict[str, str]] = []
     per_holding: list[dict[str, object]] = []
     generated_count = 0
+    local_store_read_only = bool(getattr(args, "local_store_read_only", False))
     previous_local_store_read_only = os.environ.get("CHANLUN_LOCAL_STORE_READ_ONLY")
-    if args.local_store_read_only:
+    if local_store_read_only:
         os.environ["CHANLUN_LOCAL_STORE_READ_ONLY"] = "1"
 
     try:
@@ -490,7 +491,7 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                             }
                         )
     finally:
-        if args.local_store_read_only:
+        if local_store_read_only:
             if previous_local_store_read_only is None:
                 os.environ.pop("CHANLUN_LOCAL_STORE_READ_ONLY", None)
             else:

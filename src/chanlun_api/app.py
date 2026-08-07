@@ -139,6 +139,7 @@ class PublishRefreshRequest(BaseModel):
     skip_gen_base: bool = True
     trust_existing_base: bool = False
     skip_gen_fund: bool = False
+    local_store_read_only: bool = False
     fail_on_holding_error: bool = False
     parallelism: int = Field(default=max(1, min(4, os.cpu_count() or 1)), ge=1)
     pending_reverse_mode: PendingReverseMode = "any"
@@ -383,6 +384,7 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
         skip_gen_base=request.skip_gen_base,
         trust_existing_base=request.trust_existing_base,
         skip_gen_fund=request.skip_gen_fund,
+        local_store_read_only=request.local_store_read_only,
         fail_on_holding_error=request.fail_on_holding_error,
         parallelism=request.parallelism,
         pending_reverse_mode=request.pending_reverse_mode,
