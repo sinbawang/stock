@@ -39,12 +39,19 @@ class TestHasInclusion:
         assert has_inclusion(a, b) is True
         assert has_inclusion(b, a) is False
 
-    def test_identical_range_is_not_inclusion(self):
-        """高低点完全相同不算包含。"""
+    def test_equal_high_counts_as_inclusion(self):
+        """相等高点、较低低点视为包含。"""
+        a = Bar(ts=datetime(2024, 1, 1), open=100, high=110, low=65, close=101)
+        b = Bar(ts=datetime(2024, 1, 2), open=102, high=110, low=67, close=103)
+        assert has_inclusion(a, b) is True
+        assert has_inclusion(b, a) is False
+
+    def test_identical_range_counts_as_inclusion(self):
+        """高低点完全相同也算包含。"""
         a = Bar(ts=datetime(2024, 1, 1), open=100, high=110, low=65, close=101)
         b = Bar(ts=datetime(2024, 1, 2), open=102, high=110, low=65, close=103)
-        assert has_inclusion(a, b) is False
-        assert has_inclusion(b, a) is False
+        assert has_inclusion(a, b) is True
+        assert has_inclusion(b, a) is True
 
 
 class TestMergeBars:

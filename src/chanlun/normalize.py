@@ -11,13 +11,9 @@ from .models import Bar, NormalizedBar
 def has_inclusion(bar_a: Bar, bar_b: Bar) -> bool:
     """
     检测 bar_a 是否包含 bar_b。
-    非严格包含：允许等高或等低，但不能高低点都完全相等。
+    覆盖即包含：允许等高、等低，且高低点都完全相等也算包含。
     """
-    return (
-        bar_a.high >= bar_b.high
-        and bar_a.low <= bar_b.low
-        and (bar_a.high > bar_b.high or bar_a.low < bar_b.low)
-    )
+    return bar_a.high >= bar_b.high and bar_a.low <= bar_b.low
 
 
 def merge_bars(

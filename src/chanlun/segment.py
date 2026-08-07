@@ -658,6 +658,25 @@ def _extend_segment(
             break
 
         reverse_indices.append(cursor)
+
+        prev_same_dir_idx = cursor - 1
+        prev_prev_same_dir_idx = cursor - 3
+        if (
+            prev_same_dir_idx >= start_idx
+            and prev_prev_same_dir_idx >= start_idx
+            and bis[prev_same_dir_idx].direction == direction
+            and bis[prev_prev_same_dir_idx].direction == direction
+            and (
+                (direction == BiDirection.UP and bis[prev_same_dir_idx].high <= bis[prev_prev_same_dir_idx].high)
+                or (direction == BiDirection.DOWN and bis[prev_same_dir_idx].low >= bis[prev_prev_same_dir_idx].low)
+            )
+        ):
+            break_idx = cursor
+            is_confirmed = True
+            break_bi_id = reverse_bi.bi_id
+            stop_reason = "reverse_break"
+            break
+
         if cursor + 1 >= len(bis):
             feature_break = _feature_sequence_break(bis, reverse_indices, direction)
             if feature_break is not None:
@@ -695,12 +714,20 @@ def _extend_segment(
                     _evaluate_pending_gap_candidate(bis, pending_gap_break_idx)
                 )
                 if pending_gap_outcome is True:
-                    end_idx = resolved_end_idx
-                    break_idx = resolved_break_idx
-                    is_confirmed = True
-                    break_bi_id = bis[break_idx].bi_id
-                    stop_reason = resolved_stop_reason
-                    break
+                    should_defer_down_weak_gap = (
+                        direction == BiDirection.DOWN
+                        and pending_gap_break_idx == cursor
+                        and same_dir_bi.low >= last_same_extreme
+                    )
+                    if should_defer_down_weak_gap:
+                        pass
+                    else:
+                        end_idx = resolved_end_idx
+                        break_idx = resolved_break_idx
+                        is_confirmed = True
+                        break_bi_id = bis[break_idx].bi_id
+                        stop_reason = resolved_stop_reason
+                        break
                 if pending_gap_outcome is False:
                     pending_gap_break_idx = None
                     gap_false_locked = True
@@ -780,12 +807,20 @@ def _extend_segment(
                                 _evaluate_pending_gap_candidate(bis, pending_gap_break_idx)
                             )
                             if pending_gap_outcome is True:
-                                end_idx = resolved_end_idx
-                                break_idx = resolved_break_idx
-                                is_confirmed = True
-                                break_bi_id = bis[break_idx].bi_id
-                                stop_reason = resolved_stop_reason
-                                break
+                                should_defer_down_weak_gap = (
+                                    direction == BiDirection.DOWN
+                                    and pending_gap_break_idx == cursor
+                                    and same_dir_bi.low >= last_same_extreme
+                                )
+                                if should_defer_down_weak_gap:
+                                    pass
+                                else:
+                                    end_idx = resolved_end_idx
+                                    break_idx = resolved_break_idx
+                                    is_confirmed = True
+                                    break_bi_id = bis[break_idx].bi_id
+                                    stop_reason = resolved_stop_reason
+                                    break
                             if pending_gap_outcome is False:
                                 pending_gap_break_idx = None
                                 gap_false_locked = True
@@ -804,7 +839,7 @@ def _extend_segment(
                         break_idx = cursor
                         is_confirmed = True
                         break_bi_id = next_reverse_bi.bi_id
-                        stop_reason = "reverse_break_after_gap"
+                        stop_reason = "reverse_break"
                         break
                 break_bi_id = same_dir_bi.bi_id
                 stop_reason = "same_direction_not_extending"
@@ -840,12 +875,20 @@ def _extend_segment(
                                 _evaluate_pending_gap_candidate(bis, pending_gap_break_idx)
                             )
                             if pending_gap_outcome is True:
-                                end_idx = resolved_end_idx
-                                break_idx = resolved_break_idx
-                                is_confirmed = True
-                                break_bi_id = bis[break_idx].bi_id
-                                stop_reason = resolved_stop_reason
-                                break
+                                should_defer_down_weak_gap = (
+                                    direction == BiDirection.DOWN
+                                    and pending_gap_break_idx == cursor
+                                    and same_dir_bi.low >= last_same_extreme
+                                )
+                                if should_defer_down_weak_gap:
+                                    pass
+                                else:
+                                    end_idx = resolved_end_idx
+                                    break_idx = resolved_break_idx
+                                    is_confirmed = True
+                                    break_bi_id = bis[break_idx].bi_id
+                                    stop_reason = resolved_stop_reason
+                                    break
                             if pending_gap_outcome is False:
                                 pending_gap_break_idx = None
                                 gap_false_locked = True
@@ -857,14 +900,25 @@ def _extend_segment(
                                     break
                                 cursor += 2
                                 continue
+                    weak_down_rebound = (
+                        pending_gap_break_idx == cursor
+                        and same_dir_bi.low >= last_same_extreme
+                    )
                     if (
                         next_reverse_bi.direction != direction
-                        and _reverse_breaks_last_reverse_extreme(direction, next_reverse_bi, last_reverse_extreme)
+                        and (
+                            (weak_down_rebound and _reverse_confirms_gap_break(direction, reverse_bi, next_reverse_bi))
+                            or (
+                                not weak_down_rebound
+                                and _reverse_breaks_last_reverse_extreme(direction, next_reverse_bi, last_reverse_extreme)
+                            )
+                        )
                     ):
-                        break_idx = cursor
+                        end_idx = cursor + 1
+                        break_idx = cursor + 2
                         is_confirmed = True
                         break_bi_id = next_reverse_bi.bi_id
-                        stop_reason = "reverse_break_after_gap"
+                        stop_reason = "reverse_break"
                         break
                 break_bi_id = same_dir_bi.bi_id
                 stop_reason = "same_direction_not_extending"
@@ -941,6 +995,9 @@ def identify_segments(
             )
         )
         segment_id += 1
+
+        if not is_confirmed:
+            break
 
         if break_idx is not None:
             index = break_idx
