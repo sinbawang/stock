@@ -42,6 +42,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--delete-created-api-key", action="store_true", help="Delete the temporary API key after upload")
     parser.add_argument("--force-upload", action="store_true", help="Upload all files and bypass manifest-diff skip logic")
     parser.add_argument("--dry-run", action="store_true", help="Only print what would be uploaded")
+    parser.add_argument(
+        "--verify-upload",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="After upload, read cloud files back and verify SHA256 matches local payload.",
+    )
+    parser.add_argument(
+        "--verify-retries",
+        type=int,
+        default=4,
+        help="Retry count for cloud readback verification when checksum mismatches.",
+    )
+    parser.add_argument(
+        "--verify-retry-wait-seconds",
+        type=float,
+        default=1.5,
+        help="Wait seconds between verification retries.",
+    )
     return parser.parse_args()
 
 
@@ -62,6 +80,24 @@ class CreatedApiKey:
 
 class CloudBaseUploadError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class VerificationResult:
+    relative_path: str
+    cloud_path: str
+    local_sha256: str
+    cloud_sha256: str
+    matched: bool
+    attempts: int
+    local_summary: str = ""
+    cloud_summary: str = ""
+
+
+@dataclass(frozen=True)
+class UploadedItem:
+    file: LocalFile
+    file_id: str
 
 
 def load_previous_manifest(path: Path) -> dict[str, Any] | None:
@@ -233,6 +269,208 @@ def get_upload_metadata(
     return data
 
 
+def get_download_url(
+    session: requests.Session,
+    *,
+    env_id: str,
+    region: str,
+    api_key: str,
+    cloud_path: str,
+) -> str:
+    payload_candidates: list[dict[str, Any]] = [
+        {"file_list": [cloud_path]},
+        {"fileList": [cloud_path]},
+        {"fileid_list": [cloud_path]},
+        {"fileIdList": [cloud_path]},
+        {"file_list": [{"fileid": cloud_path}]},
+        {"fileList": [{"fileid": cloud_path}]},
+        {"fileList": [{"fileId": cloud_path}]},
+        {"fileList": [{"fileID": cloud_path}]},
+        {"fileid_list": [{"fileid": cloud_path}]},
+        {"fileIdList": [{"fileID": cloud_path}]},
+    ]
+    actions = [
+        "storage.batchGetDownloadUrl",
+        "storage.batchGetTempFileURL",
+        "storage.getTempFileURL",
+    ]
+
+    response: dict[str, Any] | None = None
+    last_error: Exception | None = None
+    for action in actions:
+        for payload in payload_candidates:
+            try:
+                response = admin_request(
+                    session,
+                    env_id=env_id,
+                    region=region,
+                    api_key=api_key,
+                    action=action,
+                    payload=payload,
+                )
+                break
+            except CloudBaseUploadError as exc:
+                last_error = exc
+                continue
+        if response is not None:
+            break
+
+    if response is None:
+        if last_error is not None:
+            raise CloudBaseUploadError(str(last_error))
+        raise CloudBaseUploadError(f"Cannot request download metadata for {cloud_path}")
+
+    data = response.get("data")
+    items: list[Any] = []
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        for key in ("download_list", "downloadList", "fileList", "DownloadList", "list"):
+            candidate = data.get(key)
+            if isinstance(candidate, list):
+                items = candidate
+                break
+    if not items:
+        raise CloudBaseUploadError(f"No download metadata returned for {cloud_path}.")
+
+    first = items[0]
+    if isinstance(first, str) and first.strip():
+        return first
+    if isinstance(first, dict):
+        for key in (
+            "tempFileURL",
+            "tempFileUrl",
+            "download_url",
+            "downloadUrl",
+            "url",
+            "fileUrl",
+        ):
+            value = first.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+    raise CloudBaseUploadError(f"Cannot parse download URL for {cloud_path}: {first}")
+
+
+def download_cloud_bytes(
+    session: requests.Session,
+    *,
+    env_id: str,
+    region: str,
+    api_key: str,
+    cloud_path: str,
+) -> bytes:
+    download_url = get_download_url(
+        session,
+        env_id=env_id,
+        region=region,
+        api_key=api_key,
+        cloud_path=cloud_path,
+    )
+    response = session.get(
+        download_url,
+        headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+        timeout=60,
+    )
+    response.raise_for_status()
+    return response.content
+
+
+def _json_summary_for_compare(relative_path: str, payload: bytes) -> str:
+    if not relative_path.endswith(".json"):
+        return ""
+    try:
+        parsed = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return "invalid-json"
+
+    if isinstance(parsed, dict) and "/charts/" in relative_path:
+        segments = parsed.get("segments") or []
+        first = segments[0] if segments else {}
+        return (
+            f"source_csv={parsed.get('source_csv')} "
+            f"segments={len(segments)} "
+            f"first={first.get('start_ts')}->{first.get('end_ts')}"
+        )
+
+    if relative_path == "index.json" and isinstance(parsed, dict):
+        return f"generated_at={parsed.get('generated_at')} stocks={len(parsed.get('stocks') or [])}"
+
+    return ""
+
+
+def verify_uploaded_files(
+    session: requests.Session,
+    *,
+    env_id: str,
+    region: str,
+    api_key: str,
+    uploaded_items: list[UploadedItem],
+    retries: int,
+    retry_wait_seconds: float,
+) -> list[VerificationResult]:
+    results: list[VerificationResult] = []
+    verify_attempts = max(1, int(retries))
+
+    for uploaded in uploaded_items:
+        item = uploaded.file
+        local_payload = item.local_path.read_bytes()
+        local_summary = _json_summary_for_compare(item.relative_path, local_payload)
+        cloud_payload = b""
+        cloud_sha256 = ""
+        cloud_summary = ""
+        matched = False
+        attempts = 0
+
+        for attempt in range(1, verify_attempts + 1):
+            attempts = attempt
+            cloud_payload = download_cloud_bytes(
+                session,
+                env_id=env_id,
+                region=region,
+                api_key=api_key,
+                cloud_path=uploaded.file_id or item.cloud_path,
+            )
+            cloud_sha256 = hashlib.sha256(cloud_payload).hexdigest()
+            cloud_summary = _json_summary_for_compare(item.relative_path, cloud_payload)
+
+            if cloud_sha256 == item.sha256:
+                matched = True
+                break
+
+            if attempt < verify_attempts:
+                time.sleep(max(0.0, float(retry_wait_seconds)))
+
+        results.append(
+            VerificationResult(
+                relative_path=item.relative_path,
+                cloud_path=item.cloud_path,
+                local_sha256=item.sha256,
+                cloud_sha256=cloud_sha256,
+                matched=matched,
+                attempts=attempts,
+                local_summary=local_summary,
+                cloud_summary=cloud_summary,
+            )
+        )
+
+    mismatches = [result for result in results if not result.matched]
+    if mismatches:
+        details = []
+        for result in mismatches[:6]:
+            details.append(
+                (
+                    f"{result.relative_path} local={result.local_sha256[:12]} "
+                    f"cloud={result.cloud_sha256[:12]} attempts={result.attempts} "
+                    f"local_summary=({result.local_summary}) cloud_summary=({result.cloud_summary})"
+                )
+            )
+        raise CloudBaseUploadError(
+            "Post-upload verification failed for one or more files: " + " | ".join(details)
+        )
+
+    return results
+
+
 def upload_bytes(session: requests.Session, *, cloud_path: str, local_path: Path, metadata: dict[str, Any]) -> None:
     content_type = mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
     headers = {
@@ -336,6 +574,7 @@ def build_manifest(
     source_dir: Path,
     cloud_prefix: str,
     uploads: list[dict[str, Any]],
+    verification: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     index_item = next((item for item in uploads if item["relative_path"] == "index.json"), None)
     return {
@@ -352,6 +591,7 @@ def build_manifest(
             "file_id": index_item["file_id"] if index_item else None,
         },
         "files": uploads,
+        "verification": verification or [],
     }
 
 
@@ -426,6 +666,7 @@ def main() -> int:
 
     session = new_session()
     uploads: list[dict[str, Any]] = list(skipped_uploads)
+    uploaded_items: list[UploadedItem] = []
     try:
         for item in upload_plan:
             metadata = get_upload_metadata(
@@ -446,7 +687,36 @@ def main() -> int:
                     "status": "uploaded",
                 }
             )
+            uploaded_items.append(UploadedItem(file=item, file_id=str(metadata["fileId"])))
             print(f"uploaded {item.relative_path} -> {metadata['fileId']}")
+
+        verification_payload: list[dict[str, Any]] = []
+        if args.verify_upload and uploaded_items:
+            verification_results = verify_uploaded_files(
+                session,
+                env_id=args.env_id,
+                region=args.region,
+                api_key=api_key,
+                uploaded_items=uploaded_items,
+                retries=args.verify_retries,
+                retry_wait_seconds=args.verify_retry_wait_seconds,
+            )
+            verification_payload = [
+                {
+                    "relative_path": result.relative_path,
+                    "cloud_path": result.cloud_path,
+                    "matched": result.matched,
+                    "attempts": result.attempts,
+                    "local_sha256": result.local_sha256,
+                    "cloud_sha256": result.cloud_sha256,
+                    "local_summary": result.local_summary,
+                    "cloud_summary": result.cloud_summary,
+                }
+                for result in verification_results
+            ]
+            print(f"verified={len(verification_results)}")
+        else:
+            verification_payload = []
     finally:
         session.close()
         if created_api_key and args.delete_created_api_key:
@@ -459,6 +729,7 @@ def main() -> int:
         source_dir=source_dir,
         cloud_prefix=args.cloud_prefix,
         uploads=uploads,
+        verification=verification_payload,
     )
     write_manifest(manifest_path, manifest)
     print(f"manifest={manifest_path}")

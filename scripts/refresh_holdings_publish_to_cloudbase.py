@@ -28,6 +28,7 @@ from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 DEFAULT_HOLDINGS_FILE = holdings_file()
 DEFAULT_PUBLISH_ROOT = ROOT / "build" / "miniapp-publish"
 DEFAULT_UPLOAD_SCRIPT = SCRIPTS / "upload_miniapp_publish_bundle.py"
+DEFAULT_UPLOAD_MANIFEST_PATH = ROOT / "build" / "miniapp-publish" / "cloudbase-upload-manifest.json"
 DEFAULT_SYNC_KLINE_SCRIPT = SCRIPTS / "sync_kline_cache_cloudbase.py"
 DEFAULT_KLINE_CACHE_SOURCE_DIR = ROOT / "data" / "cache" / "kline"
 DEFAULT_KLINE_CACHE_MANIFEST_PATH = ROOT / "build" / "stock-kline-cache" / "cloudbase-upload-manifest.json"
@@ -575,6 +576,70 @@ def upload_publish_bundle(args: argparse.Namespace, source_dir: Path) -> None:
         _run_command(command)
 
 
+def _print_upload_verification_summary(manifest_path: Path, focus_symbols: list[str] | None) -> None:
+    if not manifest_path.exists():
+        print(f"upload_verification_manifest_missing={manifest_path}", flush=True)
+        return
+
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"upload_verification_manifest_read_error={error}", flush=True)
+        return
+
+    verification = payload.get("verification")
+    if not isinstance(verification, list):
+        print("upload_verification_summary=not_available", flush=True)
+        return
+
+    total = len(verification)
+    matched = sum(1 for item in verification if isinstance(item, dict) and bool(item.get("matched")))
+    mismatched = total - matched
+    print(
+        f"upload_verification_summary total={total} matched={matched} mismatched={mismatched}",
+        flush=True,
+    )
+
+    if total == 0:
+        return
+
+    normalized_focus = {
+        str(symbol).strip().zfill(5)
+        for symbol in (focus_symbols or [])
+        if str(symbol).strip()
+    }
+
+    chart_entries: list[dict[str, object]] = []
+    for item in verification:
+        if not isinstance(item, dict):
+            continue
+        relative_path = str(item.get("relative_path") or "")
+        if not relative_path.endswith("/charts/1m.json"):
+            continue
+        chart_entries.append(item)
+
+    if normalized_focus:
+        focused_entries: list[dict[str, object]] = []
+        for item in chart_entries:
+            relative_path = str(item.get("relative_path") or "")
+            parts = relative_path.split("/")
+            symbol = parts[1] if len(parts) > 2 and parts[0] == "stocks" else ""
+            if symbol in normalized_focus:
+                focused_entries.append(item)
+        if focused_entries:
+            chart_entries = focused_entries
+
+    for item in chart_entries[:3]:
+        relative_path = str(item.get("relative_path") or "")
+        local_summary = str(item.get("local_summary") or "")
+        cloud_summary = str(item.get("cloud_summary") or "")
+        matched_flag = bool(item.get("matched"))
+        print(
+            f"upload_verification_1m path={relative_path} matched={matched_flag} local=({local_summary}) cloud=({cloud_summary})",
+            flush=True,
+        )
+
+
 def _resolve_kline_cache_source_dir(args: argparse.Namespace) -> Path:
     requested = Path(args.kline_cache_source_dir)
     candidates = [
@@ -706,6 +771,10 @@ def main() -> None:
         upload_publish_bundle(args, latest_dir)
         stage_seconds["upload_seconds"] = time.perf_counter() - started_upload
         print(f"timing upload_seconds={stage_seconds['upload_seconds']:.2f}", flush=True)
+        _print_upload_verification_summary(
+            DEFAULT_UPLOAD_MANIFEST_PATH,
+            list(args.symbols) if args.symbols else None,
+        )
     stage_seconds["total_seconds"] = time.perf_counter() - started_total
     print(f"timing total_seconds={stage_seconds['total_seconds']:.2f}", flush=True)
 
