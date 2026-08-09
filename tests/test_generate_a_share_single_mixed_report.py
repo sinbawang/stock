@@ -132,8 +132,9 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     monkeypatch.setattr(module, "build_technical_summary", lambda *args, **kwargs: {"conclusion": "偏强", "suggestion": "观察"})
 
     def fake_save_structure_charts(**kwargs):
-        assert kwargs["bootstrap_mode"] == "auto"
+        assert kwargs["bootstrap_mode"] == "prefer_earlier_start"
         assert kwargs["bootstrap_skip_confirmed_bis"] == 0
+        assert kwargs["strict_segment_rules"] is True
         kwargs["svg_path"].write_text("svg", encoding="utf-8")
         kwargs["png_path"].write_text("png", encoding="utf-8")
         kwargs["jpg_path"].write_text("jpg", encoding="utf-8")

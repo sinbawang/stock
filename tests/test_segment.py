@@ -3,8 +3,14 @@
 from datetime import datetime, timedelta
 
 from chanlun.models import Bar, Bi, BiDirection, NormalizedBar
-from chanlun.segment import build_segment_tail_interpretations, identify_segments
+from chanlun.segment import SEGMENT_BOOTSTRAP_AUTO, build_segment_tail_interpretations, identify_segments as _identify_segments
 from chanlun.visualization import Plotter
+
+
+def identify_segments(bis, **kwargs):
+    kwargs.setdefault("bootstrap_mode", SEGMENT_BOOTSTRAP_AUTO)
+    kwargs.setdefault("strict_segment_rules", False)
+    return _identify_segments(bis, **kwargs)
 
 
 def _bi(bi_id: int, direction: BiDirection, high: float, low: float) -> Bi:
@@ -141,6 +147,19 @@ class TestIdentifySegments:
         assert result[0].bi_ids == [0, 1, 2]
         assert result[0].is_confirmed is False
 
+    def test_strict_mode_requires_third_bi_directional_advance(self):
+        bis = [
+            _bi(0, BiDirection.UP, 120, 100),
+            _bi(1, BiDirection.DOWN, 118, 105),
+            _bi(2, BiDirection.UP, 119, 106),
+        ]
+
+        normal = identify_segments(bis)
+        strict = identify_segments(bis, strict_segment_rules=True)
+
+        assert len(normal) == 1
+        assert strict == []
+
     def test_feature_sequence_fractal_confirms_long_up_segment_earlier(self):
         bis = [
             _bi(0, BiDirection.UP, 120, 100),
@@ -180,10 +199,10 @@ class TestIdentifySegments:
         result = identify_segments(bis)
 
         assert len(result) >= 1
-        assert result[0].direction == BiDirection.DOWN
-        assert result[0].bi_ids[0] == 1
-        assert result[0].break_bi_id in {3, 6, None}
-        assert result[0].stop_reason in {"feature_sequence_fractal", "reverse_break"}
+        assert result[0].direction == BiDirection.UP
+        assert result[0].bi_ids[0] == 2
+        assert result[0].break_bi_id == 7
+        assert result[0].stop_reason == "reverse_break"
         assert result[0].is_confirmed is True
 
     def test_gap_feature_sequence_waits_for_opposite_sequence_fractal(self):
@@ -203,7 +222,7 @@ class TestIdentifySegments:
 
         assert len(result) >= 1
         assert result[0].direction == BiDirection.UP
-        assert result[0].bi_ids[:3] == [2, 3, 4]
+        assert result[0].bi_ids[:3] == [0, 1, 2]
         assert result[0].stop_reason in {"feature_sequence_gap_fractal", "reverse_break"}
         assert result[0].is_confirmed is True
 
@@ -290,9 +309,10 @@ class TestIdentifySegments:
         assert result[0].break_bi_id == 8
         assert result[0].is_confirmed is True
         assert result[1].direction == BiDirection.DOWN
-        assert result[1].bi_ids == [8, 9, 10, 11, 12]
-        assert result[1].stop_reason == "exhausted_confirmed_bis"
-        assert result[1].is_confirmed is False
+        assert result[1].bi_ids == [8, 9, 10]
+        assert result[1].break_bi_id == 11
+        assert result[1].stop_reason == "reverse_break"
+        assert result[1].is_confirmed is True
 
     def test_extend_unconfirmed_segment_by_rising_pair(self):
         bis = [

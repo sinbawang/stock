@@ -116,9 +116,11 @@ def test_save_structure_charts_passes_bootstrap_options_to_segments(monkeypatch,
         title="demo",
         bootstrap_mode="skip_left_edge",
         bootstrap_skip_confirmed_bis=3,
+        strict_segment_rules=False,
     )
 
     assert seen["kwargs"] == {
         "bootstrap_mode": "skip_left_edge",
         "bootstrap_skip_confirmed_bis": 3,
+        "strict_segment_rules": False,
     }

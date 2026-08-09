@@ -10,8 +10,11 @@ from .normalize import normalize_bars
 from .fractal import identify_fractals, filter_consecutive_fractals
 from .bi import identify_bis
 from .segment import (
+    DEFAULT_SEGMENT_BOOTSTRAP_MODE,
+    DEFAULT_STRICT_SEGMENT_RULES,
     SEGMENT_BOOTSTRAP_AUTO,
     SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
+    SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
     SEGMENT_BOOTSTRAP_SKIP_LEFT_EDGE,
     identify_segments,
 )
@@ -28,12 +31,17 @@ def analyze(
     filepath: str = typer.Argument(..., help="CSV 文件路径"),
     output_dir: Optional[str] = typer.Option(None, help="输出目录"),
     bootstrap_mode: str = typer.Option(
-        SEGMENT_BOOTSTRAP_AUTO,
-        help="线段起点锚定模式，默认 auto；可选 first_valid_seed 或 skip_left_edge",
+        DEFAULT_SEGMENT_BOOTSTRAP_MODE,
+        help="线段起点锚定模式，默认 prefer_earlier_start；可选 auto / first_valid_seed / skip_left_edge",
     ),
     bootstrap_skip_confirmed_bis: int = typer.Option(
         0,
         help="skip_left_edge 模式下，先跳过左侧多少根已确认笔",
+    ),
+    strict_segment_rules: bool = typer.Option(
+        DEFAULT_STRICT_SEGMENT_RULES,
+        "--strict-segment-rules/--no-strict-segment-rules",
+        help="是否启用严格线段规则（前三笔同向推进 + 合并同向相邻线段）",
     ),
 ):
     """
@@ -78,6 +86,7 @@ def analyze(
         bis,
         bootstrap_mode=bootstrap_mode,
         bootstrap_skip_confirmed_bis=bootstrap_skip_confirmed_bis,
+        strict_segment_rules=strict_segment_rules,
     )
     typer.echo(f"识别 {len(segments)} 线段")
 

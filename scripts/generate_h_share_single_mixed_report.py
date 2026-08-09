@@ -318,8 +318,9 @@ def _write_lower_precision_report(
             png_path=layout.chart_png,
             jpg_path=layout.chart_jpg,
             title=f"{symbol} {name} {LOWER_PRECISION_TIMEFRAME}",
-            bootstrap_mode="auto",
+            bootstrap_mode="prefer_earlier_start",
             bootstrap_skip_confirmed_bis=0,
+            strict_segment_rules=True,
         )
 
     analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points).replace("60M", LOWER_PRECISION_LABEL)
@@ -467,8 +468,9 @@ def _save_technical_report(
             png_path=paths["png"],
             jpg_path=paths["jpg"],
             title=f"{symbol} {name} {PRIMARY_TECHNICAL_TIMEFRAME}",
-            bootstrap_mode="auto",
+            bootstrap_mode="prefer_earlier_start",
             bootstrap_skip_confirmed_bis=0,
+            strict_segment_rules=True,
         )
 
     analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points)

@@ -65,15 +65,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-profile", default=None, choices=available_a_share_source_profiles(), help="A股分钟线数据源配置；默认读取 CHANLUN_SOURCE_PROFILE 或 mainland")
     parser.add_argument(
         "--bootstrap-mode",
-        default="auto",
-        choices=["auto", "first_valid_seed", "skip_left_edge"],
-        help="线段起点锚定模式，默认 auto；可选 first_valid_seed 或 skip_left_edge",
+        default="prefer_earlier_start",
+        choices=["auto", "prefer_earlier_start", "first_valid_seed", "skip_left_edge"],
+        help="线段起点锚定模式，默认 prefer_earlier_start；可选 auto / first_valid_seed / skip_left_edge",
     )
     parser.add_argument(
         "--bootstrap-skip-confirmed-bis",
         type=int,
         default=0,
         help="skip_left_edge 模式下，先跳过左侧多少根已确认笔",
+    )
+    parser.add_argument(
+        "--strict-segment-rules",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="是否启用严格线段规则（前三笔同向推进 + 合并同向相邻线段）",
     )
     parser.add_argument("--render-only", action="store_true", help="保留兼容参数；当前始终只抓取、分析、出图")
     return parser.parse_args()
@@ -363,6 +369,7 @@ def main() -> None:
         bis,
         bootstrap_mode=args.bootstrap_mode,
         bootstrap_skip_confirmed_bis=args.bootstrap_skip_confirmed_bis,
+        strict_segment_rules=args.strict_segment_rules,
     )
     confirmed_bis = [bi for bi in bis if bi.is_confirmed]
     zhongshus = identify_zhongshu(confirmed_bis)
@@ -393,6 +400,7 @@ def main() -> None:
         title=f"{normalized_symbol} {args.name} 60m",
         bootstrap_mode=args.bootstrap_mode,
         bootstrap_skip_confirmed_bis=args.bootstrap_skip_confirmed_bis,
+        strict_segment_rules=args.strict_segment_rules,
     )
     analysis_text = analyze_current_state(args.name, raw_bars, bis, zhongshus, macd_points)
     signals = analyze_chanlun_signals(raw_bars, bis, zhongshus, macd_points)

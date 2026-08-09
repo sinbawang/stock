@@ -8,7 +8,11 @@ from matplotlib import font_manager
 from .analysis import build_structure_state
 from .fractal import Fractal
 from .models import Bar, Bi, NormalizedBar, Zhongshu
-from .segment import identify_segments
+from .segment import (
+    DEFAULT_SEGMENT_BOOTSTRAP_MODE,
+    DEFAULT_STRICT_SEGMENT_RULES,
+    identify_segments,
+)
 from .visualization import Plotter
 
 
@@ -71,8 +75,9 @@ def save_structure_charts(
     png_path: Path,
     jpg_path: Path,
     title: str,
-    bootstrap_mode: str = "auto",
+    bootstrap_mode: str = DEFAULT_SEGMENT_BOOTSTRAP_MODE,
     bootstrap_skip_confirmed_bis: int = 0,
+    strict_segment_rules: bool = DEFAULT_STRICT_SEGMENT_RULES,
 ) -> None:
     """Render the unified structure chart to svg/png/jpg artifacts."""
     _configure_matplotlib_cjk_font()
@@ -81,6 +86,7 @@ def save_structure_charts(
         bis,
         bootstrap_mode=bootstrap_mode,
         bootstrap_skip_confirmed_bis=bootstrap_skip_confirmed_bis,
+        strict_segment_rules=strict_segment_rules,
     )
     structure_state = build_structure_state(bars, zhongshus)
     confirmed_fractal_ids = {

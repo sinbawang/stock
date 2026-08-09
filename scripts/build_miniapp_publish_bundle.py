@@ -44,6 +44,11 @@ TIMEFRAME_LABELS = {
     "1m": "1M",
 }
 
+DEFAULT_SEGMENT_BOOTSTRAP_MODE = "prefer_earlier_start"
+DEFAULT_STRICT_SEGMENT_RULES = True
+ACTIVE_SEGMENT_BOOTSTRAP_MODE = DEFAULT_SEGMENT_BOOTSTRAP_MODE
+ACTIVE_STRICT_SEGMENT_RULES = DEFAULT_STRICT_SEGMENT_RULES
+
 
 @dataclass(frozen=True)
 class Holding:
@@ -93,6 +98,18 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         default=None,
         help="Optional failed symbols from regeneration stage used for missing-file diagnosis.",
+    )
+    parser.add_argument(
+        "--segment-bootstrap-mode",
+        default=DEFAULT_SEGMENT_BOOTSTRAP_MODE,
+        choices=("auto", "prefer_earlier_start", "first_valid_seed", "skip_left_edge"),
+        help="Segment bootstrap mode used when deriving publish chart segments from bis records.",
+    )
+    parser.add_argument(
+        "--strict-segment-rules",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_STRICT_SEGMENT_RULES,
+        help="Enable strict segment rules when deriving publish chart segments.",
     )
     return parser.parse_args()
 
@@ -943,12 +960,22 @@ def _normalize_segment_record(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def build_segment_records(bis_records: list[dict[str, Any]], segment_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    if segment_records:
+    should_recompute = ACTIVE_SEGMENT_BOOTSTRAP_MODE != DEFAULT_SEGMENT_BOOTSTRAP_MODE or ACTIVE_STRICT_SEGMENT_RULES
+
+    if segment_records and not should_recompute:
         return [_normalize_segment_record(record) for record in segment_records]
     bis = build_bis_from_records(bis_records)
     if not bis:
         return []
-    return [serialize_segment_record(segment) for segment in identify_segments(bis, bootstrap_mode="auto", bootstrap_skip_confirmed_bis=0)]
+    return [
+        serialize_segment_record(segment)
+        for segment in identify_segments(
+            bis,
+            bootstrap_mode=ACTIVE_SEGMENT_BOOTSTRAP_MODE,
+            bootstrap_skip_confirmed_bis=0,
+            strict_segment_rules=ACTIVE_STRICT_SEGMENT_RULES,
+        )
+    ]
 
 
 def build_segment_stop_reason_annotations(segment_records: list[dict[str, Any]], timeframe: str) -> dict[str, Any]:
@@ -1073,7 +1100,12 @@ def build_segment_tail_interpretations_payload(
     if not bis:
         return build_segment_tail_interpretations_fallback(tech_payload)
 
-    segments = identify_segments(bis, bootstrap_mode="auto", bootstrap_skip_confirmed_bis=0)
+    segments = identify_segments(
+        bis,
+        bootstrap_mode=ACTIVE_SEGMENT_BOOTSTRAP_MODE,
+        bootstrap_skip_confirmed_bis=0,
+        strict_segment_rules=ACTIVE_STRICT_SEGMENT_RULES,
+    )
     interpretations = build_segment_tail_interpretations(bis, segments)
     rendered = [serialize_segment_tail_interpretation(interpretation) for interpretation in interpretations]
     if rendered:
@@ -1514,7 +1546,12 @@ def generate_bundle(
 
 
 def main() -> None:
+    global ACTIVE_SEGMENT_BOOTSTRAP_MODE
+    global ACTIVE_STRICT_SEGMENT_RULES
+
     args = parse_args()
+    ACTIVE_SEGMENT_BOOTSTRAP_MODE = str(args.segment_bootstrap_mode)
+    ACTIVE_STRICT_SEGMENT_RULES = bool(args.strict_segment_rules)
     outputs = generate_bundle(
         holdings_path=Path(args.holdings_file),
         reports_root=Path(args.reports_root),

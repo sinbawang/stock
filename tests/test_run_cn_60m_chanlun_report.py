@@ -23,6 +23,7 @@ def test_parse_args_accepts_bootstrap_options(monkeypatch) -> None:
             "skip_left_edge",
             "--bootstrap-skip-confirmed-bis",
             "3",
+            "--no-strict-segment-rules",
         ],
     )
 
@@ -30,3 +31,4 @@ def test_parse_args_accepts_bootstrap_options(monkeypatch) -> None:
 
     assert args.bootstrap_mode == "skip_left_edge"
     assert args.bootstrap_skip_confirmed_bis == 3
+    assert args.strict_segment_rules is False

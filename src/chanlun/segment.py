@@ -22,6 +22,9 @@ STOP_REASON_LABELS = {
 SEGMENT_BOOTSTRAP_FIRST_VALID_SEED = "first_valid_seed"
 SEGMENT_BOOTSTRAP_SKIP_LEFT_EDGE = "skip_left_edge"
 SEGMENT_BOOTSTRAP_AUTO = "auto"
+SEGMENT_BOOTSTRAP_PREFER_EARLIER_START = "prefer_earlier_start"
+DEFAULT_SEGMENT_BOOTSTRAP_MODE = SEGMENT_BOOTSTRAP_PREFER_EARLIER_START
+DEFAULT_STRICT_SEGMENT_RULES = True
 
 
 @dataclass
@@ -145,6 +148,7 @@ def _validate_bootstrap_config(
 ) -> None:
     supported_modes = {
         SEGMENT_BOOTSTRAP_AUTO,
+        SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
         SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
         SEGMENT_BOOTSTRAP_SKIP_LEFT_EDGE,
     }
@@ -168,18 +172,23 @@ def _resolve_bootstrap_start_index(
         max_start = max(0, total_bis - 3)
         return min(max(0, int(bootstrap_skip_confirmed_bis)), max_start)
 
-    if bootstrap_mode != SEGMENT_BOOTSTRAP_AUTO:
+    if bootstrap_mode == SEGMENT_BOOTSTRAP_FIRST_VALID_SEED:
+        return 0
+
+    if bootstrap_mode not in {SEGMENT_BOOTSTRAP_AUTO, SEGMENT_BOOTSTRAP_PREFER_EARLIER_START}:
         return 0
 
     max_start = max(0, total_bis - 3)
     best_start: Optional[int] = None
     best_score: Optional[int] = None
+    scored_candidates: List[Tuple[int, int]] = []
 
     for candidate_idx in range(max_start + 1):
         candidate_result = _extend_segment(bis, candidate_idx)
         candidate_score = _score_bootstrap_candidate(bis, candidate_idx, candidate_result)
         if candidate_score is None:
             continue
+        scored_candidates.append((candidate_idx, candidate_score))
         if best_score is None or candidate_score > best_score or (
             candidate_score == best_score and best_start is not None and candidate_idx < best_start
         ):
@@ -188,6 +197,12 @@ def _resolve_bootstrap_start_index(
 
     if best_start is None:
         return 0
+
+    if bootstrap_mode == SEGMENT_BOOTSTRAP_PREFER_EARLIER_START and best_score is not None:
+        score_floor = best_score - 20
+        eligible = [idx for idx, score in scored_candidates if score >= score_floor]
+        if eligible:
+            return min(eligible)
 
     return best_start
 
@@ -208,8 +223,22 @@ def _has_common_overlap(window: List[Bi]) -> bool:
     return overlap_low <= overlap_high
 
 
-def _forms_initial_segment(window: List[Bi]) -> bool:
-    return len(window) == 3 and _is_alternating(window) and _has_common_overlap(window)
+def _third_bi_advances_first(window: List[Bi]) -> bool:
+    if len(window) != 3:
+        return False
+
+    first, _, third = window
+    if first.direction == BiDirection.UP:
+        return third.high > first.high
+    return third.low < first.low
+
+
+def _forms_initial_segment(window: List[Bi], *, strict_segment_rules: bool = False) -> bool:
+    if len(window) != 3 or not _is_alternating(window) or not _has_common_overlap(window):
+        return False
+    if strict_segment_rules and not _third_bi_advances_first(window):
+        return False
+    return True
 
 
 def _feature_sequence_has_gap(left_bi: Bi, right_bi: Bi) -> bool:
@@ -600,13 +629,49 @@ def _build_segment(
     )
 
 
+def _merge_segments_same_direction(
+    previous: Segment,
+    current: Segment,
+    bis: List[Bi],
+) -> Segment:
+    start_idx = previous.bi_ids[0]
+    end_idx = current.bi_ids[-1]
+    window = bis[start_idx:end_idx + 1]
+    start_bi = window[0]
+    end_bi = window[-1]
+    merged_ids = previous.bi_ids + [bi_id for bi_id in current.bi_ids if bi_id not in previous.bi_ids]
+    start_price = start_bi.low if start_bi.direction == BiDirection.UP else start_bi.high
+    end_price = end_bi.high if end_bi.direction == BiDirection.UP else end_bi.low
+    return Segment(
+        segment_id=previous.segment_id,
+        direction=previous.direction,
+        start_bi_id=previous.start_bi_id,
+        end_bi_id=current.end_bi_id,
+        start_ts=previous.start_ts,
+        end_ts=current.end_ts,
+        start_price=start_price,
+        end_price=end_price,
+        high=max(bi.high for bi in window),
+        low=min(bi.low for bi in window),
+        norm_bar_range=(previous.norm_bar_range[0], current.norm_bar_range[1]),
+        bi_ids=merged_ids,
+        is_confirmed=current.is_confirmed,
+        last_same_extreme=current.last_same_extreme,
+        last_reverse_extreme=current.last_reverse_extreme,
+        break_bi_id=current.break_bi_id,
+        stop_reason=current.stop_reason,
+    )
+
+
 def _find_later_initial_segment_window(
     bis: List[Bi],
     start_idx: int,
+    *,
+    strict_segment_rules: bool = False,
 ) -> Optional[Tuple[int, int]]:
     for candidate_start_idx in range(start_idx + 1, len(bis) - 2):
         candidate_window = bis[candidate_start_idx:candidate_start_idx + 3]
-        if _forms_initial_segment(candidate_window):
+        if _forms_initial_segment(candidate_window, strict_segment_rules=strict_segment_rules):
             return candidate_start_idx, candidate_start_idx + 2
     return None
 
@@ -616,6 +681,7 @@ def _extend_segment(
     start_idx: int,
     *,
     anchor_idx: Optional[int] = None,
+    strict_segment_rules: bool = False,
 ) -> Optional[Tuple[int, bool, Optional[int], str, Optional[int]]]:
     if start_idx + 2 >= len(bis):
         return None
@@ -624,7 +690,7 @@ def _extend_segment(
     break_idx: Optional[int] = None
     is_confirmed = False
 
-    if _forms_initial_segment(initial):
+    if _forms_initial_segment(initial, strict_segment_rules=strict_segment_rules):
         seed_start_idx = start_idx
         seed_end_idx = start_idx + 2
         direction = initial[0].direction
@@ -633,7 +699,11 @@ def _extend_segment(
         if anchor_idx is None or anchor_idx != start_idx:
             return None
 
-        fallback_seed = _find_later_initial_segment_window(bis, start_idx)
+        fallback_seed = _find_later_initial_segment_window(
+            bis,
+            start_idx,
+            strict_segment_rules=strict_segment_rules,
+        )
         if fallback_seed is None:
             return None
 
@@ -744,6 +814,7 @@ def _extend_segment(
                         else:
                             last_reverse_extreme = reverse_bi.high
                             last_same_extreme = same_dir_bi.low
+                        end_idx = cursor + 1
                         cursor += 2
                         continue
                     break_bi_id = same_dir_bi.bi_id
@@ -830,6 +901,7 @@ def _extend_segment(
                                     break_bi_id = reverse_bi.bi_id
                                     stop_reason = "reverse_break"
                                     break
+                                end_idx = cursor + 1
                                 cursor += 2
                                 continue
                     if (
@@ -898,6 +970,7 @@ def _extend_segment(
                                     break_bi_id = reverse_bi.bi_id
                                     stop_reason = "reverse_break"
                                     break
+                                end_idx = cursor + 1
                                 cursor += 2
                                 continue
                     weak_down_rebound = (
@@ -914,8 +987,15 @@ def _extend_segment(
                             )
                         )
                     ):
-                        end_idx = cursor + 1
-                        break_idx = cursor + 2
+                        if strict_segment_rules and cursor - 1 >= start_idx:
+                            # Strict mode aligns down-branch break anchoring with up-branch behavior:
+                            # current segment stops at the last same-direction bi, and the next segment
+                            # starts from the first reverse bi.
+                            end_idx = cursor - 1
+                            break_idx = cursor
+                        else:
+                            end_idx = cursor + 1
+                            break_idx = cursor + 2
                         is_confirmed = True
                         break_bi_id = next_reverse_bi.bi_id
                         stop_reason = "reverse_break"
@@ -939,8 +1019,9 @@ def _extend_segment(
 def identify_segments(
     bis: List[Bi],
     *,
-    bootstrap_mode: str = SEGMENT_BOOTSTRAP_AUTO,
+    bootstrap_mode: str = DEFAULT_SEGMENT_BOOTSTRAP_MODE,
     bootstrap_skip_confirmed_bis: int = 0,
+    strict_segment_rules: bool = DEFAULT_STRICT_SEGMENT_RULES,
 ) -> List[Segment]:
     """
     识别线段。
@@ -953,9 +1034,12 @@ def identify_segments(
     - 若尾部尚未被有效反向笔破坏，则保留一个未确认尾段
 
     可选锚定参数：
-    - bootstrap_mode=auto（默认）：扫描候选起点并选择最连贯的首个线段种子
+    - bootstrap_mode=prefer_earlier_start（默认）：在接近最优质量的候选里优先更靠左起点
+    - bootstrap_mode=auto：扫描候选起点并选择最连贯的首个线段种子
+    - bootstrap_mode=prefer_earlier_start：在接近 auto 最优质量的候选中优先更靠左起点
     - bootstrap_mode=first_valid_seed：从最左侧开始寻找首个合法三笔种子
     - bootstrap_mode=skip_left_edge：先跳过左侧若干已确认笔，再寻找首个合法三笔种子
+    - strict_segment_rules=True（默认）：额外要求“前三笔同向推进”，并合并同向相邻线段
     """
     _validate_bootstrap_config(bootstrap_mode, bootstrap_skip_confirmed_bis)
     bis = _confirmed_bis(bis)
@@ -973,7 +1057,12 @@ def identify_segments(
 
     anchor_idx: Optional[int] = None
     while index <= len(bis) - 3:
-        result = _extend_segment(bis, index, anchor_idx=anchor_idx)
+        result = _extend_segment(
+            bis,
+            index,
+            anchor_idx=anchor_idx,
+            strict_segment_rules=strict_segment_rules,
+        )
         if result is None:
             index += 1
             anchor_idx = None
@@ -981,20 +1070,23 @@ def identify_segments(
 
         end_idx, is_confirmed, break_idx, stop_reason, break_bi_id = result
         last_same_extreme, last_reverse_extreme = _segment_extremes(bis, index, end_idx)
-        segments.append(
-            _build_segment(
-                segment_id,
-                bis,
-                index,
-                end_idx,
-                is_confirmed,
-                last_same_extreme=last_same_extreme,
-                last_reverse_extreme=last_reverse_extreme,
-                break_bi_id=break_bi_id,
-                stop_reason=stop_reason,
-            )
+        candidate = _build_segment(
+            segment_id,
+            bis,
+            index,
+            end_idx,
+            is_confirmed,
+            last_same_extreme=last_same_extreme,
+            last_reverse_extreme=last_reverse_extreme,
+            break_bi_id=break_bi_id,
+            stop_reason=stop_reason,
         )
-        segment_id += 1
+
+        if strict_segment_rules and segments and segments[-1].direction == candidate.direction:
+            segments[-1] = _merge_segments_same_direction(segments[-1], candidate, bis)
+        else:
+            segments.append(candidate)
+            segment_id += 1
 
         if not is_confirmed:
             break

@@ -27,9 +27,11 @@ def test_analyze_passes_bootstrap_options_to_segment_identification(monkeypatch,
         output_dir=None,
         bootstrap_mode="skip_left_edge",
         bootstrap_skip_confirmed_bis=3,
+        strict_segment_rules=False,
     )
 
     assert seen["kwargs"] == {
         "bootstrap_mode": "skip_left_edge",
         "bootstrap_skip_confirmed_bis": 3,
+        "strict_segment_rules": False,
     }
