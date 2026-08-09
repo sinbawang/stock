@@ -1081,6 +1081,44 @@ def build_segment_tail_interpretations_payload(
     return build_segment_tail_interpretations_fallback(tech_payload)
 
 
+def _enrich_bi_records_with_fractals(
+    bis_records: list[dict[str, Any]],
+    fractal_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not bis_records:
+        return []
+
+    fractal_by_id: dict[int, dict[str, Any]] = {}
+    for record in fractal_records:
+        try:
+            fractal_id = int(record.get("fx_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        fractal_by_id[fractal_id] = record
+
+    enriched: list[dict[str, Any]] = []
+    for record in bis_records:
+        normalized = dict(record)
+        try:
+            start_fx_id = int(record.get("start_fx_id") or 0)
+            end_fx_id = int(record.get("end_fx_id") or 0)
+        except (TypeError, ValueError):
+            enriched.append(normalized)
+            continue
+
+        start_fx = fractal_by_id.get(start_fx_id)
+        end_fx = fractal_by_id.get(end_fx_id)
+        if start_fx is not None:
+            normalized["start_price"] = start_fx.get("price")
+            normalized["start_fx_type"] = start_fx.get("fx_type")
+        if end_fx is not None:
+            normalized["end_price"] = end_fx.get("price")
+            normalized["end_fx_type"] = end_fx.get("fx_type")
+        enriched.append(normalized)
+
+    return enriched
+
+
 def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | None:
     source_value = chart_spec.get("data_source_path")
     if not source_value:
@@ -1094,7 +1132,11 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
     timeframe_dir = bars_csv.parent.parent
     tech_payload = read_json_if_exists(timeframe_dir / "tech.json")
     pending_reverse_mode = safe_text(tech_payload.get("pending_reverse_mode")) or "effective_only"
-    bis_records = read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_bis"))
+    fractal_records = read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_fractals"))
+    bis_records = _enrich_bi_records_with_fractals(
+        read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_bis")),
+        fractal_records,
+    )
     segment_records = build_segment_records(
         bis_records,
         read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_segments")),
@@ -1110,7 +1152,7 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
         "bars": read_csv_records(bars_csv),
         "normalized_bars": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized")),
         "macd": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_macd")),
-        "fractals": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_fractals")),
+        "fractals": fractal_records,
         "confirmed_fractals": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_confirmed_fractals")),
         "bis": bis_records,
         "segments": segment_records,

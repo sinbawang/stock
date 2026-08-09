@@ -544,3 +544,45 @@ def test_build_chart_data_payload_includes_segment_stop_reason_annotations(tmp_p
     assert annotations["latest"]["segment_id"] == 0
     assert annotations["latest"]["stop_reason_label"] == "出现同向笔，但没有继续创新高或新低"
     assert annotations["latest"]["text"].startswith("30M S0 停驻原因：")
+
+
+def test_build_chart_data_payload_enriches_bis_with_endpoint_prices(tmp_path: Path) -> None:
+    analyze_dir = tmp_path / "1m" / "analyze"
+    analyze_dir.mkdir(parents=True, exist_ok=True)
+
+    bars_csv = analyze_dir / "01024_1m_20260806_to_20260806.csv"
+    bars_csv.write_text(
+        "ts,open,high,low,close,volume\n"
+        "2026-08-06 11:13,44.60,44.76,44.58,44.62,100\n",
+        encoding="utf-8",
+    )
+
+    (analyze_dir / "01024_1m_20260806_to_20260806_normalized_fractals.csv").write_text(
+        "fx_id,fx_type,ts,price,center_bar_idx,high,low,is_confirmed,status,note\n"
+        "148,bottom,2026-08-06 11:13,44.58,275,44.76,44.58,True,confirmed,confirmed\n"
+        "151,top,2026-08-06 11:21,44.672,280,44.672,44.62,True,confirmed,confirmed\n",
+        encoding="utf-8",
+    )
+    (analyze_dir / "01024_1m_20260806_to_20260806_normalized_bis.csv").write_text(
+        "bi_id,direction,start_fx_id,end_fx_id,start_ts,end_ts,high,low,start_norm_idx,end_norm_idx,is_confirmed,status,note\n"
+        "36,up,148,151,2026-08-06 11:13,2026-08-06 11:21,44.76,44.58,275,280,True,confirmed,auto_generated\n",
+        encoding="utf-8",
+    )
+    (analyze_dir / "01024_1m_20260806_to_20260806_normalized_segments.csv").write_text(
+        "segment_id,direction,start_bi_id,end_bi_id,start_ts,end_ts,start_price,end_price,high,low,start_norm_idx,end_norm_idx,bi_ids,last_same_extreme,last_reverse_extreme,break_bi_id,stop_reason,is_confirmed,status,note\n",
+        encoding="utf-8",
+    )
+
+    payload = module.build_chart_data_payload(
+        {
+            "timeframe": "1m",
+            "label": "1M 结构图",
+            "data_source_path": str(bars_csv),
+        }
+    )
+
+    assert payload is not None
+    assert payload["bis"][0]["start_price"] == 44.58
+    assert payload["bis"][0]["end_price"] == 44.672
+    assert payload["bis"][0]["start_fx_type"] == "bottom"
+    assert payload["bis"][0]["end_fx_type"] == "top"
