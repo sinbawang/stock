@@ -498,6 +498,180 @@
 			"type": "shell",
 			"command": "del /q src\\chanlun\\data\\__pycache__\\*.pyc; del /q tests\\__pycache__\\*.pyc",
 			"group": "test"
+		},
+		{
+			"label": "compare-01024-segment-modes",
+			"type": "shell",
+			"command": "python build/compare_01024_segment_bootstrap_modes.py",
+			"group": "test"
+		},
+		{
+			"label": "inspect-01024-prefer-segment-chain",
+			"type": "shell",
+			"command": "python -c \"import json,sys; from pathlib import Path; sys.path.insert(0,'src'); from chanlun.models import Bi,BiDirection; from chanlun.segment import identify_segments; d=json.loads(Path('build/miniapp-publish/latest/stocks/01024/charts/1m.json').read_text(encoding='utf-8')); bis=[]\nfor r in d['bis']:\n direction=BiDirection.UP if r['direction']=='up' else BiDirection.DOWN\n bis.append(Bi(bi_id=int(r['bi_id']),direction=direction,start_fx_id=int(r['start_fx_id']),end_fx_id=int(r['end_fx_id']),start_ts=r['start_ts'],end_ts=r['end_ts'],high=float(r['high']),low=float(r['low']),norm_bar_range=(int(r['start_norm_idx']),int(r['end_norm_idx'])),is_confirmed=bool(r['is_confirmed'])))\nsegs=identify_segments(bis,bootstrap_mode='prefer_earlier_start',bootstrap_skip_confirmed_bis=0)\nprint('segments',len(segs))\nfor s in segs:\n print(s.segment_id,s.direction.value,s.start_bi_id,s.end_bi_id,s.break_bi_id,s.start_ts,s.end_ts,s.stop_reason,s.is_confirmed)\"",
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-strict-mode",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment.py tests/test_segment_bootstrap_anchor.py tests/test_run_cn_60m_chanlun_report.py",
+			"group": "test"
+		},
+		{
+			"label": "compare-01024-segment-modes-strict",
+			"type": "shell",
+			"command": "python build/compare_01024_segment_bootstrap_modes.py",
+			"group": "test"
+		},
+		{
+			"label": "compare-01024-segment-modes-custom",
+			"type": "shell",
+			"command": "python build/compare_01024_segment_bootstrap_modes.py",
+			"group": "test"
+		},
+		{
+			"label": "rebuild-miniapp-publish-latest",
+			"type": "shell",
+			"command": "python scripts/build_miniapp_publish_bundle.py --latest-only",
+			"group": "test"
+		},
+		{
+			"label": "upload-01024-1m-json",
+			"type": "shell",
+			"command": "tcb.cmd --env-id cloudbase-d9gplq92zc1d88ee6 storage upload build/miniapp-publish/latest/stocks/01024/charts/1m.json miniapp-publish/latest/stocks/01024/charts/1m.json",
+			"group": "test"
+		},
+		{
+			"label": "download-and-verify-01024-1m",
+			"type": "shell",
+			"command": "tcb.cmd --env-id cloudbase-d9gplq92zc1d88ee6 storage download miniapp-publish/latest/stocks/01024/charts/1m.json build/cloud-compare/01024-1m-cloud.json; python build/verify_01024_cloud_chart.py",
+			"group": "test"
+		},
+		{
+			"label": "rebuild-01024-prefer-mode",
+			"type": "shell",
+			"command": "python scripts/build_miniapp_publish_bundle.py --latest-only --segment-bootstrap-mode prefer_earlier_start",
+			"group": "test"
+		},
+		{
+			"label": "upload-01024-1m-json-prefer",
+			"type": "shell",
+			"command": "tcb.cmd --env-id cloudbase-d9gplq92zc1d88ee6 storage upload build/miniapp-publish/latest/stocks/01024/charts/1m.json miniapp-publish/latest/stocks/01024/charts/1m.json",
+			"group": "test"
+		},
+		{
+			"label": "verify-01024-1m-prefer-cloud",
+			"type": "shell",
+			"command": "tcb.cmd --env-id cloudbase-d9gplq92zc1d88ee6 storage download miniapp-publish/latest/stocks/01024/charts/1m.json build/cloud-compare/01024-1m-cloud.json; python -c \"import json,pathlib; d=json.loads(pathlib.Path('build/cloud-compare/01024-1m-cloud.json').read_text(encoding='utf-8')); segs=d.get('segments',[]); print('segment_count',len(segs)); [print(s.get('segment_id'),s.get('direction'),s.get('start_ts'),s.get('end_ts'),s.get('is_confirmed')) for s in segs]\"",
+			"group": "test"
+		},
+		{
+			"label": "verify-01024-1m-prefer-cloud-2",
+			"type": "shell",
+			"command": "tcb.cmd --env-id cloudbase-d9gplq92zc1d88ee6 storage download miniapp-publish/latest/stocks/01024/charts/1m.json build/cloud-compare/01024-1m-cloud.json; python build/print_segments_from_json.py build/cloud-compare/01024-1m-cloud.json",
+			"group": "test"
+		},
+		{
+			"label": "rebuild-01024-prefer-mode-rerun",
+			"type": "shell",
+			"command": "python scripts/build_miniapp_publish_bundle.py --latest-only --segment-bootstrap-mode prefer_earlier_start",
+			"group": "test"
+		},
+		{
+			"label": "show-local-01024-segments-after-prefer",
+			"type": "shell",
+			"command": "python build/print_segments_from_json.py build/miniapp-publish/latest/stocks/01024/charts/1m.json",
+			"group": "test"
+		},
+		{
+			"label": "upload-01024-1m-json-prefer-rerun",
+			"type": "shell",
+			"command": "tcb.cmd --env-id cloudbase-d9gplq92zc1d88ee6 storage upload build/miniapp-publish/latest/stocks/01024/charts/1m.json miniapp-publish/latest/stocks/01024/charts/1m.json",
+			"group": "test"
+		},
+		{
+			"label": "verify-cloud-01024-prefer-rerun",
+			"type": "shell",
+			"command": "tcb.cmd --env-id cloudbase-d9gplq92zc1d88ee6 storage download miniapp-publish/latest/stocks/01024/charts/1m.json build/cloud-compare/01024-1m-cloud.json; python build/print_segments_from_json.py build/cloud-compare/01024-1m-cloud.json",
+			"group": "test"
+		},
+		{
+			"label": "upload-full-bundle-force-prefer",
+			"type": "shell",
+			"command": "python scripts/upload_miniapp_publish_bundle.py --source-dir build/miniapp-publish/latest --cloud-prefix miniapp-publish/latest --env-id cloudbase-d9gplq92zc1d88ee6 --region ap-shanghai --force-upload",
+			"group": "test"
+		},
+		{
+			"label": "verify-cloud-01024-after-full-upload",
+			"type": "shell",
+			"command": "tcb.cmd --env-id cloudbase-d9gplq92zc1d88ee6 storage download miniapp-publish/latest/stocks/01024/charts/1m.json build/cloud-compare/01024-1m-cloud.json; python build/print_segments_from_json.py build/cloud-compare/01024-1m-cloud.json",
+			"group": "test"
+		},
+		{
+			"label": "rebuild-prefer-strict-latest",
+			"type": "shell",
+			"command": "python scripts/build_miniapp_publish_bundle.py --latest-only --segment-bootstrap-mode prefer_earlier_start --strict-segment-rules",
+			"group": "test"
+		},
+		{
+			"label": "upload-full-bundle-prefer-strict",
+			"type": "shell",
+			"command": "python scripts/upload_miniapp_publish_bundle.py --source-dir build/miniapp-publish/latest --cloud-prefix miniapp-publish/latest --env-id cloudbase-d9gplq92zc1d88ee6 --region ap-shanghai --force-upload",
+			"group": "test"
+		},
+		{
+			"label": "verify-cloud-01024-prefer-strict",
+			"type": "shell",
+			"command": "tcb.cmd --env-id cloudbase-d9gplq92zc1d88ee6 storage download miniapp-publish/latest/stocks/01024/charts/1m.json build/cloud-compare/01024-1m-cloud.json; python build/print_segments_from_json.py build/cloud-compare/01024-1m-cloud.json",
+			"group": "test"
+		},
+		{
+			"label": "inspect-01024-tail-bis",
+			"type": "shell",
+			"command": "python build/inspect_01024_tail_bis.py",
+			"group": "test"
+		},
+		{
+			"label": "rebuild-prefer-strict-after-down-branch-fix",
+			"type": "shell",
+			"command": "python scripts/build_miniapp_publish_bundle.py --latest-only --segment-bootstrap-mode prefer_earlier_start --strict-segment-rules",
+			"group": "test"
+		},
+		{
+			"label": "check-local-01024-after-down-branch-fix",
+			"type": "shell",
+			"command": "python build/print_segments_from_json.py build/miniapp-publish/latest/stocks/01024/charts/1m.json",
+			"group": "test"
+		},
+		{
+			"label": "inspect-01024-bis-confirmed-after-fix",
+			"type": "shell",
+			"command": "python build/inspect_01024_tail_bis.py",
+			"group": "test"
+		},
+		{
+			"label": "rebuild-prefer-strict-after-endidx-fix",
+			"type": "shell",
+			"command": "python scripts/build_miniapp_publish_bundle.py --latest-only --segment-bootstrap-mode prefer_earlier_start --strict-segment-rules",
+			"group": "test"
+		},
+		{
+			"label": "check-local-01024-after-endidx-fix",
+			"type": "shell",
+			"command": "python build/print_segments_from_json.py build/miniapp-publish/latest/stocks/01024/charts/1m.json",
+			"group": "test"
+		},
+		{
+			"label": "upload-full-bundle-prefer-strict-final",
+			"type": "shell",
+			"command": "python scripts/upload_miniapp_publish_bundle.py --source-dir build/miniapp-publish/latest --cloud-prefix miniapp-publish/latest --env-id cloudbase-d9gplq92zc1d88ee6 --region ap-shanghai --force-upload",
+			"group": "test"
+		},
+		{
+			"label": "verify-cloud-01024-prefer-strict-final",
+			"type": "shell",
+			"command": "tcb.cmd --env-id cloudbase-d9gplq92zc1d88ee6 storage download miniapp-publish/latest/stocks/01024/charts/1m.json build/cloud-compare/01024-1m-cloud.json; python build/print_segments_from_json.py build/cloud-compare/01024-1m-cloud.json",
+			"group": "test"
 		}
 	]
 }
