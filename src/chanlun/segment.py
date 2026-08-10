@@ -1034,12 +1034,18 @@ def identify_segments(
     - 若尾部尚未被有效反向笔破坏，则保留一个未确认尾段
 
     可选锚定参数：
-    - bootstrap_mode=prefer_earlier_start（默认）：在接近最优质量的候选里优先更靠左起点
-    - bootstrap_mode=auto：扫描候选起点并选择最连贯的首个线段种子
-    - bootstrap_mode=prefer_earlier_start：在接近 auto 最优质量的候选中优先更靠左起点
+        - 默认值 bootstrap_mode=prefer_earlier_start：当前函数默认会枚举候选起点，
+            对每个可行候选试跑首段并按工程启发式打分，再在接近最优的候选里优先更靠左起点
+        - bootstrap_mode=auto：扫描候选起点并直接选择得分最高的首段种子
+        - bootstrap_mode=prefer_earlier_start：在接近 auto 最优质量的候选中优先更靠左起点
     - bootstrap_mode=first_valid_seed：从最左侧开始寻找首个合法三笔种子
     - bootstrap_mode=skip_left_edge：先跳过左侧若干已确认笔，再寻找首个合法三笔种子
     - strict_segment_rules=True（默认）：额外要求“前三笔同向推进”，并合并同向相邻线段
+
+        说明：
+        - 这里记录的是函数级默认值；当前部分调用方会按周期覆写该参数
+        - 例如当前报表/发布链路会对 1m 显式改用 first_valid_seed，以减少首段锚点右移
+        - prefer_earlier_start 的评分逻辑属于工程启发式，不应视为严格理论公式
     """
     _validate_bootstrap_config(bootstrap_mode, bootstrap_skip_confirmed_bis)
     bis = _confirmed_bis(bis)
