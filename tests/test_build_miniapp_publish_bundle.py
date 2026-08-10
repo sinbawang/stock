@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -510,6 +511,25 @@ def test_build_latest_segment_stop_reason_line_from_csv_records(tmp_path: Path) 
 
     assert line.startswith("30M S0 停驻原因：")
     assert "出现同向笔，但没有继续创新高或新低" in line
+
+
+def test_find_latest_chart_bars_csv_prefers_filename_date_range_over_mtime(tmp_path: Path) -> None:
+    timeframe_dir = tmp_path / "1m"
+    analyze_dir = timeframe_dir / "analyze"
+    analyze_dir.mkdir(parents=True, exist_ok=True)
+
+    earlier_range_csv = analyze_dir / "01024_1m_20260803_to_20260805.csv"
+    earlier_range_csv.write_text("ts,open,high,low,close,volume\n", encoding="utf-8")
+    later_range_csv = analyze_dir / "01024_1m_20260804_to_20260807.csv"
+    later_range_csv.write_text("ts,open,high,low,close,volume\n", encoding="utf-8")
+
+    os.utime(earlier_range_csv, (2000000000, 2000000000))
+    os.utime(later_range_csv, (1000000000, 1000000000))
+
+    selected = module.find_latest_chart_bars_csv(timeframe_dir, "1m")
+
+    assert selected is not None
+    assert selected.name == later_range_csv.name
 
 
 def test_build_chart_data_payload_includes_segment_stop_reason_annotations(tmp_path: Path) -> None:

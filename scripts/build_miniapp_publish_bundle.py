@@ -57,6 +57,15 @@ class Holding:
     market: str
 
 
+def _resolve_segment_bootstrap_mode_for_timeframe(timeframe: str) -> str:
+    normalized = safe_text(timeframe)
+    # Keep 1m publish JSON aligned with report-generation anchor policy unless
+    # caller explicitly overrides segment bootstrap mode via CLI.
+    if normalized == "1m" and ACTIVE_SEGMENT_BOOTSTRAP_MODE == DEFAULT_SEGMENT_BOOTSTRAP_MODE:
+        return "first_valid_seed"
+    return ACTIVE_SEGMENT_BOOTSTRAP_MODE
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build a miniapp-native publish bundle from canonical reports.")
     parser.add_argument("--holdings-file", default=str(DEFAULT_HOLDINGS_FILE), help="Combined holdings JSON file")
@@ -845,6 +854,21 @@ def build_chart_specs(
     return charts
 
 
+def _parse_chart_bars_date_range(path: Path) -> tuple[int, int] | None:
+    match = re.search(r"_(\d{8})_to_(\d{8})(?:\.csv|_|$)", path.name)
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def _chart_bars_sort_key(path: Path) -> tuple[int, int, int, float]:
+    parsed_range = _parse_chart_bars_date_range(path)
+    if parsed_range is None:
+        return (0, 0, 0, path.stat().st_mtime)
+    start_date, end_date = parsed_range
+    return (1, end_date, start_date, path.stat().st_mtime)
+
+
 def find_latest_chart_bars_csv(timeframe_dir: Path, timeframe: str) -> Path | None:
     analyze_dir = timeframe_dir / "analyze"
     if not analyze_dir.exists():
@@ -857,7 +881,7 @@ def find_latest_chart_bars_csv(timeframe_dir: Path, timeframe: str) -> Path | No
     ]
     if not candidates:
         return None
-    return max(candidates, key=lambda item: item.stat().st_mtime)
+    return max(candidates, key=_chart_bars_sort_key)
 
 
 def parse_csv_value(value: Any) -> Any:
@@ -959,10 +983,15 @@ def _normalize_segment_record(record: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def build_segment_records(bis_records: list[dict[str, Any]], segment_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_segment_records(
+    bis_records: list[dict[str, Any]],
+    segment_records: list[dict[str, Any]],
+    timeframe: str = PRIMARY_TECHNICAL_TIMEFRAME,
+) -> list[dict[str, Any]]:
+    bootstrap_mode = _resolve_segment_bootstrap_mode_for_timeframe(timeframe)
     should_recompute = ACTIVE_SEGMENT_BOOTSTRAP_MODE != DEFAULT_SEGMENT_BOOTSTRAP_MODE or ACTIVE_STRICT_SEGMENT_RULES
 
-    if segment_records and not should_recompute:
+    if segment_records and (not should_recompute or not bis_records):
         return [_normalize_segment_record(record) for record in segment_records]
     bis = build_bis_from_records(bis_records)
     if not bis:
@@ -971,7 +1000,7 @@ def build_segment_records(bis_records: list[dict[str, Any]], segment_records: li
         serialize_segment_record(segment)
         for segment in identify_segments(
             bis,
-            bootstrap_mode=ACTIVE_SEGMENT_BOOTSTRAP_MODE,
+            bootstrap_mode=bootstrap_mode,
             bootstrap_skip_confirmed_bis=0,
             strict_segment_rules=ACTIVE_STRICT_SEGMENT_RULES,
         )
@@ -1024,6 +1053,7 @@ def build_latest_segment_stop_reason_line(
     segment_records = build_segment_records(
         bis_records,
         read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_segments")),
+        timeframe,
     )
     if not segment_records:
         if not tech_payload:
@@ -1102,7 +1132,7 @@ def build_segment_tail_interpretations_payload(
 
     segments = identify_segments(
         bis,
-        bootstrap_mode=ACTIVE_SEGMENT_BOOTSTRAP_MODE,
+        bootstrap_mode=_resolve_segment_bootstrap_mode_for_timeframe(timeframe),
         bootstrap_skip_confirmed_bis=0,
         strict_segment_rules=ACTIVE_STRICT_SEGMENT_RULES,
     )
@@ -1172,6 +1202,7 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
     segment_records = build_segment_records(
         bis_records,
         read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_segments")),
+        timeframe,
     )
     stock_dir = bars_csv.parent.parent
 

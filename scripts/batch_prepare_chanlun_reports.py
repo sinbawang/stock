@@ -697,7 +697,13 @@ def export_case(
         normalized_bars,
         pending_reverse_mode=pending_reverse_mode,
     )
-    segments = identify_segments(bis)
+    segment_bootstrap_mode = "first_valid_seed" if timeframe == "1m" else "prefer_earlier_start"
+    segments = identify_segments(
+        bis,
+        bootstrap_mode=segment_bootstrap_mode,
+        bootstrap_skip_confirmed_bis=0,
+        strict_segment_rules=True,
+    )
     confirmed_bis = [bi for bi in bis if bi.is_confirmed]
     confirmed_segments = [segment for segment in segments if segment.is_confirmed]
     if zhongshu_level == "segment":
@@ -730,7 +736,7 @@ def export_case(
             png_path=png,
             jpg_path=jpg,
             title=title,
-            bootstrap_mode="prefer_earlier_start",
+            bootstrap_mode=segment_bootstrap_mode,
             bootstrap_skip_confirmed_bis=0,
             strict_segment_rules=True,
         )
