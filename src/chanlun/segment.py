@@ -816,6 +816,11 @@ def _build_segment(
     end_bi = window[-1]
     start_price = start_bi.low if start_bi.direction == BiDirection.UP else start_bi.high
     end_price = end_bi.high if end_bi.direction == BiDirection.UP else end_bi.low
+    theory_candidate_end_bi = max(
+        (bi for bi in window if bi.direction == start_bi.direction),
+        key=(lambda bi: (bi.high, bi.low, -bi.bi_id)) if start_bi.direction == BiDirection.UP else (lambda bi: (-bi.low, -bi.high, bi.bi_id)),
+    )
+    theory_candidate_end_price = theory_candidate_end_bi.high if theory_candidate_end_bi.direction == BiDirection.UP else theory_candidate_end_bi.low
     return Segment(
         segment_id=segment_id,
         direction=start_bi.direction,
@@ -830,6 +835,9 @@ def _build_segment(
         norm_bar_range=(start_bi.norm_bar_range[0], end_bi.norm_bar_range[1]),
         bi_ids=[bi.bi_id for bi in window],
         is_confirmed=is_confirmed,
+        theory_candidate_end_bi_id=theory_candidate_end_bi.bi_id,
+        theory_candidate_end_ts=theory_candidate_end_bi.end_ts,
+        theory_candidate_end_price=theory_candidate_end_price,
         last_same_extreme=last_same_extreme,
         last_reverse_extreme=last_reverse_extreme,
         break_bi_id=break_bi_id,
@@ -850,6 +858,11 @@ def _merge_segments_same_direction(
     merged_ids = previous.bi_ids + [bi_id for bi_id in current.bi_ids if bi_id not in previous.bi_ids]
     start_price = start_bi.low if start_bi.direction == BiDirection.UP else start_bi.high
     end_price = end_bi.high if end_bi.direction == BiDirection.UP else end_bi.low
+    theory_candidate_end_bi = max(
+        (bi for bi in window if bi.direction == start_bi.direction),
+        key=(lambda bi: (bi.high, bi.low, -bi.bi_id)) if start_bi.direction == BiDirection.UP else (lambda bi: (-bi.low, -bi.high, bi.bi_id)),
+    )
+    theory_candidate_end_price = theory_candidate_end_bi.high if theory_candidate_end_bi.direction == BiDirection.UP else theory_candidate_end_bi.low
     return Segment(
         segment_id=previous.segment_id,
         direction=previous.direction,
@@ -864,6 +877,9 @@ def _merge_segments_same_direction(
         norm_bar_range=(previous.norm_bar_range[0], current.norm_bar_range[1]),
         bi_ids=merged_ids,
         is_confirmed=current.is_confirmed,
+        theory_candidate_end_bi_id=theory_candidate_end_bi.bi_id,
+        theory_candidate_end_ts=theory_candidate_end_bi.end_ts,
+        theory_candidate_end_price=theory_candidate_end_price,
         last_same_extreme=current.last_same_extreme,
         last_reverse_extreme=current.last_reverse_extreme,
         break_bi_id=current.break_bi_id,

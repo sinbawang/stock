@@ -485,6 +485,9 @@ def test_build_segment_records_backfills_stop_reason_label_when_missing() -> Non
 
     assert len(records) == 1
     assert records[0]["stop_reason"] == "same_direction_not_extending"
+    assert records[0]["theory_candidate_end_bi_id"] == 3
+    assert records[0]["theory_candidate_end_ts"] == "2024-01-03 14:00"
+    assert records[0]["theory_candidate_end_price"] == 12.5
     assert records[0]["stop_reason_label"] == "出现同向笔，但没有继续创新高或新低"
     assert records[0]["stop_category"] == "pending"
     assert records[0]["is_theory_confirmed_stop"] is False

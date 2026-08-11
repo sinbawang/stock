@@ -121,6 +121,32 @@ class TestIdentifySegments:
         assert theory[0].is_confirmed is False
         assert theory[0].stop_reason not in {"unexpected_same_direction", "same_direction_slot_not_filled", "same_direction_not_extending"}
 
+    def test_theory_mode_keeps_candidate_endpoint_separate_from_pending_tail_extent(self):
+        bis = [
+            _bi(13, BiDirection.UP, 44.06, 43.76),
+            _bi(14, BiDirection.DOWN, 44.06, 43.8),
+            _bi(15, BiDirection.UP, 44.48, 43.8),
+            _bi(16, BiDirection.DOWN, 44.48, 44.3),
+            _bi(17, BiDirection.UP, 45.0, 44.3),
+            _bi(18, BiDirection.DOWN, 45.0, 44.62),
+            _bi(19, BiDirection.UP, 44.84, 44.62),
+            _bi(20, BiDirection.DOWN, 44.84, 44.62),
+            _bi(21, BiDirection.UP, 44.74, 44.62),
+        ]
+
+        theory = identify_segments(
+            bis,
+            termination_mode="theory",
+            bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
+            strict_segment_rules=False,
+        )
+
+        assert len(theory) == 1
+        assert theory[0].is_confirmed is False
+        assert theory[0].end_bi_id == 19
+        assert theory[0].theory_candidate_end_bi_id == 17
+        assert theory[0].theory_candidate_end_price == 45.0
+
     def test_theory_mode_ignores_practical_strict_seed_rule(self):
         bis = [
             _bi(0, BiDirection.UP, 120, 100),

@@ -966,10 +966,13 @@ def serialize_segment_record(segment: Any) -> dict[str, Any]:
         "direction": segment.direction.value,
         "start_bi_id": segment.start_bi_id,
         "end_bi_id": segment.end_bi_id,
+        "theory_candidate_end_bi_id": segment.theory_candidate_end_bi_id,
         "start_ts": segment.start_ts.strftime("%Y-%m-%d %H:%M"),
         "end_ts": segment.end_ts.strftime("%Y-%m-%d %H:%M"),
+        "theory_candidate_end_ts": segment.theory_candidate_end_ts.strftime("%Y-%m-%d %H:%M") if segment.theory_candidate_end_ts else None,
         "start_price": segment.start_price,
         "end_price": segment.end_price,
+        "theory_candidate_end_price": segment.theory_candidate_end_price,
         "high": segment.high,
         "low": segment.low,
         "start_norm_idx": segment.norm_bar_range[0],
@@ -994,6 +997,12 @@ def serialize_segment_record(segment: Any) -> dict[str, Any]:
 
 def _normalize_segment_record(record: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(record)
+    if normalized.get("theory_candidate_end_bi_id") is None:
+        normalized["theory_candidate_end_bi_id"] = normalized.get("end_bi_id")
+    if normalized.get("theory_candidate_end_ts") is None:
+        normalized["theory_candidate_end_ts"] = normalized.get("end_ts")
+    if normalized.get("theory_candidate_end_price") is None:
+        normalized["theory_candidate_end_price"] = normalized.get("end_price")
     stop_reason = safe_text(normalized.get("stop_reason"))
     if not safe_text(normalized.get("stop_reason_label")):
         normalized["stop_reason_label"] = describe_stop_reason(stop_reason)

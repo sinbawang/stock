@@ -151,6 +151,9 @@ class Segment:
     norm_bar_range: tuple
     bi_ids: List[int] = field(default_factory=list)
     is_confirmed: bool = False
+    theory_candidate_end_bi_id: Optional[int] = None
+    theory_candidate_end_ts: Optional[datetime] = None
+    theory_candidate_end_price: Optional[float] = None
     last_same_extreme: Optional[float] = None
     last_reverse_extreme: Optional[float] = None
     break_bi_id: Optional[int] = None
