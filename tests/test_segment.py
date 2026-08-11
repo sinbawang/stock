@@ -21,6 +21,7 @@ from chanlun.visualization import Plotter
 def identify_segments(bis, **kwargs):
     kwargs.setdefault("bootstrap_mode", SEGMENT_BOOTSTRAP_AUTO)
     kwargs.setdefault("strict_segment_rules", False)
+    kwargs.setdefault("termination_mode", "practical")
     return _identify_segments(bis, **kwargs)
 
 

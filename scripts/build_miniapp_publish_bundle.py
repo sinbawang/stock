@@ -1234,7 +1234,8 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
     timeframe = safe_text(chart_spec.get("timeframe"))
     timeframe_dir = bars_csv.parent.parent
     tech_payload = read_json_if_exists(timeframe_dir / "tech.json")
-    pending_reverse_mode = safe_text(tech_payload.get("pending_reverse_mode")) or "effective_only"
+    precision_entry = ((tech_payload.get("summary") or {}).get("precision_entry") or tech_payload.get("precision_entry") or {})
+    pending_reverse_mode = safe_text(precision_entry.get("pending_reverse_mode")) or safe_text(tech_payload.get("pending_reverse_mode")) or "effective_only"
     fractal_records = read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_fractals"))
     bis_records = _enrich_bi_records_with_fractals(
         read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_bis")),

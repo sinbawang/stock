@@ -576,6 +576,43 @@ def test_build_chart_data_payload_includes_segment_stop_reason_annotations(tmp_p
     assert annotations["latest"]["text"].startswith("30M S0 停驻原因：")
 
 
+def test_build_chart_data_payload_uses_precision_entry_pending_reverse_mode(tmp_path: Path) -> None:
+    analyze_dir = tmp_path / "30m" / "analyze"
+    analyze_dir.mkdir(parents=True, exist_ok=True)
+
+    bars_csv = analyze_dir / "000651_30m_20260101_to_20260131.csv"
+    bars_csv.write_text(
+        "ts,open,high,low,close,volume\n"
+        "2026-01-02 10:30,10.0,10.5,9.8,10.2,1000\n",
+        encoding="utf-8",
+    )
+
+    (tmp_path / "30m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "precision_entry": {
+                        "pending_reverse_mode": "strict",
+                    }
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    payload = module.build_chart_data_payload(
+        {
+            "timeframe": "30m",
+            "label": "30M 结构图",
+            "data_source_path": str(bars_csv),
+        }
+    )
+
+    assert payload is not None
+    assert payload["pending_reverse_mode"] == "strict"
+
+
 def test_build_chart_data_payload_enriches_bis_with_endpoint_prices(tmp_path: Path) -> None:
     analyze_dir = tmp_path / "1m" / "analyze"
     analyze_dir.mkdir(parents=True, exist_ok=True)

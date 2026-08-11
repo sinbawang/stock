@@ -11,8 +11,13 @@ from chanlun.segment import (
     SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
     SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
     SEGMENT_BOOTSTRAP_SKIP_LEFT_EDGE,
-    identify_segments,
+    identify_segments as _identify_segments,
 )
+
+
+def identify_segments(bis, **kwargs):
+    kwargs.setdefault("termination_mode", "practical")
+    return _identify_segments(bis, **kwargs)
 
 
 def _bi(bi_id: int, direction: BiDirection, high: float, low: float) -> Bi:

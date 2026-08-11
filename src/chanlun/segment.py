@@ -70,7 +70,7 @@ DEFAULT_SEGMENT_BOOTSTRAP_MODE = SEGMENT_BOOTSTRAP_PREFER_EARLIER_START
 DEFAULT_STRICT_SEGMENT_RULES = True
 SEGMENT_TERMINATION_MODE_THEORY = "theory"
 SEGMENT_TERMINATION_MODE_PRACTICAL = "practical"
-DEFAULT_SEGMENT_TERMINATION_MODE = SEGMENT_TERMINATION_MODE_PRACTICAL
+DEFAULT_SEGMENT_TERMINATION_MODE = SEGMENT_TERMINATION_MODE_THEORY
 
 
 class GapCandidateState(str, Enum):
@@ -312,7 +312,7 @@ def is_pending_stop_reason(stop_reason: Optional[str]) -> bool:
 def summarize_stop_reason_outcome(
     stop_reason: Optional[str],
     *,
-    mode: str = SEGMENT_TERMINATION_MODE_PRACTICAL,
+    mode: str = DEFAULT_SEGMENT_TERMINATION_MODE,
 ) -> Dict[str, Any]:
     """Turn a raw stop reason into a compact, caller-friendly outcome summary."""
     if not stop_reason:

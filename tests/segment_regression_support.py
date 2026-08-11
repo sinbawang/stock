@@ -143,4 +143,8 @@ def identify_segments_from_csv(path: Path):
     normalized_bars = normalize_bars(bars)
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
     bis = identify_bis(fractals, normalized_bars, pending_reverse_mode="any")
-    return identify_segments(bis, bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED)
+    return identify_segments(
+        bis,
+        bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
+        termination_mode="practical",
+    )

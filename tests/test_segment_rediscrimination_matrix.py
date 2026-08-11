@@ -26,13 +26,18 @@ from chanlun.segment import (
     is_pending_stop_reason,
     is_theory_confirmed_stop_reason,
     summarize_stop_reason_outcome,
-    identify_segments,
+    identify_segments as _identify_segments,
     _build_standard_feature_sequence,
     _gap_feature_sequence_candidate,
     _rediscriminate_gap_break,
     _rediscriminate_gap_break_detail,
     _replace_gap_candidate,
 )
+
+
+def identify_segments(bis, **kwargs):
+    kwargs.setdefault("termination_mode", "practical")
+    return _identify_segments(bis, **kwargs)
 
 
 def _bi(bi_id: int, direction: BiDirection, high: float, low: float) -> Bi:
@@ -429,7 +434,7 @@ def test_summarize_stop_reason_outcome_returns_caller_friendly_summary() -> None
         "label": "theory-confirmed",
     }
 
-    fallback_summary = summarize_stop_reason_outcome("reverse_break")
+    fallback_summary = summarize_stop_reason_outcome("reverse_break", mode="practical")
     assert fallback_summary == {
         "bucket": "fallback",
         "terminal": True,
