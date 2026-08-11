@@ -799,6 +799,51 @@ def _reverse_confirms_gap_break(
     return next_reverse_bi.high > reverse_bi.high
 
 
+def _resolve_theory_candidate_end_idx(
+    bis: List[Bi],
+    start_idx: int,
+    end_idx: int,
+) -> Optional[int]:
+    if end_idx <= start_idx:
+        return None
+
+    direction = bis[start_idx].direction
+    candidate_indices = [idx for idx in range(start_idx, end_idx + 1) if bis[idx].direction == direction]
+    if not candidate_indices:
+        return None
+
+    def candidate_key(idx: int) -> Tuple[float, float, int]:
+        bi = bis[idx]
+        if direction == BiDirection.UP:
+            return (bi.high, bi.low, -bi.bi_id)
+        return (-bi.low, -bi.high, bi.bi_id)
+
+    return max(candidate_indices, key=candidate_key)
+
+
+def _resolve_theory_segment_extent(
+    bis: List[Bi],
+    start_idx: int,
+    end_idx: int,
+) -> int:
+    if end_idx <= start_idx:
+        return end_idx
+
+    direction = bis[start_idx].direction
+    reverse_indices = [idx for idx in range(start_idx + 1, end_idx + 1) if bis[idx].direction != direction]
+    feature_break = _evaluate_theory_stop(bis, reverse_indices, direction)
+    if feature_break is not None:
+        theory_end_idx, _break_idx, _stop_reason = feature_break
+        if theory_end_idx >= start_idx:
+            return min(end_idx, theory_end_idx)
+
+    theory_candidate_idx = _resolve_theory_candidate_end_idx(bis, start_idx, end_idx)
+    if theory_candidate_idx is not None and theory_candidate_idx > start_idx:
+        return min(end_idx, theory_candidate_idx)
+
+    return end_idx
+
+
 def _build_segment(
     segment_id: int,
     bis: List[Bi],
@@ -816,10 +861,8 @@ def _build_segment(
     end_bi = window[-1]
     start_price = start_bi.low if start_bi.direction == BiDirection.UP else start_bi.high
     end_price = end_bi.high if end_bi.direction == BiDirection.UP else end_bi.low
-    theory_candidate_end_bi = max(
-        (bi for bi in window if bi.direction == start_bi.direction),
-        key=(lambda bi: (bi.high, bi.low, -bi.bi_id)) if start_bi.direction == BiDirection.UP else (lambda bi: (-bi.low, -bi.high, bi.bi_id)),
-    )
+    theory_candidate_idx = _resolve_theory_candidate_end_idx(bis, start_idx, end_idx)
+    theory_candidate_end_bi = bis[theory_candidate_idx] if theory_candidate_idx is not None else end_bi
     theory_candidate_end_price = theory_candidate_end_bi.high if theory_candidate_end_bi.direction == BiDirection.UP else theory_candidate_end_bi.low
     return Segment(
         segment_id=segment_id,
@@ -858,10 +901,8 @@ def _merge_segments_same_direction(
     merged_ids = previous.bi_ids + [bi_id for bi_id in current.bi_ids if bi_id not in previous.bi_ids]
     start_price = start_bi.low if start_bi.direction == BiDirection.UP else start_bi.high
     end_price = end_bi.high if end_bi.direction == BiDirection.UP else end_bi.low
-    theory_candidate_end_bi = max(
-        (bi for bi in window if bi.direction == start_bi.direction),
-        key=(lambda bi: (bi.high, bi.low, -bi.bi_id)) if start_bi.direction == BiDirection.UP else (lambda bi: (-bi.low, -bi.high, bi.bi_id)),
-    )
+    theory_candidate_idx = _resolve_theory_candidate_end_idx(bis, previous.bi_ids[0], current.bi_ids[-1])
+    theory_candidate_end_bi = bis[theory_candidate_idx] if theory_candidate_idx is not None else end_bi
     theory_candidate_end_price = theory_candidate_end_bi.high if theory_candidate_end_bi.direction == BiDirection.UP else theory_candidate_end_bi.low
     return Segment(
         segment_id=previous.segment_id,
@@ -1416,12 +1457,16 @@ def identify_segments(
             continue
 
         end_idx, is_confirmed, break_idx, stop_reason, break_bi_id = result
-        last_same_extreme, last_reverse_extreme = _segment_extremes(bis, index, end_idx)
+        effective_end_idx = end_idx
+        if termination_mode == SEGMENT_TERMINATION_MODE_THEORY and not is_confirmed:
+            effective_end_idx = _resolve_theory_segment_extent(bis, index, end_idx)
+
+        last_same_extreme, last_reverse_extreme = _segment_extremes(bis, index, effective_end_idx)
         candidate = _build_segment(
             segment_id,
             bis,
             index,
-            end_idx,
+            effective_end_idx,
             is_confirmed,
             last_same_extreme=last_same_extreme,
             last_reverse_extreme=last_reverse_extreme,
@@ -1436,6 +1481,10 @@ def identify_segments(
             segment_id += 1
 
         if not is_confirmed:
+            if termination_mode == SEGMENT_TERMINATION_MODE_THEORY:
+                index = effective_end_idx + 1
+                anchor_idx = None
+                continue
             break
 
         if break_idx is not None:

@@ -121,7 +121,7 @@ class TestIdentifySegments:
         assert theory[0].is_confirmed is False
         assert theory[0].stop_reason not in {"unexpected_same_direction", "same_direction_slot_not_filled", "same_direction_not_extending"}
 
-    def test_theory_mode_keeps_candidate_endpoint_separate_from_pending_tail_extent(self):
+    def test_theory_mode_uses_candidate_endpoint_as_segment_extent(self):
         bis = [
             _bi(13, BiDirection.UP, 44.06, 43.76),
             _bi(14, BiDirection.DOWN, 44.06, 43.8),
@@ -141,11 +141,11 @@ class TestIdentifySegments:
             strict_segment_rules=False,
         )
 
-        assert len(theory) == 1
+        assert len(theory) >= 2
         assert theory[0].is_confirmed is False
-        assert theory[0].end_bi_id == 19
-        assert theory[0].theory_candidate_end_bi_id == 17
-        assert theory[0].theory_candidate_end_price == 45.0
+        assert theory[0].end_bi_id == 17
+        assert theory[0].end_bi_id == theory[0].theory_candidate_end_bi_id
+        assert theory[0].end_price == theory[0].theory_candidate_end_price
 
     def test_theory_mode_ignores_practical_strict_seed_rule(self):
         bis = [
