@@ -16,7 +16,10 @@ from .segment import (
     SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
     SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
     SEGMENT_BOOTSTRAP_SKIP_LEFT_EDGE,
+    classify_stop_reason,
+    describe_stop_reason,
     identify_segments,
+    summarize_stop_reason_outcome,
 )
 from .zhongshu import identify_zhongshu
 from .data import read_bars_from_csv
@@ -107,8 +110,14 @@ def analyze(
 
     typer.echo(f"\n线段: {len(segments)}")
     for segment in segments:
+        stop_reason = segment.stop_reason or ""
+        stop_category = classify_stop_reason(stop_reason).value
+        stop_label = describe_stop_reason(stop_reason)
+        stop_text = stop_label or (stop_reason if stop_reason else "unknown")
+        outcome_summary = summarize_stop_reason_outcome(stop_reason)
         typer.echo(
-            f"  {segment.direction.value} #{segment.segment_id} {segment.start_ts} ~ {segment.end_ts}"
+            f"  {segment.direction.value} #{segment.segment_id} {segment.start_ts} ~ {segment.end_ts} "
+            f"| stop={stop_text} ({stop_category}) | outcome={outcome_summary['label']}"
         )
 
     typer.echo(f"\n中枢: {len(zhongshus)}")

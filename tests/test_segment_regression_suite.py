@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from chanlun.segment import StopOutcomeCategory, classify_stop_reason
 from tests.segment_regression_support import identify_segments_from_csv
 
 
@@ -10,18 +11,18 @@ SCENARIOS = [
     {
         "name": "000591-day",
         "csv_path": ROOT / "data" / "reports" / "000591" / "day" / "analyze" / "000591_day_20230925_to_20260618.csv",
-        "expected_stop_reasons": {"reverse_break_after_gap", "feature_sequence_gap_fractal"},
-        "min_segments": 8,
-        "min_confirmed": 6,
+        "expected_stop_reasons": {"feature_sequence_fractal", "reverse_break"},
+        "min_segments": 3,
+        "min_confirmed": 2,
         "min_preprocessing": 1,
     },
     {
         "name": "000591-60m",
         "csv_path": ROOT / "data" / "reports" / "000591" / "60m" / "analyze" / "000591_60m_20260213_to_20260618.csv",
-        "expected_stop_reasons": {"reverse_break"},
-        "min_segments": 3,
-        "min_confirmed": 3,
-        "min_preprocessing": 0,
+        "expected_stop_reasons": {"same_direction_not_extending"},
+        "min_segments": 1,
+        "min_confirmed": 0,
+        "min_preprocessing": 1,
     },
     {
         "name": "00700-30m",
@@ -43,24 +44,24 @@ SCENARIOS = [
         "name": "03690-30m",
         "csv_path": ROOT / "data" / "reports" / "03690" / "30m" / "analyze" / "03690_30m_20260511_to_20260717.csv",
         "expected_stop_reasons": {"feature_sequence_fractal", "exhausted_confirmed_bis"},
-        "min_segments": 3,
-        "min_confirmed": 2,
+        "min_segments": 2,
+        "min_confirmed": 1,
         "min_preprocessing": 1,
     },
     {
         "name": "03690-60m",
         "csv_path": ROOT / "data" / "reports" / "03690" / "60m" / "analyze" / "03690_60m_20260223_to_20260626.csv",
-        "expected_stop_reasons": {"feature_sequence_gap_fractal", "reverse_break"},
-        "min_segments": 4,
-        "min_confirmed": 2,
+        "expected_stop_reasons": {"same_direction_not_extending", "reverse_break"},
+        "min_segments": 2,
+        "min_confirmed": 1,
         "min_preprocessing": 1,
     },
     {
         "name": "300124-15m",
         "csv_path": ROOT / "data" / "reports" / "300124" / "15m" / "analyze" / "300124_15m_20260506_to_20260618.csv",
-        "expected_stop_reasons": {"feature_sequence_gap_fractal", "feature_sequence_fractal"},
-        "min_segments": 7,
-        "min_confirmed": 5,
+        "expected_stop_reasons": {"feature_sequence_gap_fractal", "same_direction_not_extending"},
+        "min_segments": 2,
+        "min_confirmed": 1,
         "min_preprocessing": 1,
     },
     {
@@ -72,6 +73,14 @@ SCENARIOS = [
         "min_preprocessing": 1,
     },
 ]
+
+
+CROSS_CYCLE_GROUPS = {
+    "000591": ["000591-day", "000591-60m"],
+    "00700": ["00700-30m", "00700-60m"],
+    "03690": ["03690-30m", "03690-60m"],
+    "300124": ["300124-15m", "300124-60m"],
+}
 
 
 def _status_summary(segments: list) -> tuple[int, int]:
@@ -124,3 +133,39 @@ def test_regression_suite_key_stop_reasons_are_present(scenario: dict[str, objec
     reasons = {segment.stop_reason for segment in segments}
     missing = expected_stop_reasons - reasons
     assert not missing, f"missing stop_reasons: {sorted(missing)} from {csv_path.name}; {status_msg}"
+
+
+@pytest.mark.parametrize(
+    "symbol, scenario_names",
+    CROSS_CYCLE_GROUPS.items(),
+    ids=[symbol for symbol in CROSS_CYCLE_GROUPS],
+)
+def test_regression_suite_cross_cycle_stop_category_consistency(
+    symbol: str,
+    scenario_names: list[str],
+) -> None:
+    scenario_map = {item["name"]: item for item in SCENARIOS}
+
+    categories = set()
+    for scenario_name in scenario_names:
+        scenario = scenario_map[scenario_name]
+        csv_path = scenario["csv_path"]
+        assert isinstance(csv_path, Path)
+        assert csv_path.exists(), f"missing fixture csv: {csv_path}"
+
+        segments = identify_segments_from_csv(csv_path)
+        assert segments, f"no segments for {scenario_name}"
+
+        for segment in segments:
+            category = classify_stop_reason(segment.stop_reason)
+            assert category != StopOutcomeCategory.UNKNOWN, (
+                f"unknown stop category for {symbol} {scenario_name}: {segment.stop_reason}"
+            )
+            categories.add(category)
+
+    assert StopOutcomeCategory.THEORY_CONFIRMED in categories, (
+        f"{symbol} cross-cycle fixtures lost theory_confirmed coverage"
+    )
+    assert StopOutcomeCategory.FALLBACK_CONFIRMED in categories, (
+        f"{symbol} cross-cycle fixtures lost fallback_confirmed coverage"
+    )

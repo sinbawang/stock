@@ -15,8 +15,17 @@ import pytest
 
 from chanlun.models import Bi, BiDirection
 from chanlun.segment import (
+    STOP_REASON_CATEGORIES,
     STOP_REASON_LABELS,
+    STOP_REASONS_BY_CATEGORY,
+    StopOutcomeCategory,
+    classify_stop_reason,
     describe_stop_reason,
+    get_stop_reason_contract,
+    is_fallback_confirmed_stop_reason,
+    is_pending_stop_reason,
+    is_theory_confirmed_stop_reason,
+    summarize_stop_reason_outcome,
     identify_segments,
     _build_standard_feature_sequence,
     _gap_feature_sequence_candidate,
@@ -349,3 +358,105 @@ def test_describe_stop_reason_covers_known_codes_and_fallback() -> None:
     assert describe_stop_reason(None) == ""
     assert describe_stop_reason("") == ""
     assert describe_stop_reason("unknown_stop_reason") == "unknown_stop_reason"
+
+
+def test_classify_stop_reason_covers_known_codes_and_fallback() -> None:
+    for code in STOP_REASON_LABELS:
+        assert classify_stop_reason(code) == STOP_REASON_CATEGORIES[code]
+
+    assert classify_stop_reason(None) == StopOutcomeCategory.UNKNOWN
+    assert classify_stop_reason("") == StopOutcomeCategory.UNKNOWN
+    assert classify_stop_reason("unknown_stop_reason") == StopOutcomeCategory.UNKNOWN
+
+
+def test_stop_reason_contract_groups_are_stable_and_complete() -> None:
+    contract = get_stop_reason_contract()
+
+    expected_categories = {category.value for category in StopOutcomeCategory}
+    assert set(contract) == expected_categories
+
+    flattened = [reason for reasons in contract.values() for reason in reasons]
+    assert set(flattened) == set(STOP_REASON_LABELS)
+    assert len(flattened) == len(set(flattened))
+
+    assert contract[StopOutcomeCategory.THEORY_CONFIRMED.value] == STOP_REASONS_BY_CATEGORY[StopOutcomeCategory.THEORY_CONFIRMED]
+    assert contract[StopOutcomeCategory.FALLBACK_CONFIRMED.value] == STOP_REASONS_BY_CATEGORY[StopOutcomeCategory.FALLBACK_CONFIRMED]
+    assert contract[StopOutcomeCategory.PENDING.value] == STOP_REASONS_BY_CATEGORY[StopOutcomeCategory.PENDING]
+    assert contract[StopOutcomeCategory.UNKNOWN.value] == STOP_REASONS_BY_CATEGORY[StopOutcomeCategory.UNKNOWN]
+
+
+def test_stop_reason_category_buckets_match_expected_semantics() -> None:
+    contract = get_stop_reason_contract()
+
+    assert contract[StopOutcomeCategory.THEORY_CONFIRMED.value] == (
+        "feature_sequence_fractal",
+        "feature_sequence_gap_fractal",
+        "feature_sequence_gap_fractal_delayed_true",
+    )
+    assert contract[StopOutcomeCategory.FALLBACK_CONFIRMED.value] == (
+        "reverse_break",
+        "reverse_break_after_gap",
+    )
+    assert contract[StopOutcomeCategory.PENDING.value] == (
+        "unexpected_same_direction",
+        "no_followup_same_direction",
+        "same_direction_slot_not_filled",
+        "same_direction_not_extending",
+        "transition_pending",
+        "exhausted_confirmed_bis",
+    )
+    assert contract[StopOutcomeCategory.UNKNOWN.value] == ()
+
+
+def test_stop_reason_helpers_follow_contract_categories() -> None:
+    for reason in STOP_REASON_LABELS:
+        category = classify_stop_reason(reason)
+        assert is_theory_confirmed_stop_reason(reason) is (category == StopOutcomeCategory.THEORY_CONFIRMED)
+        assert is_fallback_confirmed_stop_reason(reason) is (category == StopOutcomeCategory.FALLBACK_CONFIRMED)
+        assert is_pending_stop_reason(reason) is (category == StopOutcomeCategory.PENDING)
+
+    assert is_theory_confirmed_stop_reason(None) is False
+    assert is_fallback_confirmed_stop_reason(None) is False
+    assert is_pending_stop_reason(None) is False
+
+
+def test_summarize_stop_reason_outcome_returns_caller_friendly_summary() -> None:
+    theory_summary = summarize_stop_reason_outcome("feature_sequence_fractal")
+    assert theory_summary == {
+        "bucket": "theory",
+        "terminal": True,
+        "should_wait": False,
+        "label": "theory-confirmed",
+    }
+
+    fallback_summary = summarize_stop_reason_outcome("reverse_break")
+    assert fallback_summary == {
+        "bucket": "fallback",
+        "terminal": True,
+        "should_wait": False,
+        "label": "fallback-confirmed",
+    }
+
+    theory_mode_summary = summarize_stop_reason_outcome("reverse_break", mode="theory")
+    assert theory_mode_summary == {
+        "bucket": "pending",
+        "terminal": False,
+        "should_wait": True,
+        "label": "theory-mode-pending",
+    }
+
+    pending_summary = summarize_stop_reason_outcome("unexpected_same_direction")
+    assert pending_summary == {
+        "bucket": "pending",
+        "terminal": False,
+        "should_wait": True,
+        "label": "pending",
+    }
+
+    unknown_summary = summarize_stop_reason_outcome(None)
+    assert unknown_summary == {
+        "bucket": "unknown",
+        "terminal": False,
+        "should_wait": True,
+        "label": "no-stop-reason",
+    }

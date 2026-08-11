@@ -1,7 +1,8 @@
 """线段识别。"""
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 from .models import Bi, BiDirection, Segment, SegmentTailInterpretation
 
@@ -16,7 +17,49 @@ STOP_REASON_LABELS = {
     "no_followup_same_direction": "出现反向回撤后，没有等到后续同向推进笔",
     "same_direction_slot_not_filled": "按两笔一组的节奏，预期同向推进笔未出现",
     "same_direction_not_extending": "出现同向笔，但没有继续创新高或新低",
+    "transition_pending": "初始反向笔已破坏前线段，但后续回拉/重合尚未形成明确的新线段，先进入待确认过渡态",
     "exhausted_confirmed_bis": "已用尽确认笔序列，线段尾部暂时停住",
+}
+
+
+class StopOutcomeCategory(str, Enum):
+    THEORY_CONFIRMED = "theory_confirmed"
+    FALLBACK_CONFIRMED = "fallback_confirmed"
+    PENDING = "pending"
+    UNKNOWN = "unknown"
+
+
+STOP_REASON_CATEGORIES = {
+    "feature_sequence_fractal": StopOutcomeCategory.THEORY_CONFIRMED,
+    "feature_sequence_gap_fractal": StopOutcomeCategory.THEORY_CONFIRMED,
+    "feature_sequence_gap_fractal_delayed_true": StopOutcomeCategory.THEORY_CONFIRMED,
+    "reverse_break": StopOutcomeCategory.FALLBACK_CONFIRMED,
+    "reverse_break_after_gap": StopOutcomeCategory.FALLBACK_CONFIRMED,
+    "unexpected_same_direction": StopOutcomeCategory.PENDING,
+    "no_followup_same_direction": StopOutcomeCategory.PENDING,
+    "same_direction_slot_not_filled": StopOutcomeCategory.PENDING,
+    "same_direction_not_extending": StopOutcomeCategory.PENDING,
+    "transition_pending": StopOutcomeCategory.PENDING,
+    "exhausted_confirmed_bis": StopOutcomeCategory.PENDING,
+}
+
+STOP_REASONS_BY_CATEGORY = {
+    category: tuple(
+        reason
+        for reason in STOP_REASON_LABELS
+        if STOP_REASON_CATEGORIES.get(reason) == category
+    )
+    for category in StopOutcomeCategory
+}
+
+THEORY_STOP_REASONS = {
+    reason for reason in STOP_REASON_LABELS if STOP_REASON_CATEGORIES.get(reason) == StopOutcomeCategory.THEORY_CONFIRMED
+}
+FALLBACK_STOP_REASONS = {
+    reason for reason in STOP_REASON_LABELS if STOP_REASON_CATEGORIES.get(reason) == StopOutcomeCategory.FALLBACK_CONFIRMED
+}
+PENDING_STOP_REASONS = {
+    reason for reason in STOP_REASON_LABELS if STOP_REASON_CATEGORIES.get(reason) == StopOutcomeCategory.PENDING
 }
 
 SEGMENT_BOOTSTRAP_FIRST_VALID_SEED = "first_valid_seed"
@@ -25,6 +68,23 @@ SEGMENT_BOOTSTRAP_AUTO = "auto"
 SEGMENT_BOOTSTRAP_PREFER_EARLIER_START = "prefer_earlier_start"
 DEFAULT_SEGMENT_BOOTSTRAP_MODE = SEGMENT_BOOTSTRAP_PREFER_EARLIER_START
 DEFAULT_STRICT_SEGMENT_RULES = True
+SEGMENT_TERMINATION_MODE_THEORY = "theory"
+SEGMENT_TERMINATION_MODE_PRACTICAL = "practical"
+DEFAULT_SEGMENT_TERMINATION_MODE = SEGMENT_TERMINATION_MODE_PRACTICAL
+
+
+class GapCandidateState(str, Enum):
+    NONE = "none"
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    INVALIDATED = "invalidated"
+    DEFERRED = "deferred"
+
+
+class TransitionState(str, Enum):
+    NONE = "none"
+    PENDING = "pending"
+    RECLAIMED = "reclaimed"
 
 
 @dataclass
@@ -32,6 +92,10 @@ class _FeatureSequenceElement:
     high: float
     low: float
     source_indices: List[int] = field(default_factory=list)
+    feature_sequence_id: Optional[int] = None
+    belongs_to_prior_segment: bool = False
+    belongs_to_new_segment: bool = False
+    in_transition: bool = False
 
 
 def _confirmed_bis(bis: List[Bi]) -> List[Bi]:
@@ -85,7 +149,8 @@ def build_segment_tail_interpretations(
             )
             suggested_catalyst = "继续观察后续笔的推进与反向突破。"
 
-        evidence_parts = [f"stop_reason={stop_reason}"]
+        stop_category = classify_stop_reason(stop_reason)
+        evidence_parts = [f"stop_reason={stop_reason}", f"stop_category={stop_category.value}"]
         if segment.last_same_extreme is not None:
             evidence_parts.append(f"last_same_extreme={segment.last_same_extreme:.2f}")
         if segment.last_reverse_extreme is not None:
@@ -116,24 +181,17 @@ def _score_bootstrap_candidate(
     end_idx, is_confirmed, _break_idx, stop_reason, _break_bi_id = result
     segment_len = end_idx - start_idx + 1
     score = segment_len * 3
+    stop_category = classify_stop_reason(stop_reason)
 
     if is_confirmed:
         score += 80
 
-    if stop_reason in {
-        "feature_sequence_fractal",
-        "feature_sequence_gap_fractal",
-        "feature_sequence_gap_fractal_delayed_true",
-        "reverse_break",
-        "reverse_break_after_gap",
+    if stop_category in {
+        StopOutcomeCategory.THEORY_CONFIRMED,
+        StopOutcomeCategory.FALLBACK_CONFIRMED,
     }:
         score += 40
-    elif stop_reason in {
-        "unexpected_same_direction",
-        "same_direction_slot_not_filled",
-        "same_direction_not_extending",
-        "no_followup_same_direction",
-    }:
+    elif stop_category == StopOutcomeCategory.PENDING:
         score -= 20
 
     if stop_reason == "exhausted_confirmed_bis":
@@ -156,6 +214,15 @@ def _validate_bootstrap_config(
         raise ValueError(f"Unsupported bootstrap_mode: {bootstrap_mode}")
     if bootstrap_skip_confirmed_bis < 0:
         raise ValueError("bootstrap_skip_confirmed_bis must be >= 0")
+
+
+def _validate_termination_mode(termination_mode: str) -> None:
+    supported_modes = {
+        SEGMENT_TERMINATION_MODE_THEORY,
+        SEGMENT_TERMINATION_MODE_PRACTICAL,
+    }
+    if termination_mode not in supported_modes:
+        raise ValueError(f"Unsupported termination_mode: {termination_mode}")
 
 
 def _resolve_bootstrap_start_index(
@@ -211,6 +278,88 @@ def describe_stop_reason(stop_reason: Optional[str]) -> str:
     if not stop_reason:
         return ""
     return STOP_REASON_LABELS.get(stop_reason, stop_reason)
+
+
+def classify_stop_reason(stop_reason: Optional[str]) -> StopOutcomeCategory:
+    if not stop_reason:
+        return StopOutcomeCategory.UNKNOWN
+    return STOP_REASON_CATEGORIES.get(stop_reason, StopOutcomeCategory.UNKNOWN)
+
+
+def get_stop_reason_contract() -> dict[str, tuple[str, ...]]:
+    """Return the stable stop-reason contract grouped by outcome category."""
+    return {
+        category.value: STOP_REASONS_BY_CATEGORY[category]
+        for category in StopOutcomeCategory
+    }
+
+
+def is_theory_confirmed_stop_reason(stop_reason: Optional[str]) -> bool:
+    """Whether a stop reason is confirmed by the theory main path."""
+    return classify_stop_reason(stop_reason) == StopOutcomeCategory.THEORY_CONFIRMED
+
+
+def is_fallback_confirmed_stop_reason(stop_reason: Optional[str]) -> bool:
+    """Whether a stop reason is confirmed by practical fallback rules."""
+    return classify_stop_reason(stop_reason) == StopOutcomeCategory.FALLBACK_CONFIRMED
+
+
+def is_pending_stop_reason(stop_reason: Optional[str]) -> bool:
+    """Whether a stop reason indicates a pending/non-final structural state."""
+    return classify_stop_reason(stop_reason) == StopOutcomeCategory.PENDING
+
+
+def summarize_stop_reason_outcome(
+    stop_reason: Optional[str],
+    *,
+    mode: str = SEGMENT_TERMINATION_MODE_PRACTICAL,
+) -> Dict[str, Any]:
+    """Turn a raw stop reason into a compact, caller-friendly outcome summary."""
+    if not stop_reason:
+        return {
+            "bucket": "unknown",
+            "terminal": False,
+            "should_wait": True,
+            "label": "no-stop-reason",
+        }
+
+    if stop_reason in THEORY_STOP_REASONS:
+        return {
+            "bucket": "theory",
+            "terminal": True,
+            "should_wait": False,
+            "label": "theory-confirmed",
+        }
+
+    if stop_reason in FALLBACK_STOP_REASONS:
+        if mode == SEGMENT_TERMINATION_MODE_THEORY:
+            return {
+                "bucket": "pending",
+                "terminal": False,
+                "should_wait": True,
+                "label": "theory-mode-pending",
+            }
+        return {
+            "bucket": "fallback",
+            "terminal": True,
+            "should_wait": False,
+            "label": "fallback-confirmed",
+        }
+
+    if stop_reason in PENDING_STOP_REASONS:
+        return {
+            "bucket": "pending",
+            "terminal": False,
+            "should_wait": True,
+            "label": "pending",
+        }
+
+    return {
+        "bucket": "unknown",
+        "terminal": False,
+        "should_wait": True,
+        "label": "unknown",
+    }
 
 
 def _is_alternating(bis: List[Bi]) -> bool:
@@ -278,10 +427,17 @@ def _merge_feature_sequence_element(
     else:
         high = min(left.high, right.high)
         low = min(left.low, right.low)
+    sequence_id = left.feature_sequence_id if left.feature_sequence_id is not None else right.feature_sequence_id
+    belongs_to_prior_segment = left.belongs_to_prior_segment or right.belongs_to_prior_segment
+    belongs_to_new_segment = left.belongs_to_new_segment or right.belongs_to_new_segment
     return _FeatureSequenceElement(
         high=high,
         low=low,
         source_indices=[*left.source_indices, *right.source_indices],
+        feature_sequence_id=sequence_id,
+        belongs_to_prior_segment=belongs_to_prior_segment,
+        belongs_to_new_segment=belongs_to_new_segment,
+        in_transition=belongs_to_prior_segment and belongs_to_new_segment,
     )
 
 
@@ -294,6 +450,7 @@ def _build_standard_feature_sequence(
 
     elements: List[_FeatureSequenceElement] = []
     trend_up: Optional[bool] = None
+    sequence_id = reverse_indices[0] if reverse_indices else None
 
     for reverse_idx in reverse_indices:
         reverse_bi = bis[reverse_idx]
@@ -301,6 +458,9 @@ def _build_standard_feature_sequence(
             high=reverse_bi.high,
             low=reverse_bi.low,
             source_indices=[reverse_idx],
+            feature_sequence_id=sequence_id,
+            belongs_to_prior_segment=not elements,
+            belongs_to_new_segment=bool(elements),
         )
 
         if not elements:
@@ -437,24 +597,53 @@ def _breaks_first_bi_start(direction: BiDirection, candidate_bi: Bi, first_bi: B
     return candidate_bi.high > first_bi.high
 
 
+def _evaluate_transition_state(
+    bis: List[Bi],
+    transition_idx: int,
+    prior_direction: BiDirection,
+) -> TransitionState:
+    if transition_idx + 1 >= len(bis):
+        return TransitionState.NONE
+
+    transition_bi = bis[transition_idx]
+    candidate_direction = transition_bi.direction
+    if candidate_direction == prior_direction:
+        return TransitionState.NONE
+
+    remaining = len(bis) - (transition_idx + 1)
+    if remaining <= 2:
+        return TransitionState.PENDING
+
+    for idx in range(transition_idx + 1, len(bis)):
+        candidate_bi = bis[idx]
+        if candidate_bi.direction == candidate_direction:
+            if _same_direction_extends(
+                candidate_direction,
+                candidate_bi,
+                transition_bi.high if candidate_direction == BiDirection.UP else transition_bi.low,
+            ):
+                return TransitionState.NONE
+            continue
+
+        if _breaks_first_bi_start(candidate_direction, candidate_bi, transition_bi):
+            return TransitionState.RECLAIMED
+
+    return TransitionState.PENDING
+
+
 def _reclaims_transition_back_to_prior_segment(
     bis: List[Bi],
     transition_idx: int,
     prior_direction: BiDirection,
 ) -> Optional[int]:
-    if transition_idx + 3 >= len(bis):
+    if _evaluate_transition_state(bis, transition_idx, prior_direction) != TransitionState.RECLAIMED:
         return None
 
     transition_bi = bis[transition_idx]
     candidate_direction = transition_bi.direction
-    if candidate_direction == prior_direction:
-        return None
-
     for idx in range(transition_idx + 1, len(bis)):
         candidate_bi = bis[idx]
         if candidate_bi.direction == candidate_direction:
-            if _same_direction_extends(candidate_direction, candidate_bi, transition_bi.high if candidate_direction == BiDirection.UP else transition_bi.low):
-                return None
             continue
 
         if _breaks_first_bi_start(candidate_direction, candidate_bi, transition_bi):
@@ -471,12 +660,14 @@ def _rediscriminate_gap_break(
     return outcome
 
 
-def _evaluate_pending_gap_candidate(
+def _evaluate_gap_candidate_state(
     bis: List[Bi],
     gap_candidate_idx: Optional[int],
-) -> tuple[Optional[bool], bool, Optional[int], Optional[int], Optional[str]]:
+    *,
+    should_defer_after_local_gap_false: bool = False,
+) -> tuple[GapCandidateState, bool, Optional[int], Optional[int], Optional[str]]:
     if gap_candidate_idx is None:
-        return None, False, None, None, None
+        return GapCandidateState.NONE, False, None, None, None
 
     pending_gap_outcome, is_delayed_true = _rediscriminate_gap_break_detail(bis, gap_candidate_idx)
     if pending_gap_outcome is True:
@@ -487,11 +678,28 @@ def _evaluate_pending_gap_candidate(
             if is_delayed_true
             else "feature_sequence_gap_fractal"
         )
-        return True, is_delayed_true, end_idx, break_idx, stop_reason
+        return GapCandidateState.CONFIRMED, is_delayed_true, end_idx, break_idx, stop_reason
 
     if pending_gap_outcome is False:
-        return False, False, None, None, None
+        if should_defer_after_local_gap_false:
+            return GapCandidateState.DEFERRED, False, None, None, None
+        return GapCandidateState.INVALIDATED, False, None, None, None
 
+    return GapCandidateState.PENDING, False, None, None, None
+
+
+def _evaluate_pending_gap_candidate(
+    bis: List[Bi],
+    gap_candidate_idx: Optional[int],
+) -> tuple[Optional[bool], bool, Optional[int], Optional[int], Optional[str]]:
+    state, is_delayed_true, end_idx, break_idx, stop_reason = _evaluate_gap_candidate_state(
+        bis,
+        gap_candidate_idx,
+    )
+    if state == GapCandidateState.CONFIRMED:
+        return True, is_delayed_true, end_idx, break_idx, stop_reason
+    if state in {GapCandidateState.INVALIDATED, GapCandidateState.DEFERRED}:
+        return False, False, None, None, None
     return None, False, None, None, None
 
 
@@ -676,12 +884,24 @@ def _find_later_initial_segment_window(
     return None
 
 
+def _evaluate_theory_stop(
+    bis: List[Bi],
+    reverse_indices: List[int],
+    direction: BiDirection,
+) -> Optional[Tuple[int, int, str]]:
+    """理论主路径：先只看特征序列分型，避免早于理论判定就进入兜底分支。"""
+    return _feature_sequence_break(bis, reverse_indices, direction)
+
+
 def _extend_segment(
     bis: List[Bi],
     start_idx: int,
     *,
     anchor_idx: Optional[int] = None,
     strict_segment_rules: bool = False,
+    enable_gap_false_defer: bool = True,
+    enable_fallback_reverse_break: bool = True,
+    enable_same_direction_fallback: bool = True,
 ) -> Optional[Tuple[int, bool, Optional[int], str, Optional[int]]]:
     if start_idx + 2 >= len(bis):
         return None
@@ -719,15 +939,33 @@ def _extend_segment(
     # 冲突规则：一旦缺口再分辨先触发 False（先破第一笔起点），
     # 当前线段后续不再接受 gap 候选的 True 翻案，避免同形态窗口漂移。
     gap_false_locked = False
+    defer_next_reverse_break = False
 
     while cursor < len(bis):
         reverse_bi = bis[cursor]
         if reverse_bi.direction == direction:
+            if enable_same_direction_fallback:
+                break_bi_id = reverse_bi.bi_id
+                stop_reason = "unexpected_same_direction"
+                break
             break_bi_id = reverse_bi.bi_id
-            stop_reason = "unexpected_same_direction"
+            stop_reason = "exhausted_confirmed_bis"
             break
 
         reverse_indices.append(cursor)
+
+        transition_state = _evaluate_transition_state(bis, cursor, direction)
+        if (
+            cursor == start_idx + 3
+            and transition_state == TransitionState.PENDING
+            and cursor + 2 >= len(bis)
+            and _breaks_first_bi_start(direction, reverse_bi, bis[start_idx])
+        ):
+            break_idx = cursor
+            is_confirmed = False
+            break_bi_id = reverse_bi.bi_id
+            stop_reason = "transition_pending"
+            break
 
         prev_same_dir_idx = cursor - 1
         prev_prev_same_dir_idx = cursor - 3
@@ -741,21 +979,28 @@ def _extend_segment(
                 or (direction == BiDirection.DOWN and bis[prev_same_dir_idx].low >= bis[prev_prev_same_dir_idx].low)
             )
         ):
-            break_idx = cursor
-            is_confirmed = True
-            break_bi_id = reverse_bi.bi_id
-            stop_reason = "reverse_break"
-            break
-
-        if cursor + 1 >= len(bis):
-            feature_break = _feature_sequence_break(bis, reverse_indices, direction)
-            if feature_break is not None:
-                end_idx, break_idx, stop_reason = feature_break
+            if defer_next_reverse_break:
+                defer_next_reverse_break = False
+            elif enable_fallback_reverse_break:
+                break_idx = cursor
                 is_confirmed = True
-                break_bi_id = bis[break_idx].bi_id
+                break_bi_id = reverse_bi.bi_id
+                stop_reason = "reverse_break"
                 break
 
-            if _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
+        if cursor + 1 >= len(bis):
+            should_defer_break = defer_next_reverse_break
+            if should_defer_break:
+                defer_next_reverse_break = False
+            else:
+                feature_break = _evaluate_theory_stop(bis, reverse_indices, direction)
+                if feature_break is not None:
+                    end_idx, break_idx, stop_reason = feature_break
+                    is_confirmed = True
+                    break_bi_id = bis[break_idx].bi_id
+                    break
+
+            if enable_fallback_reverse_break and _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
                 break_idx = cursor
                 is_confirmed = True
                 break_bi_id = reverse_bi.bi_id
@@ -768,8 +1013,12 @@ def _extend_segment(
 
         same_dir_bi = bis[cursor + 1]
         if same_dir_bi.direction != direction:
+            if enable_same_direction_fallback:
+                break_bi_id = same_dir_bi.bi_id
+                stop_reason = "same_direction_slot_not_filled"
+                break
             break_bi_id = same_dir_bi.bi_id
-            stop_reason = "same_direction_slot_not_filled"
+            stop_reason = "exhausted_confirmed_bis"
             break
 
         if not gap_false_locked:
@@ -780,10 +1029,20 @@ def _extend_segment(
             )
 
             if pending_gap_break_idx is not None:
-                pending_gap_outcome, is_delayed_true, resolved_end_idx, resolved_break_idx, resolved_stop_reason = (
-                    _evaluate_pending_gap_candidate(bis, pending_gap_break_idx)
+                evaluated_gap_break_idx = pending_gap_break_idx
+                should_defer_after_local_gap_false = (
+                    enable_gap_false_defer
+                    and evaluated_gap_break_idx == cursor
+                    and cursor + 4 < len(bis)
                 )
-                if pending_gap_outcome is True:
+                gap_state, is_delayed_true, resolved_end_idx, resolved_break_idx, resolved_stop_reason = (
+                    _evaluate_gap_candidate_state(
+                        bis,
+                        pending_gap_break_idx,
+                        should_defer_after_local_gap_false=should_defer_after_local_gap_false,
+                    )
+                )
+                if gap_state == GapCandidateState.CONFIRMED:
                     should_defer_down_weak_gap = (
                         direction == BiDirection.DOWN
                         and pending_gap_break_idx == cursor
@@ -798,16 +1057,16 @@ def _extend_segment(
                         break_bi_id = bis[break_idx].bi_id
                         stop_reason = resolved_stop_reason
                         break
-                if pending_gap_outcome is False:
+                if gap_state in {GapCandidateState.INVALIDATED, GapCandidateState.DEFERRED}:
                     pending_gap_break_idx = None
                     gap_false_locked = True
-                    if _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
+                    if enable_fallback_reverse_break and _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
                         break_idx = cursor
                         is_confirmed = True
                         break_bi_id = reverse_bi.bi_id
                         stop_reason = "reverse_break"
                         break
-                    if cursor + 4 < len(bis):
+                    if gap_state == GapCandidateState.DEFERRED:
                         if direction == BiDirection.UP:
                             last_reverse_extreme = reverse_bi.low
                             last_same_extreme = same_dir_bi.high
@@ -815,8 +1074,15 @@ def _extend_segment(
                             last_reverse_extreme = reverse_bi.high
                             last_same_extreme = same_dir_bi.low
                         end_idx = cursor + 1
+                        defer_next_reverse_break = True
+                        reverse_indices = [idx for idx in reverse_indices if idx > cursor]
                         cursor += 2
                         continue
+                    if cursor + 4 < len(bis):
+                        end_idx = cursor + 1
+                        cursor += 2
+                        continue
+                    end_idx = cursor + 1
                     break_bi_id = same_dir_bi.bi_id
                     stop_reason = "same_direction_not_extending"
                     break
@@ -835,14 +1101,20 @@ def _extend_segment(
             cursor = reclaimed_idx + 1
             continue
 
-        feature_break = _feature_sequence_break(bis, reverse_indices, direction)
-        if feature_break is not None:
-            end_idx, break_idx, stop_reason = feature_break
-            is_confirmed = True
-            break_bi_id = bis[break_idx].bi_id
-            break
+        should_defer_break = defer_next_reverse_break
+        if should_defer_break:
+            defer_next_reverse_break = False
+        else:
+            feature_break = _evaluate_theory_stop(bis, reverse_indices, direction)
+            if feature_break is not None:
+                end_idx, break_idx, stop_reason = feature_break
+                is_confirmed = True
+                break_bi_id = bis[break_idx].bi_id
+                break
 
-        if _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
+        if should_defer_break:
+            pass
+        elif enable_fallback_reverse_break and _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
             break_idx = cursor
             is_confirmed = True
             break_bi_id = reverse_bi.bi_id
@@ -853,7 +1125,7 @@ def _extend_segment(
             if same_dir_bi.high <= last_same_extreme:
                 if cursor + 2 < len(bis):
                     next_reverse_bi = bis[cursor + 2]
-                    candidate_feature_break = _feature_sequence_break(
+                    candidate_feature_break = _evaluate_theory_stop(
                         bis,
                         reverse_indices + [cursor + 2],
                         direction,
@@ -874,10 +1146,14 @@ def _extend_segment(
                             gap_candidate_idx,
                         )
                         if pending_gap_break_idx is not None:
-                            pending_gap_outcome, is_delayed_true, resolved_end_idx, resolved_break_idx, resolved_stop_reason = (
-                                _evaluate_pending_gap_candidate(bis, pending_gap_break_idx)
+                            gap_state, is_delayed_true, resolved_end_idx, resolved_break_idx, resolved_stop_reason = (
+                                _evaluate_gap_candidate_state(
+                                    bis,
+                                    pending_gap_break_idx,
+                                    should_defer_after_local_gap_false=False,
+                                )
                             )
-                            if pending_gap_outcome is True:
+                            if gap_state == GapCandidateState.CONFIRMED:
                                 should_defer_down_weak_gap = (
                                     direction == BiDirection.DOWN
                                     and pending_gap_break_idx == cursor
@@ -892,10 +1168,10 @@ def _extend_segment(
                                     break_bi_id = bis[break_idx].bi_id
                                     stop_reason = resolved_stop_reason
                                     break
-                            if pending_gap_outcome is False:
+                            if gap_state in {GapCandidateState.INVALIDATED, GapCandidateState.DEFERRED}:
                                 pending_gap_break_idx = None
                                 gap_false_locked = True
-                                if _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
+                                if enable_fallback_reverse_break and _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
                                     break_idx = cursor
                                     is_confirmed = True
                                     break_bi_id = reverse_bi.bi_id
@@ -906,6 +1182,7 @@ def _extend_segment(
                                 continue
                     if (
                         next_reverse_bi.direction != direction
+                        and enable_fallback_reverse_break
                         and _reverse_breaks_last_reverse_extreme(direction, next_reverse_bi, last_reverse_extreme)
                     ):
                         break_idx = cursor
@@ -913,8 +1190,12 @@ def _extend_segment(
                         break_bi_id = next_reverse_bi.bi_id
                         stop_reason = "reverse_break"
                         break
+                if enable_same_direction_fallback:
+                    break_bi_id = same_dir_bi.bi_id
+                    stop_reason = "same_direction_not_extending"
+                    break
                 break_bi_id = same_dir_bi.bi_id
-                stop_reason = "same_direction_not_extending"
+                stop_reason = "exhausted_confirmed_bis"
                 break
             last_reverse_extreme = reverse_bi.low
             last_same_extreme = same_dir_bi.high
@@ -922,16 +1203,19 @@ def _extend_segment(
             if same_dir_bi.low >= last_same_extreme:
                 if cursor + 2 < len(bis):
                     next_reverse_bi = bis[cursor + 2]
-                    candidate_feature_break = _feature_sequence_break(
-                        bis,
-                        reverse_indices + [cursor + 2],
-                        direction,
-                    )
-                    if candidate_feature_break is not None:
-                        end_idx, break_idx, stop_reason = candidate_feature_break
-                        is_confirmed = True
-                        break_bi_id = bis[break_idx].bi_id
-                        break
+                    if defer_next_reverse_break:
+                        defer_next_reverse_break = False
+                    else:
+                        candidate_feature_break = _evaluate_theory_stop(
+                            bis,
+                            reverse_indices + [cursor + 2],
+                            direction,
+                        )
+                        if candidate_feature_break is not None:
+                            end_idx, break_idx, stop_reason = candidate_feature_break
+                            is_confirmed = True
+                            break_bi_id = bis[break_idx].bi_id
+                            break
                     if not gap_false_locked:
                         gap_candidate_idx = _gap_feature_sequence_candidate(
                             bis,
@@ -943,10 +1227,14 @@ def _extend_segment(
                             gap_candidate_idx,
                         )
                         if pending_gap_break_idx is not None:
-                            pending_gap_outcome, is_delayed_true, resolved_end_idx, resolved_break_idx, resolved_stop_reason = (
-                                _evaluate_pending_gap_candidate(bis, pending_gap_break_idx)
+                            gap_state, is_delayed_true, resolved_end_idx, resolved_break_idx, resolved_stop_reason = (
+                                _evaluate_gap_candidate_state(
+                                    bis,
+                                    pending_gap_break_idx,
+                                    should_defer_after_local_gap_false=False,
+                                )
                             )
-                            if pending_gap_outcome is True:
+                            if gap_state == GapCandidateState.CONFIRMED:
                                 should_defer_down_weak_gap = (
                                     direction == BiDirection.DOWN
                                     and pending_gap_break_idx == cursor
@@ -961,10 +1249,10 @@ def _extend_segment(
                                     break_bi_id = bis[break_idx].bi_id
                                     stop_reason = resolved_stop_reason
                                     break
-                            if pending_gap_outcome is False:
+                            if gap_state in {GapCandidateState.INVALIDATED, GapCandidateState.DEFERRED}:
                                 pending_gap_break_idx = None
                                 gap_false_locked = True
-                                if _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
+                                if enable_fallback_reverse_break and _reverse_breaks_last_reverse_extreme(direction, reverse_bi, last_reverse_extreme):
                                     break_idx = cursor
                                     is_confirmed = True
                                     break_bi_id = reverse_bi.bi_id
@@ -978,6 +1266,8 @@ def _extend_segment(
                         and same_dir_bi.low >= last_same_extreme
                     )
                     if (
+                        enable_fallback_reverse_break
+                        and
                         next_reverse_bi.direction != direction
                         and (
                             (weak_down_rebound and _reverse_confirms_gap_break(direction, reverse_bi, next_reverse_bi))
@@ -1000,8 +1290,12 @@ def _extend_segment(
                         break_bi_id = next_reverse_bi.bi_id
                         stop_reason = "reverse_break"
                         break
+                if enable_same_direction_fallback:
+                    break_bi_id = same_dir_bi.bi_id
+                    stop_reason = "same_direction_not_extending"
+                    break
                 break_bi_id = same_dir_bi.bi_id
-                stop_reason = "same_direction_not_extending"
+                stop_reason = "exhausted_confirmed_bis"
                 break
             last_reverse_extreme = reverse_bi.high
             last_same_extreme = same_dir_bi.low
@@ -1022,6 +1316,7 @@ def identify_segments(
     bootstrap_mode: str = DEFAULT_SEGMENT_BOOTSTRAP_MODE,
     bootstrap_skip_confirmed_bis: int = 0,
     strict_segment_rules: bool = DEFAULT_STRICT_SEGMENT_RULES,
+    termination_mode: str = DEFAULT_SEGMENT_TERMINATION_MODE,
 ) -> List[Segment]:
     """
     识别线段。
@@ -1048,18 +1343,45 @@ def identify_segments(
         - prefer_earlier_start 的评分逻辑属于工程启发式，不应视为严格理论公式
     """
     _validate_bootstrap_config(bootstrap_mode, bootstrap_skip_confirmed_bis)
+    _validate_termination_mode(termination_mode)
     bis = _confirmed_bis(bis)
 
     if len(bis) < 3:
         return []
 
+    effective_bootstrap_mode = bootstrap_mode
+    effective_strict_segment_rules = strict_segment_rules
+    if termination_mode == SEGMENT_TERMINATION_MODE_THEORY:
+        if bootstrap_mode in {
+            SEGMENT_BOOTSTRAP_AUTO,
+            SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
+        }:
+            effective_bootstrap_mode = SEGMENT_BOOTSTRAP_FIRST_VALID_SEED
+        # Theory mode keeps the geometric path pure and does not apply practical strengthening/merge rules.
+        effective_strict_segment_rules = False
+
     segments: List[Segment] = []
     segment_id = 0
+    enable_gap_false_defer = effective_bootstrap_mode != SEGMENT_BOOTSTRAP_FIRST_VALID_SEED
+    enable_fallback_reverse_break = termination_mode == SEGMENT_TERMINATION_MODE_PRACTICAL
+    enable_same_direction_fallback = termination_mode == SEGMENT_TERMINATION_MODE_PRACTICAL
     index = _resolve_bootstrap_start_index(
         bis,
-        bootstrap_mode=bootstrap_mode,
+        bootstrap_mode=effective_bootstrap_mode,
         bootstrap_skip_confirmed_bis=bootstrap_skip_confirmed_bis,
     )
+
+    if effective_strict_segment_rules and effective_bootstrap_mode == SEGMENT_BOOTSTRAP_PREFER_EARLIER_START:
+        probe = _extend_segment(
+            bis,
+            index,
+            strict_segment_rules=True,
+            enable_gap_false_defer=enable_gap_false_defer,
+            enable_fallback_reverse_break=enable_fallback_reverse_break,
+            enable_same_direction_fallback=enable_same_direction_fallback,
+        )
+        if probe is None:
+            index = 0
 
     anchor_idx: Optional[int] = None
     while index <= len(bis) - 3:
@@ -1067,7 +1389,10 @@ def identify_segments(
             bis,
             index,
             anchor_idx=anchor_idx,
-            strict_segment_rules=strict_segment_rules,
+            strict_segment_rules=effective_strict_segment_rules,
+            enable_gap_false_defer=enable_gap_false_defer,
+            enable_fallback_reverse_break=enable_fallback_reverse_break,
+            enable_same_direction_fallback=enable_same_direction_fallback,
         )
         if result is None:
             index += 1
@@ -1088,7 +1413,7 @@ def identify_segments(
             stop_reason=stop_reason,
         )
 
-        if strict_segment_rules and segments and segments[-1].direction == candidate.direction:
+        if effective_strict_segment_rules and segments and segments[-1].direction == candidate.direction:
             segments[-1] = _merge_segments_same_direction(segments[-1], candidate, bis)
         else:
             segments.append(candidate)

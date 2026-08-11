@@ -18,7 +18,14 @@ if str(SRC) not in sys.path:
 from chanlun.bi import identify_bis
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.models import Bar, Fractal, NormalizedBar, Segment, Zhongshu
-from chanlun.segment import describe_stop_reason
+from chanlun.segment import (
+    classify_stop_reason,
+    describe_stop_reason,
+    is_fallback_confirmed_stop_reason,
+    is_pending_stop_reason,
+    is_theory_confirmed_stop_reason,
+    summarize_stop_reason_outcome,
+)
 from chanlun.zhongshu import identify_zhongshu
 
 
@@ -265,6 +272,12 @@ def export_segments(path: Path, segments: list[Segment]) -> None:
             "break_bi_id": segment.break_bi_id,
             "stop_reason": segment.stop_reason,
             "stop_reason_label": describe_stop_reason(segment.stop_reason),
+            "stop_category": classify_stop_reason(segment.stop_reason).value,
+            "stop_outcome_bucket": summarize_stop_reason_outcome(segment.stop_reason)["bucket"],
+            "stop_outcome_label": summarize_stop_reason_outcome(segment.stop_reason)["label"],
+            "is_theory_confirmed_stop": is_theory_confirmed_stop_reason(segment.stop_reason),
+            "is_fallback_confirmed_stop": is_fallback_confirmed_stop_reason(segment.stop_reason),
+            "is_pending_stop": is_pending_stop_reason(segment.stop_reason),
             "is_confirmed": segment.is_confirmed,
             "status": "confirmed" if segment.is_confirmed else "preprocessing",
             "note": "auto_generated",
@@ -290,6 +303,12 @@ def export_segments(path: Path, segments: list[Segment]) -> None:
         "break_bi_id",
         "stop_reason",
         "stop_reason_label",
+        "stop_category",
+        "stop_outcome_bucket",
+        "stop_outcome_label",
+        "is_theory_confirmed_stop",
+        "is_fallback_confirmed_stop",
+        "is_pending_stop",
         "is_confirmed",
         "status",
         "note",

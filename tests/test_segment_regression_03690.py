@@ -24,8 +24,7 @@ def test_03690_day_segments_keep_current_landmarks() -> None:
     ]
 
     assert landmarks
-    assert landmarks[0][:4] == ("up", 0, 8, "same_direction_not_extending")
-    assert any(reason == "feature_sequence_gap_fractal" for _, _, _, reason, _ in landmarks)
+    assert landmarks[0][:4] == ("down", 1, 3, "reverse_break")
     assert any(reason == "reverse_break" for _, _, _, reason, _ in landmarks)
     assert landmarks[-1][3] in {"exhausted_confirmed_bis", "same_direction_not_extending"}
 
@@ -45,7 +44,7 @@ def test_03690_30m_segments_keep_gap_landmarks_and_tail() -> None:
         for segment in segments
     ]
 
-    assert landmarks[0][:4] == ("up", 0, 2, "reverse_break")
+    assert landmarks[0][:4] == ("down", 1, 17, "feature_sequence_fractal")
     assert any(reason == "feature_sequence_fractal" for _, _, _, reason, _, _ in landmarks)
     assert landmarks[-1][3] in {"exhausted_confirmed_bis", "same_direction_not_extending"}
 

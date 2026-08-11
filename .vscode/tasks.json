@@ -672,6 +672,65 @@
 			"type": "shell",
 			"command": "tcb.cmd --env-id cloudbase-d9gplq92zc1d88ee6 storage download miniapp-publish/latest/stocks/01024/charts/1m.json build/cloud-compare/01024-1m-cloud.json; python build/print_segments_from_json.py build/cloud-compare/01024-1m-cloud.json",
 			"group": "test"
+		},
+		{
+			"label": "pytest-summarize-stop-reason",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment_rediscrimination_matrix.py -k summarize_stop_reason_outcome",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-summarize-stop-reason",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment_rediscrimination_matrix.py -k summarize_stop_reason_outcome",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-segment-matrix",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_segment_rediscrimination_matrix.py",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-export-and-miniapp",
+			"type": "shell",
+			"command": "pytest -q tests/test_export_structures_with_boxes.py tests/test_build_miniapp_publish_bundle.py",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest-export-and-miniapp",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_export_structures_with_boxes.py tests/test_build_miniapp_publish_bundle.py",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest-export-and-miniapp-2",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_export_structures_with_boxes.py tests/test_build_miniapp_publish_bundle.py",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest-export-and-miniapp-3",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_export_structures_with_boxes.py tests/test_build_miniapp_publish_bundle.py",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "pytest-stop-reason-consumers",
+			"type": "shell",
+			"command": "python -m pytest -q tests/test_chanlun_cli.py tests/test_export_structures_with_boxes.py tests/test_build_miniapp_publish_bundle.py",
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }

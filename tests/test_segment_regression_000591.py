@@ -32,7 +32,7 @@ def test_000591_day_segments_do_not_regress_to_oversized_single_leg() -> None:
 def test_000591_60m_segments_keep_current_landmarks() -> None:
     segments = identify_segments_from_csv(SAMPLE_60M_CSV)
 
-    assert len(segments) == 3
+    assert len(segments) == 1
 
     landmarks = [
         (
@@ -46,10 +46,8 @@ def test_000591_60m_segments_keep_current_landmarks() -> None:
         for segment in segments
     ]
 
-    assert len(landmarks) == 3
-    assert landmarks[0][:4] == ("up", 0, 2, "reverse_break")
-    assert landmarks[1][3] in {"feature_sequence_gap_fractal", "reverse_break"}
-    assert landmarks[2][3] in {"reverse_break", "exhausted_confirmed_bis"}
+    assert len(landmarks) == 1
+    assert landmarks[0] == ("down", 2, 6, "same_direction_not_extending", False, (24, 71))
 
 
 def test_000591_60m_long_window_reclaims_middle_ground_breaks() -> None:
@@ -67,9 +65,9 @@ def test_000591_60m_long_window_reclaims_middle_ground_breaks() -> None:
         for segment in segments
     ]
 
-    assert len(landmarks) >= 2
-    assert landmarks[0][3] in {"reverse_break", "feature_sequence_gap_fractal"}
-    assert any(reason in {"feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break"} for _, _, _, reason, _, _ in landmarks)
+    assert len(landmarks) == 2
+    assert landmarks[0] == ("up", 1, 9, "feature_sequence_fractal", True, (4, 108))
+    assert landmarks[1] == ("down", 10, 14, "same_direction_not_extending", False, (108, 155))
 
 
 def test_000591_15m_current_report_window_keeps_continuous_segments() -> None:

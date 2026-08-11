@@ -1032,7 +1032,8 @@ def fetch_hk_capital_flow_snapshot(
             southbound_net_buy_3d = _rolling_sum_until(net_buy_df, net_buy_trade_date, "港股通净买额", 3)
             southbound_net_buy_5d = _rolling_sum_until(net_buy_df, net_buy_trade_date, "港股通净买额", 5)
             southbound_net_buy_10d = _rolling_sum_until(net_buy_df, net_buy_trade_date, "港股通净买额", 10)
-        snapshot_trade_date = snapshot_trade_date or net_buy_trade_date
+        if net_buy_trade_date is not None:
+            snapshot_trade_date = net_buy_trade_date
         sources.append(net_buy_source)
         raw_refs.append(f"{net_buy_source}:{_cache_path(actual_cache_dir, _southbound_net_buy_dataset(normalized_symbol))}")
     except Exception as exc:
@@ -1051,7 +1052,9 @@ def fetch_hk_capital_flow_snapshot(
         southbound_holding_change = _coerce_float(holding_row.get("持股市值变化-1日"))
         southbound_holding_change_5d = _coerce_float(holding_row.get("持股市值变化-5日"))
         southbound_holding_change_10d = _coerce_float(holding_row.get("持股市值变化-10日"))
-        snapshot_trade_date = snapshot_trade_date or _coerce_date(holding_row.get("持股日期"))
+        holding_trade_date = _coerce_date(holding_row.get("持股日期"))
+        if holding_trade_date is not None:
+            snapshot_trade_date = holding_trade_date
         sources.append(holding_source)
         raw_refs.append(f"{holding_source}:{_cache_path(actual_cache_dir, SOUTHBOUND_HOLDING_CACHE_DATASET)}")
     except Exception as exc:

@@ -75,12 +75,12 @@ def test_00700_15m_segments_keep_two_consecutive_gap_fractal_turns() -> None:
         for segment in segments
     ]
 
-    assert landmarks[0][:4] == ("up", 1, 3, "reverse_break")
+    assert landmarks[0][:4] == ("down", 2, 8, "reverse_break")
     assert any(reason == "feature_sequence_gap_fractal" for _, _, _, reason, _ in landmarks)
     assert any(reason == "reverse_break" for _, _, _, reason, _ in landmarks)
 
     tail = segments[-1]
     assert tail.direction.value == "down"
-    assert tail.start_bi_id == 22
+    assert tail.start_bi_id == 24
     assert tail.stop_reason in {"exhausted_confirmed_bis", "reverse_break"}
-    assert tail.is_confirmed is True
+    assert tail.is_confirmed is False

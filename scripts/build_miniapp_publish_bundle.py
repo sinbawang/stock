@@ -24,7 +24,16 @@ from chanlun.analysis import (
     format_structure_status_label,
 )
 from chanlun.models import Bi, BiDirection
-from chanlun.segment import build_segment_tail_interpretations, describe_stop_reason, identify_segments
+from chanlun.segment import (
+    build_segment_tail_interpretations,
+    classify_stop_reason,
+    describe_stop_reason,
+    identify_segments,
+    is_fallback_confirmed_stop_reason,
+    is_pending_stop_reason,
+    is_theory_confirmed_stop_reason,
+    summarize_stop_reason_outcome,
+)
 from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
 
@@ -950,6 +959,8 @@ def build_bis_from_records(records: list[dict[str, Any]]) -> list[Bi]:
 
 
 def serialize_segment_record(segment: Any) -> dict[str, Any]:
+    stop_reason = segment.stop_reason
+    outcome_summary = summarize_stop_reason_outcome(stop_reason)
     return {
         "segment_id": segment.segment_id,
         "direction": segment.direction.value,
@@ -967,8 +978,14 @@ def serialize_segment_record(segment: Any) -> dict[str, Any]:
         "last_same_extreme": segment.last_same_extreme,
         "last_reverse_extreme": segment.last_reverse_extreme,
         "break_bi_id": segment.break_bi_id,
-        "stop_reason": segment.stop_reason,
-        "stop_reason_label": describe_stop_reason(segment.stop_reason),
+        "stop_reason": stop_reason,
+        "stop_reason_label": describe_stop_reason(stop_reason),
+        "stop_category": classify_stop_reason(stop_reason).value,
+        "stop_outcome_bucket": outcome_summary["bucket"],
+        "stop_outcome_label": outcome_summary["label"],
+        "is_theory_confirmed_stop": is_theory_confirmed_stop_reason(stop_reason),
+        "is_fallback_confirmed_stop": is_fallback_confirmed_stop_reason(stop_reason),
+        "is_pending_stop": is_pending_stop_reason(stop_reason),
         "is_confirmed": segment.is_confirmed,
         "status": "confirmed" if segment.is_confirmed else "preprocessing",
         "note": "auto_generated",
@@ -980,6 +997,24 @@ def _normalize_segment_record(record: dict[str, Any]) -> dict[str, Any]:
     stop_reason = safe_text(normalized.get("stop_reason"))
     if not safe_text(normalized.get("stop_reason_label")):
         normalized["stop_reason_label"] = describe_stop_reason(stop_reason)
+    stop_category = safe_text(normalized.get("stop_category"))
+    if not stop_category:
+        stop_category = classify_stop_reason(stop_reason).value
+        normalized["stop_category"] = stop_category
+
+    if "stop_outcome_bucket" not in normalized:
+        outcome_summary = summarize_stop_reason_outcome(stop_reason)
+        normalized["stop_outcome_bucket"] = outcome_summary["bucket"]
+    if "stop_outcome_label" not in normalized:
+        outcome_summary = summarize_stop_reason_outcome(stop_reason)
+        normalized["stop_outcome_label"] = outcome_summary["label"]
+
+    if "is_theory_confirmed_stop" not in normalized:
+        normalized["is_theory_confirmed_stop"] = is_theory_confirmed_stop_reason(stop_reason)
+    if "is_fallback_confirmed_stop" not in normalized:
+        normalized["is_fallback_confirmed_stop"] = is_fallback_confirmed_stop_reason(stop_reason)
+    if "is_pending_stop" not in normalized:
+        normalized["is_pending_stop"] = is_pending_stop_reason(stop_reason)
     return normalized
 
 
@@ -1022,6 +1057,12 @@ def build_segment_stop_reason_annotations(segment_records: list[dict[str, Any]],
                 "segment_id": segment_id,
                 "stop_reason": stop_reason,
                 "stop_reason_label": stop_reason_label,
+                "stop_category": classify_stop_reason(stop_reason).value,
+                "stop_outcome_bucket": summarize_stop_reason_outcome(stop_reason)["bucket"],
+                "stop_outcome_label": summarize_stop_reason_outcome(stop_reason)["label"],
+                "is_theory_confirmed_stop": is_theory_confirmed_stop_reason(stop_reason),
+                "is_fallback_confirmed_stop": is_fallback_confirmed_stop_reason(stop_reason),
+                "is_pending_stop": is_pending_stop_reason(stop_reason),
                 "text": f"{timeframe_label} {segment_hint} 停驻原因：{stop_reason_label}",
             }
         )

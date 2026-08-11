@@ -486,6 +486,10 @@ def test_build_segment_records_backfills_stop_reason_label_when_missing() -> Non
     assert len(records) == 1
     assert records[0]["stop_reason"] == "same_direction_not_extending"
     assert records[0]["stop_reason_label"] == "出现同向笔，但没有继续创新高或新低"
+    assert records[0]["stop_category"] == "pending"
+    assert records[0]["is_theory_confirmed_stop"] is False
+    assert records[0]["is_fallback_confirmed_stop"] is False
+    assert records[0]["is_pending_stop"] is True
 
 
 def test_build_latest_segment_stop_reason_line_from_csv_records(tmp_path: Path) -> None:
@@ -563,6 +567,12 @@ def test_build_chart_data_payload_includes_segment_stop_reason_annotations(tmp_p
     assert annotations["latest"] is not None
     assert annotations["latest"]["segment_id"] == 0
     assert annotations["latest"]["stop_reason_label"] == "出现同向笔，但没有继续创新高或新低"
+    assert annotations["latest"]["stop_category"] == "pending"
+    assert annotations["latest"]["stop_outcome_bucket"] == "pending"
+    assert annotations["latest"]["stop_outcome_label"] == "pending"
+    assert annotations["latest"]["is_theory_confirmed_stop"] is False
+    assert annotations["latest"]["is_fallback_confirmed_stop"] is False
+    assert annotations["latest"]["is_pending_stop"] is True
     assert annotations["latest"]["text"].startswith("30M S0 停驻原因：")
 
 
