@@ -11,6 +11,8 @@ from chanlun.segment import (
     SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
     SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
     SEGMENT_BOOTSTRAP_SKIP_LEFT_EDGE,
+    StopOutcomeCategory,
+    classify_stop_reason,
     identify_segments as _identify_segments,
 )
 
@@ -137,3 +139,26 @@ def test_prefer_earlier_start_biases_left_within_near_best_quality() -> None:
     assert auto_segments
     assert preferred_segments
     assert preferred_segments[0].start_bi_id <= auto_segments[0].start_bi_id
+
+
+def test_bootstrap_modes_do_not_introduce_unknown_stop_categories() -> None:
+    bis = _sample_bis()
+    modes = [
+        DEFAULT_SEGMENT_BOOTSTRAP_MODE,
+        SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
+        SEGMENT_BOOTSTRAP_AUTO,
+        SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
+        SEGMENT_BOOTSTRAP_SKIP_LEFT_EDGE,
+    ]
+
+    for mode in modes:
+        kwargs = {"bootstrap_mode": mode}
+        if mode == SEGMENT_BOOTSTRAP_SKIP_LEFT_EDGE:
+            kwargs["bootstrap_skip_confirmed_bis"] = 1
+        segments = identify_segments(bis, **kwargs)
+        assert segments
+        for segment in segments:
+            category = classify_stop_reason(segment.stop_reason)
+            assert category != StopOutcomeCategory.UNKNOWN, (
+                f"unknown stop category under bootstrap_mode={mode}: {segment.stop_reason}"
+            )

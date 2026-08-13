@@ -1408,22 +1408,22 @@ def identify_segments(
     if len(bis) < 3:
         return []
 
+    practical_mode = termination_mode == SEGMENT_TERMINATION_MODE_PRACTICAL
     effective_bootstrap_mode = bootstrap_mode
-    effective_strict_segment_rules = strict_segment_rules
-    if termination_mode == SEGMENT_TERMINATION_MODE_THEORY:
+    # Strict rules are an engineering enhancement and only apply in practical mode.
+    effective_strict_segment_rules = practical_mode and strict_segment_rules
+    if not practical_mode:
         if bootstrap_mode in {
             SEGMENT_BOOTSTRAP_AUTO,
             SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
         }:
             effective_bootstrap_mode = SEGMENT_BOOTSTRAP_FIRST_VALID_SEED
-        # Theory mode keeps the geometric path pure and does not apply practical strengthening/merge rules.
-        effective_strict_segment_rules = False
 
     segments: List[Segment] = []
     segment_id = 0
     enable_gap_false_defer = effective_bootstrap_mode != SEGMENT_BOOTSTRAP_FIRST_VALID_SEED
-    enable_fallback_reverse_break = termination_mode == SEGMENT_TERMINATION_MODE_PRACTICAL
-    enable_same_direction_fallback = termination_mode == SEGMENT_TERMINATION_MODE_PRACTICAL
+    enable_fallback_reverse_break = practical_mode
+    enable_same_direction_fallback = practical_mode
     index = _resolve_bootstrap_start_index(
         bis,
         bootstrap_mode=effective_bootstrap_mode,

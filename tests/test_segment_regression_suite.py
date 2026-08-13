@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from chanlun.segment import StopOutcomeCategory, classify_stop_reason
-from tests.segment_regression_support import identify_segments_from_csv
+from tests.segment_regression_support import identify_segments_from_csv, load_bis_from_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -169,3 +169,56 @@ def test_regression_suite_cross_cycle_stop_category_consistency(
     assert StopOutcomeCategory.FALLBACK_CONFIRMED in categories, (
         f"{symbol} cross-cycle fixtures lost fallback_confirmed coverage"
     )
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    SCENARIOS,
+    ids=[item["name"] for item in SCENARIOS],
+)
+def test_regression_suite_dual_mode_has_no_unknown_stop_category(scenario: dict[str, object]) -> None:
+    csv_path = scenario["csv_path"]
+    assert isinstance(csv_path, Path)
+    assert csv_path.exists(), f"missing fixture csv: {csv_path}"
+
+    for mode in ("theory", "practical"):
+        segments = identify_segments_from_csv(csv_path, termination_mode=mode)
+        assert segments, f"no segments in {mode} mode for {csv_path.name}"
+        for segment in segments:
+            category = classify_stop_reason(segment.stop_reason)
+            assert category != StopOutcomeCategory.UNKNOWN, (
+                f"unknown stop category in {mode} mode for {csv_path.name}: {segment.stop_reason}"
+            )
+
+
+KEY_LANDMARK_SCENARIOS = [
+    "00700-60m",
+    "300124-60m",
+]
+
+
+@pytest.mark.parametrize("scenario_name", KEY_LANDMARK_SCENARIOS)
+def test_regression_suite_key_landmarks_do_not_collapse_to_single_overlong_segment(
+    scenario_name: str,
+) -> None:
+    scenario_map = {item["name"]: item for item in SCENARIOS}
+    scenario = scenario_map[scenario_name]
+    csv_path = scenario["csv_path"]
+    assert isinstance(csv_path, Path)
+    assert csv_path.exists(), f"missing fixture csv: {csv_path}"
+
+    bis = load_bis_from_csv(csv_path)
+    assert bis, f"no bis in fixture: {csv_path.name}"
+    total_bis = len(bis)
+
+    for mode in ("theory", "practical"):
+        segments = identify_segments_from_csv(csv_path, termination_mode=mode)
+        assert len(segments) >= 2, (
+            f"{scenario_name} collapsed to <2 segments in {mode} mode"
+        )
+
+        longest_segment_len = max(len(segment.bi_ids) for segment in segments)
+        assert longest_segment_len < total_bis, (
+            f"{scenario_name} collapsed to one overlong segment in {mode} mode: "
+            f"longest={longest_segment_len}, total_bis={total_bis}"
+        )

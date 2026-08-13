@@ -253,7 +253,7 @@
     - `_extend_segment(...)` 的 `transition_pending` 判定已改为基于有效三笔种子边界（`seed_start_idx/seed_end_idx`），不再误用 anchor 起点；
     - 新增回归用例 `test_transition_pending_uses_fallback_seed_boundary_instead_of_anchor_start` 锁定该场景。
 
-- [ ] Task N2：核心边界回归补齐
+- [x] Task N2：核心边界回归补齐
   - 覆盖边界：
     - 无缺口特征序列分型；
     - 有缺口且后续被反向特征序列确认；
@@ -270,10 +270,15 @@
     - [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py)
     - [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py)
     - [tests/test_segment_bootstrap_anchor.py](tests/test_segment_bootstrap_anchor.py)
+  - 完成说明（2026-08-14）：
+    - 在 [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py) 新增 theory/practical 双模式回放与 `unknown` 分类守卫；
+    - 在 [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py) 新增关键地标样本“防超长单段回退”回归；
+    - 在 [tests/test_segment_bootstrap_anchor.py](tests/test_segment_bootstrap_anchor.py) 新增 bootstrap 模式切换下 stop_category 稳定性守卫；
+    - 在 [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py) 补齐并锁定过渡边界相关回归样本。
 
 ### Next（当前稳定后推进）
 
-- [ ] Task N3：strict 规则从理论路径剥离为独立 `practical_mode`
+- [x] Task N3：strict 规则从理论路径剥离为独立 `practical_mode`
   - 目标：把“三笔同向推进 / 同向段合并”从默认识别流程中拆分，避免替代理论定义。
   - 代码锚点：
     - [src/chanlun/segment.py](src/chanlun/segment.py) 的 `identify_segments(...)`
@@ -290,6 +295,10 @@
     - [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py)
     - [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py)
     - [docs/chanlun/segment-implementation-guide.md](docs/chanlun/segment-implementation-guide.md)
+  - 完成说明（2026-08-14）：
+    - `identify_segments(...)` 中 `strict_segment_rules` 已显式绑定到 `termination_mode=practical`，theory 路径不再受 strict 开关影响；
+    - theory 模式继续把 `auto/prefer_earlier_start` 归一到 `first_valid_seed`，保证几何路径稳定；
+    - 新增回归用例 `test_theory_mode_is_invariant_to_strict_rules_toggle` 锁定 theory 路径对 strict 开关的不敏感性。
 
 - [ ] Task N4：bootstrap 逻辑主流程解耦
   - 目标：将 `bootstrap_mode`、`bootstrap_skip_confirmed_bis`、评分函数拆为可选后处理/起点优化层。

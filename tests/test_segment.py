@@ -170,6 +170,32 @@ class TestIdentifySegments:
         assert theory_strict[0].direction == BiDirection.UP
         assert theory_strict[0].bi_ids == [0, 1, 2]
 
+    def test_theory_mode_is_invariant_to_strict_rules_toggle(self):
+        bis = [
+            _bi(0, BiDirection.UP, 120, 100),
+            _bi(1, BiDirection.DOWN, 118, 105),
+            _bi(2, BiDirection.UP, 119, 106),
+            _bi(3, BiDirection.DOWN, 116, 104),
+            _bi(4, BiDirection.UP, 123, 107),
+            _bi(5, BiDirection.DOWN, 117, 103),
+            _bi(6, BiDirection.UP, 124, 108),
+        ]
+
+        theory_non_strict = identify_segments(
+            bis,
+            termination_mode="theory",
+            strict_segment_rules=False,
+        )
+        theory_strict = identify_segments(
+            bis,
+            termination_mode="theory",
+            strict_segment_rules=True,
+        )
+
+        assert [(segment.bi_ids, segment.stop_reason, segment.is_confirmed) for segment in theory_strict] == [
+            (segment.bi_ids, segment.stop_reason, segment.is_confirmed) for segment in theory_non_strict
+        ]
+
     def test_theory_mode_auto_bootstrap_matches_first_valid_seed(self):
         bis = [
             _bi(0, BiDirection.UP, 120, 100),

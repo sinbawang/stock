@@ -138,13 +138,22 @@ def assert_landmarks_equal(expected: list[tuple[Any, ...]], actual: list[tuple[A
     assert actual == expected, format_landmark_diff(diff)
 
 
-def identify_segments_from_csv(path: Path):
+def load_bis_from_csv(path: Path):
     bars = clean_bars(read_bars_from_csv(str(path)))
     normalized_bars = normalize_bars(bars)
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
-    bis = identify_bis(fractals, normalized_bars, pending_reverse_mode="any")
+    return identify_bis(fractals, normalized_bars, pending_reverse_mode="any")
+
+
+def identify_segments_from_csv(
+    path: Path,
+    *,
+    termination_mode: str = "practical",
+    bootstrap_mode: str = SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
+):
+    bis = load_bis_from_csv(path)
     return identify_segments(
         bis,
-        bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
-        termination_mode="practical",
+        bootstrap_mode=bootstrap_mode,
+        termination_mode=termination_mode,
     )
