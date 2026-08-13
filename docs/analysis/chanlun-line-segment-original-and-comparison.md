@@ -354,8 +354,14 @@
     - 新增可复用样本模块 [tests/segment_lesson_boundary_fixtures.py](tests/segment_lesson_boundary_fixtures.py)，统一维护 62/67/71/78 四类边界样本；
     - 新增消费回归 [tests/test_segment_lesson_boundary_fixtures.py](tests/test_segment_lesson_boundary_fixtures.py)，在 theory/practical 双模式下复跑并校验 stop_category 不漂移为 `unknown`；
     - 补充 78 课样本 practical/theory 对照守卫，避免后续改动导致异常收缩。
-- [ ] 增补 theory/practical 双模式的最小接入示例，面向下游消费方。
-- [ ] 将上述任务与 changelog 快照联动，形成“任务完成 -> 回归结果 -> 文档更新”的闭环。
+- [x] 增补 theory/practical 双模式的最小接入示例，面向下游消费方。
+  - 完成说明（2026-08-14）：
+    - 新增文档 [../chanlun/segment-mode-consumer-examples.md](../chanlun/segment-mode-consumer-examples.md)，提供双模式最小代码、分类消费约定与发布前最小核验命令；
+    - 已接入 [../chanlun/README.md](../chanlun/README.md) 与 [../chanlun/segment-doc-map.md](../chanlun/segment-doc-map.md) 导航。
+- [x] 将上述任务与 changelog 快照联动，形成“任务完成 -> 回归结果 -> 文档更新”的闭环。
+  - 完成说明（2026-08-14）：
+    - 在 [../chanlun/segment-implementation-changelog.md](../chanlun/segment-implementation-changelog.md) 新增 2026-08-14 快照，统一记录 N1~N5 与 Later-1/2 的“任务范围 + 回归结果 + 文档更新”；
+    - 补充闭环记录模板，后续任务按同一结构续写，避免看板与 changelog 脱节。
 
 ### Done（已完成基线）
 
