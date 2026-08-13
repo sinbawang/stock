@@ -18,6 +18,8 @@
 
 - [fundamental/fundamental-doc-map.md](fundamental/fundamental-doc-map.md): 基本面总导航
 - [chanlun/chanlun-rule-spec.md](chanlun/chanlun-rule-spec.md): 缠论规则规格
+- [chanlun/segment-doc-map.md](chanlun/segment-doc-map.md): 线段文档总导航
+- [chanlun/segment-safety-checklist.md](chanlun/segment-safety-checklist.md): 线段改动安全清单
 - [capital/capital-flow-module-spec.md](capital/capital-flow-module-spec.md): 资金面模块设计规格
 - [analysis/combined-analysis-output-spec.md](analysis/combined-analysis-output-spec.md): 联合分析输出规格
 - [miniapp/miniapp-cloud-publish-schema.md](miniapp/miniapp-cloud-publish-schema.md): 小程序云存储发布协议

@@ -1,5 +1,11 @@
 # 线段实现专题
 
+文档入口：
+
+- 总导航： [segment-doc-map.md](segment-doc-map.md)
+- 稳定接口契约： [segment-stop-reason-contract.md](segment-stop-reason-contract.md)
+- 变更快照： [segment-implementation-changelog.md](segment-implementation-changelog.md)
+
 这份文档只说明当前项目里“线段是怎么画出来的”，目标是方便人工核图。
 
 严格缠论原文口径与当前工程实现并不完全等价；如果两者冲突，以这里描述的“当前实现口径”作为现阶段对图结果的解释标准。
@@ -129,6 +135,8 @@
 - `stop_reason`：线段为何停在当前终点的工程状态码
 
 其中 `stop_reason` 当前常见取值包括：
+
+完整分类与消费口径见 [segment-stop-reason-contract.md](segment-stop-reason-contract.md)。
 
 - `feature_sequence_fractal`：反向特征序列已经形成可直接确认的顶/底分型，旧线段在该分型对应极值处终结
 - `feature_sequence_gap_fractal`：反向特征序列分型的第一二元素存在缺口，需等待其后的反向序列再长出分型，随后回头确认旧线段终结

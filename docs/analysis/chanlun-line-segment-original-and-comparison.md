@@ -1,5 +1,15 @@
 # 缠论原文关于线段划分的提炼与项目实现对照
 
+## 文档角色与入口
+
+这份文档定位为“原文对照 + 差异分析 + 演进记录”，不是当前工程规则的唯一规范入口。
+
+当前建议按以下入口使用：
+
+- 现行实现口径： [../chanlun/segment-implementation-guide.md](../chanlun/segment-implementation-guide.md)
+- 稳定接口契约： [../chanlun/segment-stop-reason-contract.md](../chanlun/segment-stop-reason-contract.md)
+- 线段文档地图： [../chanlun/segment-doc-map.md](../chanlun/segment-doc-map.md)
+
 ## 1. 原文中“线段划分”的核心定义
 
 下面内容是从《教你炒股票》相关课文中提炼出的关键段落，重点对应 62、67、71 课。
@@ -158,81 +168,33 @@
 
 ---
 
-## 4.5 当前实现状态快照（截至 2026-08-11）
+## 4.5 当前实现状态（稳定摘要）
 
-基于当前仓库状态，线段识别的核心实现已经推进到一个可验证阶段：
+本节只保留长期有效的稳定摘要；带时间戳的回归数值与完成度估算统一收敛到：
 
-- 已把“理论主路径”接入 [src/chanlun/segment.py](src/chanlun/segment.py) 的 `_evaluate_theory_stop()`，让特征序列分型优先于早期的兜底反向突破；
-- 已把缺口再分辨的“延迟确认”分支纳入扩展流程，并在部分边界场景下避免过早下结论；
-- 已把 `termination_mode` 对同向兜底分支的行为显式区分：`theory` 模式不再优先落入 `unexpected_same_direction` / `same_direction_slot_not_filled` / `same_direction_not_extending` 这类工程兜底终结；
-- 已把 `termination_mode=theory` 下的 bootstrap/strict 行为收敛到更纯理论路径：
-  - 对 `auto` / `prefer_earlier_start` 启发式锚点选择，自动降级到 `first_valid_seed`；
-  - 关闭 strict 实盘增强（前三笔推进强化与同向段合并）对理论划分的干扰；
-- 已补“第一笔破坏后第三笔分叉”的边界回放用例：
-  - 第三笔破第一笔终点 => 保持新段路径；
-  - 第三笔破第一笔起点 => 回收至前段语义；
-- 已补跨周期（15m/30m/60m）一致性断言：
-  - 在 [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py) 中按标的分组校验 stop category 覆盖；
-  - 锁定跨周期样本至少同时覆盖 `theory_confirmed` 与 `fallback_confirmed`，且不出现 `unknown` 类别；
-- 已把 stop 契约字段对齐到下游发布/导出侧：
-  - [scripts/build_miniapp_publish_bundle.py](scripts/build_miniapp_publish_bundle.py) 的 segment records 与 annotations 现已输出 `stop_category`、`is_theory_confirmed_stop`、`is_fallback_confirmed_stop`、`is_pending_stop`；
-  - [scripts/export_structures_with_boxes.py](scripts/export_structures_with_boxes.py) 的 segments CSV 现已输出同口径字段，避免调用端自行重建分组逻辑；
-- 已补上一组回归测试，覆盖理论分型优先、缺口延迟确认、过渡待定态和 theory/practical 分流边界。
+- [../chanlun/segment-implementation-changelog.md](../chanlun/segment-implementation-changelog.md)
 
-最新验证结果：
+当前稳定结论：
 
-- 分段相关回归：54 passed；
-- 全量测试：491 passed。
-
-按当前进度估算，整体完成度大约为 98%：
-
-- 98%：核心 theory/practical 分流、缺口候选状态化、过渡待定态、特征序列上下文字段、theory 模式下 bootstrap/strict 去实盘化、“第一笔破坏后第三笔分叉”边界回放、跨周期一致性断言，以及下游发布/导出/CLI 消费口径统一都已落地并通过回归；
-- 2%：剩余工作主要是把该契约在更多外围脚本/文档入口做统一声明，并沉淀一页简明“调用方接入范式”文档以减少后续扩展时的口径漂移风险。
-
-下一优先级建议：
-
-1. 把状态机语义从“内部状态”进一步提升为“对外稳定接口文档”，统一 `stop_reason`、`stop_category`、`pending` 语义边界；
-2. 在文档中补“原文边界样本 -> 当前状态机判决”的示例映射，明确调用方如何消费 `theory` 与 `practical` 两种模式结果。
+1. 核心识别路径已形成 theory/practical 分流，且对下游消费字段已有统一口径。
+2. 缺口再分辨、过渡边界和跨周期一致性已具备回归基线。
+3. 后续工作重点从“主流程落地”转向“外围入口一致性与调用方接入范式沉淀”。
 
 ---
 
 ## 4.6 stop_reason 稳定接口约定（当前版）
 
-为减少“同一 stop_reason 在不同调用方被不同解释”的风险，当前实现已提供稳定的分组接口：
+本节保留为背景说明；对外接口以 [../chanlun/segment-stop-reason-contract.md](../chanlun/segment-stop-reason-contract.md) 为准。
 
-- 代码入口：[src/chanlun/segment.py](src/chanlun/segment.py) 的 `get_stop_reason_contract()`
-- 语义来源：`STOP_REASON_CATEGORIES` + `STOP_REASONS_BY_CATEGORY`
+这里仅保留“为什么需要 contract”的背景结论：
 
-当前 contract（按 `StopOutcomeCategory`）为：
+1. 同一 `stop_reason` 必须有唯一 category（互斥）。
+2. 调用方不应自行硬编码分组，避免版本漂移。
+3. 分类迁移属于行为变更，必须配回归与变更记录。
 
-- `theory_confirmed`
-  - `feature_sequence_fractal`
-  - `feature_sequence_gap_fractal`
-  - `feature_sequence_gap_fractal_delayed_true`
-- `fallback_confirmed`
-  - `reverse_break`
-  - `reverse_break_after_gap`
-- `pending`
-  - `unexpected_same_direction`
-  - `no_followup_same_direction`
-  - `same_direction_slot_not_filled`
-  - `same_direction_not_extending`
-  - `transition_pending`
-  - `exhausted_confirmed_bis`
-- `unknown`
-  - 空集合（仅用于未知码/空值兜底）
+具体分组清单、helper API、消费规则、稳定性约束统一收敛到：
 
-配套回归：
-
-- [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py)
-  - `test_stop_reason_contract_groups_are_stable_and_complete`
-  - `test_stop_reason_category_buckets_match_expected_semantics`
-
-这两个测试用于锁定：
-
-1. contract 分类集合完整且互斥；
-2. 每个状态码归属不漂移；
-3. 公开 contract 与内部分类常量保持一致。
+- [../chanlun/segment-stop-reason-contract.md](../chanlun/segment-stop-reason-contract.md)
 
 ---
 
@@ -257,98 +219,126 @@
 
 ---
 
-## 4.8 调用方接口契约（建议直接采用）
+## 4.8 调用方契约与维护清单（统一入口）
 
-为保证后续演进时调用方不被内部重构影响，建议统一使用以下稳定接口，而不是自行硬编码状态码分组：
+本节不再重复接口细节与维护步骤，统一引用：
 
-- 分组 contract：
-  - `get_stop_reason_contract()`
-- 分类函数：
-  - `classify_stop_reason(stop_reason)`
-- 便捷判定：
-  - `is_theory_confirmed_stop_reason(stop_reason)`
-  - `is_fallback_confirmed_stop_reason(stop_reason)`
-  - `is_pending_stop_reason(stop_reason)`
-- 调用方摘要：
-  - `summarize_stop_reason_outcome(stop_reason, mode="practical")`
+- [../chanlun/segment-stop-reason-contract.md](../chanlun/segment-stop-reason-contract.md)
 
-推荐消费策略：
+调用方如果要接入/改造，请按文档地图中的顺序阅读：
 
-1. 若策略强调“理论严格性”，使用 `termination_mode=theory`，并仅把 `is_theory_confirmed_stop_reason(...) == True` 作为正式终结信号。
-2. 若策略强调“实盘响应”，使用 `termination_mode=practical`，并分开展示 theory/fallback 两类 confirmed 信号。
-3. 对 `is_pending_stop_reason(...) == True` 的样本，不做最终终结结论，只作为“待确认结构”。
-4. 对未知 stop reason（`classify_stop_reason(...) == unknown`）按降级策略处理：记录告警、降级为只读展示，不进入自动交易/自动评分主流程。
-
-兼容性约定：
-
-- 新增 stop reason 时，必须同步更新：
-  - `STOP_REASON_LABELS`
-  - `STOP_REASON_CATEGORIES`
-  - `get_stop_reason_contract()` 对应回归
-- 任何 stop reason 的分类迁移都视为“行为变更”，需补回归并在文档快照中记录。
-
-配套回归锚点：
-
-- [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py)
-  - `test_stop_reason_contract_groups_are_stable_and_complete`
-  - `test_stop_reason_category_buckets_match_expected_semantics`
-  - `test_stop_reason_helpers_follow_contract_categories`
+- [../chanlun/segment-doc-map.md](../chanlun/segment-doc-map.md)
 
 ---
 
-## 4.9 新增 stop_reason 维护清单
+## 5. TODO Board（Now / Next / Later）
 
-当新增或调整 stop reason 时，按以下顺序执行，避免调用口径漂移：
+任务源仍基于 [src/chanlun/segment.py](src/chanlun/segment.py) 与 [src/chanlun/models.py](src/chanlun/models.py)，但改为执行看板，减少重复维护成本。
 
-1. 核心语义：更新 [src/chanlun/segment.py](src/chanlun/segment.py) 中 `STOP_REASON_LABELS` 与 `STOP_REASON_CATEGORIES`。
-2. contract 导出：确认 `get_stop_reason_contract()` 与 helper（`is_theory_confirmed_stop_reason` 等）结果符合预期。
-3. 下游消费：检查 [scripts/build_miniapp_publish_bundle.py](scripts/build_miniapp_publish_bundle.py) 与 [scripts/export_structures_with_boxes.py](scripts/export_structures_with_boxes.py) 的 `stop_category`/布尔字段是否自动对齐。
-4. 回归测试：至少通过以下测试集合：
-   - [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py)
-   - [tests/test_build_miniapp_publish_bundle.py](tests/test_build_miniapp_publish_bundle.py)
-   - [tests/test_export_structures_with_boxes.py](tests/test_export_structures_with_boxes.py)
-   - [tests/test_chanlun_cli.py](tests/test_chanlun_cli.py)
-5. 快照更新：同步本文件 4.5 的“最新验证结果”和进度评估。
+### Now（当前应优先推进）
 
----
+- [ ] Task N1：过渡边界待定态收口
+  - 目标场景：第一笔破坏旧段后，第三笔出现回收或反向回拉。
+  - 代码锚点：
+    - [src/chanlun/segment.py](src/chanlun/segment.py) 的 `_evaluate_transition_state(...)`
+    - [src/chanlun/segment.py](src/chanlun/segment.py) 的 `_extend_segment(...)`
+  - 验收标准：
+    - 不在第一时间直接终结旧段；
+    - 先进入待定态（`transition_pending`）；
+    - 仅在后续特征序列证据充分后转为 confirmed 类别。
+  - 测试目标：
+    - 在 [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py) 补充“第三笔回收/反拉”用例；
+    - 在 [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py) 增加跨周期回放样本。
 
-## 5. TODO List（按优先级重排）
+- [ ] Task N2：核心边界回归补齐
+  - 覆盖边界：
+    - 无缺口特征序列分型；
+    - 有缺口且后续被反向特征序列确认；
+    - 第一笔破坏旧段、第三笔回收；
+    - 同向推进不足兜底。
+  - 代码锚点：
+    - [src/chanlun/segment.py](src/chanlun/segment.py) 的 `_extend_segment(...)`
+    - [src/chanlun/segment.py](src/chanlun/segment.py) 的 `identify_segments(...)`
+  - 验收标准：
+    - 对应 stop_reason 与 stop_category 在 theory/practical 下保持一致可解释；
+    - 不引入 `unknown` 分类漂移；
+    - 关键样本不出现历史地标段回退为超长单段。
+  - 测试目标：
+    - [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py)
+    - [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py)
+    - [tests/test_segment_bootstrap_anchor.py](tests/test_segment_bootstrap_anchor.py)
 
-下面这份清单是基于当前实现 [src/chanlun/segment.py](src/chanlun/segment.py) 和 [src/chanlun/models.py](src/chanlun/models.py) 逐项拆出来的，优先级从高到低。
+### Next（当前稳定后推进）
 
-### P0：先把“理论主路径”和“工程兜底路径”彻底分开
+- [ ] Task N3：strict 规则从理论路径剥离为独立 `practical_mode`
+  - 目标：把“三笔同向推进 / 同向段合并”从默认识别流程中拆分，避免替代理论定义。
+  - 代码锚点：
+    - [src/chanlun/segment.py](src/chanlun/segment.py) 的 `identify_segments(...)`
+    - [src/chanlun/segment.py](src/chanlun/segment.py) 中 `strict_segment_rules` 相关分支
+  - 验收标准：
+    - `termination_mode=theory` 下不依赖 strict 增强规则；
+    - `termination_mode=practical` 下保留现有工程增强行为；
+    - theory/practical 输出差异在文档与测试中可解释。
+  - 测试目标：
+    - [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py)
+    - [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py)
+  - 预计影响文件：
+    - [src/chanlun/segment.py](src/chanlun/segment.py)
+    - [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py)
+    - [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py)
+    - [docs/chanlun/segment-implementation-guide.md](docs/chanlun/segment-implementation-guide.md)
 
-- [x] 在 [src/chanlun/segment.py](src/chanlun/segment.py) 的 `_extend_segment()` 中，把线段终结拆成两条路径：
-  - 理论主路径：只依赖 `_feature_sequence_break()` 和 `_gap_feature_sequence_candidate()`；
-  - 工程兜底路径：只在主路径未给出明确结论时才启用 `reverse_break`、`same_direction_not_extending` 等规则。
-- [x] 把 `stop_reason` 的语义统一成三类：`theory_confirmed`、`fallback_confirmed`、`pending`。
+- [ ] Task N4：bootstrap 逻辑主流程解耦
+  - 目标：将 `bootstrap_mode`、`bootstrap_skip_confirmed_bis`、评分函数拆为可选后处理/起点优化层。
+  - 代码锚点：
+    - [src/chanlun/segment.py](src/chanlun/segment.py) 的起段选择与 bootstrap 评分分支
+    - [tests/test_segment_bootstrap_anchor.py](tests/test_segment_bootstrap_anchor.py)
+  - 验收标准：
+    - 关闭 bootstrap 时，理论主路径结果不受候选评分影响；
+    - 开启 bootstrap 时，行为与当前工程目标一致且可解释；
+    - 发布与报表链路对 1m 的起点策略保持可复现。
+  - 测试目标：
+    - [tests/test_segment_bootstrap_anchor.py](tests/test_segment_bootstrap_anchor.py)
+    - [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py)
+  - 预计影响文件：
+    - [src/chanlun/segment.py](src/chanlun/segment.py)
+    - [tests/test_segment_bootstrap_anchor.py](tests/test_segment_bootstrap_anchor.py)
+    - [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py)
+    - [docs/chanlun/segment-implementation-guide.md](docs/chanlun/segment-implementation-guide.md)
 
-### P0：把缺口再分辨和过渡点边界改成显式状态
+- [ ] Task N5：特征序列上下文语义进一步强化
+  - 目标：确保“同一特征序列内部包含关系”在实现与文档层完全一致。
+  - 代码锚点：
+    - [src/chanlun/segment.py](src/chanlun/segment.py) 的 `_build_standard_feature_sequence(...)`
+    - [src/chanlun/segment.py](src/chanlun/segment.py) 的 `_FeatureSequenceElement`
+  - 验收标准：
+    - 元素上下文字段在关键判定路径中被一致消费；
+    - 包含关系判定不跨序列污染；
+    - 文档中的语义声明与代码字段一一对应。
+  - 测试目标：
+    - [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py)
+    - [tests/test_segment.py](tests/test_segment.py)
+  - 预计影响文件：
+    - [src/chanlun/segment.py](src/chanlun/segment.py)
+    - [src/chanlun/models.py](src/chanlun/models.py)
+    - [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py)
+    - [tests/test_segment.py](tests/test_segment.py)
+    - [docs/chanlun/segment-implementation-guide.md](docs/chanlun/segment-implementation-guide.md)
 
-- [x] 把 `_evaluate_pending_gap_candidate()` 和 `_rediscriminate_gap_break_detail()` 的返回值从“布尔/空值混用”改成明确状态：`gap_candidate_pending`、`gap_confirmed`、`gap_invalidated`、`gap_deferred`。
-- [x] 在 [src/chanlun/segment.py](src/chanlun/segment.py) 中为 `_reclaims_transition_back_to_prior_segment()` 的边界案例增加一个明确状态，例如 `transition_pending`。
-- [ ] 当第一笔就破坏旧段、但后续第三笔又出现回收或反向回拉时，不要立刻下结论，而是进入等待态，等后续特征序列结果再确认。
+### Later（优化与收敛）
 
-### P1：把特征序列从“窗口式”提升为“显式上下文结构”
+- [ ] 把 62/67/71/78 课边界样本沉淀为可复用 fixture（跨周期复跑）。
+- [ ] 增补 theory/practical 双模式的最小接入示例，面向下游消费方。
+- [ ] 将上述任务与 changelog 快照联动，形成“任务完成 -> 回归结果 -> 文档更新”的闭环。
 
-- [x] 把 `_FeatureSequenceElement` 扩展为显式字段：`feature_sequence_id`、`belongs_to_prior_segment`、`belongs_to_new_segment`、`in_transition`。
-- [x] 让 `_build_standard_feature_sequence()` 生成带上下文的元素，而不是只依赖当前窗口的高低点推断。
-- [ ] 这样可以更严格地体现原文中“特征序列元素必须在同一特征序列内部讨论包含关系”的语义。
+### Done（已完成基线）
 
-### P1：把实盘增强规则从理论定义中剥离
-
-- [ ] 把 `strict_segment_rules` 的“三笔同向推进”和“相邻同向线段合并”改成独立的 `practical_mode`，而不是默认替代理论逻辑。
-- [x] 保留 `theory_mode` 的纯几何判定路径，避免当前默认 `DEFAULT_STRICT_SEGMENT_RULES = True` 让理论结果被实盘增强规则污染。
-- [ ] 把 bootstrap 相关逻辑（`bootstrap_mode`、`bootstrap_skip_confirmed_bis`、打分函数）从主识别流程中分离为可选后处理/可选起点优化。
-
-### P2：补回归测试，先锁住原文中的边界案例
-
-- [ ] 针对 62/67/71/78 课里提到的边界例子，补测试覆盖：
-  - 无缺口的特征序列分型；
-  - 有缺口但后续被反向特征序列确认；
-  - 第一笔破坏旧线段、第三笔回收的过渡案例；
-  - 同向推进不足的兜底情况。
-- [ ] 重点测试 [src/chanlun/segment.py](src/chanlun/segment.py) 的 `_extend_segment()` 和 `identify_segments()`。
+- [x] 线段终结已实现 theory 主路径与 fallback 兜底分流。
+- [x] `stop_reason` 已统一为 `theory_confirmed / fallback_confirmed / pending` 三类语义。
+- [x] 缺口再分辨已状态化（`gap_candidate_pending / gap_confirmed / gap_invalidated / gap_deferred`）。
+- [x] 过渡边界已引入 `transition_pending`。
+- [x] `_FeatureSequenceElement` 已扩展上下文字段（`feature_sequence_id` 等）。
+- [x] `theory_mode` 纯几何路径已保留，避免 strict 默认值污染理论结果。
 
 ---
 
