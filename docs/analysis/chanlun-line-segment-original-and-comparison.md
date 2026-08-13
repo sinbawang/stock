@@ -349,7 +349,11 @@
 
 ### Later（优化与收敛）
 
-- [ ] 把 62/67/71/78 课边界样本沉淀为可复用 fixture（跨周期复跑）。
+- [x] 把 62/67/71/78 课边界样本沉淀为可复用 fixture（跨周期复跑）。
+  - 完成说明（2026-08-14）：
+    - 新增可复用样本模块 [tests/segment_lesson_boundary_fixtures.py](tests/segment_lesson_boundary_fixtures.py)，统一维护 62/67/71/78 四类边界样本；
+    - 新增消费回归 [tests/test_segment_lesson_boundary_fixtures.py](tests/test_segment_lesson_boundary_fixtures.py)，在 theory/practical 双模式下复跑并校验 stop_category 不漂移为 `unknown`；
+    - 补充 78 课样本 practical/theory 对照守卫，避免后续改动导致异常收缩。
 - [ ] 增补 theory/practical 双模式的最小接入示例，面向下游消费方。
 - [ ] 将上述任务与 changelog 快照联动，形成“任务完成 -> 回归结果 -> 文档更新”的闭环。
 
