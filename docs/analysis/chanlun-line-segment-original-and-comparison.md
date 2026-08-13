@@ -237,7 +237,7 @@
 
 ### Now（当前应优先推进）
 
-- [ ] Task N1：过渡边界待定态收口
+- [x] Task N1：过渡边界待定态收口
   - 目标场景：第一笔破坏旧段后，第三笔出现回收或反向回拉。
   - 代码锚点：
     - [src/chanlun/segment.py](src/chanlun/segment.py) 的 `_evaluate_transition_state(...)`
@@ -249,6 +249,9 @@
   - 测试目标：
     - 在 [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py) 补充“第三笔回收/反拉”用例；
     - 在 [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py) 增加跨周期回放样本。
+  - 完成说明（2026-08-14）：
+    - `_extend_segment(...)` 的 `transition_pending` 判定已改为基于有效三笔种子边界（`seed_start_idx/seed_end_idx`），不再误用 anchor 起点；
+    - 新增回归用例 `test_transition_pending_uses_fallback_seed_boundary_instead_of_anchor_start` 锁定该场景。
 
 - [ ] Task N2：核心边界回归补齐
   - 覆盖边界：

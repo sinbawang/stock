@@ -1010,13 +1010,15 @@ def _extend_segment(
             break
 
         reverse_indices.append(cursor)
+        is_first_transition_round = cursor == seed_end_idx + 1
+        segment_first_bi = bis[seed_start_idx]
 
         transition_state = _evaluate_transition_state(bis, cursor, direction)
         if (
-            cursor == start_idx + 3
+            is_first_transition_round
             and transition_state == TransitionState.PENDING
             and cursor + 2 >= len(bis)
-            and _breaks_first_bi_start(direction, reverse_bi, bis[start_idx])
+            and _breaks_first_bi_start(direction, reverse_bi, segment_first_bi)
         ):
             break_idx = cursor
             is_confirmed = False

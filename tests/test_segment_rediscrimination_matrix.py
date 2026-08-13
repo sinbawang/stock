@@ -28,6 +28,7 @@ from chanlun.segment import (
     summarize_stop_reason_outcome,
     identify_segments as _identify_segments,
     _build_standard_feature_sequence,
+    _extend_segment,
     _gap_feature_sequence_candidate,
     _rediscriminate_gap_break,
     _rediscriminate_gap_break_detail,
@@ -76,6 +77,39 @@ def test_gap_fractal_primary_path_is_locked() -> None:
     assert len(result) >= 1
     assert result[0].stop_reason in {"feature_sequence_gap_fractal", "reverse_break"}
     assert result[0].is_confirmed is True
+
+
+def test_transition_pending_uses_fallback_seed_boundary_instead_of_anchor_start() -> None:
+    """首段种子后移时，过渡态仍应以种子边界判定 transition_pending。"""
+    bis = [
+        _bi(0, BiDirection.UP, 110, 100),
+        _bi(1, BiDirection.DOWN, 95, 90),
+        _bi(2, BiDirection.UP, 106, 96),
+        _bi(3, BiDirection.DOWN, 104, 97),
+        _bi(4, BiDirection.UP, 108, 98),
+        _bi(5, BiDirection.DOWN, 103, 95),
+        _bi(6, BiDirection.UP, 104, 96.5),
+    ]
+
+    # 锚点从 0 开始时，首个合法三笔种子应后移到 [2,3,4]，
+    # 过渡态必须基于该种子边界，而不是 anchor 起点判断。
+    result = _extend_segment(
+        bis,
+        0,
+        anchor_idx=0,
+        strict_segment_rules=False,
+        enable_gap_false_defer=True,
+        enable_fallback_reverse_break=True,
+        enable_same_direction_fallback=True,
+    )
+
+    assert result is not None
+    end_idx, is_confirmed, break_idx, stop_reason, break_bi_id = result
+    assert end_idx == 4
+    assert is_confirmed is False
+    assert break_idx == 5
+    assert stop_reason == "transition_pending"
+    assert break_bi_id == 5
 
 
 def test_gap_fractal_then_break_first_bi_start_keeps_prior_segment() -> None:
@@ -330,7 +364,15 @@ def test_delayed_true_path_emits_dedicated_stop_reason() -> None:
     ]
 
     assert result
-    assert any(segment.stop_reason in {"feature_sequence_gap_fractal", "reverse_break"} for segment in result)
+    assert any(
+        segment.stop_reason
+        in {
+            "feature_sequence_gap_fractal",
+            "feature_sequence_gap_fractal_delayed_true",
+            "reverse_break",
+        }
+        for segment in result
+    )
 
 
 def test_gap_false_outcome_has_priority_over_late_true_candidate() -> None:
