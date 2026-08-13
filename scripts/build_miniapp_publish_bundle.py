@@ -875,7 +875,9 @@ def _chart_bars_sort_key(path: Path) -> tuple[int, int, int, float]:
     if parsed_range is None:
         return (0, 0, 0, path.stat().st_mtime)
     start_date, end_date = parsed_range
-    return (1, end_date, start_date, path.stat().st_mtime)
+    # Prefer the latest end date first; for the same end date choose the
+    # earliest start date so publish JSON keeps the widest available history.
+    return (1, end_date, -start_date, path.stat().st_mtime)
 
 
 def find_latest_chart_bars_csv(timeframe_dir: Path, timeframe: str) -> Path | None:

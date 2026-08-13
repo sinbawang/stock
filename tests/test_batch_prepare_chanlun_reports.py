@@ -122,6 +122,39 @@ def test_fetch_intraday_rows_reuses_local_hk_5m_cache_before_remote_fetch(monkey
     assert payload["actual_source"] == "local.hk_5m_cache"
 
 
+def test_fetch_intraday_rows_hk_5m_incremental_probe_skips_local_reuse(monkeypatch) -> None:
+    security = module.Security("00700", "腾讯", "HK")
+    cached_rows = [
+        {"ts": f"2026-06-27 10:{index:02d}", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1}
+        for index in range(module.HK_REUSABLE_5M_MIN_ROWS)
+    ]
+    remote_rows = [
+        {"ts": "2026-06-30 15:55", "open": 2.0, "high": 2.1, "low": 1.9, "close": 2.0, "volume": 2},
+    ]
+
+    monkeypatch.setattr(module, "_load_reusable_hk_intraday_rows", lambda *args, **kwargs: cached_rows)
+    monkeypatch.setattr(module, "resolve_hk_minute_source_selection", lambda: ("xueqiu", ("akshare",), "mainland"))
+    monkeypatch.setattr(module, "get_last_hk_fetch_metadata", lambda: {"actual_source": "xueqiu", "source_attempts": []})
+    monkeypatch.setattr(
+        module,
+        "fetch_hk_minute_with_policy",
+        lambda *args, **kwargs: (remote_rows, "xueqiu"),
+    )
+
+    rows, payload = module.fetch_intraday_rows(
+        security,
+        timeframe="5m",
+        period="5",
+        start="2026-06-20 09:30",
+        bar_count=600,
+        source_probe_min_rows=1,
+    )
+
+    assert rows == remote_rows
+    assert payload["source"] == "xueqiu->akshare"
+    assert payload["actual_source"] == "xueqiu"
+
+
 def test_fetch_with_optional_local_store_uses_incremental_start_and_tail(monkeypatch, tmp_path: Path) -> None:
     security = module.Security("00700", "腾讯", "HK")
     local_rows = [

@@ -539,6 +539,26 @@ def test_find_latest_chart_bars_csv_prefers_filename_date_range_over_mtime(tmp_p
     assert selected.name == later_range_csv.name
 
 
+def test_find_latest_chart_bars_csv_prefers_earlier_start_when_end_date_matches(tmp_path: Path) -> None:
+    timeframe_dir = tmp_path / "5m"
+    analyze_dir = timeframe_dir / "analyze"
+    analyze_dir.mkdir(parents=True, exist_ok=True)
+
+    wider_window_csv = analyze_dir / "00981_5m_20260722_to_20260813.csv"
+    wider_window_csv.write_text("ts,open,high,low,close,volume\n", encoding="utf-8")
+    narrower_window_csv = analyze_dir / "00981_5m_20260803_to_20260813.csv"
+    narrower_window_csv.write_text("ts,open,high,low,close,volume\n", encoding="utf-8")
+
+    # Keep modification times equal to make date-range ordering decisive.
+    os.utime(wider_window_csv, (1500000000, 1500000000))
+    os.utime(narrower_window_csv, (1500000000, 1500000000))
+
+    selected = module.find_latest_chart_bars_csv(timeframe_dir, "5m")
+
+    assert selected is not None
+    assert selected.name == wider_window_csv.name
+
+
 def test_build_chart_data_payload_includes_segment_stop_reason_annotations(tmp_path: Path) -> None:
     analyze_dir = tmp_path / "30m" / "analyze"
     analyze_dir.mkdir(parents=True, exist_ok=True)
