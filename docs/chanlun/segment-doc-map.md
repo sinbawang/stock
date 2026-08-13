@@ -28,6 +28,10 @@
 - [segment-mode-consumer-examples.md](segment-mode-consumer-examples.md)
 - 用途：给下游最小可运行的 theory/practical 对照接入范式。
 
+7. 线段到中枢协议草案
+- [segment-to-zhongshu-mode-protocol-draft.md](segment-to-zhongshu-mode-protocol-draft.md)
+- 用途：约束中枢层如何继承 theory/practical 语义并处理 pending。
+
 ## 推荐阅读顺序
 
 1. 先读 [segment-implementation-guide.md](segment-implementation-guide.md)
@@ -45,6 +49,8 @@
 
 ## 当前 TODO
 
-- [ ] 把 71 课再分辨剩余分支（R1-R6）拆到可跟踪 issue/测试映射
+- [x] 把 71 课再分辨剩余分支（R1-R6）拆到可跟踪 issue/测试映射
 - [x] 在发布与报告消费端补一页最小接入示例（theory/practical 双模式）
+- [x] 补充线段安全闸门单入口任务（`python scripts/run_segment_safety_gates.py`）
+- [x] 增补线段到中枢模式传递协议草案
 - [x] 增设 `segment-implementation-changelog.md` 承接时点快照，减少正文历史堆积

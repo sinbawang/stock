@@ -343,6 +343,27 @@ P0 再分辨实施入口（用例矩阵骨架）见 `tests/test_segment_rediscri
 - `stop_reason` 已经可导出，并且已补充 `stop_reason_label` 作为统一释义列；后续若要再提高解释性，可直接在分析文本和图注中复用这套映射。
 - 线段与中枢目前是松耦合实现，后续若要进一步贴近严格缠论，需要把“段内中枢、段破坏、走势类型”统一到同一套层级定义里。
 
+### 6.8 双模式口径与中枢传递约束
+
+从当前版本起，线段识别应明确区分 `termination_mode=theory/practical` 两条消费口径，并保持以下规则：
+
+- `theory`：仅 `theory_confirmed` 视为终结；`fallback_confirmed` 与 `pending` 都不应直接终结。
+- `practical`：`theory_confirmed` 与 `fallback_confirmed` 都可视为终结；`pending` 仍不可终结。
+- 任一模式下出现 `pending`，都只能视为待确认状态，不得在下游中枢层当作完成结构。
+
+当中枢层消费线段结果时，禁止在下游重新发明 stop 分类规则；应复用线段层契约字段并按模式解释。
+
+详细草案见：
+
+- [segment-to-zhongshu-mode-protocol-draft.md](segment-to-zhongshu-mode-protocol-draft.md)
+- [segment-stop-reason-contract.md](segment-stop-reason-contract.md)
+
+线段改动执行闸门建议统一走单入口脚本：
+
+- `python scripts/run_segment_safety_gates.py`
+
+这样可以降低“命令分散导致漏跑”的风险，并保证发布前线段契约回归完整。
+
 ## 7. 中枢定义
 
 ### 7.1 中枢输入

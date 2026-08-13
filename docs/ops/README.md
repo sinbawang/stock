@@ -11,6 +11,7 @@
 - [day-incremental-probe-runbook.md](day-incremental-probe-runbook.md): day 级别单标增量抓取/分析探针
 - [day-incremental-probe-batch-runbook.md](day-incremental-probe-batch-runbook.md): day 级别持仓批量增量探针榜单
 - [kline-cache-cloud-backup-runbook.md](kline-cache-cloud-backup-runbook.md): 本地 K 线缓存备份到 CloudBase/COS 与新实例恢复手册（含 CloudBase 托管容器模式）
+- [segment-safety-gates-runbook.md](segment-safety-gates-runbook.md): 线段改动发布前单入口闸门执行手册
 
 相关模板：
 

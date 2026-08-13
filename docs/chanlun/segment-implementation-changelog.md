@@ -53,6 +53,11 @@
 | N5 特征序列上下文强化 | 增加跨序列包含守卫与 triplet 上下文校验；新增 2 条上下文回归 | 核心与回归闸门通过（48+） | 更新实现指南与任务看板 |
 | Later-1 课文边界 fixture 化 | 新增 `segment_lesson_boundary_fixtures` 与消费测试 | 新增 fixture 测试通过（9）并纳入闸门（57+） | 更新任务看板完成说明 |
 | Later-2 双模式接入示例 | 新增消费方最小接入文档 | 文档命令抽样可执行（39+） | 更新文档地图、README、任务看板 |
+| B1 再分辨 R1-R6 映射 | 在 `test_segment_rediscrimination_matrix` 增加 R1-R6 参数化映射、唯一 ID 与双模式断言 | 目标测试通过（39+） | 更新任务看板与文档地图 |
+| B2 消费端双模式冒烟 | 新增 `test_segment_consumer_mode_smoke`；验证 pending/terminal 按模式消费 | 目标测试通过（39+） | 更新示例文档与任务看板 |
+| B3 安全闸门单入口 | 新增 `scripts/run_segment_safety_gates.py`、任务入口与脚本单测 | `--dry-run` 与 `--only core consumer` 通过 | 更新任务看板与文档地图 |
+| B4 双模式可视化对照 | 在消费者示例新增 stop_reason 双模式对照表 | 文档对照与 contract 口径一致 | 更新示例文档与任务看板 |
+| B5 线段到中枢协议草案 | 新增模式传递协议草案并接入文档导航 | 文档检查无诊断错误 | 更新 README、文档地图、任务看板 |
 
 说明：
 

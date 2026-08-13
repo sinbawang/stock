@@ -58,6 +58,137 @@ def _bi(bi_id: int, direction: BiDirection, high: float, low: float) -> Bi:
     )
 
 
+R_CASES = [
+    {
+        "id": "R1",
+        "bis": [
+            _bi(0, BiDirection.UP, 120, 100),
+            _bi(1, BiDirection.DOWN, 112, 104),
+            _bi(2, BiDirection.UP, 125, 106),
+            _bi(3, BiDirection.DOWN, 111, 105),
+            _bi(4, BiDirection.UP, 126, 107),
+            _bi(5, BiDirection.DOWN, 118, 108),
+            _bi(6, BiDirection.UP, 130, 109),
+            _bi(7, BiDirection.DOWN, 110, 102),
+        ],
+        "expected": {
+            "theory": {"stop_reason": "feature_sequence_fractal", "is_confirmed": True},
+            "practical": {"stop_reason": "feature_sequence_fractal", "is_confirmed": True},
+        },
+    },
+    {
+        "id": "R2",
+        "bis": [
+            _bi(0, BiDirection.UP, 120, 100),
+            _bi(1, BiDirection.DOWN, 108, 104),
+            _bi(2, BiDirection.UP, 125, 106),
+            _bi(3, BiDirection.DOWN, 112, 109),
+            _bi(4, BiDirection.UP, 111.5, 110),
+            _bi(5, BiDirection.DOWN, 110, 107),
+            _bi(6, BiDirection.UP, 114, 108),
+            _bi(7, BiDirection.DOWN, 109, 103),
+            _bi(8, BiDirection.UP, 116, 109),
+        ],
+        "expected": {
+            "theory": {"stop_reason": "feature_sequence_gap_fractal", "is_confirmed": True},
+            "practical": {"stop_reason": "feature_sequence_gap_fractal", "is_confirmed": True},
+        },
+    },
+    {
+        "id": "R3",
+        "bis": [
+            _bi(0, BiDirection.UP, 100, 90),
+            _bi(1, BiDirection.DOWN, 95, 85),
+            _bi(2, BiDirection.UP, 105, 95),
+            _bi(3, BiDirection.DOWN, 94, 80),
+            _bi(4, BiDirection.UP, 96, 87),
+        ],
+        "expected": {
+            "theory": {"stop_reason": "transition_pending", "is_confirmed": False},
+            "practical": {"stop_reason": "transition_pending", "is_confirmed": False},
+        },
+    },
+    {
+        "id": "R4",
+        "bis": [
+            _bi(0, BiDirection.UP, 120, 100),
+            _bi(1, BiDirection.DOWN, 108, 104),
+            _bi(2, BiDirection.UP, 125, 106),
+            _bi(3, BiDirection.DOWN, 112, 109),
+            _bi(4, BiDirection.UP, 110.4, 109.4),
+            _bi(5, BiDirection.DOWN, 109.6, 109.0),
+        ],
+        "expected": {
+            "theory": {"stop_reason": "exhausted_confirmed_bis", "is_confirmed": False},
+            "practical": {"stop_reason": "same_direction_not_extending", "is_confirmed": False},
+        },
+    },
+    {
+        "id": "R5",
+        "bis": [
+            _bi(0, BiDirection.UP, 120, 100),
+            _bi(1, BiDirection.DOWN, 108, 104),
+            _bi(2, BiDirection.UP, 125, 106),
+            _bi(3, BiDirection.DOWN, 112, 109),
+            _bi(4, BiDirection.UP, 113, 110),
+            _bi(5, BiDirection.DOWN, 110, 107),
+            _bi(6, BiDirection.UP, 114, 108),
+            _bi(7, BiDirection.DOWN, 109, 103),
+            _bi(8, BiDirection.UP, 116, 109),
+        ],
+        "expected": {
+            "theory": {"stop_reason": "exhausted_confirmed_bis", "is_confirmed": False},
+            "practical": {"stop_reason": "reverse_break", "is_confirmed": True},
+        },
+    },
+    {
+        "id": "R6",
+        "bis": [
+            _bi(0, BiDirection.UP, 120, 100),
+            _bi(1, BiDirection.DOWN, 108, 104),
+            _bi(2, BiDirection.UP, 125, 106),
+            _bi(3, BiDirection.DOWN, 112, 109),
+            _bi(4, BiDirection.UP, 111.0, 110.0),
+            _bi(5, BiDirection.DOWN, 110.8, 109.4),
+            _bi(6, BiDirection.UP, 111.6, 109.0),
+            _bi(7, BiDirection.DOWN, 110.0, 108.6),
+            _bi(8, BiDirection.UP, 116.0, 109.0),
+        ],
+        "expected": {
+            "theory": {"stop_reason": "feature_sequence_gap_fractal_delayed_true", "is_confirmed": True},
+            "practical": {"stop_reason": "feature_sequence_gap_fractal_delayed_true", "is_confirmed": True},
+        },
+    },
+]
+
+
+def test_r_case_ids_are_unique() -> None:
+    ids = [case["id"] for case in R_CASES]
+    assert len(ids) == len(set(ids))
+
+
+@pytest.mark.parametrize("case", R_CASES, ids=[case["id"] for case in R_CASES])
+@pytest.mark.parametrize("mode", ["theory", "practical"])
+def test_r_case_mapping_has_dual_mode_assertions(case: dict, mode: str) -> None:
+    result = identify_segments(case["bis"], termination_mode=mode)
+    assert result, f"{case['id']} produced no segments in {mode} mode"
+
+    first = result[0]
+    expected = case["expected"][mode]
+    assert first.stop_reason == expected["stop_reason"], (
+        f"{case['id']} unexpected first stop_reason in {mode}: {first.stop_reason}"
+    )
+    assert first.is_confirmed is expected["is_confirmed"], (
+        f"{case['id']} unexpected first confirmation in {mode}: {first.is_confirmed}"
+    )
+
+    for segment in result:
+        category = classify_stop_reason(segment.stop_reason)
+        assert category != StopOutcomeCategory.UNKNOWN, (
+            f"{case['id']} emits unknown category in {mode}: {segment.stop_reason}"
+        )
+
+
 def test_gap_fractal_primary_path_is_locked() -> None:
     """主路径基线：缺口候选后按当前闭环确认为 feature_sequence_gap_fractal。"""
     bis = [

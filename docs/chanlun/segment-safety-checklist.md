@@ -10,6 +10,20 @@
 
 ## 提交前必跑（本地）
 
+推荐先执行单入口闸门：
+
+```powershell
+python scripts/run_segment_safety_gates.py
+```
+
+需要缩小范围时可用：
+
+```powershell
+python scripts/run_segment_safety_gates.py --only core consumer
+```
+
+下列命令保留为明细拆分入口：
+
 1. 核心规则与回归样本
 
 ```powershell
