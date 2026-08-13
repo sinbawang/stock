@@ -434,10 +434,40 @@ def _feature_sequence_has_gap(left_bi: Bi, right_bi: Bi) -> bool:
 
 
 def _contains(left: _FeatureSequenceElement, right: _FeatureSequenceElement) -> bool:
+    if (
+        left.feature_sequence_id is not None
+        and right.feature_sequence_id is not None
+        and left.feature_sequence_id != right.feature_sequence_id
+    ):
+        return False
+
     return (
         (left.high >= right.high and left.low <= right.low)
         or (right.high >= left.high and right.low <= left.low)
     )
+
+
+def _feature_sequence_triplet_has_consistent_context(
+    left: _FeatureSequenceElement,
+    middle: _FeatureSequenceElement,
+    right: _FeatureSequenceElement,
+) -> bool:
+    sequence_ids = {
+        element.feature_sequence_id
+        for element in (left, middle, right)
+        if element.feature_sequence_id is not None
+    }
+    if len(sequence_ids) > 1:
+        return False
+
+    # At least one element should carry explicit prior/new segment context.
+    has_context_flag = any(
+        element.belongs_to_prior_segment
+        or element.belongs_to_new_segment
+        or element.in_transition
+        for element in (left, middle, right)
+    )
+    return has_context_flag
 
 
 def _resolve_feature_sequence_trend(
@@ -553,6 +583,12 @@ def _feature_sequence_break(
         return None
 
     left_element, middle_element, right_element = standard_sequence[-3:]
+    if not _feature_sequence_triplet_has_consistent_context(
+        left_element,
+        middle_element,
+        right_element,
+    ):
+        return None
 
     if _feature_element_has_gap(left_element, middle_element):
         return None
@@ -595,6 +631,13 @@ def _gap_feature_sequence_candidate(
         return None
 
     left_element, middle_element, right_element = standard_sequence[-3:]
+    if not _feature_sequence_triplet_has_consistent_context(
+        left_element,
+        middle_element,
+        right_element,
+    ):
+        return None
+
     if not _feature_element_has_gap(left_element, middle_element):
         return None
 

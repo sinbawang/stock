@@ -324,7 +324,7 @@
     - `identify_segments(...)` 新增 `_resolve_execution_profile(...)`，统一理论/实盘模式下的有效参数收敛，主流程不再混杂 bootstrap 评分细节；
     - 新增回归 `test_first_valid_seed_bypasses_scored_bootstrap_optimization` 锁定“关闭评分优化时不受候选评分影响”。
 
-- [ ] Task N5：特征序列上下文语义进一步强化
+- [x] Task N5：特征序列上下文语义进一步强化
   - 目标：确保“同一特征序列内部包含关系”在实现与文档层完全一致。
   - 代码锚点：
     - [src/chanlun/segment.py](src/chanlun/segment.py) 的 `_build_standard_feature_sequence(...)`
@@ -342,6 +342,10 @@
     - [tests/test_segment_rediscrimination_matrix.py](tests/test_segment_rediscrimination_matrix.py)
     - [tests/test_segment.py](tests/test_segment.py)
     - [docs/chanlun/segment-implementation-guide.md](docs/chanlun/segment-implementation-guide.md)
+  - 完成说明（2026-08-14）：
+    - 在 `_contains(...)` 增加 feature_sequence_id 一致性守卫，防止包含关系判定跨序列污染；
+    - 新增 `_feature_sequence_triplet_has_consistent_context(...)`，并在 `_feature_sequence_break(...)` / `_gap_feature_sequence_candidate(...)` 中显式消费上下文字段后再进入分型判定；
+    - 新增回归 `test_feature_sequence_contains_rejects_cross_sequence_comparison` 与 `test_feature_sequence_triplet_context_requires_single_sequence_scope` 锁定上下文约束。
 
 ### Later（优化与收敛）
 

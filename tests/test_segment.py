@@ -7,6 +7,9 @@ from chanlun.segment import (
     SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
     SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
     SEGMENT_BOOTSTRAP_AUTO,
+    _FeatureSequenceElement,
+    _contains,
+    _feature_sequence_triplet_has_consistent_context,
     GapCandidateState,
     TransitionState,
     _build_standard_feature_sequence,
@@ -508,6 +511,49 @@ class TestIdentifySegments:
         assert elements[0].in_transition is False
         assert elements[-1].belongs_to_prior_segment is False
         assert elements[-1].belongs_to_new_segment is True
+
+    def test_feature_sequence_contains_rejects_cross_sequence_comparison(self):
+        left = _FeatureSequenceElement(
+            high=120,
+            low=100,
+            source_indices=[1],
+            feature_sequence_id=1,
+            belongs_to_prior_segment=True,
+        )
+        right = _FeatureSequenceElement(
+            high=118,
+            low=102,
+            source_indices=[3],
+            feature_sequence_id=2,
+            belongs_to_new_segment=True,
+        )
+
+        assert _contains(left, right) is False
+
+    def test_feature_sequence_triplet_context_requires_single_sequence_scope(self):
+        left = _FeatureSequenceElement(
+            high=120,
+            low=100,
+            source_indices=[1],
+            feature_sequence_id=1,
+            belongs_to_prior_segment=True,
+        )
+        middle = _FeatureSequenceElement(
+            high=121,
+            low=101,
+            source_indices=[3],
+            feature_sequence_id=1,
+            belongs_to_new_segment=True,
+        )
+        right = _FeatureSequenceElement(
+            high=119,
+            low=99,
+            source_indices=[5],
+            feature_sequence_id=2,
+            belongs_to_new_segment=True,
+        )
+
+        assert _feature_sequence_triplet_has_consistent_context(left, middle, right) is False
 
     def test_same_direction_not_extending_can_be_reclaimed_by_prior_segment(self):
         bis = [
