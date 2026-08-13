@@ -300,7 +300,7 @@
     - theory 模式继续把 `auto/prefer_earlier_start` 归一到 `first_valid_seed`，保证几何路径稳定；
     - 新增回归用例 `test_theory_mode_is_invariant_to_strict_rules_toggle` 锁定 theory 路径对 strict 开关的不敏感性。
 
-- [ ] Task N4：bootstrap 逻辑主流程解耦
+- [x] Task N4：bootstrap 逻辑主流程解耦
   - 目标：将 `bootstrap_mode`、`bootstrap_skip_confirmed_bis`、评分函数拆为可选后处理/起点优化层。
   - 代码锚点：
     - [src/chanlun/segment.py](src/chanlun/segment.py) 的起段选择与 bootstrap 评分分支
@@ -317,6 +317,12 @@
     - [tests/test_segment_bootstrap_anchor.py](tests/test_segment_bootstrap_anchor.py)
     - [tests/test_segment_regression_suite.py](tests/test_segment_regression_suite.py)
     - [docs/chanlun/segment-implementation-guide.md](docs/chanlun/segment-implementation-guide.md)
+  - 完成说明（2026-08-14）：
+    - bootstrap 起点选择已拆分为“基础起点层 + 评分优化层”：
+      - `_resolve_base_bootstrap_start_index(...)` 负责基础起点（如 `first_valid_seed` / `skip_left_edge`）；
+      - `_resolve_scored_bootstrap_start_index(...)` 仅在 `auto/prefer_earlier_start` 下生效；
+    - `identify_segments(...)` 新增 `_resolve_execution_profile(...)`，统一理论/实盘模式下的有效参数收敛，主流程不再混杂 bootstrap 评分细节；
+    - 新增回归 `test_first_valid_seed_bypasses_scored_bootstrap_optimization` 锁定“关闭评分优化时不受候选评分影响”。
 
 - [ ] Task N5：特征序列上下文语义进一步强化
   - 目标：确保“同一特征序列内部包含关系”在实现与文档层完全一致。

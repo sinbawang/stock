@@ -225,13 +225,12 @@ def _validate_termination_mode(termination_mode: str) -> None:
         raise ValueError(f"Unsupported termination_mode: {termination_mode}")
 
 
-def _resolve_bootstrap_start_index(
-    bis: List[Bi],
+def _resolve_base_bootstrap_start_index(
+    total_bis: int,
     *,
     bootstrap_mode: str,
     bootstrap_skip_confirmed_bis: int,
 ) -> int:
-    total_bis = len(bis)
     if total_bis <= 0:
         return 0
 
@@ -239,13 +238,15 @@ def _resolve_bootstrap_start_index(
         max_start = max(0, total_bis - 3)
         return min(max(0, int(bootstrap_skip_confirmed_bis)), max_start)
 
-    if bootstrap_mode == SEGMENT_BOOTSTRAP_FIRST_VALID_SEED:
-        return 0
+    return 0
 
-    if bootstrap_mode not in {SEGMENT_BOOTSTRAP_AUTO, SEGMENT_BOOTSTRAP_PREFER_EARLIER_START}:
-        return 0
 
-    max_start = max(0, total_bis - 3)
+def _resolve_scored_bootstrap_start_index(
+    bis: List[Bi],
+    *,
+    bootstrap_mode: str,
+) -> int:
+    max_start = max(0, len(bis) - 3)
     best_start: Optional[int] = None
     best_score: Optional[int] = None
     scored_candidates: List[Tuple[int, int]] = []
@@ -272,6 +273,44 @@ def _resolve_bootstrap_start_index(
             return min(eligible)
 
     return best_start
+
+
+def _resolve_bootstrap_start_index(
+    bis: List[Bi],
+    *,
+    bootstrap_mode: str,
+    bootstrap_skip_confirmed_bis: int,
+) -> int:
+    base_start = _resolve_base_bootstrap_start_index(
+        len(bis),
+        bootstrap_mode=bootstrap_mode,
+        bootstrap_skip_confirmed_bis=bootstrap_skip_confirmed_bis,
+    )
+    if bootstrap_mode in {SEGMENT_BOOTSTRAP_AUTO, SEGMENT_BOOTSTRAP_PREFER_EARLIER_START}:
+        return _resolve_scored_bootstrap_start_index(
+            bis,
+            bootstrap_mode=bootstrap_mode,
+        )
+    return base_start
+
+
+def _resolve_execution_profile(
+    *,
+    termination_mode: str,
+    bootstrap_mode: str,
+    strict_segment_rules: bool,
+) -> Tuple[bool, str, bool]:
+    practical_mode = termination_mode == SEGMENT_TERMINATION_MODE_PRACTICAL
+    effective_bootstrap_mode = bootstrap_mode
+    effective_strict_segment_rules = practical_mode and strict_segment_rules
+
+    if not practical_mode and bootstrap_mode in {
+        SEGMENT_BOOTSTRAP_AUTO,
+        SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
+    }:
+        effective_bootstrap_mode = SEGMENT_BOOTSTRAP_FIRST_VALID_SEED
+
+    return practical_mode, effective_bootstrap_mode, effective_strict_segment_rules
 
 
 def describe_stop_reason(stop_reason: Optional[str]) -> str:
@@ -1408,16 +1447,11 @@ def identify_segments(
     if len(bis) < 3:
         return []
 
-    practical_mode = termination_mode == SEGMENT_TERMINATION_MODE_PRACTICAL
-    effective_bootstrap_mode = bootstrap_mode
-    # Strict rules are an engineering enhancement and only apply in practical mode.
-    effective_strict_segment_rules = practical_mode and strict_segment_rules
-    if not practical_mode:
-        if bootstrap_mode in {
-            SEGMENT_BOOTSTRAP_AUTO,
-            SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
-        }:
-            effective_bootstrap_mode = SEGMENT_BOOTSTRAP_FIRST_VALID_SEED
+    practical_mode, effective_bootstrap_mode, effective_strict_segment_rules = _resolve_execution_profile(
+        termination_mode=termination_mode,
+        bootstrap_mode=bootstrap_mode,
+        strict_segment_rules=strict_segment_rules,
+    )
 
     segments: List[Segment] = []
     segment_id = 0

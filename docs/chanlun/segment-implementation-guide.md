@@ -169,6 +169,16 @@
 - 当前生产链路：报表生成和发布打包阶段实际传入的 `bootstrap_mode`
 - 实验口径：人工做 A/B 对照时可显式指定的模式
 
+当前实现已把 bootstrap 拆成两层：
+
+- 基础起点层：负责确定“不做评分优化时”的起点（例如 `first_valid_seed`、`skip_left_edge`）
+- 评分优化层：仅在 `auto` / `prefer_earlier_start` 下启用，用于候选评分与优选
+
+这意味着：
+
+- 关闭评分优化（例如使用 `first_valid_seed`）时，结果不会受候选评分函数影响
+- 理论模式会把 `auto` / `prefer_earlier_start` 收敛到 `first_valid_seed`，避免评分优化影响理论主路径
+
 代码默认口径（当前 `identify_segments(...)` 默认值）：
 
 - `identify_segments(..., bootstrap_mode="prefer_earlier_start")`

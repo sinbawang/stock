@@ -117,6 +117,31 @@ def test_auto_bootstrap_selects_coherent_seed_without_manual_skip() -> None:
     assert segments[0].start_bi_id > 0
 
 
+def test_first_valid_seed_bypasses_scored_bootstrap_optimization() -> None:
+    bis = [
+        _bi(0, BiDirection.UP, 10.0, 9.0),
+        _bi(1, BiDirection.DOWN, 10.0, 8.0),
+        _bi(2, BiDirection.UP, 11.0, 8.5),
+        _bi(3, BiDirection.DOWN, 10.5, 8.0),
+        _bi(4, BiDirection.UP, 10.5, 8.5),
+        _bi(5, BiDirection.DOWN, 11.0, 8.0),
+        _bi(6, BiDirection.UP, 12.0, 9.0),
+        _bi(7, BiDirection.DOWN, 13.0, 8.5),
+        _bi(8, BiDirection.UP, 13.5, 9.0),
+    ]
+
+    auto_segments = identify_segments(bis, bootstrap_mode=SEGMENT_BOOTSTRAP_AUTO)
+    first_seed_segments = identify_segments(
+        bis,
+        bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
+    )
+
+    assert auto_segments
+    assert first_seed_segments
+    assert auto_segments[0].start_bi_id > first_seed_segments[0].start_bi_id
+    assert first_seed_segments[0].start_bi_id == 0
+
+
 def test_prefer_earlier_start_biases_left_within_near_best_quality() -> None:
     bis = [
         _bi(0, BiDirection.UP, 10.0, 9.0),
