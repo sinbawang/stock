@@ -129,3 +129,6 @@ flowchart TD
 - 首批样例包（已填充）：`sample-case-pack-2026-08-v1.md`
 - 首批阈值回放记录（已填充）：`rhythm-replay-log-2026-08-first-batch.md`
 - 首批文案抽检记录（已填充）：`../analysis/publish-snippet-audit-2026-08-first-batch.md`
+- 第二批样例包（已填充）：`sample-case-pack-2026-08-v2.md`
+- 第二批阈值回放记录（已填充）：`rhythm-replay-log-2026-08-second-batch.md`
+- 第二批文案抽检记录（已填充）：`../analysis/publish-snippet-audit-2026-08-second-batch.md`

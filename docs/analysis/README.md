@@ -8,6 +8,7 @@
 - [combined-analysis-service-interface.md](combined-analysis-service-interface.md): 联合分析服务接口说明
 - [publish-snippet-adoption-checklist.md](publish-snippet-adoption-checklist.md): 发布层统一文案片段接入清单
 - [publish-snippet-audit-2026-08-first-batch.md](publish-snippet-audit-2026-08-first-batch.md): 首批统一文案抽检记录
+- [publish-snippet-audit-2026-08-second-batch.md](publish-snippet-audit-2026-08-second-batch.md): 第二批统一文案抽检记录（含入口级差异统计）
 - [chanlun-line-segment-original-and-comparison.md](chanlun-line-segment-original-and-comparison.md): 线段原文提炼与工程实现对照
 
 ## 线段相关跳转
