@@ -149,7 +149,7 @@ class PublishRefreshRequest(BaseModel):
     m15_bars: int = Field(default=1200, ge=1)
     m5_bars: int = Field(default=1200, ge=1)
     m1_bars: int = Field(default=2000, ge=1)
-    zhongshu_level: ZhongshuLevel = "bi"
+    zhongshu_level: ZhongshuLevel = "segment"
     tech_timeframes: list[Timeframe] = Field(default_factory=lambda: ["day", "30m", "5m", "1m"])
     export_structure_images: bool = True
     publish_timeframes: list[Timeframe] | None = None
@@ -190,7 +190,7 @@ class TechnicalRefreshRequest(BaseModel):
     m1_start: str | None = None
     m1_bars: int = Field(default=2000, ge=1)
     pending_reverse_mode: PendingReverseMode = "effective_only"
-    zhongshu_level: ZhongshuLevel = "bi"
+    zhongshu_level: ZhongshuLevel = "segment"
     refresh_mode: TechnicalRefreshMode = "m30_intraday"
     tech_timeframes: list[Timeframe] | None = None
     publish_timeframes: list[Timeframe] | None = None
