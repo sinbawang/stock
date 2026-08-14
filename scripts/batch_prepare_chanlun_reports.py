@@ -168,8 +168,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--zhongshu-level",
         choices=("bi", "segment"),
-        default="bi",
-        help="中枢绘制层级：bi=笔中枢，segment=线段中枢。",
+        default="segment",
+        help="中枢主口径层级：segment=标准中枢(默认)，bi=类中枢(兼容模式)。",
     )
     parser.add_argument(
         "--timeframes",
@@ -675,7 +675,7 @@ def export_case(
     title: str,
     data_fetch: dict[str, object] | None = None,
     pending_reverse_mode: str = "effective_only",
-    zhongshu_level: str = "bi",
+    zhongshu_level: str = "segment",
     export_structure_images: bool = True,
 ) -> dict[str, Path]:
     layout = timeframe_report_paths(security.symbol, timeframe, rows)
@@ -706,11 +706,16 @@ def export_case(
         strict_segment_rules=True,
     )
     confirmed_bis = [bi for bi in bis if bi.is_confirmed]
-    confirmed_segments = [segment for segment in segments if segment.is_confirmed]
-    if zhongshu_level == "segment":
-        zhongshus = identify_zhongshu(confirmed_segments, structure_level="segment")
+    # Segment zhongshu should be built on the full segment chain so an ongoing tail
+    # does not force a fallback to bi-level primary output.
+    segment_zhongshus = identify_zhongshu(segments, structure_level="segment")
+    lei_zhongshus = identify_zhongshu(confirmed_bis, structure_level="bi")
+    if zhongshu_level == "bi":
+        zhongshus = lei_zhongshus
+        auxiliary_zhongshus = segment_zhongshus
     else:
-        zhongshus = identify_zhongshu(confirmed_bis, structure_level="bi")
+        zhongshus = segment_zhongshus or lei_zhongshus
+        auxiliary_zhongshus = lei_zhongshus if zhongshus is segment_zhongshus else segment_zhongshus
     macd_points = calculate_macd(raw_bars)
 
     confirmed_fx_ids: set[int] = set()
@@ -725,6 +730,8 @@ def export_case(
     export_bis(layout.bis_csv, bis)
     export_segments(layout.segments_csv, segments)
     export_zhongshus(layout.zhongshu_csv, zhongshus)
+    lei_zhongshu_csv = layout.zhongshu_csv.with_name(f"{layout.zhongshu_csv.stem}_lei.csv")
+    export_zhongshus(lei_zhongshu_csv, lei_zhongshus)
     export_macd(layout.macd_csv, macd_points)
     if export_structure_images:
         save_structure_charts(
@@ -733,6 +740,7 @@ def export_case(
             fractals=fractals,
             bis=bis,
             zhongshus=zhongshus,
+            lei_zhongshus=auxiliary_zhongshus,
             svg_path=svg,
             png_path=png,
             jpg_path=jpg,
@@ -756,6 +764,7 @@ def export_case(
     )
     report_text = analysis_text + "\n\n" + advice_text + "\n"
     latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
+    latest_lei_zhongshu = serialize_zhongshu(lei_zhongshus[-1]) if lei_zhongshus else None
 
     analysis_path.write_text(analysis_text + "\n", encoding="utf-8")
     advice_path.write_text(advice_text + "\n", encoding="utf-8")
@@ -773,8 +782,11 @@ def export_case(
             "pending_reverse_mode": pending_reverse_mode,
             "zhongshu_level": zhongshu_level,
             "structure": {
+                "primary_zhongshu_level": "segment" if zhongshus and zhongshus[0].structure_level == "segment" else "bi",
                 "latest_zhongshu": latest_zhongshu,
                 "zhongshus": serialize_zhongshus(zhongshus),
+                "latest_lei_zhongshu": latest_lei_zhongshu,
+                "lei_zhongshus": serialize_zhongshus(lei_zhongshus),
             },
             "structure_state": signals.get("structure_state"),
             "divergence": signals.get("divergence"),
@@ -789,6 +801,7 @@ def export_case(
                 "bis_csv": layout.bis_csv,
                 "segments_csv": layout.segments_csv,
                 "zhongshu_csv": layout.zhongshu_csv,
+                "lei_zhongshu_csv": lei_zhongshu_csv,
                 "macd_csv": layout.macd_csv,
                 "structure_svg": svg,
                 "structure_png": png,
@@ -936,7 +949,7 @@ def _reuse_existing_hk_5m_case(
         return None
     if payload.get("pending_reverse_mode") != "effective_only":
         return None
-    if str(payload.get("zhongshu_level") or "bi") != "bi":
+    if str(payload.get("zhongshu_level") or "segment") != zhongshu_level:
         return None
 
     data_fetch = payload.get("data_fetch") or {}
@@ -962,7 +975,7 @@ def run_batch_prepare(
     m1_start: str | None = None,
     m1_bars: int = M1_BAR_DEFAULT,
     pending_reverse_mode: str = "effective_only",
-    zhongshu_level: str = "bi",
+    zhongshu_level: str = "segment",
     timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
     use_local_store: bool = True,
     local_store_read_only: bool = False,

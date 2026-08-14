@@ -31,6 +31,7 @@ class Plotter:
         self.dea_color = '#ff8c00'
         self.zero_color = '#808080'
         self.zhongshu_colors = ['#4fc3f7', '#ffb74d', '#81c784', '#e57373']
+        self.lei_zhongshu_colors = ['#b39ddb', '#90caf9', '#a5d6a7', '#ffcc80']
         self.confirmed_fractal_fontsize = 6
         self.unconfirmed_fractal_fontsize = 3
         self.bi_linewidth = 0.8
@@ -364,7 +365,7 @@ class Plotter:
                     zorder=5,
                 )
 
-    def _draw_zhongshus(
+    def _draw_zhongshu_layer(
         self,
         ax,
         bars: List[Bar],
@@ -372,6 +373,12 @@ class Plotter:
         bis: List[Bi],
         segments: List[Segment],
         normalized_bars: Optional[List[NormalizedBar]],
+        *,
+        label_prefix: str,
+        colors: List[str],
+        line_style: str,
+        fill_alpha: float,
+        line_width: float,
     ) -> None:
         bi_by_id = {bi.bi_id: bi for bi in bis}
         segment_by_id = {segment.segment_id: segment for segment in segments}
@@ -402,30 +409,67 @@ class Plotter:
                 end_unit.norm_bar_range[1],
             )
             width = max(end_idx - start_idx, 1)
-            color = self.zhongshu_colors[color_index % len(self.zhongshu_colors)]
+            color = colors[color_index % len(colors)]
             rect = Rectangle(
                 (start_idx, zs.zs_low),
                 width,
                 zs.zs_high - zs.zs_low,
-                linewidth=1.2,
-                linestyle='--',
+                linewidth=line_width,
+                linestyle=line_style,
                 edgecolor=color,
                 facecolor=color,
-                alpha=0.18,
+                alpha=fill_alpha,
             )
             ax.add_patch(rect)
             ax.text(
                 end_idx + 0.2,
                 zs.zs_high,
                 (
-                    f"ZS{zs.zs_id} [{zs.zs_low:.2f}, {zs.zs_high:.2f}]"
+                    f"{label_prefix}{zs.zs_id} [{zs.zs_low:.2f}, {zs.zs_high:.2f}]"
                     if zs.structure_level != "segment"
-                    else f"ZS{zs.zs_id} [{zs.zs_low:.2f}, {zs.zs_high:.2f}] S{','.join(str(bi_id) for bi_id in zs.bi_ids)}"
+                    else f"{label_prefix}{zs.zs_id} [{zs.zs_low:.2f}, {zs.zs_high:.2f}] S{','.join(str(bi_id) for bi_id in zs.bi_ids)}"
                 ),
                 color=color,
                 fontsize=9,
                 va='bottom',
             )
+
+    def _draw_zhongshus(
+        self,
+        ax,
+        bars: List[Bar],
+        zhongshus: List[Zhongshu],
+        lei_zhongshus: List[Zhongshu],
+        bis: List[Bi],
+        segments: List[Segment],
+        normalized_bars: Optional[List[NormalizedBar]],
+    ) -> None:
+        self._draw_zhongshu_layer(
+            ax,
+            bars,
+            zhongshus,
+            bis,
+            segments,
+            normalized_bars,
+            label_prefix="ZS",
+            colors=self.zhongshu_colors,
+            line_style='-',
+            fill_alpha=0.24,
+            line_width=1.8,
+        )
+        self._draw_zhongshu_layer(
+            ax,
+            bars,
+            lei_zhongshus,
+            bis,
+            segments,
+            normalized_bars,
+            label_prefix="LZS",
+            colors=self.lei_zhongshu_colors,
+            line_style=':',
+            fill_alpha=0.10,
+            line_width=1.0,
+        )
 
     def _draw_macd(self, ax, bars: List[Bar]) -> None:
         dif, dea, histogram = self._compute_macd(bars)
@@ -519,6 +563,7 @@ class Plotter:
         bis: List[Bi],
         segments: List[Segment],
         zhongshus: List[Zhongshu],
+        lei_zhongshus: Optional[List[Zhongshu]] = None,
         normalized_bars: Optional[List[NormalizedBar]] = None,
         confirmed_fractal_ids: Optional[set[int]] = None,
         structure_state: Optional[dict] = None,
@@ -527,7 +572,8 @@ class Plotter:
         """
         绘制主图总览：K 线 + 分型 + 笔 + 线段 + 中枢 + MACD。
         """
-        show_segment_ids = any(zs.structure_level == "segment" for zs in zhongshus)
+        lei_zhongshus = lei_zhongshus or []
+        show_segment_ids = any(zs.structure_level == "segment" for zs in (zhongshus + lei_zhongshus))
         fig, (price_ax, macd_ax) = plt.subplots(
             2,
             1,
@@ -539,7 +585,7 @@ class Plotter:
 
         self._draw_bars(price_ax, bars)
         self._draw_moving_averages(price_ax, bars)
-        self._draw_zhongshus(price_ax, bars, zhongshus, bis, segments, normalized_bars)
+        self._draw_zhongshus(price_ax, bars, zhongshus, lei_zhongshus, bis, segments, normalized_bars)
         self._draw_segments(price_ax, bars, segments, normalized_bars, show_segment_ids=show_segment_ids)
         self._draw_bis(price_ax, bars, bis, normalized_bars)
         self._draw_fractals(price_ax, bars, fractals, normalized_bars, confirmed_fractal_ids)

@@ -71,6 +71,16 @@ LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS = 480
 LAST_TECHNICAL_TIMINGS: dict[str, float] = {}
 
 
+def _resolve_primary_and_aux_zhongshus(bis, segments):
+    confirmed_bis = [bi for bi in bis if bi.is_confirmed]
+    # Keep segment-level primary stable by using the full segment chain.
+    segment_zhongshus = identify_zhongshu(segments, structure_level="segment")
+    lei_zhongshus = identify_zhongshu(confirmed_bis, structure_level="bi")
+    zhongshus = segment_zhongshus or lei_zhongshus
+    auxiliary_zhongshus = lei_zhongshus if zhongshus is segment_zhongshus else segment_zhongshus
+    return zhongshus, lei_zhongshus, auxiliary_zhongshus
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate a single-stock H-share mixed report.")
     parser.add_argument("symbol", help="HK symbol such as 09988")
@@ -242,8 +252,7 @@ def _build_lower_precision_entry(
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
     bis = identify_bis(fractals, normalized_bars, pending_reverse_mode=LOWER_PRECISION_PENDING_REVERSE_MODE)
     segments = identify_segments(bis)
-    confirmed_bis = [bi for bi in bis if bi.is_confirmed]
-    zhongshus = identify_zhongshu(confirmed_bis)
+    zhongshus, lei_zhongshus, auxiliary_zhongshus = _resolve_primary_and_aux_zhongshus(bis, segments)
     macd_points = calculate_macd(raw_bars)
     lower_signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
     _write_lower_precision_report(
@@ -256,6 +265,8 @@ def _build_lower_precision_entry(
         bis=bis,
         segments=segments,
         zhongshus=zhongshus,
+        lei_zhongshus=lei_zhongshus,
+        auxiliary_zhongshus=auxiliary_zhongshus,
         macd_points=macd_points,
         signals=lower_signals,
         source=used_source,
@@ -285,6 +296,8 @@ def _write_lower_precision_report(
     bis,
     segments,
     zhongshus,
+    lei_zhongshus,
+    auxiliary_zhongshus,
     macd_points,
     signals: dict[str, object],
     source: str,
@@ -306,6 +319,8 @@ def _write_lower_precision_report(
     export_bis(layout.bis_csv, bis)
     export_segments(layout.segments_csv, segments)
     export_zhongshus(layout.zhongshu_csv, zhongshus)
+    lei_zhongshu_csv = layout.zhongshu_csv.with_name(f"{layout.zhongshu_csv.stem}_lei.csv")
+    export_zhongshus(lei_zhongshu_csv, lei_zhongshus)
     export_macd(layout.macd_csv, macd_points)
     if export_structure_images:
         save_structure_charts(
@@ -314,6 +329,7 @@ def _write_lower_precision_report(
             fractals=fractals,
             bis=bis,
             zhongshus=zhongshus,
+            lei_zhongshus=auxiliary_zhongshus,
             svg_path=layout.chart_svg,
             png_path=layout.chart_png,
             jpg_path=layout.chart_jpg,
@@ -333,6 +349,7 @@ def _write_lower_precision_report(
     )
     report_text = analysis_text + "\n\n" + advice_text + "\n"
     latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
+    latest_lei_zhongshu = serialize_zhongshu(lei_zhongshus[-1]) if lei_zhongshus else None
 
     analysis_path = layout.root_dir / "analysis.txt"
     advice_path = layout.root_dir / "advice.txt"
@@ -361,10 +378,13 @@ def _write_lower_precision_report(
                 "source_probe_min_rows": LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS,
             },
             "pending_reverse_mode": LOWER_PRECISION_PENDING_REVERSE_MODE,
-            "zhongshu_level": "bi",
+            "zhongshu_level": "segment",
             "structure": {
+                "primary_zhongshu_level": "segment" if zhongshus and zhongshus[0].structure_level == "segment" else "bi",
                 "latest_zhongshu": latest_zhongshu,
                 "zhongshus": serialize_zhongshus(zhongshus),
+                "latest_lei_zhongshu": latest_lei_zhongshu,
+                "lei_zhongshus": serialize_zhongshus(lei_zhongshus),
             },
             "structure_state": signals.get("structure_state"),
             "divergence": signals.get("divergence"),
@@ -379,6 +399,7 @@ def _write_lower_precision_report(
                 "bis_csv": layout.bis_csv,
                 "segments_csv": layout.segments_csv,
                 "zhongshu_csv": layout.zhongshu_csv,
+                "lei_zhongshu_csv": lei_zhongshu_csv,
                 "macd_csv": layout.macd_csv,
                 "structure_svg": layout.chart_svg,
                 "structure_png": layout.chart_png,
@@ -428,6 +449,7 @@ def _save_technical_report(
         "fractals_csv": layout.fractals_csv,
         "confirmed_fractals_csv": layout.confirmed_fractals_csv,
         "bis_csv": layout.bis_csv,
+        "segments_csv": layout.segments_csv,
         "zhongshu_csv": layout.zhongshu_csv,
         "macd_csv": layout.macd_csv,
         "svg": layout.chart_svg,
@@ -441,8 +463,8 @@ def _save_technical_report(
     write_normalized_csv(paths["normalized_csv"], normalized_bars)
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
     bis = identify_bis(fractals, normalized_bars)
-    confirmed_bis = [bi for bi in bis if bi.is_confirmed]
-    zhongshus = identify_zhongshu(confirmed_bis)
+    segments = identify_segments(bis)
+    zhongshus, lei_zhongshus, auxiliary_zhongshus = _resolve_primary_and_aux_zhongshus(bis, segments)
     macd_points = calculate_macd(raw_bars)
 
     confirmed_fx_ids: set[int] = set()
@@ -455,7 +477,10 @@ def _save_technical_report(
     export_fractals(paths["fractals_csv"], normalized_bars, fractals, confirmed_fx_ids, unconfirmed_end_fx_ids)
     export_confirmed_fractals(paths["confirmed_fractals_csv"], normalized_bars, fractals, confirmed_fx_ids)
     export_bis(paths["bis_csv"], bis)
+    export_segments(paths["segments_csv"], segments)
     export_zhongshus(paths["zhongshu_csv"], zhongshus)
+    lei_zhongshu_csv = paths["zhongshu_csv"].with_name(f"{paths['zhongshu_csv'].stem}_lei.csv")
+    export_zhongshus(lei_zhongshu_csv, lei_zhongshus)
     export_macd(paths["macd_csv"], macd_points)
     if export_structure_images:
         save_structure_charts(
@@ -464,6 +489,7 @@ def _save_technical_report(
             fractals=fractals,
             bis=bis,
             zhongshus=zhongshus,
+            lei_zhongshus=auxiliary_zhongshus,
             svg_path=paths["svg"],
             png_path=paths["png"],
             jpg_path=paths["jpg"],
@@ -513,6 +539,7 @@ def _save_technical_report(
     conclusion = summary_payload.get("conclusion") or "missing"
     suggestion = summary_payload.get("suggestion") or "等待更多技术面确认。"
     latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
+    latest_lei_zhongshu = serialize_zhongshu(lei_zhongshus[-1]) if lei_zhongshus else None
 
     output_path = output_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json"
     write_json(
@@ -535,9 +562,13 @@ def _save_technical_report(
                 "bar_count_policy": BAR_COUNT_POLICY,
                 "source_probe_min_rows": PRIMARY_TECHNICAL_SOURCE_PROBE_MIN_ROWS,
             },
+            "zhongshu_level": "segment",
             "structure": {
+                "primary_zhongshu_level": "segment" if zhongshus and zhongshus[0].structure_level == "segment" else "bi",
                 "latest_zhongshu": latest_zhongshu,
                 "zhongshus": serialize_zhongshus(zhongshus),
+                "latest_lei_zhongshu": latest_lei_zhongshu,
+                "lei_zhongshus": serialize_zhongshus(lei_zhongshus),
             },
             "structure_state": signals.get("structure_state"),
             "divergence": signals.get("divergence"),
@@ -552,7 +583,9 @@ def _save_technical_report(
                 "fractals_csv": paths["fractals_csv"],
                 "confirmed_fractals_csv": paths["confirmed_fractals_csv"],
                 "bis_csv": paths["bis_csv"],
+                "segments_csv": paths["segments_csv"],
                 "zhongshu_csv": paths["zhongshu_csv"],
+                "lei_zhongshu_csv": lei_zhongshu_csv,
                 "macd_csv": paths["macd_csv"],
                 "structure_svg": paths["svg"],
                 "structure_png": paths["png"],

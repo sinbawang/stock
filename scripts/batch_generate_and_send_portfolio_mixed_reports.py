@@ -88,7 +88,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--m15-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
     parser.add_argument("--m5-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 5M K-line fetch count.")
     parser.add_argument("--m1-bars", type=int, default=2000, help="Forwarded to batch_prepare_chanlun_reports.py for 1M K-line fetch count.")
-    parser.add_argument("--zhongshu-level", choices=("bi", "segment"), default="bi", help="Forwarded to batch_prepare_chanlun_reports.py to switch between bi and segment zhongshu rendering.")
+    parser.add_argument("--zhongshu-level", choices=("bi", "segment"), default="segment", help="Forwarded to batch_prepare_chanlun_reports.py to switch between bi and segment zhongshu rendering.")
     parser.add_argument(
         "--tech-timeframes",
         nargs="+",
@@ -186,7 +186,7 @@ def _generate_all_timeframe_charts(
     m15_bars: int = 1200,
     m5_bars: int = 1200,
     m1_bars: int = 2000,
-    zhongshu_level: str = "bi",
+    zhongshu_level: str = "segment",
     tech_timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
     export_structure_images: bool = True,
 ) -> None:
@@ -310,7 +310,7 @@ def generate_bundle(
     m15_bars: int = 1200,
     m5_bars: int = 1200,
     m1_bars: int = 2000,
-    zhongshu_level: str = "bi",
+    zhongshu_level: str = "segment",
     tech_timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
     export_structure_images: bool = True,
 ) -> GeneratedBundle:

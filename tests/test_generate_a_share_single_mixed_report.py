@@ -111,11 +111,13 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     monkeypatch.setattr(module, "identify_fractals", lambda *args, **kwargs: [])
     monkeypatch.setattr(module, "filter_consecutive_fractals", lambda fractals: fractals)
     monkeypatch.setattr(module, "identify_bis", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "identify_segments", lambda *args, **kwargs: [])
     monkeypatch.setattr(module, "identify_zhongshu", lambda *args, **kwargs: zhongshus)
     monkeypatch.setattr(module, "calculate_macd", lambda *args, **kwargs: [])
     monkeypatch.setattr(module, "export_fractals", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "export_confirmed_fractals", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "export_bis", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_segments", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "export_zhongshus", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "export_macd", lambda *args, **kwargs: None)
     monkeypatch.setattr(module, "analyze_current_state", lambda *args, **kwargs: "analysis")
@@ -158,8 +160,11 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     assert Path(artifacts["structure_jpg"]).exists()
     assert Path(artifacts["macd_csv"]).name.endswith("_normalized_macd.csv")
     assert payload["source_actual"] == "xueqiu"
+    assert payload["zhongshu_level"] == "segment"
     assert payload["structure"]["latest_zhongshu"]["core_bi_ids"] == [9, 10, 11]
     assert payload["structure"]["latest_zhongshu"]["bi_ids"] == [9, 10, 11, 12]
+    assert payload["structure"]["latest_lei_zhongshu"]["core_bi_ids"] == [9, 10, 11]
+    assert payload["structure"]["lei_zhongshus"][0]["bi_ids"] == [9, 10, 11, 12]
     assert payload["structure"]["zhongshus"][0]["render_end_bi_id"] == 12
     assert payload["structure_state"]["current_ongoing"]["type"] == "range"
     assert payload["divergence"]["trend"]["active"] is False

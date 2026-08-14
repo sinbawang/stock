@@ -714,6 +714,16 @@ def build_technical_focus_lines(decomposition: dict[str, Any], signal_summary: d
     return lines
 
 
+def build_zhongshu_level_note(tech_payload: dict[str, Any]) -> str:
+    structure = tech_payload.get("structure") or {}
+    primary_level = safe_text(structure.get("primary_zhongshu_level")) or safe_text(tech_payload.get("zhongshu_level"))
+    if primary_level == "segment":
+        return "中枢口径：主中枢=线段中枢；类中枢仅作辅助参考。"
+    if primary_level == "bi":
+        return "中枢口径：主中枢=类中枢（笔级），用于兼容旧口径。"
+    return ""
+
+
 def build_fundamental_section(base_payload: dict[str, Any]) -> dict[str, Any]:
     summary = base_payload.get("summary") or {}
     blended = base_payload.get("blended") or {}
@@ -766,11 +776,16 @@ def build_capital_flow_section(fund_payload: dict[str, Any]) -> dict[str, Any]:
     }
 def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
     summary = tech_payload.get("summary") or {}
+    structure_payload = tech_payload.get("structure") or {}
     analysis_text = safe_text(tech_payload.get("analysis_text"))
     precision_entry = summary.get("precision_entry") or tech_payload.get("precision_entry") or {}
     precision_window_display = build_precision_window_display(precision_entry)
     same_level_decomposition = build_same_level_decomposition(tech_payload)
     latest_signal_summary = build_latest_signal_summary(tech_payload)
+    zhongshu_level_note = build_zhongshu_level_note(tech_payload)
+    technical_focus_lines = build_technical_focus_lines(same_level_decomposition, latest_signal_summary)
+    if zhongshu_level_note:
+        technical_focus_lines.append(zhongshu_level_note)
     signal_context = {
         "signal_points": summary.get("signal_points") or [],
         "signal_catalog": summary.get("signal_catalog") or [],
@@ -796,7 +811,12 @@ def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
         "signal_descriptions": build_signal_explanation_lines(signal_context),
         "same_level_decomposition": same_level_decomposition,
         "latest_signal_summary": latest_signal_summary,
-        "technical_focus_lines": build_technical_focus_lines(same_level_decomposition, latest_signal_summary),
+        "technical_focus_lines": technical_focus_lines,
+        "zhongshu_level": tech_payload.get("zhongshu_level"),
+        "primary_zhongshu_level": structure_payload.get("primary_zhongshu_level"),
+        "latest_zhongshu": structure_payload.get("latest_zhongshu"),
+        "latest_lei_zhongshu": structure_payload.get("latest_lei_zhongshu"),
+        "zhongshu_level_note": zhongshu_level_note,
         "precision_entry": precision_entry,
         "precision_note": precision_entry.get("note"),
         "precision_window_basis_label": precision_entry.get("window_basis_label") or (precision_entry.get("nested_from") or {}).get("window_basis_label"),
@@ -928,6 +948,45 @@ def read_csv_records(path: Path | None) -> list[dict[str, Any]]:
             {key: parse_csv_value(value) for key, value in row.items()}
             for row in reader
         ]
+
+
+_ZHONGSHU_BI_KEYS = {
+    "start_bi_id",
+    "end_bi_id",
+    "entering_bi_id",
+    "core_bi_ids",
+    "exit_bi_id",
+    "bi_ids",
+    "render_start_bi_id",
+    "render_end_bi_id",
+}
+
+_ZHONGSHU_SEGMENT_KEYS = {
+    "start_segment_id",
+    "end_segment_id",
+    "entering_segment_id",
+    "core_segment_ids",
+    "exit_segment_id",
+    "segment_ids",
+    "render_start_segment_id",
+    "render_end_segment_id",
+}
+
+
+def normalize_chart_zhongshu_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return zhongshu records with a single id namespace based on structure_level."""
+    normalized: list[dict[str, Any]] = []
+    for record in records:
+        item = dict(record)
+        level = safe_text(item.get("structure_level"))
+        if level == "segment":
+            for key in _ZHONGSHU_BI_KEYS:
+                item.pop(key, None)
+        elif level == "bi":
+            for key in _ZHONGSHU_SEGMENT_KEYS:
+                item.pop(key, None)
+        normalized.append(item)
+    return normalized
 
 
 def parse_report_datetime(value: Any) -> datetime:
@@ -1258,11 +1317,20 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
         timeframe,
     )
     stock_dir = bars_csv.parent.parent
+    structure_payload = tech_payload.get("structure") if isinstance(tech_payload, dict) else {}
+    lei_zhongshus = normalize_chart_zhongshu_records(
+        read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_zhongshu_lei"))
+    )
+    zhongshus = normalize_chart_zhongshu_records(
+        read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_zhongshu"))
+    )
 
     return {
         "schema_version": "chart-data-v1",
         "timeframe": timeframe,
         "pending_reverse_mode": pending_reverse_mode,
+        "zhongshu_level": safe_text(tech_payload.get("zhongshu_level")) if isinstance(tech_payload, dict) else "",
+        "primary_zhongshu_level": safe_text((structure_payload or {}).get("primary_zhongshu_level")) if isinstance(structure_payload, dict) else "",
         "label": chart_spec.get("label"),
         "source_csv": bars_csv.name,
         "bars": read_csv_records(bars_csv),
@@ -1274,7 +1342,8 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
         "segments": segment_records,
         "segment_stop_reason_annotations": build_segment_stop_reason_annotations(segment_records, timeframe),
         "segment_tail_interpretations": build_segment_tail_interpretations_payload(stock_dir, timeframe, None),
-        "zhongshus": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_zhongshu")),
+        "zhongshus": zhongshus,
+        "lei_zhongshus": lei_zhongshus,
     }
 
 
@@ -1291,10 +1360,15 @@ def build_summary_payload(
     base_summary = base_payload.get("summary") or {}
     fund_summary = fund_payload.get("summary") or {}
     tech_summary = tech_payload.get("summary") or {}
+    structure_payload = tech_payload.get("structure") or {}
     precision_entry = tech_summary.get("precision_entry") or tech_payload.get("precision_entry") or {}
     precision_window_display = build_precision_window_display(precision_entry)
     same_level_decomposition = build_same_level_decomposition(tech_payload)
     latest_signal_summary = build_latest_signal_summary(tech_payload)
+    zhongshu_level_note = build_zhongshu_level_note(tech_payload)
+    technical_focus_lines = build_technical_focus_lines(same_level_decomposition, latest_signal_summary)
+    if zhongshu_level_note:
+        technical_focus_lines.append(zhongshu_level_note)
     segment_stop_line = (
         build_latest_segment_stop_reason_line(stock_dir, primary_technical_timeframe, tech_payload)
         if tech_payload
@@ -1353,7 +1427,12 @@ def build_summary_payload(
                 ),
                 "same_level_decomposition": same_level_decomposition,
                 "latest_signal_summary": latest_signal_summary,
-                "technical_focus_lines": build_technical_focus_lines(same_level_decomposition, latest_signal_summary),
+                "technical_focus_lines": technical_focus_lines,
+                "zhongshu_level": tech_payload.get("zhongshu_level"),
+                "primary_zhongshu_level": structure_payload.get("primary_zhongshu_level"),
+                "latest_zhongshu": structure_payload.get("latest_zhongshu"),
+                "latest_lei_zhongshu": structure_payload.get("latest_lei_zhongshu"),
+                "zhongshu_level_note": zhongshu_level_note,
                 "segment_tail_interpretations": segment_tail_interpretations,
                 "precision_entry": precision_entry,
                 "precision_note": precision_entry.get("note"),

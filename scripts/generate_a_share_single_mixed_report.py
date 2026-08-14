@@ -31,8 +31,9 @@ from chanlun.data.kline_fetcher import fetch_kline, get_last_fetch_metadata, sav
 from chanlun.data.source_profiles import available_a_share_source_profiles, resolve_a_share_intraday_source_label
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.normalize import normalize_bars
+from chanlun.segment import identify_segments
 from chanlun.zhongshu import identify_zhongshu
-from export_structures_with_boxes import calculate_macd, export_bis, export_confirmed_fractals, export_fractals, export_macd, export_zhongshus, serialize_zhongshu, serialize_zhongshus
+from export_structures_with_boxes import calculate_macd, export_bis, export_confirmed_fractals, export_fractals, export_macd, export_segments, export_zhongshus, serialize_zhongshu, serialize_zhongshus
 from fundamental.reporting.presentation import build_fundamental_presentation, write_base_text
 from fundamental.services import fetch_and_analyze_cn_blended_fundamentals
 from report_retention import prune_older_outputs
@@ -63,6 +64,17 @@ LOWER_PRECISION_LABEL = "5M"
 LOWER_PRECISION_PENDING_REVERSE_MODE = "effective_only"
 DEFAULT_REPORT_SOURCE_LABEL = "tencent->xueqiu->eastmoney->tushare"
 LAST_TECHNICAL_TIMINGS: dict[str, float] = {}
+
+
+def _resolve_primary_and_aux_zhongshus(bis):
+    segments = identify_segments(bis)
+    confirmed_bis = [bi for bi in bis if bi.is_confirmed]
+    # Keep segment-level primary stable by using the full segment chain.
+    segment_zhongshus = identify_zhongshu(segments, structure_level="segment")
+    lei_zhongshus = identify_zhongshu(confirmed_bis, structure_level="bi")
+    zhongshus = segment_zhongshus or lei_zhongshus
+    auxiliary_zhongshus = lei_zhongshus if zhongshus is segment_zhongshus else segment_zhongshus
+    return segments, zhongshus, lei_zhongshus, auxiliary_zhongshus
 
 
 def parse_args() -> argparse.Namespace:
@@ -216,8 +228,7 @@ def _build_lower_precision_entry(
     normalized_bars = normalize_bars(raw_bars)
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
     bis = identify_bis(fractals, normalized_bars, pending_reverse_mode=LOWER_PRECISION_PENDING_REVERSE_MODE)
-    confirmed_bis = [bi for bi in bis if bi.is_confirmed]
-    zhongshus = identify_zhongshu(confirmed_bis)
+    _segments, zhongshus, _lei_zhongshus, _auxiliary_zhongshus = _resolve_primary_and_aux_zhongshus(bis)
     macd_points = calculate_macd(raw_bars)
     lower_signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
     return build_lower_timeframe_precision_entry(
@@ -262,6 +273,7 @@ def _save_technical_report(
         "fractals_csv": layout.fractals_csv,
         "confirmed_fractals_csv": layout.confirmed_fractals_csv,
         "bis_csv": layout.bis_csv,
+        "segments_csv": layout.segments_csv,
         "zhongshu_csv": layout.zhongshu_csv,
         "macd_csv": layout.macd_csv,
         "svg": layout.chart_svg,
@@ -275,8 +287,7 @@ def _save_technical_report(
     write_normalized_csv(paths["normalized_csv"], normalized_bars)
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
     bis = identify_bis(fractals, normalized_bars)
-    confirmed_bis = [bi for bi in bis if bi.is_confirmed]
-    zhongshus = identify_zhongshu(confirmed_bis)
+    segments, zhongshus, lei_zhongshus, auxiliary_zhongshus = _resolve_primary_and_aux_zhongshus(bis)
     macd_points = calculate_macd(raw_bars)
 
     confirmed_fx_ids: set[int] = set()
@@ -289,7 +300,10 @@ def _save_technical_report(
     export_fractals(paths["fractals_csv"], normalized_bars, fractals, confirmed_fx_ids, unconfirmed_end_fx_ids)
     export_confirmed_fractals(paths["confirmed_fractals_csv"], normalized_bars, fractals, confirmed_fx_ids)
     export_bis(paths["bis_csv"], bis)
+    export_segments(paths["segments_csv"], segments)
     export_zhongshus(paths["zhongshu_csv"], zhongshus)
+    lei_zhongshu_csv = paths["zhongshu_csv"].with_name(f"{paths['zhongshu_csv'].stem}_lei.csv")
+    export_zhongshus(lei_zhongshu_csv, lei_zhongshus)
     export_macd(paths["macd_csv"], macd_points)
     if export_structure_images:
         save_structure_charts(
@@ -298,6 +312,7 @@ def _save_technical_report(
             fractals=fractals,
             bis=bis,
             zhongshus=zhongshus,
+            lei_zhongshus=auxiliary_zhongshus,
             svg_path=paths["svg"],
             png_path=paths["png"],
             jpg_path=paths["jpg"],
@@ -343,6 +358,7 @@ def _save_technical_report(
     conclusion = summary_payload.get("conclusion") or "missing"
     suggestion = summary_payload.get("suggestion") or "等待更多技术面确认。"
     latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
+    latest_lei_zhongshu = serialize_zhongshu(lei_zhongshus[-1]) if lei_zhongshus else None
 
     output_path = paths["base_dir"] / "tech.json"
     write_json(
@@ -365,9 +381,13 @@ def _save_technical_report(
                 "bar_count_policy": BAR_COUNT_POLICY,
                 "source_probe_min_rows": INTRADAY_SOURCE_PROBE_ROWS,
             },
+            "zhongshu_level": "segment",
             "structure": {
+                "primary_zhongshu_level": "segment" if zhongshus and zhongshus[0].structure_level == "segment" else "bi",
                 "latest_zhongshu": latest_zhongshu,
                 "zhongshus": serialize_zhongshus(zhongshus),
+                "latest_lei_zhongshu": latest_lei_zhongshu,
+                "lei_zhongshus": serialize_zhongshus(lei_zhongshus),
             },
             "structure_state": signals.get("structure_state"),
             "divergence": signals.get("divergence"),
@@ -382,7 +402,9 @@ def _save_technical_report(
                 "fractals_csv": paths["fractals_csv"],
                 "confirmed_fractals_csv": paths["confirmed_fractals_csv"],
                 "bis_csv": paths["bis_csv"],
+                "segments_csv": paths["segments_csv"],
                 "zhongshu_csv": paths["zhongshu_csv"],
+                "lei_zhongshu_csv": lei_zhongshu_csv,
                 "macd_csv": paths["macd_csv"],
                 "structure_svg": paths["svg"],
                 "structure_png": paths["png"],

@@ -277,8 +277,11 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     assert Path(artifacts["raw_csv"]).parent == tmp_path / "30m" / "analyze"
     assert data_fetch["source"] == "xueqiu"
     assert payload["source_actual"] == "xueqiu"
+    assert payload["zhongshu_level"] == "segment"
     assert payload["structure"]["latest_zhongshu"]["core_bi_ids"] == [19, 20, 21]
     assert payload["structure"]["latest_zhongshu"]["bi_ids"] == [19, 20, 21, 22]
+    assert payload["structure"]["latest_lei_zhongshu"]["core_bi_ids"] == [19, 20, 21]
+    assert payload["structure"]["lei_zhongshus"][0]["bi_ids"] == [19, 20, 21, 22]
     assert payload["structure_state"]["current_ongoing"]["type"] == "range"
     assert payload["divergence"]["trend"]["active"] is False
     assert data_fetch["actual_source"] == "xueqiu"
@@ -294,6 +297,8 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     lower_payload = json.loads((tmp_path / "5m" / "tech.json").read_text(encoding="utf-8"))
     assert lower_payload["timeframe"] == "5m"
     assert lower_payload["pending_reverse_mode"] == "effective_only"
+    assert lower_payload["zhongshu_level"] == "segment"
+    assert lower_payload["structure"]["latest_lei_zhongshu"]["core_bi_ids"] == [19, 20, 21]
     assert lower_payload["data_fetch"]["requested_min_rows"] == module.LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS
     assert lower_payload["data_fetch"]["fulfilled_min_rows"] is False
     assert lower_payload["data_fetch"]["source_probe_min_rows"] == module.LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS

@@ -676,3 +676,51 @@ def test_build_chart_data_payload_enriches_bis_with_endpoint_prices(tmp_path: Pa
     assert payload["bis"][0]["end_price"] == 44.672
     assert payload["bis"][0]["start_fx_type"] == "bottom"
     assert payload["bis"][0]["end_fx_type"] == "top"
+
+
+def test_normalize_chart_zhongshu_records_segment_removes_bi_keys() -> None:
+    records = [
+        {
+            "structure_level": "segment",
+            "start_bi_id": 1,
+            "end_bi_id": 3,
+            "core_bi_ids": "1,2,3",
+            "start_segment_id": 1,
+            "end_segment_id": 3,
+            "core_segment_ids": "1,2,3",
+        }
+    ]
+
+    normalized = module.normalize_chart_zhongshu_records(records)
+
+    assert len(normalized) == 1
+    assert normalized[0]["start_segment_id"] == 1
+    assert normalized[0]["end_segment_id"] == 3
+    assert normalized[0]["core_segment_ids"] == "1,2,3"
+    assert "start_bi_id" not in normalized[0]
+    assert "end_bi_id" not in normalized[0]
+    assert "core_bi_ids" not in normalized[0]
+
+
+def test_normalize_chart_zhongshu_records_bi_removes_segment_keys() -> None:
+    records = [
+        {
+            "structure_level": "bi",
+            "start_bi_id": 9,
+            "end_bi_id": 12,
+            "core_bi_ids": "9,10,11",
+            "start_segment_id": 3,
+            "end_segment_id": 4,
+            "core_segment_ids": "3,4,5",
+        }
+    ]
+
+    normalized = module.normalize_chart_zhongshu_records(records)
+
+    assert len(normalized) == 1
+    assert normalized[0]["start_bi_id"] == 9
+    assert normalized[0]["end_bi_id"] == 12
+    assert normalized[0]["core_bi_ids"] == "9,10,11"
+    assert "start_segment_id" not in normalized[0]
+    assert "end_segment_id" not in normalized[0]
+    assert "core_segment_ids" not in normalized[0]

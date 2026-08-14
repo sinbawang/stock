@@ -326,7 +326,7 @@ def export_segments(path: Path, segments: list[Segment]) -> None:
 
 
 def serialize_zhongshu(zs: Zhongshu) -> dict[str, object]:
-    return {
+    payload = {
         "zs_id": zs.zs_id,
         "structure_level": zs.structure_level,
         "recognition_mode": zs.recognition_mode,
@@ -350,6 +350,23 @@ def serialize_zhongshu(zs: Zhongshu) -> dict[str, object]:
         "superseded_by_zs_id": getattr(zs, "superseded_by_zs_id", None),
         "is_reabsorbed_by_larger_expansion": getattr(zs, "is_reabsorbed_by_larger_expansion", False),
     }
+
+    if zs.structure_level == "segment":
+        # Keep legacy *_bi_id keys for compatibility while exposing explicit segment keys.
+        payload.update(
+            {
+                "entering_segment_id": zs.entering_bi_id,
+                "core_segment_ids": list(zs.core_bi_ids),
+                "segment_ids": list(zs.bi_ids),
+                "exit_segment_id": zs.exit_bi_id,
+                "start_segment_id": zs.start_bi_id,
+                "end_segment_id": zs.end_bi_id,
+                "render_start_segment_id": zs.render_start_bi_id,
+                "render_end_segment_id": zs.render_end_bi_id,
+            }
+        )
+
+    return payload
 
 
 def serialize_zhongshus(zhongshus: list[Zhongshu]) -> list[dict[str, object]]:
@@ -379,6 +396,11 @@ def export_zhongshus(path: Path, zhongshus) -> None:
             "entering_bi_id": zs.entering_bi_id,
             "core_bi_ids": ",".join(str(bi_id) for bi_id in zs.core_bi_ids),
             "exit_bi_id": zs.exit_bi_id,
+            "start_segment_id": zs.start_bi_id if zs.structure_level == "segment" else None,
+            "end_segment_id": zs.end_bi_id if zs.structure_level == "segment" else None,
+            "entering_segment_id": zs.entering_bi_id if zs.structure_level == "segment" else None,
+            "core_segment_ids": ",".join(str(bi_id) for bi_id in zs.core_bi_ids) if zs.structure_level == "segment" else None,
+            "exit_segment_id": zs.exit_bi_id if zs.structure_level == "segment" else None,
             "zs_low": zs.zs_low,
             "zs_high": zs.zs_high,
             "peak_low": zs.peak_low,
@@ -386,9 +408,12 @@ def export_zhongshus(path: Path, zhongshus) -> None:
             "start_ts": zs.start_ts.strftime("%Y-%m-%d %H:%M"),
             "end_ts": zs.end_ts.strftime("%Y-%m-%d %H:%M"),
             "bi_ids": ",".join(str(bi_id) for bi_id in zs.bi_ids),
+            "segment_ids": ",".join(str(bi_id) for bi_id in zs.bi_ids) if zs.structure_level == "segment" else None,
             "zone_mode": zs.zone_mode,
             "render_start_bi_id": zs.render_start_bi_id,
             "render_end_bi_id": zs.render_end_bi_id,
+            "render_start_segment_id": zs.render_start_bi_id if zs.structure_level == "segment" else None,
+            "render_end_segment_id": zs.render_end_bi_id if zs.structure_level == "segment" else None,
             "structure_level": zs.structure_level,
             "recognition_mode": zs.recognition_mode,
             "render_mode": zs.render_mode,
@@ -404,6 +429,11 @@ def export_zhongshus(path: Path, zhongshus) -> None:
         "entering_bi_id",
         "core_bi_ids",
         "exit_bi_id",
+        "start_segment_id",
+        "end_segment_id",
+        "entering_segment_id",
+        "core_segment_ids",
+        "exit_segment_id",
         "zs_low",
         "zs_high",
         "peak_low",
@@ -411,9 +441,12 @@ def export_zhongshus(path: Path, zhongshus) -> None:
         "start_ts",
         "end_ts",
         "bi_ids",
+        "segment_ids",
         "zone_mode",
         "render_start_bi_id",
         "render_end_bi_id",
+        "render_start_segment_id",
+        "render_end_segment_id",
         "structure_level",
         "recognition_mode",
         "render_mode",
