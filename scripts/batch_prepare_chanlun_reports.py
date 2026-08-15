@@ -85,7 +85,7 @@ SECURITIES = [
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
 INTRADAY_SOURCE_PROBE_ROWS = 1200
-M1_BAR_DEFAULT = 2000
+M1_BAR_DEFAULT = 3000
 BAR_COUNT_POLICY = "feasible_maximum"
 HK_REUSABLE_5M_MIN_ROWS = 480
 INTRADAY_TIMEFRAME_SPECS = (
@@ -153,7 +153,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--m5-start", default=None, help="5M 起始时间；未指定时按 5M 根数自动回推")
     parser.add_argument("--m5-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="5M 抓取目标根数，默认 1200")
     parser.add_argument("--m1-start", default=None, help="1M 起始时间；未指定时按 1M 根数自动回推")
-    parser.add_argument("--m1-bars", type=int, default=M1_BAR_DEFAULT, help="1M 抓取目标根数，默认 2000")
+    parser.add_argument("--m1-bars", type=int, default=M1_BAR_DEFAULT, help="1M 抓取目标根数，默认 3000")
     parser.add_argument(
         "--holdings-file",
         default=str(DEFAULT_HOLDINGS_FILE),
