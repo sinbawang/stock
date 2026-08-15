@@ -19,7 +19,7 @@ if str(SRC) not in sys.path:
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from report_retention import prune_older_outputs
+from report_retention import prune_analyze_csv_families, prune_older_outputs
 
 from chanlun.analysis import (
     analyze_chanlun_signals,
@@ -710,12 +710,9 @@ def export_case(
     # does not force a fallback to bi-level primary output.
     segment_zhongshus = identify_zhongshu(segments, structure_level="segment")
     lei_zhongshus = identify_zhongshu(confirmed_bis, structure_level="bi")
-    if zhongshu_level == "bi":
-        zhongshus = lei_zhongshus
-        auxiliary_zhongshus = segment_zhongshus
-    else:
-        zhongshus = segment_zhongshus or lei_zhongshus
-        auxiliary_zhongshus = lei_zhongshus if zhongshus is segment_zhongshus else segment_zhongshus
+    # Enforce segment as the only primary zhongshu layer across all symbols/timeframes.
+    zhongshus = segment_zhongshus
+    auxiliary_zhongshus = lei_zhongshus
     macd_points = calculate_macd(raw_bars)
 
     confirmed_fx_ids: set[int] = set()
@@ -780,9 +777,9 @@ def export_case(
             "source": (data_fetch or {}).get("source"),
             "data_fetch": data_fetch,
             "pending_reverse_mode": pending_reverse_mode,
-            "zhongshu_level": zhongshu_level,
+            "zhongshu_level": "segment",
             "structure": {
-                "primary_zhongshu_level": "segment" if zhongshus and zhongshus[0].structure_level == "segment" else "bi",
+                "primary_zhongshu_level": "segment",
                 "latest_zhongshu": latest_zhongshu,
                 "zhongshus": serialize_zhongshus(zhongshus),
                 "latest_lei_zhongshu": latest_lei_zhongshu,
@@ -810,6 +807,7 @@ def export_case(
             },
         },
     )
+    prune_analyze_csv_families(raw_csv)
     return {
         "analysis": analysis_path,
         "advice": advice_path,

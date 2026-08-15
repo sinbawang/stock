@@ -36,7 +36,7 @@ from chanlun.zhongshu import identify_zhongshu
 from export_structures_with_boxes import calculate_macd, export_bis, export_confirmed_fractals, export_fractals, export_macd, export_segments, export_zhongshus, serialize_zhongshu, serialize_zhongshus
 from fundamental.reporting.presentation import build_fundamental_presentation, write_base_text
 from fundamental.services import fetch_and_analyze_cn_blended_fundamentals
-from report_retention import prune_older_outputs
+from report_retention import prune_analyze_csv_families, prune_older_outputs
 from generate_a_share_combined_overview import (
     CapitalFlowRef,
     CombinedOverviewRow,
@@ -72,8 +72,8 @@ def _resolve_primary_and_aux_zhongshus(bis):
     # Keep segment-level primary stable by using the full segment chain.
     segment_zhongshus = identify_zhongshu(segments, structure_level="segment")
     lei_zhongshus = identify_zhongshu(confirmed_bis, structure_level="bi")
-    zhongshus = segment_zhongshus or lei_zhongshus
-    auxiliary_zhongshus = lei_zhongshus if zhongshus is segment_zhongshus else segment_zhongshus
+    zhongshus = segment_zhongshus
+    auxiliary_zhongshus = lei_zhongshus
     return segments, zhongshus, lei_zhongshus, auxiliary_zhongshus
 
 
@@ -383,7 +383,7 @@ def _save_technical_report(
             },
             "zhongshu_level": "segment",
             "structure": {
-                "primary_zhongshu_level": "segment" if zhongshus and zhongshus[0].structure_level == "segment" else "bi",
+                "primary_zhongshu_level": "segment",
                 "latest_zhongshu": latest_zhongshu,
                 "zhongshus": serialize_zhongshus(zhongshus),
                 "latest_lei_zhongshu": latest_lei_zhongshu,
@@ -412,6 +412,7 @@ def _save_technical_report(
             },
         },
     )
+    prune_analyze_csv_families(paths["raw_csv"])
     total_seconds = time.perf_counter() - started_total
     LAST_TECHNICAL_TIMINGS.clear()
     LAST_TECHNICAL_TIMINGS.update(
