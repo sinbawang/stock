@@ -252,6 +252,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Force uploader to skip manifest-diff optimization and upload all files.",
     )
+    parser.add_argument(
+        "--upload-chart-timeframes",
+        nargs="+",
+        choices=("day", "60m", "30m", "15m", "5m", "1m"),
+        default=None,
+        help="Optional chart timeframes to upload incrementally (only stocks/*/charts/<timeframe>.json plus index/groups/alerts).",
+    )
+    parser.add_argument(
+        "--upload-symbols",
+        nargs="+",
+        default=None,
+        help="Optional symbols to scope incremental chart uploads.",
+    )
     parser.add_argument("--upload-dry-run", action="store_true", help="Run upload script in dry-run mode")
     parser.add_argument(
         "--sync-kline-cache-restore-before-regenerate",
@@ -566,6 +579,12 @@ def upload_publish_bundle(args: argparse.Namespace, source_dir: Path) -> None:
         command.append("--delete-created-api-key")
     if bool(getattr(args, "force_upload", False)):
         command.append("--force-upload")
+    upload_chart_timeframes = getattr(args, "upload_chart_timeframes", None)
+    if upload_chart_timeframes:
+        command.extend(["--chart-timeframes", *[str(value) for value in upload_chart_timeframes]])
+    upload_symbols = getattr(args, "upload_symbols", None)
+    if upload_symbols:
+        command.extend(["--symbols", *[str(value) for value in upload_symbols]])
     if args.upload_dry_run:
         command.append("--dry-run")
     try:

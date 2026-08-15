@@ -6,6 +6,7 @@ import json
 import mimetypes
 import os
 import fnmatch
+import re
 import sys
 import time
 import uuid
@@ -27,6 +28,12 @@ ALWAYS_UPLOAD_PATTERNS = (
     "stocks/*/detail.json",
     "stocks/*/summary.json",
 )
+INCREMENTAL_BASE_PATTERNS = (
+    "index.json",
+    "groups/*.json",
+    "alerts/*.json",
+)
+CHART_FILE_RE = re.compile(r"^stocks/([^/]+)/charts/([^/.]+)\.json$")
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,6 +48,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--api-key-expire-in", type=int, default=7200, help="Temporary API key lifetime in seconds")
     parser.add_argument("--delete-created-api-key", action="store_true", help="Delete the temporary API key after upload")
     parser.add_argument("--force-upload", action="store_true", help="Upload all files and bypass manifest-diff skip logic")
+    parser.add_argument(
+        "--chart-timeframes",
+        nargs="+",
+        choices=("day", "60m", "30m", "15m", "5m", "1m"),
+        default=None,
+        help="Upload only selected chart JSON timeframes and minimal index/group metadata.",
+    )
+    parser.add_argument(
+        "--symbols",
+        nargs="+",
+        default=None,
+        help="Optional symbols to scope incremental chart uploads, e.g. 01024 00700.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Only print what would be uploaded")
     parser.add_argument(
         "--verify-upload",
@@ -196,6 +216,52 @@ def iter_local_files(source_dir: Path, cloud_prefix: str) -> list[LocalFile]:
             )
         )
     return files
+
+
+def _symbol_variants(symbol: str) -> set[str]:
+    value = str(symbol or "").strip()
+    if not value:
+        return set()
+    variants = {value}
+    digits = value.replace("HK", "").replace("hk", "")
+    if digits.isdigit():
+        variants.add(digits.zfill(5))
+        variants.add(digits.zfill(6))
+    return variants
+
+
+def filter_incremental_files(
+    files: list[LocalFile],
+    *,
+    chart_timeframes: set[str] | None,
+    symbols: set[str] | None,
+) -> list[LocalFile]:
+    if not chart_timeframes and not symbols:
+        return files
+
+    normalized_timeframes = {str(value).strip().lower() for value in (chart_timeframes or set()) if str(value).strip()}
+    normalized_symbols = {str(value).strip() for value in (symbols or set()) if str(value).strip()}
+
+    selected: list[LocalFile] = []
+    for item in files:
+        relative_path = item.relative_path.replace("\\", "/")
+        if any(fnmatch.fnmatch(relative_path, pattern) for pattern in INCREMENTAL_BASE_PATTERNS):
+            selected.append(item)
+            continue
+
+        chart_match = CHART_FILE_RE.match(relative_path)
+        if not chart_match:
+            continue
+
+        symbol = chart_match.group(1)
+        timeframe = chart_match.group(2).lower()
+        if normalized_timeframes and timeframe not in normalized_timeframes:
+            continue
+        if normalized_symbols and symbol not in normalized_symbols:
+            continue
+        selected.append(item)
+
+    return selected
 
 
 def build_admin_url(env_id: str, region: str) -> str:
@@ -609,6 +675,15 @@ def main() -> int:
         raise CloudBaseUploadError("Missing --env-id or CLOUDBASE_ENV_ID/TCB_ENV_ID.")
 
     files = iter_local_files(source_dir, args.cloud_prefix)
+    chart_timeframes = {str(value).strip() for value in (args.chart_timeframes or []) if str(value).strip()}
+    symbol_selector: set[str] = set()
+    for raw_symbol in args.symbols or []:
+        symbol_selector.update(_symbol_variants(raw_symbol))
+    files = filter_incremental_files(
+        files,
+        chart_timeframes=chart_timeframes if chart_timeframes else None,
+        symbols=symbol_selector if symbol_selector else None,
+    )
     if not files:
         raise CloudBaseUploadError(f"No files found under {source_dir}")
 
@@ -624,6 +699,10 @@ def main() -> int:
 
     print(f"source={source_dir}")
     print(f"files={len(files)}")
+    if chart_timeframes:
+        print(f"chart_timeframes={','.join(sorted(chart_timeframes))}")
+    if symbol_selector:
+        print(f"symbols={','.join(sorted(symbol_selector))}")
     print(f"uploading={len(upload_plan)}")
     print(f"skipped={len(skipped_uploads)}")
     print(f"cloud_prefix={args.cloud_prefix}")

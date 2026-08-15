@@ -72,6 +72,8 @@ def _normalize_technical_publish_timeframes(publish_timeframes: list[Timeframe] 
     normalized = _dedupe_timeframes(publish_timeframes)
     if "day" not in normalized:
         normalized.append("day")
+    if "30m" not in normalized:
+        normalized.append("30m")
     return normalized
 
 
@@ -319,6 +321,8 @@ def _build_publish_namespace(
     force_upload: bool,
     publish_json_only: bool,
     upload_dry_run: bool,
+    upload_chart_timeframes: list[Timeframe] | None = None,
+    upload_symbols: list[str] | None = None,
 ) -> Namespace:
     return Namespace(
         holdings_file=holdings_file,
@@ -339,6 +343,8 @@ def _build_publish_namespace(
         force_upload=force_upload,
         publish_json_only=publish_json_only,
         upload_dry_run=upload_dry_run,
+        upload_chart_timeframes=tuple(_dedupe_timeframes(upload_chart_timeframes)) if upload_chart_timeframes else None,
+        upload_symbols=tuple(upload_symbols) if upload_symbols else None,
     )
 
 
@@ -449,7 +455,7 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             timeframes=tuple(tech_timeframes),
         )
         publish_args = _build_publish_namespace(
-            holdings_file=request.holdings_file,
+            holdings_file=str(filtered_holdings_path),
             reports_root=request.reports_root,
             publish_root=request.publish_root,
             snapshot_stamp=request.snapshot_stamp,
@@ -467,6 +473,8 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             force_upload=request.force_upload,
             publish_json_only=request.publish_json_only,
             upload_dry_run=request.upload_dry_run,
+            upload_chart_timeframes=list(prepare_result.selected_timeframes),
+            upload_symbols=[item.symbol for item in holdings],
         )
         publish_result = _publish_build_and_upload(publish_args)
     publish_result.update(
