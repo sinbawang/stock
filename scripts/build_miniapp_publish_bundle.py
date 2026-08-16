@@ -168,6 +168,78 @@ def read_json_if_exists(path: Path) -> dict[str, Any]:
     return read_json(path)
 
 
+def load_previous_publish_stock_payloads(latest_dir: Path) -> dict[str, dict[str, Any]]:
+    stocks_dir = latest_dir / "stocks"
+    if not stocks_dir.exists():
+        return {}
+
+    payloads: dict[str, dict[str, Any]] = {}
+    for stock_dir in sorted(item for item in stocks_dir.iterdir() if item.is_dir()):
+        symbol = stock_dir.name
+        summary = read_json_if_exists(stock_dir / "summary.json")
+        detail = read_json_if_exists(stock_dir / "detail.json")
+        if not summary and not detail:
+            continue
+        payloads[symbol] = {"summary": summary, "detail": detail}
+    return payloads
+
+
+def _section_timeframe_key(section: dict[str, Any]) -> str:
+    timeframe = safe_text(section.get("timeframe")).lower()
+    if timeframe:
+        return timeframe
+    key = safe_text(section.get("key")).lower()
+    if key.startswith("technical_"):
+        return key.removeprefix("technical_")
+    return ""
+
+
+def merge_technical_sections_with_fallback(
+    sections: list[dict[str, Any]],
+    fallback_detail_payload: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if not fallback_detail_payload:
+        return sections
+
+    fallback_sections = fallback_detail_payload.get("sections") or []
+    if not isinstance(fallback_sections, list):
+        return sections
+
+    existing_timeframes = {
+        _section_timeframe_key(section)
+        for section in sections
+        if isinstance(section, dict) and str(section.get("key") or "").startswith("technical")
+    }
+
+    merged = list(sections)
+    for section in fallback_sections:
+        if not isinstance(section, dict):
+            continue
+        key = str(section.get("key") or "")
+        if not key.startswith("technical"):
+            continue
+        timeframe = _section_timeframe_key(section)
+        if timeframe not in {"day", "30m"}:
+            continue
+        if timeframe in existing_timeframes:
+            continue
+        merged.append(section)
+        existing_timeframes.add(timeframe)
+
+    order_map = {value: index for index, value in enumerate(DETAIL_TECHNICAL_TIMEFRAMES)}
+
+    def _sort_key(section: dict[str, Any]) -> tuple[int, str]:
+        key = str(section.get("key") or "")
+        if key == "fundamental":
+            return (-2, "")
+        if key == "capital_flow":
+            return (99, "")
+        timeframe = _section_timeframe_key(section)
+        return (order_map.get(timeframe, 50), timeframe)
+
+    return sorted(merged, key=_sort_key)
+
+
 def resolve_primary_technical_payload(stock_dir: Path) -> tuple[str, dict[str, Any]]:
     for timeframe in PRIMARY_TECHNICAL_CANDIDATES:
         tech_path = stock_dir / timeframe / "tech.json"
@@ -1353,6 +1425,7 @@ def build_summary_payload(
     group_item: dict[str, Any] | None,
     publish_timeframes: tuple[str, ...] | None = None,
     include_chart_images: bool = True,
+    fallback_summary_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     base_payload = read_json_if_exists(stock_dir / "base.json")
     fund_payload = read_json_if_exists(stock_dir / "fund.json")
@@ -1382,6 +1455,52 @@ def build_summary_payload(
     charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes, include_chart_images=include_chart_images)
     cover_chart_path = chart_publish_path(charts, primary_technical_timeframe) or chart_publish_path(charts, PRIMARY_TECHNICAL_TIMEFRAME)
     primary_technical_label = TIMEFRAME_LABELS.get(primary_technical_timeframe, primary_technical_timeframe.upper())
+
+    has_day_or_30m_local = any((stock_dir / timeframe / "tech.json").exists() for timeframe in ("day", "30m"))
+    fallback_technical = (((fallback_summary_payload or {}).get("cards") or {}).get("technical") or {})
+    fallback_timeframe = safe_text(fallback_technical.get("timeframe")).lower()
+    if not has_day_or_30m_local and fallback_timeframe in {"day", "30m"}:
+        tech_card_payload = fallback_technical
+        primary_technical_timeframe = fallback_timeframe
+        primary_technical_label = TIMEFRAME_LABELS.get(primary_technical_timeframe, primary_technical_timeframe.upper())
+    else:
+        tech_card_payload = {
+            "timeframe": tech_payload.get("timeframe") or primary_technical_timeframe,
+            "timeframe_label": primary_technical_label,
+            "operation_level": tech_summary.get("operation_level"),
+            "score": tech_summary.get("score"),
+            "rating": tech_summary.get("rating"),
+            "bias": tech_summary.get("bias"),
+            "score_breakdown": tech_summary.get("score_breakdown") or {},
+            "conclusion": tech_summary.get("conclusion"),
+            "suggestion": tech_summary.get("suggestion"),
+            "buy_points": tech_summary.get("buy_points") or [],
+            "buy_point_labels": format_signal_point_labels(tech_summary.get("buy_points") or []),
+            "sell_points": tech_summary.get("sell_points") or [],
+            "sell_point_labels": format_signal_point_labels(tech_summary.get("sell_points") or []),
+            "signal_points": tech_summary.get("signal_points") or [],
+            "signal_catalog": tech_summary.get("signal_catalog") or [],
+            "signal_descriptions": build_signal_explanation_lines(
+                {
+                    "signal_points": tech_summary.get("signal_points") or [],
+                    "signal_catalog": tech_summary.get("signal_catalog") or [],
+                }
+            ),
+            "same_level_decomposition": same_level_decomposition,
+            "latest_signal_summary": latest_signal_summary,
+            "technical_focus_lines": technical_focus_lines,
+            "zhongshu_level": tech_payload.get("zhongshu_level"),
+            "primary_zhongshu_level": structure_payload.get("primary_zhongshu_level"),
+            "latest_zhongshu": structure_payload.get("latest_zhongshu"),
+            "latest_lei_zhongshu": structure_payload.get("latest_lei_zhongshu"),
+            "zhongshu_level_note": zhongshu_level_note,
+            "segment_tail_interpretations": segment_tail_interpretations,
+            "precision_entry": precision_entry,
+            "precision_note": precision_entry.get("note"),
+            "precision_window_basis_label": precision_entry.get("window_basis_label") or (precision_entry.get("nested_from") or {}).get("window_basis_label"),
+            "precision_window_basis_description": precision_entry.get("window_basis_description") or (precision_entry.get("nested_from") or {}).get("window_basis_description"),
+            "precision_window_display": precision_window_display,
+        }
     updated_at = max(
         safe_text(base_payload.get("generated_at")),
         safe_text(fund_payload.get("generated_at")),
@@ -1404,41 +1523,8 @@ def build_summary_payload(
                 "summary": first_non_empty(base_summary.get("comment"), (base_payload.get("blended") or {}).get("annual_anchor", {}).get("scorecard", {}).get("combined_comment")),
             },
             "technical": {
-                "timeframe": tech_payload.get("timeframe") or primary_technical_timeframe,
-                "timeframe_label": primary_technical_label,
-                "operation_level": tech_summary.get("operation_level"),
-                "score": tech_summary.get("score"),
-                "rating": tech_summary.get("rating"),
-                "bias": tech_summary.get("bias"),
-                "score_breakdown": tech_summary.get("score_breakdown") or {},
-                "conclusion": tech_summary.get("conclusion"),
-                "suggestion": tech_summary.get("suggestion"),
-                "buy_points": tech_summary.get("buy_points") or [],
-                "buy_point_labels": format_signal_point_labels(tech_summary.get("buy_points") or []),
-                "sell_points": tech_summary.get("sell_points") or [],
-                "sell_point_labels": format_signal_point_labels(tech_summary.get("sell_points") or []),
-                "signal_points": tech_summary.get("signal_points") or [],
-                "signal_catalog": tech_summary.get("signal_catalog") or [],
-                "signal_descriptions": build_signal_explanation_lines(
-                    {
-                        "signal_points": tech_summary.get("signal_points") or [],
-                        "signal_catalog": tech_summary.get("signal_catalog") or [],
-                    }
-                ),
-                "same_level_decomposition": same_level_decomposition,
-                "latest_signal_summary": latest_signal_summary,
-                "technical_focus_lines": technical_focus_lines,
-                "zhongshu_level": tech_payload.get("zhongshu_level"),
-                "primary_zhongshu_level": structure_payload.get("primary_zhongshu_level"),
-                "latest_zhongshu": structure_payload.get("latest_zhongshu"),
-                "latest_lei_zhongshu": structure_payload.get("latest_lei_zhongshu"),
-                "zhongshu_level_note": zhongshu_level_note,
-                "segment_tail_interpretations": segment_tail_interpretations,
-                "precision_entry": precision_entry,
-                "precision_note": precision_entry.get("note"),
-                "precision_window_basis_label": precision_entry.get("window_basis_label") or (precision_entry.get("nested_from") or {}).get("window_basis_label"),
-                "precision_window_basis_description": precision_entry.get("window_basis_description") or (precision_entry.get("nested_from") or {}).get("window_basis_description"),
-                "precision_window_display": precision_window_display,
+                **tech_card_payload,
+                "timeframe_label": tech_card_payload.get("timeframe_label") or primary_technical_label,
             },
             "capital_flow": {
                 "score": fund_summary.get("score"),
@@ -1459,6 +1545,7 @@ def build_detail_payload(
     group_item: dict[str, Any] | None,
     publish_timeframes: tuple[str, ...] | None = None,
     include_chart_images: bool = True,
+    fallback_detail_payload: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
     base_payload = read_json_if_exists(stock_dir / "base.json")
     fund_payload = read_json_if_exists(stock_dir / "fund.json")
@@ -1470,6 +1557,7 @@ def build_detail_payload(
         DETAIL_TECHNICAL_TIMEFRAMES,
         primary_timeframe=primary_technical_timeframe,
     )
+    technical_sections = merge_technical_sections_with_fallback(technical_sections, fallback_detail_payload)
     technical = next((section for section in technical_sections if section.get("key") == "technical"), None) or build_technical_section(tech_payload)
     segment_stop_line = (
         build_latest_segment_stop_reason_line(stock_dir, primary_technical_timeframe, tech_payload)
@@ -1628,6 +1716,7 @@ def generate_bundle(
     snapshot_dir = publish_root / "snapshots" / stamp
     meta_dir = reports_root / "_meta"
     holdings = load_holdings(holdings_path)
+    previous_stock_payloads = load_previous_publish_stock_payloads(latest_dir)
     group_payloads = load_group_payloads(meta_dir)
     group_item_map = collect_group_item_map(group_payloads)
 
@@ -1659,6 +1748,7 @@ def generate_bundle(
             group_item_map.get(holding.symbol),
             publish_timeframes=publish_timeframes,
             include_chart_images=include_chart_images,
+            fallback_summary_payload=(previous_stock_payloads.get(holding.symbol) or {}).get("summary"),
         )
         detail_payload, chart_specs = build_detail_payload(
             holding,
@@ -1666,6 +1756,7 @@ def generate_bundle(
             group_item_map.get(holding.symbol),
             publish_timeframes=publish_timeframes,
             include_chart_images=include_chart_images,
+            fallback_detail_payload=(previous_stock_payloads.get(holding.symbol) or {}).get("detail"),
         )
         summary_payloads.append(summary_payload)
         for target in targets:

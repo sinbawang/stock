@@ -34,6 +34,7 @@ INCREMENTAL_BASE_PATTERNS = (
     "alerts/*.json",
 )
 CHART_FILE_RE = re.compile(r"^stocks/([^/]+)/charts/([^/.]+)\.json$")
+STOCK_META_FILE_RE = re.compile(r"^stocks/([^/]+)/(base|summary|detail)\.json$")
 
 
 def parse_args() -> argparse.Namespace:
@@ -241,11 +242,22 @@ def filter_incremental_files(
 
     normalized_timeframes = {str(value).strip().lower() for value in (chart_timeframes or set()) if str(value).strip()}
     normalized_symbols = {str(value).strip() for value in (symbols or set()) if str(value).strip()}
+    symbol_variants: set[str] = set()
+    for symbol in normalized_symbols:
+        symbol_variants.update(_symbol_variants(symbol))
 
     selected: list[LocalFile] = []
     for item in files:
         relative_path = item.relative_path.replace("\\", "/")
         if any(fnmatch.fnmatch(relative_path, pattern) for pattern in INCREMENTAL_BASE_PATTERNS):
+            selected.append(item)
+            continue
+
+        stock_meta_match = STOCK_META_FILE_RE.match(relative_path)
+        if stock_meta_match:
+            symbol = stock_meta_match.group(1)
+            if symbol_variants and symbol not in symbol_variants:
+                continue
             selected.append(item)
             continue
 
@@ -257,7 +269,7 @@ def filter_incremental_files(
         timeframe = chart_match.group(2).lower()
         if normalized_timeframes and timeframe not in normalized_timeframes:
             continue
-        if normalized_symbols and symbol not in normalized_symbols:
+        if symbol_variants and symbol not in symbol_variants:
             continue
         selected.append(item)
 
