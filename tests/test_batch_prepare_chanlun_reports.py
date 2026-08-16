@@ -94,6 +94,75 @@ def test_reuse_existing_hk_5m_case_accepts_effective_only_payload_for_any(monkey
     assert reused == expected
 
 
+def test_reuse_existing_hk_5m_case_accepts_segment_payload(monkeypatch, tmp_path: Path) -> None:
+    security = module.Security("03690", "美团", "HK")
+    rows = [
+        {"ts": "2026-08-14 15:20:00", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+        {"ts": "2026-08-14 15:25:00", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+    ]
+    root_dir = tmp_path / "03690" / "5m"
+    analyze_dir = root_dir / "analyze"
+    analyze_dir.mkdir(parents=True, exist_ok=True)
+    layout = SimpleNamespace(
+        root_dir=root_dir,
+        raw_csv=analyze_dir / "raw.csv",
+        normalized_csv=analyze_dir / "normalized.csv",
+        fractals_csv=analyze_dir / "fractals.csv",
+        confirmed_fractals_csv=analyze_dir / "confirmed_fractals.csv",
+        bis_csv=analyze_dir / "bis.csv",
+        segments_csv=analyze_dir / "segments.csv",
+        zhongshu_csv=analyze_dir / "zhongshu.csv",
+        macd_csv=analyze_dir / "macd.csv",
+        chart_svg=root_dir / "structure.svg",
+        chart_png=root_dir / "structure.png",
+        chart_jpg=root_dir / "structure.jpg",
+        technical_report_json=root_dir / "tech.json",
+    )
+    for path in (
+        layout.raw_csv,
+        layout.normalized_csv,
+        layout.fractals_csv,
+        layout.confirmed_fractals_csv,
+        layout.bis_csv,
+        layout.segments_csv,
+        layout.zhongshu_csv,
+        layout.macd_csv,
+        layout.chart_svg,
+        layout.chart_png,
+        layout.chart_jpg,
+        root_dir / "analysis.txt",
+        root_dir / "advice.txt",
+        root_dir / "report.txt",
+    ):
+        path.write_text("ok", encoding="utf-8")
+
+    layout.technical_report_json.write_text(
+        json.dumps(
+            {
+                "timeframe": "5m",
+                "pending_reverse_mode": "effective_only",
+                "zhongshu_level": "segment",
+                "data_fetch": {"actual_bar_count": 2},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    expected = {"report": root_dir / "report.txt"}
+    monkeypatch.setattr(module, "timeframe_report_paths", lambda symbol, timeframe, bars: layout)
+    monkeypatch.setattr(module, "load_existing_case", lambda actual_security, timeframe: expected)
+
+    reused = module._reuse_existing_hk_5m_case(
+        security,
+        rows,
+        pending_reverse_mode="effective_only",
+        zhongshu_level="segment",
+    )
+
+    assert reused == expected
+
+
 def test_fetch_intraday_rows_reuses_local_hk_5m_cache_before_remote_fetch(monkeypatch) -> None:
     security = module.Security("00700", "腾讯", "HK")
     cached_rows = [

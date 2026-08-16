@@ -918,7 +918,7 @@ def _reuse_existing_hk_5m_case(
     pending_reverse_mode: str,
     zhongshu_level: str,
 ) -> dict[str, Path] | None:
-    if security.market != "HK" or pending_reverse_mode not in {"any", "effective_only"} or zhongshu_level != "bi":
+    if security.market != "HK" or pending_reverse_mode not in {"any", "effective_only"}:
         return None
 
     layout = timeframe_report_paths(security.symbol, "5m", rows)
