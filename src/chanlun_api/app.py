@@ -179,6 +179,7 @@ class TechnicalRefreshRequest(BaseModel):
     latest_only: bool = True
     skip_build: bool = False
     skip_upload: bool = False
+    parallelism: int = Field(default=max(1, min(4, os.cpu_count() or 1)), ge=1)
     day_start: str | None = None
     day_bars: int = Field(default=1200, ge=1)
     m60_start: str | None = None
@@ -438,6 +439,7 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
         filtered_holdings_path, holdings = filtered
         prepare_result = run_batch_prepare(
             holdings_path=filtered_holdings_path,
+            parallelism=request.parallelism,
             day_start=request.day_start,
             day_bars=request.day_bars,
             m60_start=request.m60_start,

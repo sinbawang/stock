@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from concurrent.futures import Future
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -222,6 +223,193 @@ def test_fetch_intraday_rows_hk_5m_incremental_probe_skips_local_reuse(monkeypat
     assert rows == remote_rows
     assert payload["source"] == "xueqiu->akshare"
     assert payload["actual_source"] == "xueqiu"
+
+
+def test_run_batch_prepare_uses_requested_parallelism(monkeypatch, tmp_path: Path) -> None:
+    securities = [
+        module.Security("000651", "格力电器", "A"),
+        module.Security("03690", "美团", "HK"),
+    ]
+    captured: dict[str, object] = {}
+
+    class FakeExecutor:
+        def __init__(self, max_workers: int):
+            captured["max_workers"] = max_workers
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def submit(self, fn, *args, **kwargs):
+            future = Future()
+            future.set_result(fn(*args, **kwargs))
+            return future
+
+    def fake_prepare_security_result(security, **kwargs):
+        return module.PreparedSecurityResult(security=security, day_case={}, m60_case={})
+
+    monkeypatch.setattr(module, "load_securities", lambda path: securities)
+    monkeypatch.setattr(module, "ThreadPoolExecutor", FakeExecutor)
+    monkeypatch.setattr(module, "as_completed", lambda futures: list(futures))
+    monkeypatch.setattr(module, "_prepare_security_result", fake_prepare_security_result)
+    monkeypatch.setattr(module, "REPORTS_META_DIR", tmp_path)
+
+    result = module.run_batch_prepare(
+        holdings_path=tmp_path / "holdings.json",
+        timeframes=("5m", "1m"),
+        parallelism=4,
+    )
+
+    assert captured["max_workers"] == 2
+    assert result.security_count == 2
+
+
+def test_reuse_existing_exact_case_accepts_matching_1m_payload(monkeypatch, tmp_path: Path) -> None:
+    security = module.Security("03690", "美团", "HK")
+    rows = [
+        {"ts": "2026-08-14 15:20:00", "open": 1.0, "high": 1.1, "low": 0.9, "close": 1.0, "volume": 1},
+        {"ts": "2026-08-14 15:21:00", "open": 1.0, "high": 1.1, "low": 0.9, "close": 1.0, "volume": 1},
+    ]
+    root_dir = tmp_path / "03690" / "1m"
+    analyze_dir = root_dir / "analyze"
+    analyze_dir.mkdir(parents=True, exist_ok=True)
+    layout = SimpleNamespace(
+        root_dir=root_dir,
+        raw_csv=analyze_dir / "raw.csv",
+        normalized_csv=analyze_dir / "normalized.csv",
+        fractals_csv=analyze_dir / "fractals.csv",
+        confirmed_fractals_csv=analyze_dir / "confirmed_fractals.csv",
+        bis_csv=analyze_dir / "bis.csv",
+        segments_csv=analyze_dir / "segments.csv",
+        zhongshu_csv=analyze_dir / "zhongshu.csv",
+        macd_csv=analyze_dir / "macd.csv",
+        chart_svg=root_dir / "structure.svg",
+        chart_png=root_dir / "structure.png",
+        chart_jpg=root_dir / "structure.jpg",
+        technical_report_json=root_dir / "tech.json",
+    )
+    for path in (
+        layout.normalized_csv,
+        layout.fractals_csv,
+        layout.confirmed_fractals_csv,
+        layout.bis_csv,
+        layout.segments_csv,
+        layout.zhongshu_csv,
+        layout.macd_csv,
+        layout.chart_svg,
+        layout.chart_png,
+        layout.chart_jpg,
+        root_dir / "analysis.txt",
+        root_dir / "advice.txt",
+        root_dir / "report.txt",
+    ):
+        path.write_text("ok", encoding="utf-8")
+    layout.raw_csv.write_text(
+        "ts,open,high,low,close,volume\n"
+        "2026-08-14 15:20:00,1,1.1,0.9,1,1\n"
+        "2026-08-14 15:21:00,1,1.1,0.9,1,1\n",
+        encoding="utf-8",
+    )
+    layout.technical_report_json.write_text(
+        json.dumps(
+            {
+                "timeframe": "1m",
+                "pending_reverse_mode": "effective_only",
+                "zhongshu_level": "segment",
+                "data_fetch": {"actual_bar_count": 2},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    expected = {"report": root_dir / "report.txt"}
+    monkeypatch.setattr(module, "timeframe_report_paths", lambda symbol, timeframe, bars: layout)
+    monkeypatch.setattr(module, "load_existing_case", lambda actual_security, timeframe: expected)
+
+    reused = module._reuse_existing_exact_case(
+        security,
+        "1m",
+        rows,
+        pending_reverse_mode="effective_only",
+        zhongshu_level="segment",
+    )
+
+    assert reused == expected
+
+
+def test_reuse_existing_exact_case_rejects_stale_raw_csv(monkeypatch, tmp_path: Path) -> None:
+    security = module.Security("03690", "美团", "HK")
+    rows = [
+        {"ts": "2026-08-14 15:20:00", "open": 1.0, "high": 1.1, "low": 0.9, "close": 1.0, "volume": 1},
+        {"ts": "2026-08-14 15:21:00", "open": 1.0, "high": 1.1, "low": 0.9, "close": 1.0, "volume": 1},
+    ]
+    root_dir = tmp_path / "03690" / "1m"
+    analyze_dir = root_dir / "analyze"
+    analyze_dir.mkdir(parents=True, exist_ok=True)
+    layout = SimpleNamespace(
+        root_dir=root_dir,
+        raw_csv=analyze_dir / "raw.csv",
+        normalized_csv=analyze_dir / "normalized.csv",
+        fractals_csv=analyze_dir / "fractals.csv",
+        confirmed_fractals_csv=analyze_dir / "confirmed_fractals.csv",
+        bis_csv=analyze_dir / "bis.csv",
+        segments_csv=analyze_dir / "segments.csv",
+        zhongshu_csv=analyze_dir / "zhongshu.csv",
+        macd_csv=analyze_dir / "macd.csv",
+        chart_svg=root_dir / "structure.svg",
+        chart_png=root_dir / "structure.png",
+        chart_jpg=root_dir / "structure.jpg",
+        technical_report_json=root_dir / "tech.json",
+    )
+    for path in (
+        layout.normalized_csv,
+        layout.fractals_csv,
+        layout.confirmed_fractals_csv,
+        layout.bis_csv,
+        layout.segments_csv,
+        layout.zhongshu_csv,
+        layout.macd_csv,
+        layout.chart_svg,
+        layout.chart_png,
+        layout.chart_jpg,
+        root_dir / "analysis.txt",
+        root_dir / "advice.txt",
+        root_dir / "report.txt",
+    ):
+        path.write_text("ok", encoding="utf-8")
+    layout.raw_csv.write_text(
+        "ts,open,high,low,close,volume\n"
+        "2026-08-14 15:20:00,1,1.1,0.9,1,1\n"
+        "2026-08-14 15:22:00,1,1.1,0.9,1,1\n",
+        encoding="utf-8",
+    )
+    layout.technical_report_json.write_text(
+        json.dumps(
+            {
+                "timeframe": "1m",
+                "pending_reverse_mode": "effective_only",
+                "zhongshu_level": "segment",
+                "data_fetch": {"actual_bar_count": 2},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(module, "timeframe_report_paths", lambda symbol, timeframe, bars: layout)
+
+    reused = module._reuse_existing_exact_case(
+        security,
+        "1m",
+        rows,
+        pending_reverse_mode="effective_only",
+        zhongshu_level="segment",
+    )
+
+    assert reused is None
 
 
 def test_fetch_with_optional_local_store_uses_incremental_start_and_tail(monkeypatch, tmp_path: Path) -> None:

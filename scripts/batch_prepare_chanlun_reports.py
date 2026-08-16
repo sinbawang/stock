@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import csv
 import inspect
 import json
@@ -112,6 +113,13 @@ class BatchPrepareResult:
     summary_path: Path | None
 
 
+@dataclass(frozen=True)
+class PreparedSecurityResult:
+    security: Security
+    day_case: dict[str, Path]
+    m60_case: dict[str, Path]
+
+
 def timeframe_display_label(timeframe: str) -> str:
     normalized = timeframe.strip().lower()
     if normalized == "day":
@@ -206,6 +214,12 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="是否导出结构图文件（svg/png/jpg）。默认 true；设为 false 可仅生成结构数据与文本，提升批量速度。",
+    )
+    parser.add_argument(
+        "--parallelism",
+        type=int,
+        default=min(4, max(1, os.cpu_count() or 1)),
+        help="按持仓并行生成的 worker 数，默认最多 4。",
     )
     return parser.parse_args()
 
@@ -957,6 +971,207 @@ def _reuse_existing_hk_5m_case(
     return load_existing_case(security, "5m")
 
 
+def _raw_csv_matches_rows(path: Path, rows: list[dict]) -> bool:
+    if not rows or not path.exists():
+        return False
+
+    first_ts = str(rows[0].get("ts") or "")
+    last_ts = str(rows[-1].get("ts") or "")
+    actual_first = ""
+    actual_last = ""
+    actual_count = 0
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for record in reader:
+            ts = str(record.get("ts") or "")
+            if actual_count == 0:
+                actual_first = ts
+            actual_last = ts
+            actual_count += 1
+    return actual_count == len(rows) and actual_first == first_ts and actual_last == last_ts
+
+
+def _reuse_existing_exact_case(
+    security: Security,
+    timeframe: str,
+    rows: list[dict],
+    *,
+    pending_reverse_mode: str,
+    zhongshu_level: str,
+) -> dict[str, Path] | None:
+    layout = timeframe_report_paths(security.symbol, timeframe, rows)
+    required_paths = [
+        layout.raw_csv,
+        layout.normalized_csv,
+        layout.fractals_csv,
+        layout.confirmed_fractals_csv,
+        layout.bis_csv,
+        layout.segments_csv,
+        layout.zhongshu_csv,
+        layout.macd_csv,
+        layout.chart_svg,
+        layout.chart_png,
+        layout.chart_jpg,
+        layout.technical_report_json,
+        layout.root_dir / "analysis.txt",
+        layout.root_dir / "advice.txt",
+        layout.root_dir / "report.txt",
+    ]
+    if any(not path.exists() for path in required_paths):
+        return None
+
+    payload = json.loads(layout.technical_report_json.read_text(encoding="utf-8"))
+    if payload.get("timeframe") != timeframe:
+        return None
+    if str(payload.get("pending_reverse_mode") or "") != pending_reverse_mode:
+        return None
+    if str(payload.get("zhongshu_level") or "segment") != zhongshu_level:
+        return None
+
+    data_fetch = payload.get("data_fetch") or {}
+    if int(data_fetch.get("actual_bar_count") or 0) != len(rows):
+        return None
+    if not _raw_csv_matches_rows(layout.raw_csv, rows):
+        return None
+
+    return load_existing_case(security, timeframe)
+
+
+def _prepare_security_result(
+    security: Security,
+    *,
+    selected_timeframes: tuple[str, ...],
+    resolved_day_start: str,
+    day_bars: int,
+    resolved_m60_start: str,
+    m60_bars: int,
+    resolved_m30_start: str,
+    m30_bars: int,
+    resolved_m15_start: str,
+    m15_bars: int,
+    resolved_m5_start: str,
+    m5_bars: int,
+    resolved_m1_start: str,
+    m1_bars: int,
+    pending_reverse_mode: str,
+    zhongshu_level: str,
+    use_local_store: bool,
+    local_store_read_only: bool,
+    incremental_overlap_bars: int,
+    local_store_root: Path | None,
+    export_structure_images: bool,
+) -> PreparedSecurityResult:
+    day_case: dict[str, Path] = {}
+    m60_case: dict[str, Path] = {}
+
+    if "day" in selected_timeframes:
+        started = time.perf_counter()
+        day_rows, day_fetch = _fetch_with_optional_local_store(
+            security,
+            timeframe="day",
+            requested_start=resolved_day_start,
+            bar_count=day_bars,
+            overlap_bars=incremental_overlap_bars,
+            use_local_store=use_local_store,
+            local_store_read_only=local_store_read_only,
+            local_store_root=local_store_root,
+            remote_fetcher=lambda start, _min_rows: fetch_day_rows(security, start, day_bars),
+        )
+        day_case = export_case(
+            security,
+            "day",
+            day_rows,
+            f"{security.symbol} {security.name} day",
+            data_fetch=day_fetch,
+            pending_reverse_mode=pending_reverse_mode,
+            zhongshu_level=zhongshu_level,
+            export_structure_images=export_structure_images,
+        )
+        print(f"timing {security.symbol} day seconds={time.perf_counter() - started:.2f}", flush=True)
+
+    timeframe_specs = {
+        "60m": ("60", resolved_m60_start, m60_bars),
+        "30m": ("30", resolved_m30_start, m30_bars),
+        "15m": ("15", resolved_m15_start, m15_bars),
+        "5m": ("5", resolved_m5_start, m5_bars),
+        "1m": ("1", resolved_m1_start, m1_bars),
+    }
+    for timeframe in ("60m", "30m", "15m", "5m", "1m"):
+        if timeframe not in selected_timeframes:
+            continue
+        period, start, bar_count = timeframe_specs[timeframe]
+        started = time.perf_counter()
+        if timeframe == "60m":
+            remote_fetcher = lambda effective_start, min_rows: fetch_m60_rows(
+                security,
+                effective_start,
+                bar_count,
+            )
+        elif timeframe == "15m":
+            remote_fetcher = lambda effective_start, min_rows: fetch_m15_rows(
+                security,
+                effective_start,
+                bar_count,
+            )
+        else:
+            remote_fetcher = lambda effective_start, min_rows: fetch_intraday_rows(
+                security,
+                timeframe=timeframe,
+                period=period,
+                start=effective_start,
+                bar_count=bar_count,
+                source_probe_min_rows=min_rows,
+            )
+        rows, fetch_meta = _fetch_with_optional_local_store(
+            security,
+            timeframe=timeframe,
+            requested_start=start,
+            bar_count=bar_count,
+            overlap_bars=incremental_overlap_bars,
+            use_local_store=use_local_store,
+            local_store_read_only=local_store_read_only,
+            local_store_root=local_store_root,
+            remote_fetcher=remote_fetcher,
+        )
+        exported = None
+        if timeframe == "5m":
+            exported = _reuse_existing_hk_5m_case(
+                security,
+                rows,
+                pending_reverse_mode=pending_reverse_mode,
+                zhongshu_level=zhongshu_level,
+            )
+            if exported is not None:
+                print(f"reuse {security.symbol} 5m existing_effective_only_case", flush=True)
+        if exported is None and timeframe in {"5m", "1m"}:
+            exported = _reuse_existing_exact_case(
+                security,
+                timeframe,
+                rows,
+                pending_reverse_mode=pending_reverse_mode,
+                zhongshu_level=zhongshu_level,
+            )
+            if exported is not None:
+                print(f"reuse {security.symbol} {timeframe} existing_exact_case", flush=True)
+        if exported is None:
+            exported = export_case(
+                security,
+                timeframe,
+                rows,
+                f"{security.symbol} {security.name} {timeframe}",
+                data_fetch=fetch_meta,
+                pending_reverse_mode=pending_reverse_mode,
+                zhongshu_level=zhongshu_level,
+                export_structure_images=export_structure_images,
+            )
+        if timeframe == "60m":
+            m60_case = exported
+        print(f"timing {security.symbol} {timeframe} seconds={time.perf_counter() - started:.2f}", flush=True)
+
+    print(f"Prepared {security.name}")
+    return PreparedSecurityResult(security=security, day_case=day_case, m60_case=m60_case)
+
+
 def run_batch_prepare(
     *,
     holdings_path: Path | None = None,
@@ -980,6 +1195,7 @@ def run_batch_prepare(
     incremental_overlap_bars: int = 120,
     local_store_root: Path | None = None,
     export_structure_images: bool = True,
+    parallelism: int = min(4, max(1, os.cpu_count() or 1)),
 ) -> BatchPrepareResult:
     selected_timeframes = tuple(dict.fromkeys(timeframes))
     resolved_day_start = day_start or default_day_start_for_bar_target(day_bars)
@@ -989,108 +1205,71 @@ def run_batch_prepare(
     resolved_m5_start = m5_start or default_intraday_start_for_bar_target("5m", m5_bars)
     resolved_m1_start = m1_start or default_intraday_start_for_bar_target("1m", m1_bars)
     securities = load_securities(holdings_path or DEFAULT_HOLDINGS_FILE)
+    worker_count = max(1, min(parallelism, len(securities)))
     bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]] = []
-    for security in securities:
-        day_case: dict[str, Path] = {}
-        m60_case: dict[str, Path] = {}
-
-        if "day" in selected_timeframes:
-            started = time.perf_counter()
-            day_rows, day_fetch = _fetch_with_optional_local_store(
+    ordered_results: list[PreparedSecurityResult | None] = [None] * len(securities)
+    if worker_count == 1:
+        for index, security in enumerate(securities):
+            ordered_results[index] = _prepare_security_result(
                 security,
-                timeframe="day",
-                requested_start=resolved_day_start,
-                bar_count=day_bars,
-                overlap_bars=incremental_overlap_bars,
-                use_local_store=use_local_store,
-                local_store_read_only=local_store_read_only,
-                local_store_root=local_store_root,
-                remote_fetcher=lambda start, _min_rows: fetch_day_rows(security, start, day_bars),
-            )
-            day_case = export_case(
-                security,
-                "day",
-                day_rows,
-                f"{security.symbol} {security.name} day",
-                data_fetch=day_fetch,
+                selected_timeframes=selected_timeframes,
+                resolved_day_start=resolved_day_start,
+                day_bars=day_bars,
+                resolved_m60_start=resolved_m60_start,
+                m60_bars=m60_bars,
+                resolved_m30_start=resolved_m30_start,
+                m30_bars=m30_bars,
+                resolved_m15_start=resolved_m15_start,
+                m15_bars=m15_bars,
+                resolved_m5_start=resolved_m5_start,
+                m5_bars=m5_bars,
+                resolved_m1_start=resolved_m1_start,
+                m1_bars=m1_bars,
                 pending_reverse_mode=pending_reverse_mode,
                 zhongshu_level=zhongshu_level,
-                export_structure_images=export_structure_images,
-            )
-            print(f"timing {security.symbol} day seconds={time.perf_counter() - started:.2f}", flush=True)
-
-        timeframe_specs = {
-            "60m": ("60", resolved_m60_start, m60_bars),
-            "30m": ("30", resolved_m30_start, m30_bars),
-            "15m": ("15", resolved_m15_start, m15_bars),
-            "5m": ("5", resolved_m5_start, m5_bars),
-            "1m": ("1", resolved_m1_start, m1_bars),
-        }
-        for timeframe in ("60m", "30m", "15m", "5m", "1m"):
-            if timeframe not in selected_timeframes:
-                continue
-            period, start, bar_count = timeframe_specs[timeframe]
-            started = time.perf_counter()
-            if timeframe == "60m":
-                remote_fetcher = lambda effective_start, min_rows: fetch_m60_rows(
-                    security,
-                    effective_start,
-                    bar_count,
-                )
-            elif timeframe == "15m":
-                remote_fetcher = lambda effective_start, min_rows: fetch_m15_rows(
-                    security,
-                    effective_start,
-                    bar_count,
-                )
-            else:
-                remote_fetcher = lambda effective_start, min_rows: fetch_intraday_rows(
-                    security,
-                    timeframe=timeframe,
-                    period=period,
-                    start=effective_start,
-                    bar_count=bar_count,
-                    source_probe_min_rows=min_rows,
-                )
-            rows, fetch_meta = _fetch_with_optional_local_store(
-                security,
-                timeframe=timeframe,
-                requested_start=start,
-                bar_count=bar_count,
-                overlap_bars=incremental_overlap_bars,
                 use_local_store=use_local_store,
                 local_store_read_only=local_store_read_only,
+                incremental_overlap_bars=incremental_overlap_bars,
                 local_store_root=local_store_root,
-                remote_fetcher=remote_fetcher,
+                export_structure_images=export_structure_images,
             )
-            exported = None
-            if timeframe == "5m":
-                exported = _reuse_existing_hk_5m_case(
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = {
+                executor.submit(
+                    _prepare_security_result,
                     security,
-                    rows,
+                    selected_timeframes=selected_timeframes,
+                    resolved_day_start=resolved_day_start,
+                    day_bars=day_bars,
+                    resolved_m60_start=resolved_m60_start,
+                    m60_bars=m60_bars,
+                    resolved_m30_start=resolved_m30_start,
+                    m30_bars=m30_bars,
+                    resolved_m15_start=resolved_m15_start,
+                    m15_bars=m15_bars,
+                    resolved_m5_start=resolved_m5_start,
+                    m5_bars=m5_bars,
+                    resolved_m1_start=resolved_m1_start,
+                    m1_bars=m1_bars,
                     pending_reverse_mode=pending_reverse_mode,
                     zhongshu_level=zhongshu_level,
-                )
-                if exported is not None:
-                    print(f"reuse {security.symbol} 5m existing_effective_only_case", flush=True)
-            if exported is None:
-                exported = export_case(
-                    security,
-                    timeframe,
-                    rows,
-                    f"{security.symbol} {security.name} {timeframe}",
-                    data_fetch=fetch_meta,
-                    pending_reverse_mode=pending_reverse_mode,
-                    zhongshu_level=zhongshu_level,
+                    use_local_store=use_local_store,
+                    local_store_read_only=local_store_read_only,
+                    incremental_overlap_bars=incremental_overlap_bars,
+                    local_store_root=local_store_root,
                     export_structure_images=export_structure_images,
-                )
-            if timeframe == "60m":
-                m60_case = exported
-            print(f"timing {security.symbol} {timeframe} seconds={time.perf_counter() - started:.2f}", flush=True)
+                ): index
+                for index, security in enumerate(securities)
+            }
+            for future in as_completed(futures):
+                ordered_results[futures[future]] = future.result()
 
-        if m60_case:
-            bundle.append((security, day_case, m60_case))
-        print(f"Prepared {security.name}")
+    for prepared in ordered_results:
+        if prepared is None:
+            continue
+        if prepared.m60_case:
+            bundle.append((prepared.security, prepared.day_case, prepared.m60_case))
 
     REPORTS_META_DIR.mkdir(parents=True, exist_ok=True)
     manifest = REPORTS_META_DIR / f"group888_generation_manifest_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
@@ -1140,6 +1319,7 @@ def main() -> None:
         incremental_overlap_bars=args.incremental_overlap_bars,
         local_store_root=Path(args.local_store_root) if args.local_store_root else None,
         export_structure_images=bool(args.export_structure_images),
+        parallelism=args.parallelism,
     )
 
 

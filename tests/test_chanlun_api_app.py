@@ -1,4 +1,5 @@
 import importlib
+from types import SimpleNamespace
 
 module = importlib.import_module("chanlun_api.app")
 from chanlun_api.app import _normalize_technical_publish_timeframes
@@ -32,7 +33,7 @@ def test_resolve_technical_timeframes_expands_30m_chain() -> None:
     assert module._resolve_technical_timeframes("m30_intraday", ["30m"]) == ["30m", "5m", "1m"]
 
 
-def test_publish_refresh_request_defaults_to_1200_bars_except_1m_2000() -> None:
+def test_publish_refresh_request_defaults_to_1200_bars_except_1m_3000() -> None:
     request = module.PublishRefreshRequest()
 
     assert request.day_bars == 1200
@@ -40,18 +41,58 @@ def test_publish_refresh_request_defaults_to_1200_bars_except_1m_2000() -> None:
     assert request.m30_bars == 1200
     assert request.m15_bars == 1200
     assert request.m5_bars == 1200
-    assert request.m1_bars == 2000
+    assert request.m1_bars == 3000
 
 
-def test_technical_refresh_request_defaults_to_1200_bars_except_1m_2000() -> None:
+def test_technical_refresh_request_defaults_to_1200_bars_except_1m_3000() -> None:
     request = module.TechnicalRefreshRequest()
 
+    assert request.parallelism >= 1
     assert request.day_bars == 1200
     assert request.m60_bars == 1200
     assert request.m30_bars == 1200
     assert request.m15_bars == 1200
     assert request.m5_bars == 1200
-    assert request.m1_bars == 2000
+    assert request.m1_bars == 3000
+
+
+def test_run_technical_refresh_passes_parallelism_to_batch_prepare(monkeypatch, tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_batch_prepare(**kwargs):
+        captured["parallelism"] = kwargs["parallelism"]
+        return SimpleNamespace(
+            security_count=1,
+            selected_timeframes=("5m", "1m"),
+            manifest_path=tmp_path / "manifest.txt",
+            summary_path=None,
+        )
+
+    def fake_publish_build_and_upload(args):
+        return {
+            "publish_root": args.publish_root,
+            "latest_dir": "latest",
+            "cloud_prefix": args.cloud_prefix,
+            "published_timeframes": None,
+        }
+
+    monkeypatch.setattr(module, "run_batch_prepare", fake_run_batch_prepare)
+    monkeypatch.setattr(module, "_publish_build_and_upload", fake_publish_build_and_upload)
+
+    result = module._run_technical_refresh(
+        module.TechnicalRefreshRequest(
+            market="HK",
+            symbols=["03690"],
+            refresh_mode="m5_intraday",
+            tech_timeframes=["5m", "1m"],
+            skip_build=True,
+            skip_upload=True,
+            parallelism=3,
+        )
+    )
+
+    assert captured["parallelism"] == 3
+    assert result["generated_timeframes"] == ["5m", "1m"]
 
 
 def test_run_publish_refresh_reroutes_intraday_only_request(monkeypatch) -> None:
@@ -85,7 +126,7 @@ def test_run_publish_refresh_reroutes_intraday_only_request(monkeypatch) -> None
     assert rerouted.day_bars == 1200
     assert rerouted.m30_bars == 1200
     assert rerouted.m5_bars == 1200
-    assert rerouted.m1_bars == 2000
+    assert rerouted.m1_bars == 3000
 
 
 def test_run_publish_refresh_keeps_full_path_when_primary_timeframe_requested(monkeypatch) -> None:
