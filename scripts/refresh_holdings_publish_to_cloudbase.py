@@ -585,6 +585,10 @@ def upload_publish_bundle(args: argparse.Namespace, source_dir: Path) -> None:
     upload_symbols = getattr(args, "upload_symbols", None)
     if upload_symbols:
         command.extend(["--symbols", *[str(value) for value in upload_symbols]])
+    if not bool(getattr(args, "upload_include_stock_meta", True)):
+        command.append("--no-include-stock-meta")
+    if not bool(getattr(args, "upload_include_index_groups", True)):
+        command.append("--no-include-index-groups")
     if args.upload_dry_run:
         command.append("--dry-run")
     try:

@@ -69,6 +69,8 @@ def test_run_technical_refresh_passes_parallelism_to_batch_prepare(monkeypatch, 
         )
 
     def fake_publish_build_and_upload(args):
+        captured["upload_include_stock_meta"] = args.upload_include_stock_meta
+        captured["upload_include_index_groups"] = args.upload_include_index_groups
         return {
             "publish_root": args.publish_root,
             "latest_dir": "latest",
@@ -92,6 +94,8 @@ def test_run_technical_refresh_passes_parallelism_to_batch_prepare(monkeypatch, 
     )
 
     assert captured["parallelism"] == 3
+    assert captured["upload_include_stock_meta"] is False
+    assert captured["upload_include_index_groups"] is False
     assert result["generated_timeframes"] == ["5m", "1m"]
 
 

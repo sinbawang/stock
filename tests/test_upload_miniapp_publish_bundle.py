@@ -94,3 +94,78 @@ def test_load_previous_manifest_returns_none_for_invalid_json(tmp_path: Path) ->
     path.write_text("{not json}", encoding="utf-8")
 
     assert module.load_previous_manifest(path) is None
+
+
+def test_filter_incremental_files_can_skip_stock_meta_and_index_groups(tmp_path: Path) -> None:
+    stock_dir = tmp_path / "stocks" / "03690"
+    charts_dir = stock_dir / "charts"
+    groups_dir = tmp_path / "groups"
+    alerts_dir = tmp_path / "alerts"
+    charts_dir.mkdir(parents=True, exist_ok=True)
+    groups_dir.mkdir(parents=True, exist_ok=True)
+    alerts_dir.mkdir(parents=True, exist_ok=True)
+
+    (tmp_path / "index.json").write_text("{}", encoding="utf-8")
+    (groups_dir / "portfolio.json").write_text("{}", encoding="utf-8")
+    (alerts_dir / "missing_artifacts.json").write_text("[]", encoding="utf-8")
+    (stock_dir / "summary.json").write_text("{}", encoding="utf-8")
+    (stock_dir / "detail.json").write_text("{}", encoding="utf-8")
+    (charts_dir / "5m.json").write_text("{}", encoding="utf-8")
+    (charts_dir / "1m.json").write_text("{}", encoding="utf-8")
+
+    files = module.iter_local_files(tmp_path, "miniapp-publish/latest")
+    filtered = module.filter_incremental_files(
+        files,
+        chart_timeframes={"5m", "1m"},
+        symbols={"03690"},
+        include_stock_meta=False,
+        include_index_groups=False,
+    )
+
+    assert [item.relative_path for item in filtered] == [
+        "alerts/missing_artifacts.json",
+        "stocks/03690/charts/1m.json",
+        "stocks/03690/charts/5m.json",
+    ]
+
+
+def test_verify_uploaded_files_retries_download_errors(monkeypatch, tmp_path: Path) -> None:
+    local_path = tmp_path / "index.json"
+    local_path.write_text('{"ok": true}', encoding="utf-8")
+    payload = local_path.read_bytes()
+    sha256 = module.hashlib.sha256(payload).hexdigest()
+    local_file = module.LocalFile(
+        relative_path="index.json",
+        local_path=local_path,
+        cloud_path="miniapp-publish/latest/index.json",
+        size=len(payload),
+        sha256=sha256,
+    )
+    uploaded = module.UploadedItem(file=local_file, file_id="cloud://index")
+    attempts = {"count": 0}
+
+    def fake_download(*args, **kwargs):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise module.requests.exceptions.ChunkedEncodingError("boom")
+        return payload
+
+    monkeypatch.setattr(module, "download_cloud_bytes", fake_download)
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+
+    session = module.new_session()
+    try:
+        results = module.verify_uploaded_files(
+            session,
+            env_id="env",
+            region="ap-guangzhou",
+            api_key="key",
+            uploaded_items=[uploaded],
+            retries=3,
+            retry_wait_seconds=0.0,
+        )
+    finally:
+        session.close()
+
+    assert attempts["count"] == 2
+    assert results[0].matched is True

@@ -28,9 +28,11 @@ ALWAYS_UPLOAD_PATTERNS = (
     "stocks/*/detail.json",
     "stocks/*/summary.json",
 )
-INCREMENTAL_BASE_PATTERNS = (
+INCREMENTAL_INDEX_GROUP_PATTERNS = (
     "index.json",
     "groups/*.json",
+)
+INCREMENTAL_ALERT_PATTERNS = (
     "alerts/*.json",
 )
 CHART_FILE_RE = re.compile(r"^stocks/([^/]+)/charts/([^/.]+)\.json$")
@@ -72,14 +74,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--verify-retries",
         type=int,
-        default=4,
+        default=8,
         help="Retry count for cloud readback verification when checksum mismatches.",
     )
     parser.add_argument(
         "--verify-retry-wait-seconds",
         type=float,
-        default=1.5,
+        default=2.0,
         help="Wait seconds between verification retries.",
+    )
+    parser.add_argument(
+        "--include-stock-meta",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether incremental uploads should include stocks/*/(base|summary|detail).json.",
+    )
+    parser.add_argument(
+        "--include-index-groups",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Whether incremental uploads should include index.json and groups/*.json.",
     )
     return parser.parse_args()
 
@@ -236,6 +250,8 @@ def filter_incremental_files(
     *,
     chart_timeframes: set[str] | None,
     symbols: set[str] | None,
+    include_stock_meta: bool = True,
+    include_index_groups: bool = True,
 ) -> list[LocalFile]:
     if not chart_timeframes and not symbols:
         return files
@@ -249,12 +265,17 @@ def filter_incremental_files(
     selected: list[LocalFile] = []
     for item in files:
         relative_path = item.relative_path.replace("\\", "/")
-        if any(fnmatch.fnmatch(relative_path, pattern) for pattern in INCREMENTAL_BASE_PATTERNS):
+        if any(fnmatch.fnmatch(relative_path, pattern) for pattern in INCREMENTAL_ALERT_PATTERNS):
+            selected.append(item)
+            continue
+        if include_index_groups and any(fnmatch.fnmatch(relative_path, pattern) for pattern in INCREMENTAL_INDEX_GROUP_PATTERNS):
             selected.append(item)
             continue
 
         stock_meta_match = STOCK_META_FILE_RE.match(relative_path)
         if stock_meta_match:
+            if not include_stock_meta:
+                continue
             symbol = stock_meta_match.group(1)
             if symbol_variants and symbol not in symbol_variants:
                 continue
@@ -446,6 +467,7 @@ def download_cloud_bytes(
     )
     response = session.get(
         download_url,
+        params={"_ts": str(time.time_ns())},
         headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
         timeout=60,
     )
@@ -501,13 +523,22 @@ def verify_uploaded_files(
 
         for attempt in range(1, verify_attempts + 1):
             attempts = attempt
-            cloud_payload = download_cloud_bytes(
-                session,
-                env_id=env_id,
-                region=region,
-                api_key=api_key,
-                cloud_path=uploaded.file_id or item.cloud_path,
-            )
+            try:
+                cloud_payload = download_cloud_bytes(
+                    session,
+                    env_id=env_id,
+                    region=region,
+                    api_key=api_key,
+                    cloud_path=uploaded.file_id or item.cloud_path,
+                )
+            except requests.RequestException as exc:
+                cloud_payload = b""
+                cloud_sha256 = ""
+                cloud_summary = f"download_error:{type(exc).__name__}"
+                if attempt < verify_attempts:
+                    time.sleep(max(0.0, float(retry_wait_seconds)))
+                    continue
+                break
             cloud_sha256 = hashlib.sha256(cloud_payload).hexdigest()
             cloud_summary = _json_summary_for_compare(item.relative_path, cloud_payload)
 
@@ -695,6 +726,8 @@ def main() -> int:
         files,
         chart_timeframes=chart_timeframes if chart_timeframes else None,
         symbols=symbol_selector if symbol_selector else None,
+        include_stock_meta=bool(args.include_stock_meta),
+        include_index_groups=bool(args.include_index_groups),
     )
     if not files:
         raise CloudBaseUploadError(f"No files found under {source_dir}")

@@ -324,6 +324,8 @@ def _build_publish_namespace(
     upload_dry_run: bool,
     upload_chart_timeframes: list[Timeframe] | None = None,
     upload_symbols: list[str] | None = None,
+    upload_include_stock_meta: bool = True,
+    upload_include_index_groups: bool = True,
 ) -> Namespace:
     return Namespace(
         holdings_file=holdings_file,
@@ -346,6 +348,8 @@ def _build_publish_namespace(
         upload_dry_run=upload_dry_run,
         upload_chart_timeframes=tuple(_dedupe_timeframes(upload_chart_timeframes)) if upload_chart_timeframes else None,
         upload_symbols=tuple(upload_symbols) if upload_symbols else None,
+        upload_include_stock_meta=upload_include_stock_meta,
+        upload_include_index_groups=upload_include_index_groups,
     )
 
 
@@ -477,6 +481,8 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             upload_dry_run=request.upload_dry_run,
             upload_chart_timeframes=list(prepare_result.selected_timeframes),
             upload_symbols=[item.symbol for item in holdings],
+            upload_include_stock_meta=request.refresh_mode != "m5_intraday",
+            upload_include_index_groups=request.refresh_mode != "m5_intraday",
         )
         publish_result = _publish_build_and_upload(publish_args)
     publish_result.update(
