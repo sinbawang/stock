@@ -109,6 +109,12 @@ docker run --rm -p 8000:8000 \
 
 行为：
 
+- `m30_intraday` 适合半小时主分析刷新；当前容器入口默认槽位是交易日 `09:30` 到 `15:30` 的半点档位。
+- `m5_intraday` 适合盘中细粒度刷新；当前容器入口默认槽位是交易日盘中每 5 分钟一次，但排除 `:00` 和 `:30`，因此默认从 `09:35` 跑到 `15:55`。
+- 收盘后另有 `16:10` 的 `EOD` 容器内调度，用于覆盖港股 `16:00~16:10` 集合竞价后的收盘刷新。
+
+当前仓库的容器入口 [scripts/container_bootstrap_and_run.sh](c:/sandbox/sinba/stock/scripts/container_bootstrap_and_run.sh) 已直接内置这三条可选调度器，按环境变量 `INTRADAY_SCHEDULER_ENABLED`、`M5_INTRADAY_SCHEDULER_ENABLED`、`EOD_SCHEDULER_ENABLED` 启用。也就是说，这部分已经不只是规划，而是当前默认可部署能力。
+
 - 只刷新技术级别图和 `tech.json`
 - 然后重建发布包并上传
 

@@ -23,11 +23,23 @@ KLINE_SYNC_RESTORE_FILE_ID="${KLINE_SYNC_RESTORE_FILE_ID:-}"
 KLINE_SYNC_BACKUP_ON_START="${KLINE_SYNC_BACKUP_ON_START:-false}"
 KLINE_SYNC_BACKUP_INTERVAL_SECONDS="${KLINE_SYNC_BACKUP_INTERVAL_SECONDS:-1800}"
 KLINE_SYNC_BACKUP_ON_STOP="${KLINE_SYNC_BACKUP_ON_STOP:-true}"
+INTRADAY_SCHEDULER_ENABLED="${INTRADAY_SCHEDULER_ENABLED:-false}"
+INTRADAY_SCHEDULER_TIMEZONE="${INTRADAY_SCHEDULER_TIMEZONE:-Asia/Shanghai}"
+INTRADAY_SCHEDULER_GRACE_SECONDS="${INTRADAY_SCHEDULER_GRACE_SECONDS:-150}"
+INTRADAY_SCHEDULER_POLL_SECONDS="${INTRADAY_SCHEDULER_POLL_SECONDS:-30}"
+M5_INTRADAY_SCHEDULER_ENABLED="${M5_INTRADAY_SCHEDULER_ENABLED:-false}"
+EOD_SCHEDULER_ENABLED="${EOD_SCHEDULER_ENABLED:-false}"
+EOD_SCHEDULER_TIMEZONE="${EOD_SCHEDULER_TIMEZONE:-Asia/Shanghai}"
+EOD_SCHEDULER_GRACE_SECONDS="${EOD_SCHEDULER_GRACE_SECONDS:-300}"
+EOD_SCHEDULER_POLL_SECONDS="${EOD_SCHEDULER_POLL_SECONDS:-30}"
 
 mkdir -p "${KLINE_SYNC_LOCAL_ROOT}"
 mkdir -p "$(dirname "${KLINE_SYNC_MANIFEST_PATH}")"
 
 backup_loop_pid=""
+scheduler_pid=""
+mini_scheduler_pid=""
+eod_scheduler_pid=""
 child_pid=""
 
 run_backup_once() {
@@ -75,6 +87,33 @@ start_backup_loop() {
   log "started periodic backup loop (interval=${interval}s)"
 }
 
+start_intraday_scheduler() {
+  INTRADAY_SCHEDULER_TIMEZONE="${INTRADAY_SCHEDULER_TIMEZONE}" \
+  INTRADAY_SCHEDULER_GRACE_SECONDS="${INTRADAY_SCHEDULER_GRACE_SECONDS}" \
+  INTRADAY_SCHEDULER_POLL_SECONDS="${INTRADAY_SCHEDULER_POLL_SECONDS}" \
+  python /app/scripts/run_m30_intraday_scheduler.py &
+  scheduler_pid=$!
+  log "started intraday scheduler (timezone=${INTRADAY_SCHEDULER_TIMEZONE})"
+}
+
+start_m5_intraday_scheduler() {
+  INTRADAY_SCHEDULER_TIMEZONE="${INTRADAY_SCHEDULER_TIMEZONE}" \
+  INTRADAY_SCHEDULER_GRACE_SECONDS="${INTRADAY_SCHEDULER_GRACE_SECONDS}" \
+  INTRADAY_SCHEDULER_POLL_SECONDS="${INTRADAY_SCHEDULER_POLL_SECONDS}" \
+  python /app/scripts/run_m30_intraday_scheduler.py --profile m5_intraday &
+  mini_scheduler_pid=$!
+  log "started m5 intraday scheduler (timezone=${INTRADAY_SCHEDULER_TIMEZONE})"
+}
+
+start_eod_scheduler() {
+  INTRADAY_SCHEDULER_TIMEZONE="${EOD_SCHEDULER_TIMEZONE}" \
+  INTRADAY_SCHEDULER_GRACE_SECONDS="${EOD_SCHEDULER_GRACE_SECONDS}" \
+  INTRADAY_SCHEDULER_POLL_SECONDS="${EOD_SCHEDULER_POLL_SECONDS}" \
+  python /app/scripts/run_m30_intraday_scheduler.py --profile eod &
+  eod_scheduler_pid=$!
+  log "started eod scheduler (timezone=${EOD_SCHEDULER_TIMEZONE})"
+}
+
 handle_shutdown() {
   if is_true "${KLINE_SYNC_ENABLED}" && is_true "${KLINE_SYNC_BACKUP_ON_STOP}"; then
     log "received shutdown signal; running final backup"
@@ -86,6 +125,21 @@ handle_shutdown() {
   if [ -n "${backup_loop_pid}" ] && kill -0 "${backup_loop_pid}" 2>/dev/null; then
     kill "${backup_loop_pid}" 2>/dev/null || true
     wait "${backup_loop_pid}" 2>/dev/null || true
+  fi
+
+  if [ -n "${scheduler_pid}" ] && kill -0 "${scheduler_pid}" 2>/dev/null; then
+    kill "${scheduler_pid}" 2>/dev/null || true
+    wait "${scheduler_pid}" 2>/dev/null || true
+  fi
+
+  if [ -n "${mini_scheduler_pid}" ] && kill -0 "${mini_scheduler_pid}" 2>/dev/null; then
+    kill "${mini_scheduler_pid}" 2>/dev/null || true
+    wait "${mini_scheduler_pid}" 2>/dev/null || true
+  fi
+
+  if [ -n "${eod_scheduler_pid}" ] && kill -0 "${eod_scheduler_pid}" 2>/dev/null; then
+    kill "${eod_scheduler_pid}" 2>/dev/null || true
+    wait "${eod_scheduler_pid}" 2>/dev/null || true
   fi
 
   if [ -n "${child_pid}" ] && kill -0 "${child_pid}" 2>/dev/null; then
@@ -125,6 +179,24 @@ if is_true "${KLINE_SYNC_ENABLED}"; then
   esac
 else
   log "sync disabled"
+fi
+
+if is_true "${INTRADAY_SCHEDULER_ENABLED}"; then
+  start_intraday_scheduler
+else
+  log "intraday scheduler disabled"
+fi
+
+if is_true "${M5_INTRADAY_SCHEDULER_ENABLED}"; then
+  start_m5_intraday_scheduler
+else
+  log "m5 intraday scheduler disabled"
+fi
+
+if is_true "${EOD_SCHEDULER_ENABLED}"; then
+  start_eod_scheduler
+else
+  log "eod scheduler disabled"
 fi
 
 log "starting main process: $*"
