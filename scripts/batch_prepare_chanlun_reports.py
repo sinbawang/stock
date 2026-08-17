@@ -111,6 +111,7 @@ class BatchPrepareResult:
     selected_timeframes: tuple[str, ...]
     manifest_path: Path
     summary_path: Path | None
+    timeframe_diagnostics: list[dict[str, object]]
 
 
 @dataclass(frozen=True)
@@ -118,6 +119,7 @@ class PreparedSecurityResult:
     security: Security
     day_case: dict[str, Path]
     m60_case: dict[str, Path]
+    timeframe_diagnostics: list[dict[str, object]]
 
 
 def timeframe_display_label(timeframe: str) -> str:
@@ -145,6 +147,59 @@ def _data_fetch_payload(
         "fulfilled_min_rows": actual_bar_count >= requested_min_rows if requested_min_rows is not None else None,
         "bar_count_policy": BAR_COUNT_POLICY,
         "source_probe_min_rows": INTRADAY_SOURCE_PROBE_ROWS if requested_min_rows is None else requested_min_rows,
+    }
+
+
+def _build_timeframe_diagnostic(
+    security: Security,
+    timeframe: str,
+    rows: list[dict],
+    fetch_meta: dict[str, object] | None,
+    exported: dict[str, Path] | None,
+    *,
+    requested_start: str,
+    bar_count: int,
+    reused_existing_case: bool,
+) -> dict[str, object]:
+    tech_payload: dict[str, object] = {}
+    if exported and exported.get("tech_json"):
+        try:
+            tech_payload = json.loads(Path(exported["tech_json"]).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            tech_payload = {}
+
+    artifacts = tech_payload.get("artifacts") or {}
+    local_store = (fetch_meta or {}).get("local_store") or {}
+    raw_csv = artifacts.get("raw_csv")
+    raw_csv_name = Path(raw_csv).name if raw_csv else None
+    return {
+        "symbol": security.symbol,
+        "market": security.market,
+        "timeframe": timeframe,
+        "requested_start": requested_start,
+        "requested_bar_count": bar_count,
+        "actual_bar_count": len(rows),
+        "first_bar_ts": str(rows[0].get("ts") or "") if rows else None,
+        "last_bar_ts": str(rows[-1].get("ts") or "") if rows else None,
+        "source": (fetch_meta or {}).get("source"),
+        "actual_source": (fetch_meta or {}).get("actual_source"),
+        "source_attempts": list((fetch_meta or {}).get("source_attempts") or []),
+        "raw_csv": raw_csv,
+        "raw_csv_name": raw_csv_name,
+        "generated_at": tech_payload.get("generated_at"),
+        "reused_existing_case": reused_existing_case,
+        "local_store": {
+            "enabled": bool(local_store.get("enabled")),
+            "read_only": bool(local_store.get("read_only")),
+            "local_rows_before": local_store.get("local_rows_before"),
+            "remote_rows": local_store.get("remote_rows"),
+            "merged_total_rows": local_store.get("merged_total_rows"),
+            "added_rows": local_store.get("added_rows"),
+            "updated_rows": local_store.get("updated_rows"),
+            "analysis_rows": local_store.get("analysis_rows"),
+            "effective_start": local_store.get("effective_start"),
+            "store_path": local_store.get("store_path"),
+        },
     }
 
 
@@ -1063,6 +1118,7 @@ def _prepare_security_result(
 ) -> PreparedSecurityResult:
     day_case: dict[str, Path] = {}
     m60_case: dict[str, Path] = {}
+    timeframe_diagnostics: list[dict[str, object]] = []
 
     if "day" in selected_timeframes:
         started = time.perf_counter()
@@ -1086,6 +1142,18 @@ def _prepare_security_result(
             pending_reverse_mode=pending_reverse_mode,
             zhongshu_level=zhongshu_level,
             export_structure_images=export_structure_images,
+        )
+        timeframe_diagnostics.append(
+            _build_timeframe_diagnostic(
+                security,
+                "day",
+                day_rows,
+                day_fetch,
+                day_case,
+                requested_start=resolved_day_start,
+                bar_count=day_bars,
+                reused_existing_case=False,
+            )
         )
         print(f"timing {security.symbol} day seconds={time.perf_counter() - started:.2f}", flush=True)
 
@@ -1134,6 +1202,7 @@ def _prepare_security_result(
             remote_fetcher=remote_fetcher,
         )
         exported = None
+        reused_existing_case = False
         if timeframe == "5m":
             exported = _reuse_existing_hk_5m_case(
                 security,
@@ -1142,6 +1211,7 @@ def _prepare_security_result(
                 zhongshu_level=zhongshu_level,
             )
             if exported is not None:
+                reused_existing_case = True
                 print(f"reuse {security.symbol} 5m existing_effective_only_case", flush=True)
         if exported is None and timeframe in {"5m", "1m"}:
             exported = _reuse_existing_exact_case(
@@ -1152,6 +1222,7 @@ def _prepare_security_result(
                 zhongshu_level=zhongshu_level,
             )
             if exported is not None:
+                reused_existing_case = True
                 print(f"reuse {security.symbol} {timeframe} existing_exact_case", flush=True)
         if exported is None:
             exported = export_case(
@@ -1164,12 +1235,24 @@ def _prepare_security_result(
                 zhongshu_level=zhongshu_level,
                 export_structure_images=export_structure_images,
             )
+        timeframe_diagnostics.append(
+            _build_timeframe_diagnostic(
+                security,
+                timeframe,
+                rows,
+                fetch_meta,
+                exported,
+                requested_start=start,
+                bar_count=bar_count,
+                reused_existing_case=reused_existing_case,
+            )
+        )
         if timeframe == "60m":
             m60_case = exported
         print(f"timing {security.symbol} {timeframe} seconds={time.perf_counter() - started:.2f}", flush=True)
 
     print(f"Prepared {security.name}")
-    return PreparedSecurityResult(security=security, day_case=day_case, m60_case=m60_case)
+    return PreparedSecurityResult(security=security, day_case=day_case, m60_case=m60_case, timeframe_diagnostics=timeframe_diagnostics)
 
 
 def run_batch_prepare(
@@ -1271,6 +1354,13 @@ def run_batch_prepare(
         if prepared.m60_case:
             bundle.append((prepared.security, prepared.day_case, prepared.m60_case))
 
+    timeframe_diagnostics = [
+        diagnostic
+        for prepared in ordered_results
+        if prepared is not None
+        for diagnostic in prepared.timeframe_diagnostics
+    ]
+
     REPORTS_META_DIR.mkdir(parents=True, exist_ok=True)
     manifest = REPORTS_META_DIR / f"group888_generation_manifest_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     lines = ["group888 生成清单", ""]
@@ -1292,6 +1382,7 @@ def run_batch_prepare(
         selected_timeframes=selected_timeframes,
         manifest_path=manifest,
         summary_path=summary_path,
+        timeframe_diagnostics=timeframe_diagnostics,
     )
 
 

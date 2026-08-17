@@ -492,6 +492,7 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             "generated_timeframes": list(prepare_result.selected_timeframes),
             "manifest_path": str(prepare_result.manifest_path),
             "summary_path": str(prepare_result.summary_path) if prepare_result.summary_path else None,
+            "timeframe_diagnostics": list(getattr(prepare_result, "timeframe_diagnostics", []) or []),
         }
     )
     return publish_result

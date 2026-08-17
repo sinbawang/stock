@@ -66,6 +66,7 @@ def test_run_technical_refresh_passes_parallelism_to_batch_prepare(monkeypatch, 
             selected_timeframes=("5m", "1m"),
             manifest_path=tmp_path / "manifest.txt",
             summary_path=None,
+            timeframe_diagnostics=[{"symbol": "03690", "timeframe": "5m", "last_bar_ts": "2026-08-17 10:05"}],
         )
 
     def fake_publish_build_and_upload(args):
@@ -97,6 +98,7 @@ def test_run_technical_refresh_passes_parallelism_to_batch_prepare(monkeypatch, 
     assert captured["upload_include_stock_meta"] is True
     assert captured["upload_include_index_groups"] is True
     assert result["generated_timeframes"] == ["5m", "1m"]
+    assert result["timeframe_diagnostics"] == [{"symbol": "03690", "timeframe": "5m", "last_bar_ts": "2026-08-17 10:05"}]
 
 
 def test_run_publish_refresh_reroutes_intraday_only_request(monkeypatch) -> None:
