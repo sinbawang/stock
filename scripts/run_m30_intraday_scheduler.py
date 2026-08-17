@@ -26,10 +26,13 @@ DEFAULT_INTRADAY_COMMAND = (
     "--skip-gen-base",
     "--skip-gen-fund",
     "--tech-timeframes",
+    "30m",
     "5m",
+    "1m",
     "--publish-timeframes",
     "30m",
     "5m",
+    "1m",
     "day",
 )
 DEFAULT_EOD_COMMAND = (

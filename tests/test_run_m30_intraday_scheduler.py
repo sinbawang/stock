@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import argparse
 from datetime import datetime
 from pathlib import Path
 import sys
@@ -72,3 +73,21 @@ def test_next_slot_after_supports_m5_intraday_profile_around_session_boundaries(
     assert module.next_slot_after(_dt("2026-08-17T09:31:00"), module.DEFAULT_M5_INTRADAY_SLOTS) == _dt("2026-08-17T09:35:00")
     assert module.next_slot_after(_dt("2026-08-17T12:01:00"), module.DEFAULT_M5_INTRADAY_SLOTS) == _dt("2026-08-17T13:05:00")
     assert module.next_slot_after(_dt("2026-08-17T15:31:00"), module.DEFAULT_M5_INTRADAY_SLOTS) == _dt("2026-08-17T15:35:00")
+
+
+def test_build_command_for_intraday_profile_requests_30m_generation(monkeypatch) -> None:
+    monkeypatch.delenv("INTRADAY_SCHEDULER_EXTRA_ARGS", raising=False)
+    monkeypatch.delenv("INTRADAY_SCHEDULER_PYTHON", raising=False)
+
+    args = argparse.Namespace(
+        command=None,
+        profile="intraday",
+    )
+
+    command = module.build_command(args)
+
+    assert "--tech-timeframes" in command
+    tech_index = command.index("--tech-timeframes")
+    publish_index = command.index("--publish-timeframes")
+    assert command[tech_index + 1 : publish_index] == ["30m", "5m", "1m"]
+    assert command[publish_index + 1 :] == ["30m", "5m", "1m", "day"]
