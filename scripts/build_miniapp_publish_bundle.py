@@ -248,6 +248,21 @@ def resolve_primary_technical_payload(stock_dir: Path) -> tuple[str, dict[str, A
     return PRIMARY_TECHNICAL_TIMEFRAME, {}
 
 
+def latest_generated_technical_at(stock_dir: Path) -> str:
+    timestamps: list[str] = []
+    seen: set[str] = set()
+    for timeframe in (*DETAIL_TECHNICAL_TIMEFRAMES, *PRIMARY_TECHNICAL_CANDIDATES):
+        normalized = safe_text(timeframe).lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        tech_payload = read_json_if_exists(stock_dir / normalized / "tech.json")
+        generated_at = safe_text(tech_payload.get("generated_at"))
+        if generated_at:
+            timestamps.append(generated_at)
+    return max(timestamps) if timestamps else ""
+
+
 def _missing_reason(
     *,
     symbol: str,
@@ -1504,7 +1519,7 @@ def build_summary_payload(
     updated_at = max(
         safe_text(base_payload.get("generated_at")),
         safe_text(fund_payload.get("generated_at")),
-        safe_text(tech_payload.get("generated_at")),
+        latest_generated_technical_at(stock_dir),
     )
     return {
         "schema_version": "v1",
@@ -1585,7 +1600,7 @@ def build_detail_payload(
     updated_at = max(
         safe_text(base_payload.get("generated_at")),
         safe_text(fund_payload.get("generated_at")),
-        safe_text(tech_payload.get("generated_at")),
+        latest_generated_technical_at(stock_dir),
     )
     payload = {
         "schema_version": "v1",

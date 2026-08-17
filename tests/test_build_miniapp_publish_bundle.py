@@ -420,6 +420,72 @@ Generated at: 2026-05-30T20:05:52
     assert (snapshot_dir / "stocks" / "00700" / "charts" / "1m.svg").exists()
 
 
+def test_stock_payload_updated_at_uses_latest_available_technical_timeframe(tmp_path: Path) -> None:
+    stock_dir = tmp_path / "03690"
+    (stock_dir / "30m").mkdir(parents=True)
+    (stock_dir / "5m").mkdir(parents=True)
+    (stock_dir / "base.json").write_text(
+        json.dumps({"generated_at": "2026-08-17T09:00:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "fund.json").write_text(
+        json.dumps({"generated_at": "2026-08-17T09:05:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "30m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-08-17T09:30:00",
+                "timeframe": "30m",
+                "summary": {
+                    "score": 60,
+                    "rating": "C",
+                    "bias": "中性",
+                    "score_breakdown": {},
+                    "conclusion": "30M 观察中",
+                    "suggestion": "等待确认",
+                    "buy_points": [],
+                    "sell_points": [],
+                    "signal_points": [],
+                    "signal_catalog": [],
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (stock_dir / "5m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-08-17T10:05:00",
+                "timeframe": "5m",
+                "summary": {
+                    "score": 61,
+                    "rating": "C",
+                    "bias": "偏多",
+                    "score_breakdown": {},
+                    "conclusion": "5M 已刷新",
+                    "suggestion": "继续跟踪",
+                    "buy_points": [],
+                    "sell_points": [],
+                    "signal_points": [],
+                    "signal_catalog": [],
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    holding = module.Holding(symbol="03690", name="美团", market="HK")
+
+    summary_payload = module.build_summary_payload(holding, stock_dir, None)
+    detail_payload, _ = module.build_detail_payload(holding, stock_dir, None)
+
+    assert summary_payload["updated_at"] == "2026-08-17T10:05:00"
+    assert detail_payload["updated_at"] == "2026-08-17T10:05:00"
+
+
 def test_build_same_level_decomposition_labels_same_type_extension_as_confirmed_slice() -> None:
     decomposition = module.build_same_level_decomposition(
         {

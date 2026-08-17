@@ -481,8 +481,8 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             upload_dry_run=request.upload_dry_run,
             upload_chart_timeframes=list(prepare_result.selected_timeframes),
             upload_symbols=[item.symbol for item in holdings],
-            upload_include_stock_meta=request.refresh_mode != "m5_intraday",
-            upload_include_index_groups=request.refresh_mode != "m5_intraday",
+            upload_include_stock_meta=True,
+            upload_include_index_groups=True,
         )
         publish_result = _publish_build_and_upload(publish_args)
     publish_result.update(
