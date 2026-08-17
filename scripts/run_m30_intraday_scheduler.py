@@ -22,7 +22,6 @@ DEFAULT_INTRADAY_COMMAND = (
     str(ROOT / "scripts" / "refresh_holdings_publish_to_cloudbase.py"),
     "--latest-only",
     "--sync-kline-cache-restore-before-regenerate",
-    "--local-store-read-only",
     "--skip-gen-base",
     "--skip-gen-fund",
     "--tech-timeframes",
@@ -40,7 +39,6 @@ DEFAULT_EOD_COMMAND = (
     str(ROOT / "scripts" / "refresh_holdings_publish_to_cloudbase.py"),
     "--latest-only",
     "--sync-kline-cache-restore-before-regenerate",
-    "--local-store-read-only",
 )
 DEFAULT_M5_INTRADAY_COMMAND = (
     "python",

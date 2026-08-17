@@ -86,8 +86,23 @@ def test_build_command_for_intraday_profile_requests_30m_generation(monkeypatch)
 
     command = module.build_command(args)
 
+    assert "--local-store-read-only" not in command
     assert "--tech-timeframes" in command
     tech_index = command.index("--tech-timeframes")
     publish_index = command.index("--publish-timeframes")
     assert command[tech_index + 1 : publish_index] == ["30m", "5m", "1m"]
     assert command[publish_index + 1 :] == ["30m", "5m", "1m", "day"]
+
+
+def test_build_command_for_eod_profile_allows_fresh_fetch(monkeypatch) -> None:
+    monkeypatch.delenv("EOD_SCHEDULER_EXTRA_ARGS", raising=False)
+    monkeypatch.delenv("INTRADAY_SCHEDULER_PYTHON", raising=False)
+
+    args = argparse.Namespace(
+        command=None,
+        profile="eod",
+    )
+
+    command = module.build_command(args)
+
+    assert "--local-store-read-only" not in command
