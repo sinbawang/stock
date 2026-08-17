@@ -16,7 +16,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
@@ -166,6 +166,11 @@ class PublishRefreshRequest(BaseModel):
     force_upload: bool = False
     upload_dry_run: bool = False
     client_request_id: str | None = None
+
+    @field_validator("local_store_read_only", mode="before")
+    @classmethod
+    def _disable_local_store_read_only(cls, _value: object) -> bool:
+        return False
 
 
 class TechnicalRefreshRequest(BaseModel):

@@ -200,7 +200,7 @@ def parse_args() -> argparse.Namespace:
         "--local-store-read-only",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="Force child technical generation to use local K-line store only (no remote incremental fetch).",
+        help="Deprecated and ignored. Remote incremental fetch is always enabled.",
     )
     parser.add_argument(
         "--pending-reverse-mode",
@@ -380,35 +380,92 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
     failures: list[dict[str, str]] = []
     per_holding: list[dict[str, object]] = []
     generated_count = 0
-    local_store_read_only = bool(getattr(args, "local_store_read_only", False))
-    previous_local_store_read_only = os.environ.get("CHANLUN_LOCAL_STORE_READ_ONLY")
-    if local_store_read_only:
-        os.environ["CHANLUN_LOCAL_STORE_READ_ONLY"] = "1"
+    if worker_count == 1:
+        for index, holding in enumerate(holdings, start=1):
+            started = time.perf_counter()
+            try:
+                bundle = generate_report_bundle(
+                    holding,
+                    skip_gen_base=args.skip_gen_base,
+                    trust_existing_base=args.trust_existing_base,
+                    skip_gen_fund=args.skip_gen_fund,
+                    pending_reverse_mode=args.pending_reverse_mode,
+                    day_bars=args.day_bars,
+                    m60_bars=args.m60_bars,
+                    m30_bars=args.m30_bars,
+                    m15_bars=args.m15_bars,
+                    m5_bars=args.m5_bars,
+                    m1_bars=args.m1_bars,
+                    zhongshu_level=args.zhongshu_level,
+                    tech_timeframes=tuple(args.tech_timeframes),
+                    export_structure_images=bool(args.export_structure_images),
+                )
+                print(
+                    f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
+                    f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg} seconds={time.perf_counter() - started:.2f}",
+                    flush=True,
+                )
+                generated_count += 1
+                per_holding.append(
+                    {
+                        "index": index,
+                        "market": holding.market,
+                        "symbol": holding.symbol,
+                        "name": holding.name,
+                        "status": "generated",
+                        "bucket": bundle.combined_bucket,
+                        "chart_jpg": str(bundle.chart_jpg) if bundle.chart_jpg else None,
+                        "seconds": _round_seconds(time.perf_counter() - started),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                failures.append({"market": holding.market, "symbol": holding.symbol, "name": holding.name, "error": str(exc)})
+                print(
+                    f"failed {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name}: {exc}",
+                    flush=True,
+                )
+                per_holding.append(
+                    {
+                        "index": index,
+                        "market": holding.market,
+                        "symbol": holding.symbol,
+                        "name": holding.name,
+                        "status": "failed",
+                        "error": str(exc),
+                        "seconds": _round_seconds(time.perf_counter() - started),
+                    }
+                )
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = {
+                executor.submit(
+                    generate_report_bundle,
+                    holding,
+                    skip_gen_base=args.skip_gen_base,
+                    trust_existing_base=args.trust_existing_base,
+                    skip_gen_fund=args.skip_gen_fund,
+                    pending_reverse_mode=args.pending_reverse_mode,
+                    day_bars=args.day_bars,
+                    m60_bars=args.m60_bars,
+                    m30_bars=args.m30_bars,
+                    m15_bars=args.m15_bars,
+                    m5_bars=args.m5_bars,
+                    m1_bars=args.m1_bars,
+                    zhongshu_level=args.zhongshu_level,
+                    tech_timeframes=tuple(args.tech_timeframes),
+                    export_structure_images=bool(args.export_structure_images),
+                ): (idx, holding, time.perf_counter())
+                for idx, holding in enumerate(holdings, start=1)
+            }
 
-    try:
-        if worker_count == 1:
-            for index, holding in enumerate(holdings, start=1):
-                started = time.perf_counter()
+            for future in as_completed(futures):
+                index, holding, started = futures[future]
+                elapsed = time.perf_counter() - started
                 try:
-                    bundle = generate_report_bundle(
-                        holding,
-                        skip_gen_base=args.skip_gen_base,
-                        trust_existing_base=args.trust_existing_base,
-                        skip_gen_fund=args.skip_gen_fund,
-                        pending_reverse_mode=args.pending_reverse_mode,
-                        day_bars=args.day_bars,
-                        m60_bars=args.m60_bars,
-                        m30_bars=args.m30_bars,
-                        m15_bars=args.m15_bars,
-                        m5_bars=args.m5_bars,
-                        m1_bars=args.m1_bars,
-                        zhongshu_level=args.zhongshu_level,
-                        tech_timeframes=tuple(args.tech_timeframes),
-                        export_structure_images=bool(args.export_structure_images),
-                    )
+                    bundle = future.result()
                     print(
                         f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
-                        f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg} seconds={time.perf_counter() - started:.2f}",
+                        f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg} seconds={elapsed:.2f}",
                         flush=True,
                     )
                     generated_count += 1
@@ -421,7 +478,7 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                             "status": "generated",
                             "bucket": bundle.combined_bucket,
                             "chart_jpg": str(bundle.chart_jpg) if bundle.chart_jpg else None,
-                            "seconds": _round_seconds(time.perf_counter() - started),
+                            "seconds": _round_seconds(elapsed),
                         }
                     )
                 except Exception as exc:  # noqa: BLE001
@@ -438,78 +495,9 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                             "name": holding.name,
                             "status": "failed",
                             "error": str(exc),
-                            "seconds": _round_seconds(time.perf_counter() - started),
+                            "seconds": _round_seconds(elapsed),
                         }
                     )
-        else:
-            with ThreadPoolExecutor(max_workers=worker_count) as executor:
-                futures = {
-                    executor.submit(
-                        generate_report_bundle,
-                        holding,
-                        skip_gen_base=args.skip_gen_base,
-                        trust_existing_base=args.trust_existing_base,
-                        skip_gen_fund=args.skip_gen_fund,
-                        pending_reverse_mode=args.pending_reverse_mode,
-                        day_bars=args.day_bars,
-                        m60_bars=args.m60_bars,
-                        m30_bars=args.m30_bars,
-                        m15_bars=args.m15_bars,
-                        m5_bars=args.m5_bars,
-                        m1_bars=args.m1_bars,
-                        zhongshu_level=args.zhongshu_level,
-                        tech_timeframes=tuple(args.tech_timeframes),
-                        export_structure_images=bool(args.export_structure_images),
-                    ): (idx, holding, time.perf_counter())
-                    for idx, holding in enumerate(holdings, start=1)
-                }
-
-                for future in as_completed(futures):
-                    index, holding, started = futures[future]
-                    elapsed = time.perf_counter() - started
-                    try:
-                        bundle = future.result()
-                        print(
-                            f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
-                            f"bucket={bundle.combined_bucket} chart={bundle.chart_jpg} seconds={elapsed:.2f}",
-                            flush=True,
-                        )
-                        generated_count += 1
-                        per_holding.append(
-                            {
-                                "index": index,
-                                "market": holding.market,
-                                "symbol": holding.symbol,
-                                "name": holding.name,
-                                "status": "generated",
-                                "bucket": bundle.combined_bucket,
-                                "chart_jpg": str(bundle.chart_jpg) if bundle.chart_jpg else None,
-                                "seconds": _round_seconds(elapsed),
-                            }
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        failures.append({"market": holding.market, "symbol": holding.symbol, "name": holding.name, "error": str(exc)})
-                        print(
-                            f"failed {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name}: {exc}",
-                            flush=True,
-                        )
-                        per_holding.append(
-                            {
-                                "index": index,
-                                "market": holding.market,
-                                "symbol": holding.symbol,
-                                "name": holding.name,
-                                "status": "failed",
-                                "error": str(exc),
-                                "seconds": _round_seconds(elapsed),
-                            }
-                        )
-    finally:
-        if local_store_read_only:
-            if previous_local_store_read_only is None:
-                os.environ.pop("CHANLUN_LOCAL_STORE_READ_ONLY", None)
-            else:
-                os.environ["CHANLUN_LOCAL_STORE_READ_ONLY"] = previous_local_store_read_only
     failure_lines = [
         f"{item['market']} {item['symbol']} {item['name']}: {item['error']}"
         for item in failures

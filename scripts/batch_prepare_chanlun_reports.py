@@ -261,8 +261,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--local-store-read-only",
         action=argparse.BooleanOptionalAction,
-        default=_env_flag("CHANLUN_LOCAL_STORE_READ_ONLY", False),
-        help="仅使用本地 K 线仓库尾部数据，不执行远端增量抓取（可通过 CHANLUN_LOCAL_STORE_READ_ONLY=1 启用）。",
+        default=False,
+        help="已废弃且忽略；始终允许远端增量抓取并合并本地 K 线仓库。",
     )
     parser.add_argument(
         "--export-structure-images",
@@ -1280,6 +1280,7 @@ def run_batch_prepare(
     export_structure_images: bool = True,
     parallelism: int = min(4, max(1, os.cpu_count() or 1)),
 ) -> BatchPrepareResult:
+    local_store_read_only = False
     selected_timeframes = tuple(dict.fromkeys(timeframes))
     resolved_day_start = day_start or default_day_start_for_bar_target(day_bars)
     resolved_m60_start = m60_start or default_intraday_start_for_bar_target("60m", m60_bars)

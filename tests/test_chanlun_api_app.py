@@ -44,6 +44,12 @@ def test_publish_refresh_request_defaults_to_1200_bars_except_1m_3000() -> None:
     assert request.m1_bars == 3000
 
 
+def test_publish_refresh_request_ignores_local_store_read_only_true() -> None:
+    request = module.PublishRefreshRequest(local_store_read_only=True)
+
+    assert request.local_store_read_only is False
+
+
 def test_technical_refresh_request_defaults_to_1200_bars_except_1m_3000() -> None:
     request = module.TechnicalRefreshRequest()
 
