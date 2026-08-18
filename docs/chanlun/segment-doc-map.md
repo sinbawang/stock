@@ -9,6 +9,8 @@
 - 用途：说明当前工程实现如何识别线段，供人工核图、调试、回归使用。
 
 2. 原文复核与示例支撑（理论/评审文档）
+- [segment-review-entry.md](segment-review-entry.md)
+- 用途：给下一轮线段 review 一个单页入口，统一原文定义、当前实现、pending/重写样例和消费红线。
 - [segment-original-review-matrix.md](segment-original-review-matrix.md)
 - 用途：逐课对照线段原文定义与当前仓库线段口径，显式标注理论与工程边界。
 - [segment-visual-example-library.md](segment-visual-example-library.md)
@@ -25,6 +27,8 @@
 5. 变更快照（时点记录）
 - [segment-implementation-changelog.md](segment-implementation-changelog.md)
 - 用途：沉淀阶段性测试结果、完成度估算和演进快照，避免污染主规范正文。
+- [segment-review-diff-summary-2026-08.md](segment-review-diff-summary-2026-08.md)
+- 用途：汇总本轮线段文档整理新增了哪些入口、案例和仍待补的缺口，便于 review 前快速预热。
 
 6. 改动安全清单（执行闸门）
 - [segment-safety-checklist.md](segment-safety-checklist.md)
@@ -41,14 +45,16 @@
 ## 推荐阅读顺序
 
 1. 先读 [segment-implementation-guide.md](segment-implementation-guide.md)
-2. 再读 [segment-original-review-matrix.md](segment-original-review-matrix.md)
-3. 然后看 [segment-visual-example-library.md](segment-visual-example-library.md)
-4. 再读 [segment-stop-reason-contract.md](segment-stop-reason-contract.md)
-5. 最后参考 [../analysis/chanlun-line-segment-original-and-comparison.md](../analysis/chanlun-line-segment-original-and-comparison.md)
+2. 再读 [segment-review-entry.md](segment-review-entry.md)
+3. 再读 [segment-original-review-matrix.md](segment-original-review-matrix.md)
+4. 然后看 [segment-visual-example-library.md](segment-visual-example-library.md)
+5. 再读 [segment-stop-reason-contract.md](segment-stop-reason-contract.md)
+6. 最后参考 [../analysis/chanlun-line-segment-original-and-comparison.md](../analysis/chanlun-line-segment-original-and-comparison.md)
 
 ## 维护规则
 
 - 规则变更：先更新 [segment-implementation-guide.md](segment-implementation-guide.md)
+- review 入口与任务收口：更新 [segment-review-entry.md](segment-review-entry.md)
 - 原文对照补充：更新 [segment-original-review-matrix.md](segment-original-review-matrix.md)
 - 图示/案例补充：更新 [segment-visual-example-library.md](segment-visual-example-library.md)
 - 契约变更：同步更新 [segment-stop-reason-contract.md](segment-stop-reason-contract.md)

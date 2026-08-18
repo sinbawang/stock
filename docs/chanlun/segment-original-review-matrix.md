@@ -26,9 +26,9 @@
 | 课次 | 原文关键点（摘要） | 当前文档映射 | 判定 | 后续动作 |
 | --- | --- | --- | --- | --- |
 | 62 | 线段必须建立在笔的结构稳定性之上，不能脱离分型、笔的确认链。 | [segment-implementation-guide.md](segment-implementation-guide.md) 已明确线段仅基于确认笔生成。 | 基本一致 | 补“未确认尾笔不入段”的标准负例图。 |
-| 63 | 替代与确认会影响线段起段、延伸和终结，不能把候选状态误写成已确认结构。 | [segment-implementation-guide.md](segment-implementation-guide.md) 已区分确认线段与未确认尾段。 | 基本一致 | 补“候选终结 vs 已确认终结”的对照卡片。 |
-| 67 | 起段三笔必须满足公共重叠；反向特征序列分型和第一/第二种情况是线段确认核心。 | [segment-implementation-guide.md](segment-implementation-guide.md) 已覆盖起段三笔公共重叠、直接分型终结、缺口第二种情况。 | 基本一致 | 补“第一种情况/第二种情况”并列图。 |
-| 71 | 第一二元素存在缺口时，需通过再分辨决定旧段终结还是延续。 | [segment-implementation-guide.md](segment-implementation-guide.md) 已实现最小再分辨闭环，并在 [../analysis/chanlun-line-segment-original-and-comparison.md](../analysis/chanlun-line-segment-original-and-comparison.md) 留有背景分析。 | 工程近似但主路径已闭环 | 继续补 R1-R6 正反例，并标清“已实现”与“待补”分支。 |
+| 63 | 替代与确认会影响线段起段、延伸和终结，不能把候选状态误写成已确认结构。 | [segment-implementation-guide.md](segment-implementation-guide.md) 已区分确认线段与未确认尾段。 | 基本一致 | 已补“候选终结 vs 已确认终结”的对照模板，见 [segment-visual-example-library.md](segment-visual-example-library.md) 第 6 节；真实样本先看 `SZ.000651 30m` 的尾部待确认案例。 |
+| 67 | 起段三笔必须满足公共重叠；反向特征序列分型和第一/第二种情况是线段确认核心。 | [segment-implementation-guide.md](segment-implementation-guide.md) 已覆盖起段三笔公共重叠、直接分型终结、缺口第二种情况。 | 基本一致 | 已补“第一种情况/第二种情况/再分辨”并列模板，见 [segment-visual-example-library.md](segment-visual-example-library.md) 第 7 节；当前可先对照 `SZ.000591 15m` 与 `HK.00700 15m` 两个真实回归窗口。 |
+| 71 | 第一二元素存在缺口时，需通过再分辨决定旧段终结还是延续。 | [segment-implementation-guide.md](segment-implementation-guide.md) 已实现最小再分辨闭环，并在 [../analysis/chanlun-line-segment-original-and-comparison.md](../analysis/chanlun-line-segment-original-and-comparison.md) 留有背景分析。 | 工程近似但主路径已闭环 | 已补 R6 延迟确认正例与“先破起点撤销候选”反例，见 [segment-visual-example-library.md](segment-visual-example-library.md) 第 7 节；当前也可结合 `SZ.000591 15m` 与 `HK.00700 15m` 真实回归窗口检查 confirmed 段与未闭合尾段如何并存。 |
 
 ## 3. 当前偏差与边界
 
@@ -48,9 +48,10 @@
 
 1. 补“起段三笔公共重叠成立/不成立”成套图例。
 2. 补“直接特征序列分型终结”正例与伪分型负例。
-3. 补“67 课第二种情况”标准时序卡片。
-4. 补“71 课再分辨 R1-R6”案例映射表。
-5. 增加“理论定义 / 工程启发式 / 消费契约”三层边界示意图。
+3. 基于 [segment-visual-example-library.md](segment-visual-example-library.md) 第 7 节，补“67 课第二种情况”实盘缺口案例。
+4. 基于 [segment-visual-example-library.md](segment-visual-example-library.md) 第 7 节，继续补“71 课再分辨 R1-R5”案例映射表。
+5. 基于 [segment-visual-example-library.md](segment-visual-example-library.md) 第 8 节，继续补“重写 / 吸收 / 复用”更多真实案例；当前已至少有发布层真实样本（8.6）与文本层规范联动样本（8.7）两个锚点。
+6. 增加“理论定义 / 工程启发式 / 消费契约”三层边界示意图。
 
 ## 6. 参考课文文件
 
