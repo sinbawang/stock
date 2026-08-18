@@ -409,6 +409,38 @@ def safe_text(value: Any, default: str = "") -> str:
     return str(value).strip()
 
 
+def safe_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return safe_text(value).lower() in {"1", "true", "yes", "y"}
+
+
+def safe_int_list(value: Any) -> list[int]:
+    if isinstance(value, list):
+        result: list[int] = []
+        for item in value:
+            try:
+                result.append(int(item))
+            except (TypeError, ValueError):
+                continue
+        return result
+
+    text = safe_text(value)
+    if not text:
+        return []
+
+    result: list[int] = []
+    for part in text.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        try:
+            result.append(int(token))
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
 def chart_publish_path(charts: list[dict[str, str]], timeframe: str) -> str | None:
     for chart in charts:
         if chart.get("timeframe") == timeframe:
@@ -785,6 +817,46 @@ def build_latest_signal_summary(tech_payload: dict[str, Any]) -> dict[str, Any]:
         sell_price = f"，价格 {latest_sell['price']:.2f}" if latest_sell.get("price") is not None else ""
         lines.append(f"最近卖点：{latest_sell['label']} {safe_text(latest_sell.get('time'))}{sell_price}")
 
+    zs_monitor_alert = safe_text(summary.get("zs_monitor_alert")).lower()
+    if zs_monitor_alert in {"pre_breakout", "pre_breakdown"}:
+        direction = "向上预警" if zs_monitor_alert == "pre_breakout" else "向下预警"
+        pending_text = "当前不构成确认三买" if zs_monitor_alert == "pre_breakout" else "当前不构成确认三卖"
+        bias_text = {
+            "strong": "偏强",
+            "weak": "偏弱",
+            "neutral": "中性",
+        }.get(safe_text(summary.get("zs_monitor_bias")).lower(), "")
+        midline = summary.get("zs_monitor_midline")
+        basis_parts = []
+        if midline is not None:
+            basis_parts.append(f"中线 {midline}")
+        if bias_text:
+            basis_parts.append(f"节奏{bias_text}")
+        basis_suffix = f"（{'，'.join(basis_parts)}）" if basis_parts else ""
+        lines.append(f"中枢预警：{direction}，{pending_text}{basis_suffix}")
+
+    post_divergence_route = safe_text(summary.get("post_divergence_route")).lower()
+    if post_divergence_route:
+        route_label = {
+            "higher_level_range": "更大级别盘整",
+            "higher_level_reverse_trend": "更大级别反趋势",
+            "last_zs_extension": "最后中枢延伸",
+        }.get(post_divergence_route, post_divergence_route)
+        route_from = safe_text(summary.get("route_level_from"))
+        route_to = safe_text(summary.get("route_level_to"))
+        route_suffix = f"（{route_from} -> {route_to}）" if route_from and route_to else ""
+        lines.append(f"去向候选：{route_label}{route_suffix}，当前只按观察态处理")
+
+    rhythm_state = safe_text(summary.get("oscillation_rhythm_state")).lower()
+    rhythm_label = {
+        "up_bias": "节奏偏强",
+        "down_bias": "节奏偏弱",
+        "balanced": "节奏平衡",
+        "pending": "节奏待判定",
+    }.get(rhythm_state)
+    if rhythm_label:
+        lines.append(f"节奏监视：{rhythm_label}，当前只作辅助观察")
+
     return {
         "latest_buy": latest_buy,
         "latest_sell": latest_sell,
@@ -897,6 +969,10 @@ def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
         "signal_catalog": summary.get("signal_catalog") or [],
         "signal_descriptions": build_signal_explanation_lines(signal_context),
         "same_level_decomposition": same_level_decomposition,
+        "oscillation_rhythm_state": summary.get("oscillation_rhythm_state") or tech_payload.get("oscillation_rhythm_state"),
+        "post_divergence_route": summary.get("post_divergence_route") or tech_payload.get("post_divergence_route"),
+        "route_level_from": summary.get("route_level_from") or tech_payload.get("route_level_from"),
+        "route_level_to": summary.get("route_level_to") or tech_payload.get("route_level_to"),
         "latest_signal_summary": latest_signal_summary,
         "technical_focus_lines": technical_focus_lines,
         "zhongshu_level": tech_payload.get("zhongshu_level"),
@@ -1130,6 +1206,8 @@ def serialize_segment_record(segment: Any) -> dict[str, Any]:
         "last_reverse_extreme": segment.last_reverse_extreme,
         "break_bi_id": segment.break_bi_id,
         "stop_reason": stop_reason,
+        "is_reclaimed": segment.is_reclaimed,
+        "absorbed_segment_ids": ",".join(str(segment_id) for segment_id in segment.absorbed_segment_ids),
         "stop_reason_label": describe_stop_reason(stop_reason),
         "stop_category": classify_stop_reason(stop_reason).value,
         "stop_outcome_bucket": outcome_summary["bucket"],
@@ -1172,6 +1250,8 @@ def _normalize_segment_record(record: dict[str, Any]) -> dict[str, Any]:
         normalized["is_fallback_confirmed_stop"] = is_fallback_confirmed_stop_reason(stop_reason)
     if "is_pending_stop" not in normalized:
         normalized["is_pending_stop"] = is_pending_stop_reason(stop_reason)
+    normalized["is_reclaimed"] = safe_bool(normalized.get("is_reclaimed"))
+    normalized["absorbed_segment_ids"] = safe_int_list(normalized.get("absorbed_segment_ids"))
     return normalized
 
 
@@ -1288,6 +1368,8 @@ def serialize_segment_tail_interpretation(interpretation: Any) -> dict[str, Any]
         "uncertainty": interpretation.uncertainty,
         "evidence": interpretation.evidence,
         "suggested_catalyst": interpretation.suggested_catalyst,
+        "is_reclaimed": getattr(interpretation, "is_reclaimed", False),
+        "absorbed_segment_ids": list(getattr(interpretation, "absorbed_segment_ids", [])),
     }
 
 
@@ -1309,8 +1391,32 @@ def build_segment_tail_interpretations_fallback(tech_payload: dict[str, Any] | N
             "uncertainty": "当前尾段缺少足够的后续笔推进或反向突破证据，暂时以待确认结构呈现。",
             "evidence": f"current_structure_status={current_structure_status}; current_ongoing_type={ongoing_type}",
             "suggested_catalyst": "继续观察后续笔推进和反向突破是否形成正式终结条件。",
+            "is_reclaimed": False,
+            "absorbed_segment_ids": [],
         }
     ]
+
+
+def build_latest_segment_reclaim_line(
+    segment_tail_interpretations: list[dict[str, Any]],
+    timeframe: str,
+) -> str:
+    if not segment_tail_interpretations:
+        return ""
+
+    latest = segment_tail_interpretations[-1]
+    if not safe_bool(latest.get("is_reclaimed")):
+        return ""
+
+    absorbed_segment_ids = safe_int_list(latest.get("absorbed_segment_ids"))
+    if not absorbed_segment_ids:
+        return ""
+
+    timeframe_label = TIMEFRAME_LABELS.get(timeframe, timeframe.upper())
+    segment_id = latest.get("segment_id")
+    segment_hint = f"S{segment_id}" if segment_id is not None else "最新线段"
+    absorbed_segments = "、".join(f"S{segment_id}" for segment_id in absorbed_segment_ids)
+    return f"{timeframe_label} {segment_hint} 线段重写吸收：已吸收旧段 {absorbed_segments}，当前尾段继续按待确认结构观察。"
 
 
 def build_segment_tail_interpretations_payload(
@@ -1467,6 +1573,7 @@ def build_summary_payload(
         if tech_payload
         else []
     )
+    segment_reclaim_line = build_latest_segment_reclaim_line(segment_tail_interpretations, primary_technical_timeframe)
     charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes, include_chart_images=include_chart_images)
     cover_chart_path = chart_publish_path(charts, primary_technical_timeframe) or chart_publish_path(charts, PRIMARY_TECHNICAL_TIMEFRAME)
     primary_technical_label = TIMEFRAME_LABELS.get(primary_technical_timeframe, primary_technical_timeframe.upper())
@@ -1502,8 +1609,12 @@ def build_summary_payload(
                 }
             ),
             "same_level_decomposition": same_level_decomposition,
+            "oscillation_rhythm_state": tech_summary.get("oscillation_rhythm_state") or tech_payload.get("oscillation_rhythm_state"),
+            "post_divergence_route": tech_summary.get("post_divergence_route") or tech_payload.get("post_divergence_route"),
+            "route_level_from": tech_summary.get("route_level_from") or tech_payload.get("route_level_from"),
+            "route_level_to": tech_summary.get("route_level_to") or tech_payload.get("route_level_to"),
             "latest_signal_summary": latest_signal_summary,
-            "technical_focus_lines": technical_focus_lines,
+            "technical_focus_lines": technical_focus_lines + ([segment_reclaim_line] if segment_reclaim_line else []),
             "zhongshu_level": tech_payload.get("zhongshu_level"),
             "primary_zhongshu_level": structure_payload.get("primary_zhongshu_level"),
             "latest_zhongshu": structure_payload.get("latest_zhongshu"),
@@ -1584,9 +1695,14 @@ def build_detail_payload(
         if tech_payload
         else []
     )
+    segment_reclaim_line = build_latest_segment_reclaim_line(segment_tail_interpretations, primary_technical_timeframe)
     if segment_stop_line:
         technical_focus_lines = list(technical.get("technical_focus_lines") or [])
         technical_focus_lines.append(segment_stop_line)
+        technical["technical_focus_lines"] = technical_focus_lines
+    if segment_reclaim_line:
+        technical_focus_lines = list(technical.get("technical_focus_lines") or [])
+        technical_focus_lines.append(segment_reclaim_line)
         technical["technical_focus_lines"] = technical_focus_lines
     technical["segment_tail_interpretations"] = segment_tail_interpretations
     capital_flow = build_capital_flow_section(fund_payload)

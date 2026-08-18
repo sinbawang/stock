@@ -127,7 +127,13 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
         lambda *args, **kwargs: {
             "bucket": "watch",
             "structure_state": {"current_ongoing": {"type": "range"}},
+            "same_level_decomposition_mode": "dual_interpretation_pending",
+            "post_divergence_route": "higher_level_range",
+            "oscillation_rhythm_state": "down_bias",
             "divergence": {"trend": {"active": False}, "range": {"active": False}},
+            "zs_monitor_alert": "pre_breakdown",
+            "zs_monitor_midline": 10.45,
+            "zs_monitor_bias": "weak",
         },
     )
     monkeypatch.setattr(module, "build_advice", lambda *args, **kwargs: "建议：观察")
@@ -167,7 +173,15 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     assert payload["structure"]["lei_zhongshus"][0]["bi_ids"] == [9, 10, 11, 12]
     assert payload["structure"]["zhongshus"][0]["render_end_bi_id"] == 12
     assert payload["structure_state"]["current_ongoing"]["type"] == "range"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["post_divergence_route"] == "higher_level_range"
+    assert payload["oscillation_rhythm_state"] == "down_bias"
+    assert payload["route_level_from"] == "30m"
+    assert payload["route_level_to"] == "day"
     assert payload["divergence"]["trend"]["active"] is False
+    assert payload["zs_monitor_alert"] == "pre_breakdown"
+    assert payload["zs_monitor_midline"] == 10.45
+    assert payload["zs_monitor_bias"] == "weak"
     assert data_fetch["source"] == "tencent->xueqiu->eastmoney->tushare"
     assert data_fetch["actual_source"] == "xueqiu"
     assert data_fetch["source_attempts"][0]["source"] == "tushare"

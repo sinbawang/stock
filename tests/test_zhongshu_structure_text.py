@@ -108,6 +108,59 @@ def test_build_advice_describes_second_buy_in_plain_language() -> None:
     assert "信号说明：二买，一买后回抽确认，低点未再跌破前低，参考价 10.25，关联中枢 ZS2。" in text
 
 
+def test_build_advice_keeps_pre_breakdown_as_pending_watch() -> None:
+    signals = {
+        "current_zs": _sample_zhongshu(),
+        "latest_confirmed_up": None,
+        "latest_down": None,
+        "buy_points": [],
+        "sell_points": [],
+        "top_divergence": False,
+        "bottom_divergence": False,
+        "oscillation_rhythm_state": "down_bias",
+        "zs_monitor_alert": "pre_breakdown",
+        "zs_monitor_midline": 10.45,
+        "zs_monitor_bias": "weak",
+    }
+    raw_bars = [SimpleNamespace(close=10.18)]
+
+    text = build_advice("示例标的", "60M", raw_bars, signals)
+
+    assert "出现向下预警，但当前不构成确认三卖。" in text
+    assert "监视器：中枢中线 10.45，当前偏弱，预警状态 向下预警。" in text
+    assert "节奏监视：节奏偏弱，当前只作辅助观察，不单独升级主结论。" in text
+
+
+def test_build_advice_downgrades_buy_signal_when_same_level_decomposition_is_pending() -> None:
+    signals = {
+        "current_zs": _sample_zhongshu(),
+        "latest_confirmed_up": None,
+        "latest_down": SimpleNamespace(low=10.25),
+        "buy_points": ["buy_2"],
+        "sell_points": [],
+        "top_divergence": False,
+        "bottom_divergence": False,
+        "same_level_decomposition_mode": "dual_interpretation_pending",
+        "signal_points": [
+            {
+                "point": "buy2",
+                "active": True,
+                "price": 10.25,
+                "basis": "buy1_pullback_confirmation",
+                "related_zs_id": 2,
+            }
+        ],
+    }
+    raw_bars = [SimpleNamespace(close=10.5)]
+
+    text = build_advice("示例标的", "60M", raw_bars, signals)
+
+    assert "结论：观察，等待确认。" in text
+    assert "已出现 二买，但同级别分解仍处待确认状态，当前不能直接上升为已确认买点。" in text
+    assert "dual_interpretation_pending" in text
+    assert "结论：偏多，允许轻仓试错。" not in text
+
+
 def test_analyze_current_state_mentions_core_and_extended_bis(monkeypatch) -> None:
     monkeypatch.setattr(cn_report, "compute_bi_strengths", lambda bis, macd_points: {})
     raw_bars = [
@@ -258,12 +311,18 @@ def test_build_technical_summary_includes_action_value_score() -> None:
             "current_ongoing": {"type": "up"},
             "relationship": {"kind": "completed_then_new_type_ongoing"},
         },
+        "same_level_decomposition_mode": "single_confirmed",
+        "post_divergence_route": "higher_level_reverse_trend",
+        "oscillation_rhythm_state": "balanced",
         "divergence": {
             "trend": {"active": True},
             "range": {"active": False},
             "top": {"active": False},
             "bottom": {"active": True},
         },
+        "zs_monitor_alert": "pre_breakout",
+        "zs_monitor_midline": 10.45,
+        "zs_monitor_bias": "strong",
     }
     raw_bars = [SimpleNamespace(close=10.2)]
 
@@ -278,6 +337,14 @@ def test_build_technical_summary_includes_action_value_score() -> None:
     assert summary["score"] == 95
     assert summary["rating"] == "A"
     assert summary["bias"] == "偏多"
+    assert summary["same_level_decomposition_mode"] == "single_confirmed"
+    assert summary["post_divergence_route"] == "higher_level_reverse_trend"
+    assert summary["oscillation_rhythm_state"] == "balanced"
+    assert summary["route_level_from"] == "30m"
+    assert summary["route_level_to"] == "day"
+    assert summary["zs_monitor_alert"] == "pre_breakout"
+    assert summary["zs_monitor_midline"] == 10.45
+    assert summary["zs_monitor_bias"] == "strong"
     assert summary["score_breakdown"] == {
         "structure": 30,
         "location": 18,

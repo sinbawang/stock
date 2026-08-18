@@ -81,6 +81,12 @@ def identify_zhongshu(items: List[Bi | Segment], *, structure_level: str = "bi")
     if structure_level not in {"bi", "segment"}:
         raise ValueError(f"Unsupported structure_level: {structure_level}")
 
+    if structure_level == "segment":
+        # Standard segment-level centers should be built only on confirmed segment boundaries.
+        # Pending tail interpretations stay in the auxiliary explanation layer and must not
+        # rewrite the primary zhongshu chain before the segment itself is confirmed.
+        items = [item for item in items if getattr(item, "is_confirmed", False)]
+
     if len(items) < 5:
         return []
 

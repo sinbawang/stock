@@ -124,6 +124,8 @@ class SegmentTailInterpretation:
     uncertainty: str = ""
     evidence: str = ""
     suggested_catalyst: str = ""
+    is_reclaimed: bool = False
+    absorbed_segment_ids: List[int] = field(default_factory=list)
 
 
 @dataclass
@@ -158,6 +160,8 @@ class Segment:
     last_reverse_extreme: Optional[float] = None
     break_bi_id: Optional[int] = None
     stop_reason: Optional[str] = None
+    is_reclaimed: bool = False
+    absorbed_segment_ids: List[int] = field(default_factory=list)
 
     def is_up(self) -> bool:
         return self.direction == BiDirection.UP

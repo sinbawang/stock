@@ -318,7 +318,12 @@ def write_technical_report_json(
                 "zhongshus": serialize_zhongshus(zhongshus),
             },
             "structure_state": structure_state,
+            "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
+            "oscillation_rhythm_state": signals.get("oscillation_rhythm_state"),
             "divergence": divergence,
+            "zs_monitor_alert": signals.get("zs_monitor_alert", "none"),
+            "zs_monitor_midline": signals.get("zs_monitor_midline"),
+            "zs_monitor_bias": signals.get("zs_monitor_bias"),
             "summary": summary_payload
             or {
                 "conclusion": _extract_prefixed_value(advice_text, "结论："),

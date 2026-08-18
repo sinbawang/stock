@@ -88,7 +88,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--m15-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 15M K-line fetch count.")
     parser.add_argument("--m5-bars", type=int, default=1200, help="Forwarded to batch_prepare_chanlun_reports.py for 5M K-line fetch count.")
     parser.add_argument("--m1-bars", type=int, default=3000, help="Forwarded to batch_prepare_chanlun_reports.py for 1M K-line fetch count.")
-    parser.add_argument("--zhongshu-level", choices=("bi", "segment"), default="segment", help="Forwarded to batch_prepare_chanlun_reports.py to switch between bi and segment zhongshu rendering.")
+    parser.add_argument("--zhongshu-level", choices=("segment",), default="segment", help="Forwarded to batch_prepare_chanlun_reports.py to keep standard segment zhongshu as the only primary rendering layer.")
     parser.add_argument(
         "--tech-timeframes",
         nargs="+",

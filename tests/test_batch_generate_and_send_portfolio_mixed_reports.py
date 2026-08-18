@@ -84,14 +84,14 @@ def test_generate_bundle_runs_four_timeframe_chart_pipeline(monkeypatch, tmp_pat
     assert any(part.endswith("batch_prepare_chanlun_reports.py") for part in commands[1])
     assert "--holdings-file" in commands[1]
     assert "--zhongshu-level" in commands[1]
-    assert commands[1][commands[1].index("--zhongshu-level") + 1] == "bi"
+    assert commands[1][commands[1].index("--zhongshu-level") + 1] == "segment"
     assert "--m30-bars" in commands[1]
     assert "--m5-bars" in commands[1]
     assert "--m1-bars" in commands[1]
     assert commands[1][commands[1].index("--day-bars") + 1] == "1200"
     assert commands[1][commands[1].index("--m30-bars") + 1] == "1200"
     assert commands[1][commands[1].index("--m5-bars") + 1] == "1200"
-    assert commands[1][commands[1].index("--m1-bars") + 1] == "1200"
+    assert commands[1][commands[1].index("--m1-bars") + 1] == "3000"
     assert commands[1][commands[1].index("--timeframes") + 1 :] == ["day", "30m", "5m", "1m"]
     assert bundle.chart_jpg == report_root / "30m" / "structure.jpg"
     assert bundle.chart_svg == report_root / "30m" / "structure.svg"

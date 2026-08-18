@@ -230,9 +230,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--zhongshu-level",
-        choices=("bi", "segment"),
+        choices=("segment",),
         default="segment",
-        help="中枢主口径层级：segment=标准中枢(默认)，bi=类中枢(兼容模式)。",
+        help="中枢主口径层级：segment=标准中枢(默认)。",
     )
     parser.add_argument(
         "--timeframes",
@@ -648,12 +648,42 @@ def build_technical_summary(
     precision_entry: dict[str, object] | None = None,
 ) -> dict[str, object]:
     conclusion = _extract_prefixed_value_from_text(advice_text, "结论：") or None
+    route_fields = _build_route_level_fields(timeframe_label, signals)
     return {
         "operation_level": timeframe_label,
         "conclusion": conclusion,
         "suggestion": _extract_prefixed_value_from_text(advice_text, "建议：") or None,
         **build_technical_score_summary(raw_bars, signals, conclusion=conclusion, precision_entry=precision_entry),
         **build_signal_summary_fields(signals),
+        **route_fields,
+    }
+
+
+def _normalize_timeframe_label(value: str | None) -> str | None:
+    if not value:
+        return None
+    return str(value).strip().lower()
+
+
+def _next_route_level(from_level: str | None) -> str | None:
+    mapping = {
+        "1m": "5m",
+        "5m": "30m",
+        "15m": "60m",
+        "30m": "day",
+        "60m": "day",
+    }
+    return mapping.get(str(from_level or "").lower())
+
+
+def _build_route_level_fields(timeframe_label: str, signals: dict[str, object]) -> dict[str, object]:
+    route = signals.get("post_divergence_route")
+    route_level_from = _normalize_timeframe_label(timeframe_label)
+    route_level_to = _next_route_level(route_level_from) if route else None
+    return {
+        "post_divergence_route": route,
+        "route_level_from": route_level_from if route else None,
+        "route_level_to": route_level_to,
     }
 
 
@@ -665,13 +695,53 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
     sell_points = signals["sell_points"]
     top_divergence = signals["top_divergence"]
     bottom_divergence = signals["bottom_divergence"]
+    same_level_decomposition_mode = signals.get("same_level_decomposition_mode")
+    oscillation_rhythm_state = signals.get("oscillation_rhythm_state")
+    zs_monitor_alert = signals.get("zs_monitor_alert") or "none"
+    zs_monitor_midline = signals.get("zs_monitor_midline")
+    zs_monitor_bias = signals.get("zs_monitor_bias")
     close_price = raw_bars[-1].close
     signal_explanations = build_signal_explanation_lines(signals)
     buy_labels = "、".join(format_signal_point_labels(buy_points))
     sell_labels = "、".join(format_signal_point_labels(sell_points))
+    dual_pending = same_level_decomposition_mode == "dual_interpretation_pending"
 
     lines = [f"【{name} {timeframe_label} 操作建议】"]
-    if buy_points:
+    if dual_pending and buy_points:
+        signal_text = buy_labels or "买点信号"
+        lines.extend(
+            [
+                "结论：观察，等待确认。",
+                f"理由：已出现 {signal_text}，但同级别分解仍处待确认状态，当前不能直接上升为已确认买点。",
+                "建议：先按观察态处理，等待离开-回抽或级别闭合后再决定是否升级。",
+            ]
+        )
+    elif dual_pending and sell_points:
+        signal_text = sell_labels or "卖点信号"
+        lines.extend(
+            [
+                "结论：观察，等待确认。",
+                f"理由：已出现 {signal_text}，但同级别分解仍处待确认状态，当前不能直接上升为已确认卖点。",
+                "建议：先按观察态处理，等待反抽失败或级别闭合后再决定是否升级。",
+            ]
+        )
+    elif dual_pending and current_zs and latest_down and latest_down.low < current_zs.zs_low:
+        lines.extend(
+            [
+                "结论：观察，等待确认。",
+                f"理由：价格已落到最新中枢下沿 {current_zs.zs_low:.2f} 下方，但同级别分解仍待确认。",
+                f"建议：等待重新站回 {current_zs.zs_low:.2f}-{current_zs.zs_high:.2f} 或后续级别闭合后再判断是否升级。",
+            ]
+        )
+    elif dual_pending and current_zs and close_price >= current_zs.zs_high:
+        lines.extend(
+            [
+                "结论：观察，等待确认。",
+                f"理由：价格运行到中枢上沿 {current_zs.zs_high:.2f} 附近或上方，但同级别分解仍待确认。",
+                f"建议：先看回试是否回中枢，未完成确认链前不按趋势延续或三买确认处理。",
+            ]
+        )
+    elif buy_points:
         stop_hint = f"{latest_down.low:.2f}" if latest_down else "最近低点"
         lines.extend(
             [
@@ -705,6 +775,26 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
                 f"建议：已有仓位可继续持有，回踩不破 {current_zs.zs_high:.2f} 再考虑加仓。",
             ]
         )
+    elif current_zs and zs_monitor_alert == "pre_breakout":
+        bias_text = {"strong": "节奏偏强", "weak": "节奏偏弱", "neutral": "节奏中性"}.get(str(zs_monitor_bias), "节奏中性")
+        midline_text = f"，中枢中线 {float(zs_monitor_midline):.2f}" if zs_monitor_midline is not None else ""
+        lines.extend(
+            [
+                "结论：出现向上预警，但当前不构成确认三买。",
+                f"理由：价格贴近最新中枢上沿 {current_zs.zs_high:.2f}{midline_text}，{bias_text}。",
+                "建议：继续观察首次回试是否回中枢，未完成离开-回试确认链前不升级为三买。",
+            ]
+        )
+    elif current_zs and zs_monitor_alert == "pre_breakdown":
+        bias_text = {"strong": "节奏偏强", "weak": "节奏偏弱", "neutral": "节奏中性"}.get(str(zs_monitor_bias), "节奏中性")
+        midline_text = f"，中枢中线 {float(zs_monitor_midline):.2f}" if zs_monitor_midline is not None else ""
+        lines.extend(
+            [
+                "结论：出现向下预警，但当前不构成确认三卖。",
+                f"理由：价格贴近最新中枢下沿 {current_zs.zs_low:.2f}{midline_text}，{bias_text}。",
+                "建议：继续观察首次回抽是否回中枢，未完成离开-回抽确认链前不升级为三卖。",
+            ]
+        )
     elif current_zs:
         lines.extend(
             [
@@ -724,8 +814,27 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
 
     if current_zs:
         lines.append(f"结构说明：{format_zhongshu_structure_text(current_zs)}。")
+    if zs_monitor_midline is not None or zs_monitor_bias:
+        bias_text = {"strong": "偏强", "weak": "偏弱", "neutral": "中性"}.get(str(zs_monitor_bias), str(zs_monitor_bias or ""))
+        alert_text = {
+            "pre_breakout": "向上预警",
+            "pre_breakdown": "向下预警",
+            "none": "无预警",
+        }.get(str(zs_monitor_alert), str(zs_monitor_alert))
+        midline_text = f"{float(zs_monitor_midline):.2f}" if zs_monitor_midline is not None else "未知"
+        lines.append(f"监视器：中枢中线 {midline_text}，当前{bias_text}，预警状态 {alert_text}。")
     if signal_explanations:
         lines.append(f"信号说明：{'；'.join(signal_explanations)}。")
+    if dual_pending:
+        lines.append("分解说明：当前同级别分解仍处 dual_interpretation_pending，所有高层结论统一按观察/等待确认处理。")
+    rhythm_text = {
+        "up_bias": "节奏偏强",
+        "down_bias": "节奏偏弱",
+        "balanced": "节奏平衡",
+        "pending": "节奏待判定",
+    }.get(str(oscillation_rhythm_state or "").strip())
+    if rhythm_text:
+        lines.append(f"节奏监视：{rhythm_text}，当前只作辅助观察，不单独升级主结论。")
 
     if bottom_divergence and not buy_points:
         lines.append("补充：已有底背驰迹象，但买点尚未确认，最多列入观察名单。")
@@ -855,7 +964,14 @@ def export_case(
                 "lei_zhongshus": serialize_zhongshus(lei_zhongshus),
             },
             "structure_state": signals.get("structure_state"),
+            "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
+            "post_divergence_route": signals.get("post_divergence_route"),
+            "route_level_from": timeframe,
+            "route_level_to": _next_route_level(timeframe) if signals.get("post_divergence_route") else None,
             "divergence": signals.get("divergence"),
+            "zs_monitor_alert": signals.get("zs_monitor_alert", "none"),
+            "zs_monitor_midline": signals.get("zs_monitor_midline"),
+            "zs_monitor_bias": signals.get("zs_monitor_bias"),
             "summary": summary_payload,
             "analysis_text": analysis_text,
             "advice_text": advice_text,

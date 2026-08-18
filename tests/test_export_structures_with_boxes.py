@@ -41,11 +41,13 @@ def test_export_segments_writes_expected_columns(tmp_path: Path) -> None:
             last_reverse_extreme=10.8,
             break_bi_id=4,
             stop_reason="same_direction_not_extending",
+            is_reclaimed=False,
+            absorbed_segment_ids=[],
         )
     ]
 
     export_segments(path, segments)
 
     text = path.read_text(encoding="utf-8-sig")
-    assert "segment_id,direction,start_bi_id,end_bi_id,theory_candidate_end_bi_id,start_ts,end_ts,theory_candidate_end_ts,start_price,end_price,theory_candidate_end_price,high,low,start_norm_idx,end_norm_idx,bi_ids,last_same_extreme,last_reverse_extreme,break_bi_id,stop_reason,stop_reason_label,stop_category,stop_outcome_bucket,stop_outcome_label,is_theory_confirmed_stop,is_fallback_confirmed_stop,is_pending_stop,is_confirmed,status,note" in text
-    assert "0,up,1,3,2,2024-01-01 10:30,2024-01-03 14:00,2024-01-02 14:00,10.0,12.5,12.2,12.5,9.8,4,12,\"1,2,3\",12.5,10.8,4,same_direction_not_extending,出现同向笔，但没有继续创新高或新低,pending,pending,pending,False,False,True,False,preprocessing,auto_generated" in text
+    assert "segment_id,direction,start_bi_id,end_bi_id,theory_candidate_end_bi_id,start_ts,end_ts,theory_candidate_end_ts,start_price,end_price,theory_candidate_end_price,high,low,start_norm_idx,end_norm_idx,bi_ids,last_same_extreme,last_reverse_extreme,break_bi_id,stop_reason,is_reclaimed,absorbed_segment_ids,stop_reason_label,stop_category,stop_outcome_bucket,stop_outcome_label,is_theory_confirmed_stop,is_fallback_confirmed_stop,is_pending_stop,is_confirmed,status,note" in text
+    assert "0,up,1,3,2,2024-01-01 10:30,2024-01-03 14:00,2024-01-02 14:00,10.0,12.5,12.2,12.5,9.8,4,12,\"1,2,3\",12.5,10.8,4,same_direction_not_extending,False,,出现同向笔，但没有继续创新高或新低,pending,pending,pending,False,False,True,False,preprocessing,auto_generated" in text

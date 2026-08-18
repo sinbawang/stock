@@ -130,6 +130,19 @@ def test_build_structure_state_up_then_overlapping_return_becomes_new_range_ongo
     assert state["current_structure_status"] == "candidate_completed_waiting_stability"
 
 
+def test_analyze_chanlun_signals_marks_single_zhongshu_as_dual_interpretation_pending() -> None:
+    raw_bars = [SimpleNamespace(ts=datetime(2026, 5, 2, 14, 30), close=10.2)]
+
+    signals = analyze_chanlun_signals(
+        raw_bars,
+        [],
+        [_zhongshu(1, zs_low=10.0, zs_high=10.4, day=1)],
+        [],
+    )
+
+    assert signals["same_level_decomposition_mode"] == "dual_interpretation_pending"
+
+
 def test_build_structure_state_unterminated_trend_tail_overlap_stays_same_trend_ongoing() -> None:
     zhongshus = [
         _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1),
@@ -211,6 +224,132 @@ def test_build_structure_state_range_then_non_overlapping_up_marks_previous_rang
     assert state["current_structure_status"] == "completed_then_new_type"
 
 
+def test_analyze_chanlun_signals_marks_stable_new_type_as_single_confirmed() -> None:
+    raw_bars = [SimpleNamespace(ts=datetime(2026, 5, 9, 14, 30), close=11.9)]
+    zhongshus = [
+        _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1),
+        _zhongshu(2, zs_low=10.4, zs_high=10.9, day=4),
+        _zhongshu(3, zs_low=11.5, zs_high=12.2, day=7),
+    ]
+
+    signals = analyze_chanlun_signals(raw_bars, [], zhongshus, [])
+
+    assert signals["same_level_decomposition_mode"] == "single_confirmed"
+
+
+def test_analyze_chanlun_signals_marks_range_divergence_as_higher_level_range() -> None:
+    current_zs = _zhongshu(10, zs_low=10.0, zs_high=10.8, day=10)
+    bis = [
+        _bi(1, BiDirection.UP, high=10.7, low=10.2, day=10),
+        _bi(2, BiDirection.DOWN, high=10.6, low=10.1, day=11),
+        _bi(3, BiDirection.UP, high=11.0, low=10.3, day=12),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=4.0, dif=1.0),
+        SimpleNamespace(ts=bis[2].end_ts, macd=2.0, dif=0.8),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["divergence"]["range"]["active"] is True
+    assert signals["post_divergence_route"] == "higher_level_range"
+
+
+def test_analyze_chanlun_signals_marks_trend_divergence_as_higher_level_reverse_trend() -> None:
+    zhongshus = [
+        _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1),
+        _zhongshu(2, zs_low=11.5, zs_high=12.2, day=4),
+    ]
+    bis = [
+        _bi(10, BiDirection.UP, high=12.0, low=11.3, day=4),
+        _bi(11, BiDirection.DOWN, high=11.8, low=11.4, day=5),
+        _bi(12, BiDirection.UP, high=12.6, low=11.6, day=6),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=5.0, dif=1.2),
+        SimpleNamespace(ts=bis[2].end_ts, macd=3.0, dif=0.9),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points)
+
+    assert signals["divergence"]["trend"]["active"] is True
+    assert signals["post_divergence_route"] == "higher_level_reverse_trend"
+
+
+def test_analyze_chanlun_signals_emits_pre_breakdown_when_close_presses_lower_zs_edge() -> None:
+    raw_bars = [
+        SimpleNamespace(ts=datetime(2026, 5, 1, 10, 30), close=10.55),
+        SimpleNamespace(ts=datetime(2026, 5, 2, 14, 30), close=10.08),
+    ]
+
+    signals = analyze_chanlun_signals(
+        raw_bars,
+        [],
+        [_zhongshu(1, zs_low=10.0, zs_high=10.4, day=1)],
+        [],
+    )
+
+    assert signals["zs_monitor_alert"] == "pre_breakdown"
+
+
+def test_analyze_chanlun_signals_emits_down_bias_when_latest_up_strength_weakens_inside_zs() -> None:
+    zhongshus = [_zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)]
+    bis = [
+        _bi(10, BiDirection.UP, high=10.9, low=10.0, day=2),
+        _bi(11, BiDirection.DOWN, high=10.7, low=10.2, day=3),
+        _bi(12, BiDirection.UP, high=11.0, low=10.3, day=4),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=2.31, dif=1.0),
+        SimpleNamespace(ts=bis[1].end_ts, macd=1.10, dif=-0.6),
+        SimpleNamespace(ts=bis[2].end_ts, macd=1.89, dif=0.8),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points)
+
+    assert signals["oscillation_rhythm_state"] == "down_bias"
+
+
+def test_analyze_chanlun_signals_emits_balanced_rhythm_when_latest_same_direction_ratio_is_neutral() -> None:
+    zhongshus = [_zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)]
+    bis = [
+        _bi(20, BiDirection.UP, high=10.9, low=10.0, day=2),
+        _bi(21, BiDirection.DOWN, high=10.7, low=10.2, day=3),
+        _bi(22, BiDirection.UP, high=11.0, low=10.3, day=4),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=1.94, dif=0.9),
+        SimpleNamespace(ts=bis[1].end_ts, macd=1.20, dif=-0.5),
+        SimpleNamespace(ts=bis[2].end_ts, macd=1.99, dif=0.92),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points)
+
+    assert signals["oscillation_rhythm_state"] == "balanced"
+
+
+def test_build_signal_summary_fields_includes_zs_monitor_alert() -> None:
+    payload = build_signal_summary_fields(
+        {
+            "buy_points": [],
+            "sell_points": [],
+            "signal_points": [],
+            "signal_catalog": [],
+            "structure_state": {"current_ongoing": {"type": "range"}},
+            "same_level_decomposition_mode": "dual_interpretation_pending",
+            "post_divergence_route": "higher_level_range",
+            "oscillation_rhythm_state": "down_bias",
+            "divergence": {"trend": {"active": False}},
+            "zs_monitor_alert": "pre_breakout",
+        }
+    )
+
+    assert payload["zs_monitor_alert"] == "pre_breakout"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["post_divergence_route"] == "higher_level_range"
+    assert payload["oscillation_rhythm_state"] == "down_bias"
+
+
 def test_build_signal_summary_fields_preserves_catalog_slots() -> None:
     payload = build_signal_summary_fields(
         {
@@ -226,13 +365,19 @@ def test_build_signal_summary_fields_preserves_catalog_slots() -> None:
                 {"point": "sell3", "active": False, "time": None, "price": None, "basis": None},
             ],
             "structure_state": {"current_ongoing": {"type": "range"}},
+            "same_level_decomposition_mode": "single_confirmed",
+            "oscillation_rhythm_state": "balanced",
             "divergence": {"trend": {"active": False}},
+            "zs_monitor_alert": "none",
         }
     )
 
     assert payload["buy_points"] == ["buy1"]
     assert payload["signal_points"][0]["point"] == "buy1"
     assert len(payload["signal_catalog"]) == 6
+    assert payload["zs_monitor_alert"] == "none"
+    assert payload["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["oscillation_rhythm_state"] == "balanced"
 
 
 def test_build_signal_point_payloads_include_related_structure() -> None:

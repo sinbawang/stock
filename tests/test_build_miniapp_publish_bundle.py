@@ -359,6 +359,7 @@ Generated at: 2026-05-30T20:05:52
     ]
     assert summary_payload["cards"]["technical"]["segment_tail_interpretations"]
     assert summary_payload["cards"]["technical"]["segment_tail_interpretations"][-1]["kind"] == "pending_confirmation"
+    assert summary_payload["cards"]["technical"]["segment_tail_interpretations"][-1]["is_reclaimed"] is False
 
     detail_payload = json.loads((latest_dir / "stocks" / "00700" / "detail.json").read_text(encoding="utf-8"))
     assert detail_payload["headline"]["priority"] == "P1"
@@ -396,6 +397,7 @@ Generated at: 2026-05-30T20:05:52
     assert any("重写说明：前一中枢 ZS2 的走出笔 29 被当前中枢 ZS3 复用为进入笔 29" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert detail_payload["sections"][1]["segment_tail_interpretations"]
     assert detail_payload["sections"][1]["segment_tail_interpretations"][-1]["kind"] == "pending_confirmation"
+    assert detail_payload["sections"][1]["segment_tail_interpretations"][-1]["is_reclaimed"] is False
     assert any("候选完成待确认" in line or "边界仍待右侧结构确认稳定" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert any("工程结构摘要" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert any("停驻原因：" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
@@ -425,6 +427,22 @@ Generated at: 2026-05-30T20:05:52
     assert (snapshot_dir / "stocks" / "00700" / "charts" / "30m.svg").exists()
     assert (snapshot_dir / "stocks" / "00700" / "charts" / "5m.svg").exists()
     assert (snapshot_dir / "stocks" / "00700" / "charts" / "1m.svg").exists()
+
+
+def test_build_latest_segment_reclaim_line_exposes_absorbed_segment_ids() -> None:
+    line = module.build_latest_segment_reclaim_line(
+        [
+            {
+                "segment_id": 3,
+                "kind": "pending_confirmation",
+                "is_reclaimed": True,
+                "absorbed_segment_ids": [1, 2],
+            }
+        ],
+        "30m",
+    )
+
+    assert line == "30M S3 线段重写吸收：已吸收旧段 S1、S2，当前尾段继续按待确认结构观察。"
 
 
 def test_stock_payload_updated_at_uses_latest_available_technical_timeframe(tmp_path: Path) -> None:
@@ -525,6 +543,243 @@ def test_build_same_level_decomposition_labels_same_type_extension_as_confirmed_
     assert decomposition["previous"]["type_label"] == "下跌"
     assert decomposition["current"]["type_label"] == "下跌"
     assert decomposition["lines"][0].startswith("前段已确认同型片段：下跌")
+
+
+def test_build_latest_signal_summary_includes_pending_zs_monitor_line() -> None:
+    summary = module.build_latest_signal_summary(
+        {
+            "summary": {
+                "signal_points": [],
+                "signal_catalog": [],
+                "oscillation_rhythm_state": "down_bias",
+                "zs_monitor_alert": "pre_breakdown",
+                "zs_monitor_midline": 10.45,
+                "zs_monitor_bias": "weak",
+            }
+        }
+    )
+
+    assert summary["latest_overall"] is None
+    assert any("中枢预警：向下预警，当前不构成确认三卖（中线 10.45，节奏偏弱）" in line for line in summary["lines"])
+    assert any("节奏监视：节奏偏弱，当前只作辅助观察" in line for line in summary["lines"])
+
+
+def test_build_summary_and_detail_payload_preserve_30m_pre_breakdown_publish_anchor(tmp_path: Path) -> None:
+    stock_dir = tmp_path / "601328"
+    (stock_dir / "30m").mkdir(parents=True)
+    (stock_dir / "base.json").write_text(
+        json.dumps({"generated_at": "2026-08-18T09:00:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "fund.json").write_text(
+        json.dumps({"generated_at": "2026-08-18T09:05:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "30m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-08-18T09:30:00",
+                "timeframe": "30m",
+                "source": "akshare.eastmoney",
+                "zhongshu_level": "segment",
+                "structure": {
+                    "primary_zhongshu_level": "segment",
+                    "latest_zhongshu": {
+                        "zs_id": 7,
+                        "entering_bi_id": 51,
+                        "exit_bi_id": None,
+                        "is_terminated": False,
+                        "superseded_by_zs_id": None,
+                        "is_reabsorbed_by_larger_expansion": False,
+                    },
+                    "zhongshus": [
+                        {
+                            "zs_id": 7,
+                            "entering_bi_id": 51,
+                            "exit_bi_id": None,
+                            "is_terminated": False,
+                            "superseded_by_zs_id": None,
+                            "is_reabsorbed_by_larger_expansion": False,
+                        }
+                    ],
+                },
+                "summary": {
+                    "score": 61,
+                    "rating": "C",
+                    "bias": "偏弱",
+                    "score_breakdown": {},
+                    "conclusion": "出现向下预警，但当前不构成确认三卖。",
+                    "suggestion": "继续观察首次回抽是否回中枢。",
+                    "buy_points": [],
+                    "sell_points": [],
+                    "signal_points": [],
+                    "signal_catalog": [],
+                    "structure_state": {
+                        "last_completed": None,
+                        "current_ongoing": {
+                            "type": "range",
+                            "status": "ongoing",
+                            "start_ts": "2026-08-01T10:30:00",
+                            "latest_ts": "2026-08-18T09:30:00",
+                            "zs_count_so_far": 1,
+                            "confirmation_basis": "single_active_zhongshu",
+                        },
+                        "relationship": {
+                            "kind": "undetermined",
+                            "note": "当前只有一个同级别中枢，按工程口径先视为盘整进行中。",
+                        },
+                        "current_structure_status": "ongoing_same_type",
+                    },
+                    "same_level_decomposition_mode": "dual_interpretation_pending",
+                    "oscillation_rhythm_state": "down_bias",
+                    "post_divergence_route": "higher_level_range",
+                    "route_level_from": "30m",
+                    "route_level_to": "day",
+                    "zs_monitor_alert": "pre_breakdown",
+                    "zs_monitor_midline": 10.45,
+                    "zs_monitor_bias": "weak",
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    holding = module.Holding(symbol="601328", name="交通银行", market="CN")
+
+    summary_payload = module.build_summary_payload(holding, stock_dir, None)
+    detail_payload, _ = module.build_detail_payload(holding, stock_dir, None)
+
+    technical_card = summary_payload["cards"]["technical"]
+    technical_section = detail_payload["sections"][1]
+
+    assert technical_card["conclusion"] == "出现向下预警，但当前不构成确认三卖。"
+    assert technical_card["suggestion"] == "继续观察首次回抽是否回中枢。"
+    assert technical_card["same_level_decomposition"]["current"]["type_label"] == "盘整"
+    assert technical_card["oscillation_rhythm_state"] == "down_bias"
+    assert technical_card["post_divergence_route"] == "higher_level_range"
+    assert technical_card["route_level_from"] == "30m"
+    assert technical_card["route_level_to"] == "day"
+    assert any("中枢预警：向下预警，当前不构成确认三卖（中线 10.45，节奏偏弱）" in line for line in technical_card["technical_focus_lines"])
+    assert any("去向候选：更大级别盘整（30m -> day），当前只按观察态处理" in line for line in technical_card["technical_focus_lines"])
+    assert any("节奏监视：节奏偏弱，当前只作辅助观察" in line for line in technical_card["technical_focus_lines"])
+    assert technical_section["conclusion"] == "出现向下预警，但当前不构成确认三卖。"
+    assert technical_section["oscillation_rhythm_state"] == "down_bias"
+    assert technical_section["post_divergence_route"] == "higher_level_range"
+    assert technical_section["route_level_from"] == "30m"
+    assert technical_section["route_level_to"] == "day"
+    assert any("中枢预警：向下预警，当前不构成确认三卖（中线 10.45，节奏偏弱）" in line for line in technical_section["technical_focus_lines"])
+    assert any("去向候选：更大级别盘整（30m -> day），当前只按观察态处理" in line for line in technical_section["technical_focus_lines"])
+    assert any("节奏监视：节奏偏弱，当前只作辅助观察" in line for line in technical_section["technical_focus_lines"])
+
+
+def test_build_summary_and_detail_payload_preserve_30m_pre_breakout_publish_anchor(tmp_path: Path) -> None:
+    stock_dir = tmp_path / "002594"
+    (stock_dir / "30m").mkdir(parents=True)
+    (stock_dir / "base.json").write_text(
+        json.dumps({"generated_at": "2026-08-18T09:00:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "fund.json").write_text(
+        json.dumps({"generated_at": "2026-08-18T09:05:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "30m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-08-18T09:30:00",
+                "timeframe": "30m",
+                "source": "akshare.eastmoney",
+                "zhongshu_level": "segment",
+                "structure": {
+                    "primary_zhongshu_level": "segment",
+                    "latest_zhongshu": {
+                        "zs_id": 8,
+                        "entering_bi_id": 61,
+                        "exit_bi_id": None,
+                        "is_terminated": False,
+                        "superseded_by_zs_id": None,
+                        "is_reabsorbed_by_larger_expansion": False,
+                    },
+                    "zhongshus": [
+                        {
+                            "zs_id": 8,
+                            "entering_bi_id": 61,
+                            "exit_bi_id": None,
+                            "is_terminated": False,
+                            "superseded_by_zs_id": None,
+                            "is_reabsorbed_by_larger_expansion": False,
+                        }
+                    ],
+                },
+                "summary": {
+                    "score": 63,
+                    "rating": "C",
+                    "bias": "偏强",
+                    "score_breakdown": {},
+                    "conclusion": "出现向上预警，但当前不构成确认三买。",
+                    "suggestion": "继续观察首次回试是否回中枢。",
+                    "buy_points": [],
+                    "sell_points": [],
+                    "signal_points": [],
+                    "signal_catalog": [],
+                    "structure_state": {
+                        "last_completed": None,
+                        "current_ongoing": {
+                            "type": "range",
+                            "status": "ongoing",
+                            "start_ts": "2026-08-01T10:30:00",
+                            "latest_ts": "2026-08-18T09:30:00",
+                            "zs_count_so_far": 1,
+                            "confirmation_basis": "single_active_zhongshu",
+                        },
+                        "relationship": {
+                            "kind": "undetermined",
+                            "note": "当前只有一个同级别中枢，按工程口径先视为盘整进行中。",
+                        },
+                        "current_structure_status": "ongoing_same_type",
+                    },
+                    "same_level_decomposition_mode": "dual_interpretation_pending",
+                    "oscillation_rhythm_state": "balanced",
+                    "post_divergence_route": "higher_level_reverse_trend",
+                    "route_level_from": "30m",
+                    "route_level_to": "day",
+                    "zs_monitor_alert": "pre_breakout",
+                    "zs_monitor_midline": 18.25,
+                    "zs_monitor_bias": "strong",
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    holding = module.Holding(symbol="002594", name="比亚迪", market="CN")
+
+    summary_payload = module.build_summary_payload(holding, stock_dir, None)
+    detail_payload, _ = module.build_detail_payload(holding, stock_dir, None)
+
+    technical_card = summary_payload["cards"]["technical"]
+    technical_section = detail_payload["sections"][1]
+
+    assert technical_card["conclusion"] == "出现向上预警，但当前不构成确认三买。"
+    assert technical_card["suggestion"] == "继续观察首次回试是否回中枢。"
+    assert technical_card["same_level_decomposition"]["current"]["type_label"] == "盘整"
+    assert technical_card["oscillation_rhythm_state"] == "balanced"
+    assert technical_card["post_divergence_route"] == "higher_level_reverse_trend"
+    assert technical_card["route_level_from"] == "30m"
+    assert technical_card["route_level_to"] == "day"
+    assert any("中枢预警：向上预警，当前不构成确认三买（中线 18.25，节奏偏强）" in line for line in technical_card["technical_focus_lines"])
+    assert any("去向候选：更大级别反趋势（30m -> day），当前只按观察态处理" in line for line in technical_card["technical_focus_lines"])
+    assert any("节奏监视：节奏平衡，当前只作辅助观察" in line for line in technical_card["technical_focus_lines"])
+    assert technical_section["conclusion"] == "出现向上预警，但当前不构成确认三买。"
+    assert technical_section["oscillation_rhythm_state"] == "balanced"
+    assert technical_section["post_divergence_route"] == "higher_level_reverse_trend"
+    assert technical_section["route_level_from"] == "30m"
+    assert technical_section["route_level_to"] == "day"
+    assert any("中枢预警：向上预警，当前不构成确认三买（中线 18.25，节奏偏强）" in line for line in technical_section["technical_focus_lines"])
+    assert any("去向候选：更大级别反趋势（30m -> day），当前只按观察态处理" in line for line in technical_section["technical_focus_lines"])
+    assert any("节奏监视：节奏平衡，当前只作辅助观察" in line for line in technical_section["technical_focus_lines"])
 
 
 def test_generate_bundle_preserves_previous_latest_when_build_fails(tmp_path: Path, monkeypatch) -> None:

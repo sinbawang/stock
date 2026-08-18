@@ -26,7 +26,7 @@ sys.modules[module_spec.name] = module
 module_spec.loader.exec_module(module)
 
 
-def test_reuse_existing_hk_5m_case_accepts_effective_only_payload_for_any(monkeypatch, tmp_path: Path) -> None:
+def test_reuse_existing_hk_5m_case_rejects_legacy_bi_payload(monkeypatch, tmp_path: Path) -> None:
     security = module.Security("00700", "腾讯", "HK")
     rows = [
         {"ts": "2026-06-27 09:35:00", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
@@ -89,10 +89,10 @@ def test_reuse_existing_hk_5m_case_accepts_effective_only_payload_for_any(monkey
         security,
         rows,
         pending_reverse_mode="any",
-        zhongshu_level="bi",
+        zhongshu_level="segment",
     )
 
-    assert reused == expected
+    assert reused is None
 
 
 def test_reuse_existing_hk_5m_case_accepts_segment_payload(monkeypatch, tmp_path: Path) -> None:
@@ -248,7 +248,12 @@ def test_run_batch_prepare_uses_requested_parallelism(monkeypatch, tmp_path: Pat
             return future
 
     def fake_prepare_security_result(security, **kwargs):
-        return module.PreparedSecurityResult(security=security, day_case={}, m60_case={})
+        return module.PreparedSecurityResult(
+            security=security,
+            day_case={},
+            m60_case={},
+            timeframe_diagnostics=[],
+        )
 
     monkeypatch.setattr(module, "load_securities", lambda path: securities)
     monkeypatch.setattr(module, "ThreadPoolExecutor", FakeExecutor)

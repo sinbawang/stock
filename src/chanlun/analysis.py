@@ -240,6 +240,144 @@ def _is_reabsorbed_tail(zhongshu: Zhongshu) -> bool:
     )
 
 
+def _safe_float(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_zs_monitor_state(
+    raw_bars: list[Bar],
+    current_zs: Zhongshu | None,
+    *,
+    buy_points: list[str],
+    sell_points: list[str],
+) -> dict[str, object]:
+    if current_zs is None or not raw_bars:
+        return {
+            "zs_monitor_midline": None,
+            "zs_monitor_bias": None,
+            "zs_monitor_alert": "none",
+        }
+    if "buy_3" in buy_points or "sell_3" in sell_points:
+        alert = "none"
+    else:
+        alert = "none"
+
+    latest_close = _safe_float(getattr(raw_bars[-1], "close", None))
+    zs_low = _safe_float(getattr(current_zs, "zs_low", None))
+    zs_high = _safe_float(getattr(current_zs, "zs_high", None))
+    if latest_close is None or zs_low is None or zs_high is None:
+        return {
+            "zs_monitor_midline": None,
+            "zs_monitor_bias": None,
+            "zs_monitor_alert": "none",
+        }
+
+    width = zs_high - zs_low
+    if width <= 0:
+        return {
+            "zs_monitor_midline": None,
+            "zs_monitor_bias": None,
+            "zs_monitor_alert": "none",
+        }
+
+    midline = round((zs_low + zs_high) / 2.0, 2)
+    bias_threshold = max(width * 0.1, 1e-9)
+    if latest_close >= ((zs_low + zs_high) / 2.0) + bias_threshold:
+        bias = "strong"
+    elif latest_close <= ((zs_low + zs_high) / 2.0) - bias_threshold:
+        bias = "weak"
+    else:
+        bias = "neutral"
+
+    if latest_close < zs_low or latest_close > zs_high:
+        return {
+            "zs_monitor_midline": midline,
+            "zs_monitor_bias": bias,
+            "zs_monitor_alert": alert,
+        }
+
+    trigger_band = max(width * 0.2, 1e-9)
+    if alert == "none" and latest_close >= zs_high - trigger_band:
+        alert = "pre_breakout"
+    elif alert == "none" and latest_close <= zs_low + trigger_band:
+        alert = "pre_breakdown"
+
+    return {
+        "zs_monitor_midline": midline,
+        "zs_monitor_bias": bias,
+        "zs_monitor_alert": alert,
+    }
+
+
+def _build_same_level_decomposition_mode(structure_state: dict[str, object]) -> str:
+    current_status = str(structure_state.get("current_structure_status") or "").strip()
+    current_ongoing = structure_state.get("current_ongoing") or {}
+    confirmation_basis = str(current_ongoing.get("confirmation_basis") or "").strip()
+
+    if current_status == "candidate_completed_waiting_stability":
+        return "dual_interpretation_pending"
+    if confirmation_basis in {"no_same_level_zhongshu", "single_active_zhongshu"}:
+        return "dual_interpretation_pending"
+    return "single_confirmed"
+
+
+def _build_post_divergence_route(
+    structure_state: dict[str, object],
+    divergence: dict[str, object],
+    *,
+    top_divergence: bool,
+    bottom_divergence: bool,
+) -> str | None:
+    ongoing = structure_state.get("current_ongoing") or {}
+    confirmation_basis = str(ongoing.get("confirmation_basis") or "").strip()
+    trend = divergence.get("trend") or {}
+    range_divergence = divergence.get("range") or {}
+
+    if trend.get("active"):
+        return "higher_level_reverse_trend"
+    if range_divergence.get("active"):
+        return "higher_level_range"
+    if top_divergence or bottom_divergence or confirmation_basis == "still_inside_last_zs_extension":
+        return "last_zs_extension"
+    return None
+
+
+def _build_oscillation_rhythm_state(
+    current_zs: Zhongshu | None,
+    confirmed_bis: list[Bi],
+    strengths: dict[int, dict[str, float]],
+) -> str:
+    if current_zs is None:
+        return "pending"
+    latest_confirmed = confirmed_bis[-1] if confirmed_bis else None
+    if latest_confirmed is None:
+        return "pending"
+
+    direction = "up" if latest_confirmed.is_up() else "down"
+    recent_same_direction = _find_recent_confirmed_bis_by_direction(confirmed_bis, direction=direction, limit=2)
+    if len(recent_same_direction) < 2:
+        return "pending"
+
+    latest_same_direction = recent_same_direction[0]
+    previous_same_direction = recent_same_direction[1]
+    latest_strength = _safe_float((strengths.get(latest_same_direction.bi_id) or {}).get("macd_sum_abs"))
+    previous_strength = _safe_float((strengths.get(previous_same_direction.bi_id) or {}).get("macd_sum_abs"))
+    if latest_strength is None or previous_strength is None or previous_strength <= 0:
+        return "pending"
+
+    ratio = latest_strength / previous_strength
+    if ratio >= 1.1:
+        return "up_bias" if direction == "up" else "down_bias"
+    if ratio <= 0.9:
+        return "down_bias" if direction == "up" else "up_bias"
+    return "balanced"
+
+
 def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dict[str, object]:
     latest_bar_ts = raw_bars[-1].ts if raw_bars else None
     if not zhongshus:
@@ -515,6 +653,7 @@ def analyze_chanlun_signals(
         sell_points.append("sell_3")
 
     structure_state = build_structure_state(raw_bars, zhongshus)
+    same_level_decomposition_mode = _build_same_level_decomposition_mode(structure_state)
     divergence = build_divergence_state(
         structure_state,
         top_divergence=top_divergence,
@@ -522,6 +661,13 @@ def analyze_chanlun_signals(
         latest_confirmed_up=latest_confirmed_up,
         latest_down=latest_down,
     )
+    post_divergence_route = _build_post_divergence_route(
+        structure_state,
+        divergence,
+        top_divergence=top_divergence,
+        bottom_divergence=bottom_divergence,
+    )
+    oscillation_rhythm_state = _build_oscillation_rhythm_state(current_zs, confirmed_bis, strengths)
     signal_points, signal_catalog = build_signal_point_payloads(
         buy_points=buy_points,
         sell_points=sell_points,
@@ -529,6 +675,12 @@ def analyze_chanlun_signals(
         latest_up=latest_up,
         latest_down=latest_down,
         current_zs=current_zs,
+    )
+    zs_monitor_state = _build_zs_monitor_state(
+        raw_bars,
+        current_zs,
+        buy_points=buy_points,
+        sell_points=sell_points,
     )
 
     return {
@@ -544,7 +696,11 @@ def analyze_chanlun_signals(
         "signal_points": signal_points,
         "signal_catalog": signal_catalog,
         "structure_state": structure_state,
+        "same_level_decomposition_mode": same_level_decomposition_mode,
+        "post_divergence_route": post_divergence_route,
+        "oscillation_rhythm_state": oscillation_rhythm_state,
         "divergence": divergence,
+        **zs_monitor_state,
     }
 
 
@@ -642,7 +798,13 @@ def build_signal_summary_fields(signals: dict[str, object]) -> dict[str, object]
         "signal_points": list(signals.get("signal_points", [])),
         "signal_catalog": list(signals.get("signal_catalog", [])),
         "structure_state": signals.get("structure_state"),
+        "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
+        "post_divergence_route": signals.get("post_divergence_route"),
+        "oscillation_rhythm_state": signals.get("oscillation_rhythm_state"),
         "divergence": signals.get("divergence"),
+        "zs_monitor_alert": signals.get("zs_monitor_alert", "none"),
+        "zs_monitor_midline": signals.get("zs_monitor_midline"),
+        "zs_monitor_bias": signals.get("zs_monitor_bias"),
     }
 
 

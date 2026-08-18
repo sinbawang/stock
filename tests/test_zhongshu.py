@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu
+from chanlun.segment import identify_segments
 from chanlun.zhongshu import _mark_reabsorbed_lineage, identify_zhongshu
 
 
@@ -22,7 +23,7 @@ def _bi(bi_id: int, direction: BiDirection, high: float, low: float) -> Bi:
     )
 
 
-def _segment(segment_id: int, direction: BiDirection, high: float, low: float) -> Segment:
+def _segment(segment_id: int, direction: BiDirection, high: float, low: float, *, is_confirmed: bool = True) -> Segment:
     start = datetime(2024, 2, 1 + segment_id)
     end = datetime(2024, 2, 1 + segment_id, 1)
     start_price = low if direction == BiDirection.UP else high
@@ -40,7 +41,7 @@ def _segment(segment_id: int, direction: BiDirection, high: float, low: float) -
         low=low,
         norm_bar_range=(segment_id * 4, segment_id * 4 + 3),
         bi_ids=[segment_id * 2, segment_id * 2 + 1],
-        is_confirmed=True,
+        is_confirmed=is_confirmed,
     )
 
 
@@ -175,6 +176,78 @@ class TestIdentifyZhongshu:
         assert result[0].core_bi_ids == [1, 2, 3]
         assert result[0].bi_ids == [1, 2, 3]
         assert result[0].exit_bi_id == 4
+
+    def test_identify_segment_zhongshu_ignores_unconfirmed_tail_segment(self):
+        segments = [
+            _segment(0, BiDirection.DOWN, 110, 98),
+            _segment(1, BiDirection.UP, 106, 100),
+            _segment(2, BiDirection.DOWN, 104, 101),
+            _segment(3, BiDirection.UP, 103, 102),
+            _segment(4, BiDirection.DOWN, 102, 96, is_confirmed=False),
+        ]
+
+        result = identify_zhongshu(segments, structure_level="segment")
+
+        assert len(result) == 0
+
+    def test_identify_segment_zhongshu_ignores_transition_pending_tail_from_segment_pipeline(self):
+        bis = [
+            _bi(0, BiDirection.UP, 100, 90),
+            _bi(1, BiDirection.DOWN, 95, 85),
+            _bi(2, BiDirection.UP, 105, 95),
+            _bi(3, BiDirection.DOWN, 94, 80),
+            _bi(4, BiDirection.UP, 96, 87),
+        ]
+
+        segments = identify_segments(bis)
+        result = identify_zhongshu(segments, structure_level="segment")
+
+        assert len(segments) == 1
+        assert segments[0].is_confirmed is False
+        assert segments[0].stop_reason == "transition_pending"
+        assert result == []
+
+    def test_identify_segment_zhongshu_recomputes_to_empty_after_same_direction_reclaim(self):
+        bis = [
+            _bi(0, BiDirection.UP, 110, 100),
+            _bi(1, BiDirection.DOWN, 108, 103),
+            _bi(2, BiDirection.UP, 115, 104),
+            _bi(3, BiDirection.DOWN, 114, 105),
+            _bi(4, BiDirection.UP, 113, 106),
+            _bi(5, BiDirection.DOWN, 112, 106.5),
+            _bi(6, BiDirection.UP, 116, 107),
+        ]
+
+        segments = identify_segments(bis)
+        result = identify_zhongshu(segments, structure_level="segment")
+
+        assert len(segments) == 1
+        assert segments[0].direction == BiDirection.UP
+        assert segments[0].bi_ids == [0, 1, 2, 3, 4, 5, 6]
+        assert segments[0].is_confirmed is False
+        assert segments[0].stop_reason == "exhausted_confirmed_bis"
+        assert result == []
+
+    def test_identify_segment_zhongshu_recomputes_to_empty_after_reverse_break_reclaim(self):
+        bis = [
+            _bi(0, BiDirection.UP, 110, 100),
+            _bi(1, BiDirection.DOWN, 108, 103),
+            _bi(2, BiDirection.UP, 115, 104),
+            _bi(3, BiDirection.DOWN, 114, 102),
+            _bi(4, BiDirection.UP, 113, 103),
+            _bi(5, BiDirection.DOWN, 112, 103.5),
+            _bi(6, BiDirection.UP, 116, 104),
+        ]
+
+        segments = identify_segments(bis)
+        result = identify_zhongshu(segments, structure_level="segment")
+
+        assert len(segments) == 1
+        assert segments[0].direction == BiDirection.UP
+        assert segments[0].bi_ids == [0, 1, 2, 3, 4, 5, 6]
+        assert segments[0].is_confirmed is False
+        assert segments[0].stop_reason == "exhausted_confirmed_bis"
+        assert result == []
 
     def test_overlapping_followup_center_marks_previous_as_reabsorbed(self):
         bis = [
