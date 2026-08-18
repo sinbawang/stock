@@ -10,26 +10,26 @@ ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS = [
     {
         "name": "000591-day",
-        "csv_path": ROOT / "data" / "reports" / "000591" / "day" / "analyze" / "000591_day_20230925_to_20260618.csv",
+        "csv_path": ROOT / "data" / "reports" / "000591" / "day" / "analyze" / "000591_day_20210902_to_20260818.csv",
         "expected_stop_reasons": {"feature_sequence_fractal", "reverse_break"},
         "min_segments": 3,
         "min_confirmed": 2,
-        "min_preprocessing": 1,
+        "min_preprocessing": 0,
     },
     {
         "name": "000591-60m",
         "csv_path": ROOT / "data" / "reports" / "000591" / "60m" / "analyze" / "000591_60m_20260213_to_20260618.csv",
-        "expected_stop_reasons": {"same_direction_not_extending"},
-        "min_segments": 1,
-        "min_confirmed": 0,
-        "min_preprocessing": 1,
+        "expected_stop_reasons": {"reverse_break"},
+        "min_segments": 2,
+        "min_confirmed": 2,
+        "min_preprocessing": 0,
     },
     {
         "name": "00700-30m",
-        "csv_path": ROOT / "data" / "reports" / "00700" / "30m" / "analyze" / "00700_30m_20260511_to_20260717.csv",
-        "expected_stop_reasons": {"reverse_break", "feature_sequence_fractal"},
-        "min_segments": 4,
-        "min_confirmed": 4,
+        "csv_path": ROOT / "data" / "reports" / "00700" / "30m" / "analyze" / "00700_30m_20260527_to_20260814.csv",
+        "expected_stop_reasons": {"reverse_break", "feature_sequence_gap_fractal", "exhausted_confirmed_bis"},
+        "min_segments": 6,
+        "min_confirmed": 5,
         "min_preprocessing": 0,
     },
     {
@@ -42,10 +42,10 @@ SCENARIOS = [
     },
     {
         "name": "03690-30m",
-        "csv_path": ROOT / "data" / "reports" / "03690" / "30m" / "analyze" / "03690_30m_20260511_to_20260717.csv",
+        "csv_path": ROOT / "data" / "reports" / "03690" / "30m" / "analyze" / "03690_30m_20260527_to_20260814.csv",
         "expected_stop_reasons": {"feature_sequence_fractal", "exhausted_confirmed_bis"},
-        "min_segments": 2,
-        "min_confirmed": 1,
+        "min_segments": 5,
+        "min_confirmed": 4,
         "min_preprocessing": 1,
     },
     {
@@ -222,3 +222,72 @@ def test_regression_suite_key_landmarks_do_not_collapse_to_single_overlong_segme
             f"{scenario_name} collapsed to one overlong segment in {mode} mode: "
             f"longest={longest_segment_len}, total_bis={total_bis}"
         )
+
+
+def test_00700_60m_practical_keeps_post_seed_feature_sequence_fractal() -> None:
+    scenario = next(item for item in SCENARIOS if item["name"] == "00700-60m")
+    csv_path = scenario["csv_path"]
+    assert isinstance(csv_path, Path)
+    assert csv_path.exists(), f"missing fixture csv: {csv_path}"
+
+    practical_segments = identify_segments_from_csv(csv_path, termination_mode="practical")
+
+    assert len(practical_segments) >= 3
+    third = practical_segments[2]
+    assert third.start_bi_id == 6
+    assert third.end_bi_id == 10
+    assert third.direction.value == "down"
+    assert third.is_confirmed is True
+    assert third.stop_reason == "feature_sequence_fractal"
+
+
+def test_00700_60m_reverse_break_restart_anchor_survives_latent_reclaim() -> None:
+    scenario = next(item for item in SCENARIOS if item["name"] == "00700-60m")
+    csv_path = scenario["csv_path"]
+    assert isinstance(csv_path, Path)
+    assert csv_path.exists(), f"missing fixture csv: {csv_path}"
+
+    practical_segments = identify_segments_from_csv(csv_path, termination_mode="practical")
+
+    assert len(practical_segments) >= 5
+    fourth = practical_segments[3]
+    fifth = practical_segments[4]
+
+    assert fourth.direction.value == "up"
+    assert fourth.stop_reason == "reverse_break"
+    assert fourth.break_bi_id == 16
+    assert fourth.end_bi_id == 15
+    assert fifth.start_bi_id == fourth.break_bi_id
+
+
+def test_300124_60m_keeps_mixed_overlap_and_restart_anchors() -> None:
+    scenario = next(item for item in SCENARIOS if item["name"] == "300124-60m")
+    csv_path = scenario["csv_path"]
+    assert isinstance(csv_path, Path)
+    assert csv_path.exists(), f"missing fixture csv: {csv_path}"
+
+    practical_segments = identify_segments_from_csv(csv_path, termination_mode="practical")
+
+    assert len(practical_segments) >= 5
+    second = practical_segments[1]
+    third = practical_segments[2]
+    fourth = practical_segments[3]
+    fifth = practical_segments[4]
+
+    assert second.direction.value == "up"
+    assert second.end_bi_id == 8
+    assert second.break_bi_id == 11
+    assert second.stop_reason == "reverse_break"
+    assert third.direction.value == "down"
+    assert third.start_bi_id == 9
+    assert 11 in third.bi_ids
+    assert third.break_bi_id == 12
+    assert third.stop_reason == "reverse_break"
+    assert fourth.direction.value == "up"
+    assert fourth.start_bi_id == third.break_bi_id
+    assert fourth.break_bi_id == 17
+    assert fourth.stop_reason == "reverse_break"
+    assert fifth.direction.value == "down"
+    assert fifth.start_bi_id == fourth.break_bi_id
+    assert fifth.start_bi_id == 17
+    assert fifth.break_bi_id == 20

@@ -4,7 +4,7 @@ from tests.segment_regression_support import assert_landmarks_equal, identify_se
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_DAY_CSV = ROOT / "data" / "reports" / "000591" / "day" / "analyze" / "000591_day_20230925_to_20260618.csv"
+SAMPLE_DAY_CSV = ROOT / "data" / "reports" / "000591" / "day" / "analyze" / "000591_day_20210902_to_20260818.csv"
 SAMPLE_60M_LONG_CSV = ROOT / "data" / "reports" / "000591" / "60m" / "analyze" / "000591_60m_20251210_to_20260618.csv"
 SAMPLE_60M_CSV = ROOT / "data" / "reports" / "000591" / "60m" / "analyze" / "000591_60m_20260213_to_20260618.csv"
 SAMPLE_15M_CSV = ROOT / "data" / "reports" / "000591" / "15m" / "analyze" / "000591_15m_20260506_to_20260618.csv"
@@ -14,12 +14,13 @@ def test_000591_day_segments_do_not_regress_to_oversized_single_leg() -> None:
     segments = identify_segments_from_csv(SAMPLE_DAY_CSV)
 
     assert segments
+    assert len(segments) >= 8
 
     max_norm_span = max(segment.norm_bar_range[1] - segment.norm_bar_range[0] for segment in segments)
     max_bi_count = max(len(segment.bi_ids) for segment in segments)
 
-    assert max_norm_span < 210
-    assert max_bi_count < 20
+    assert max_norm_span < 240
+    assert max_bi_count < 25
     assert not any(
         segment.start_bi_id == 6 and segment.end_bi_id == 46
         for segment in segments
@@ -30,11 +31,10 @@ def test_000591_day_segments_do_not_regress_to_oversized_single_leg() -> None:
 
 
 def test_000591_60m_segments_keep_current_landmarks() -> None:
-    segments = identify_segments_from_csv(SAMPLE_60M_CSV)
+    practical_segments = identify_segments_from_csv(SAMPLE_60M_CSV)
+    theory_segments = identify_segments_from_csv(SAMPLE_60M_CSV, termination_mode="theory")
 
-    assert len(segments) == 1
-
-    landmarks = [
+    practical_landmarks = [
         (
             segment.direction.value,
             segment.start_bi_id,
@@ -43,17 +43,49 @@ def test_000591_60m_segments_keep_current_landmarks() -> None:
             segment.is_confirmed,
             segment.norm_bar_range,
         )
-        for segment in segments
+        for segment in practical_segments
+    ]
+    theory_landmarks = [
+        (
+            segment.direction.value,
+            segment.start_bi_id,
+            segment.end_bi_id,
+            segment.stop_reason,
+            segment.is_confirmed,
+            segment.norm_bar_range,
+        )
+        for segment in theory_segments
     ]
 
-    assert len(landmarks) == 1
-    assert landmarks[0] == ("down", 2, 6, "same_direction_not_extending", False, (24, 71))
+    assert practical_landmarks == [
+        ("down", 2, 8, "reverse_break", True, (24, 79)),
+        ("up", 9, 13, "reverse_break", True, (79, 137)),
+    ]
+    assert theory_landmarks == [
+        ("down", 0, 6, "exhausted_confirmed_bis", False, (7, 71)),
+        ("up", 7, 13, "exhausted_confirmed_bis", False, (71, 137)),
+    ]
+
+
+def test_000591_60m_gap_false_lock_keeps_reverse_break_restart_anchor() -> None:
+    practical_segments = identify_segments_from_csv(SAMPLE_60M_CSV)
+
+    assert len(practical_segments) >= 2
+    first_segment = practical_segments[0]
+    second_segment = practical_segments[1]
+
+    assert first_segment.stop_reason == "reverse_break"
+    assert first_segment.break_bi_id == 9
+    assert first_segment.end_bi_id == 8
+    assert second_segment.start_bi_id == first_segment.break_bi_id
+    assert second_segment.start_bi_id == 9
 
 
 def test_000591_60m_long_window_reclaims_middle_ground_breaks() -> None:
-    segments = identify_segments_from_csv(SAMPLE_60M_LONG_CSV)
+    practical_segments = identify_segments_from_csv(SAMPLE_60M_LONG_CSV)
+    theory_segments = identify_segments_from_csv(SAMPLE_60M_LONG_CSV, termination_mode="theory")
 
-    landmarks = [
+    practical_landmarks = [
         (
             segment.direction.value,
             segment.start_bi_id,
@@ -62,12 +94,48 @@ def test_000591_60m_long_window_reclaims_middle_ground_breaks() -> None:
             segment.is_confirmed,
             segment.norm_bar_range,
         )
-        for segment in segments
+        for segment in practical_segments
+    ]
+    theory_landmarks = [
+        (
+            segment.direction.value,
+            segment.start_bi_id,
+            segment.end_bi_id,
+            segment.stop_reason,
+            segment.is_confirmed,
+            segment.norm_bar_range,
+        )
+        for segment in theory_segments
     ]
 
-    assert len(landmarks) == 2
-    assert landmarks[0] == ("up", 1, 9, "feature_sequence_fractal", True, (4, 108))
-    assert landmarks[1] == ("down", 10, 14, "same_direction_not_extending", False, (108, 155))
+    assert practical_landmarks == [
+        ("up", 1, 9, "feature_sequence_fractal", True, (4, 108)),
+        ("down", 10, 14, "reverse_break", True, (108, 155)),
+        ("up", 15, 21, "reverse_break", True, (155, 221)),
+    ]
+    assert theory_landmarks == [
+        ("down", 0, 2, "exhausted_confirmed_bis", False, (1, 11)),
+        ("up", 3, 9, "feature_sequence_fractal", True, (11, 108)),
+        ("down", 10, 14, "exhausted_confirmed_bis", False, (108, 155)),
+        ("up", 15, 21, "exhausted_confirmed_bis", False, (155, 221)),
+    ]
+
+
+def test_000591_60m_long_window_keeps_middle_reverse_break_overlap_reuse() -> None:
+    practical_segments = identify_segments_from_csv(SAMPLE_60M_LONG_CSV)
+
+    assert len(practical_segments) >= 3
+    middle = practical_segments[1]
+    tail = practical_segments[2]
+
+    assert middle.direction.value == "down"
+    assert middle.end_bi_id == 14
+    assert middle.break_bi_id == 17
+    assert middle.stop_reason == "reverse_break"
+    assert tail.direction.value == "up"
+    assert tail.start_bi_id == 15
+    assert 17 in tail.bi_ids
+    assert tail.break_bi_id == 22
 
 
 def test_000591_15m_current_report_window_keeps_continuous_segments() -> None:

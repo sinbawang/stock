@@ -10,11 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SMOKE_SCENARIOS = [
     {
         "name": "000591-day",
-        "csv_path": ROOT / "data" / "reports" / "000591" / "day" / "analyze" / "000591_day_20230925_to_20260618.csv",
+        "csv_path": ROOT / "data" / "reports" / "000591" / "day" / "analyze" / "000591_day_20210902_to_20260818.csv",
     },
     {
         "name": "00700-30m",
-        "csv_path": ROOT / "data" / "reports" / "00700" / "30m" / "analyze" / "00700_30m_20260511_to_20260717.csv",
+        "csv_path": ROOT / "data" / "reports" / "00700" / "30m" / "analyze" / "00700_30m_20260527_to_20260814.csv",
     },
 ]
 

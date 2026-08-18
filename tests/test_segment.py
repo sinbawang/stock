@@ -2,6 +2,8 @@
 
 from datetime import datetime, timedelta
 
+import chanlun.segment as segment_module
+
 from chanlun.models import Bar, Bi, BiDirection, NormalizedBar
 from chanlun.segment import (
     SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
@@ -9,9 +11,11 @@ from chanlun.segment import (
     SEGMENT_BOOTSTRAP_AUTO,
     _FeatureSequenceElement,
     _contains,
+    _extend_segment,
     _feature_sequence_triplet_has_consistent_context,
     GapCandidateState,
     TransitionState,
+    _merge_segments_same_direction,
     _build_standard_feature_sequence,
     _evaluate_gap_candidate_state,
     _evaluate_transition_state,
@@ -63,17 +67,16 @@ class TestIdentifySegments:
             _bi(5, BiDirection.DOWN, 106, 98),
         ]
 
-        result = identify_segments(bis)
+        result = _identify_segments(bis, termination_mode="practical")
 
-        assert len(result) == 2
+        assert len(result) == 1
         assert result[0].direction == BiDirection.UP
         assert result[0].bi_ids == [0, 1, 2]
-        assert result[0].is_confirmed is True
+        assert result[0].is_confirmed is False
         assert result[0].start_price == 100
         assert result[0].end_price == 115
-        assert result[1].direction == BiDirection.DOWN
-        assert result[1].bi_ids == [3, 4, 5]
-        assert result[1].is_confirmed is False
+        assert result[0].stop_reason == "same_direction_not_extending"
+        assert result[0].break_bi_id == 4
 
     def test_theory_termination_mode_does_not_confirm_by_fallback_reverse_break(self):
         bis = [
@@ -88,8 +91,8 @@ class TestIdentifySegments:
         practical = identify_segments(bis)
         theory = identify_segments(bis, termination_mode="theory")
 
-        assert practical[0].stop_reason == "reverse_break"
-        assert practical[0].is_confirmed is True
+        assert practical[0].stop_reason == "same_direction_not_extending"
+        assert practical[0].is_confirmed is False
         assert theory[0].stop_reason != "reverse_break"
         assert theory[0].is_confirmed is False
 
@@ -240,11 +243,42 @@ class TestIdentifySegments:
             _bi(4, BiDirection.UP, 96, 87),
         ]
 
-        result = identify_segments(bis)
+        result = _identify_segments(bis, termination_mode="practical")
 
         assert len(result) == 1
         assert result[0].is_confirmed is False
         assert result[0].stop_reason == "transition_pending"
+
+    def test_pending_initial_transition_does_not_confirm_by_practical_reverse_break(self):
+        bis = [
+            _bi(0, BiDirection.UP, 100, 90),
+            _bi(1, BiDirection.DOWN, 95, 85),
+            _bi(2, BiDirection.UP, 105, 95),
+            _bi(3, BiDirection.DOWN, 96, 80),
+            _bi(4, BiDirection.UP, 94, 86),
+            _bi(5, BiDirection.DOWN, 98, 81),
+            _bi(6, BiDirection.UP, 96, 87),
+        ]
+
+        assert _evaluate_transition_state(bis, 3, BiDirection.UP) == TransitionState.PENDING
+
+        practical_probe = _extend_segment(
+            bis,
+            0,
+            strict_segment_rules=False,
+            enable_gap_false_defer=True,
+            enable_fallback_reverse_break=True,
+            enable_same_direction_fallback=True,
+        )
+        practical = identify_segments(bis, bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED)
+        theory = identify_segments(bis, bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED, termination_mode="theory")
+
+        assert practical_probe is not None
+        assert practical_probe[1] is False
+        assert practical_probe[3] != "reverse_break"
+        assert practical[0].is_confirmed is False
+        assert practical[0].stop_reason != "reverse_break"
+        assert theory[0].is_confirmed is False
 
     def test_identify_confirmed_up_segment_after_gap_reverse_fails_to_retake_high(self):
         bis = [
@@ -256,7 +290,7 @@ class TestIdentifySegments:
             _bi(5, BiDirection.DOWN, 112, 102),
         ]
 
-        result = identify_segments(bis)
+        result = _identify_segments(bis, termination_mode="practical")
 
         assert len(result) == 2
         assert result[0].direction == BiDirection.UP
@@ -384,11 +418,11 @@ class TestIdentifySegments:
 
         result = identify_segments(bis)
 
-        assert len(result) >= 1
+        assert len(result) >= 2
         assert result[0].direction == BiDirection.UP
-        assert result[0].bi_ids[0] == 2
-        assert result[0].break_bi_id == 7
-        assert result[0].stop_reason == "reverse_break"
+        assert result[0].bi_ids == [0, 1, 2]
+        assert result[0].break_bi_id == 3
+        assert result[0].stop_reason == "feature_sequence_fractal"
         assert result[0].is_confirmed is True
 
     def test_theory_feature_sequence_break_takes_priority_over_early_reverse_break(self):
@@ -492,6 +526,120 @@ class TestIdentifySegments:
         # 第三笔（向上）先破第一笔起点（向下笔的高点），应回收到前段语义。
         assert _evaluate_transition_state(bis, 3, BiDirection.UP) == TransitionState.RECLAIMED
 
+    def test_invalidated_gap_candidate_does_not_preempt_same_round_reclaim(self, monkeypatch):
+        bis = [
+            _bi(0, BiDirection.UP, 110, 100),
+            _bi(1, BiDirection.DOWN, 109, 101),
+            _bi(2, BiDirection.UP, 112, 102),
+            _bi(3, BiDirection.DOWN, 108, 101.5),
+            _bi(4, BiDirection.UP, 111, 102.5),
+            _bi(5, BiDirection.DOWN, 107, 100.5),
+            _bi(6, BiDirection.UP, 113, 103),
+        ]
+
+        monkeypatch.setattr(
+            segment_module,
+            "_gap_feature_sequence_candidate",
+            lambda _bis, reverse_indices, _direction: reverse_indices[-1],
+        )
+        monkeypatch.setattr(
+            segment_module,
+            "_evaluate_gap_candidate_state",
+            lambda *_args, **_kwargs: (GapCandidateState.INVALIDATED, False, None, None, None),
+        )
+        monkeypatch.setattr(
+            segment_module,
+            "_reclaims_transition_back_to_prior_segment",
+            lambda *_args, **_kwargs: 6,
+        )
+
+        result = _extend_segment(
+            bis,
+            0,
+            strict_segment_rules=False,
+            enable_gap_false_defer=False,
+            enable_fallback_reverse_break=True,
+            enable_same_direction_fallback=True,
+        )
+
+        assert result is not None
+        end_idx, is_confirmed, break_idx, stop_reason, break_bi_id = result
+        assert end_idx == 6
+        assert is_confirmed is False
+        assert break_idx is None
+        assert stop_reason == "exhausted_confirmed_bis"
+        assert break_bi_id is None
+
+    def test_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim(self, monkeypatch):
+        bis = [
+            _bi(0, BiDirection.UP, 110, 100),
+            _bi(1, BiDirection.DOWN, 109, 101),
+            _bi(2, BiDirection.UP, 112, 102),
+            _bi(3, BiDirection.DOWN, 108, 101.5),
+            _bi(4, BiDirection.UP, 111, 102.5),
+            _bi(5, BiDirection.DOWN, 107, 100.5),
+            _bi(6, BiDirection.UP, 113, 103),
+            _bi(7, BiDirection.DOWN, 106, 99.5),
+            _bi(8, BiDirection.UP, 114, 103.5),
+        ]
+
+        gap_states = iter(
+            [
+                (GapCandidateState.DEFERRED, False, None, None, None),
+                (GapCandidateState.INVALIDATED, False, None, None, None),
+            ]
+        )
+        reclaim_calls = []
+
+        monkeypatch.setattr(
+            segment_module,
+            "_gap_feature_sequence_candidate",
+            lambda _bis, reverse_indices, _direction: 3 if len(reverse_indices) <= 2 else None,
+        )
+        monkeypatch.setattr(
+            segment_module,
+            "_evaluate_gap_candidate_state",
+            lambda *_args, **_kwargs: next(gap_states),
+        )
+
+        def reclaim_stub(_bis, cursor, _direction):
+            reclaim_calls.append(cursor)
+            return 8
+
+        monkeypatch.setattr(
+            segment_module,
+            "_reclaims_transition_back_to_prior_segment",
+            reclaim_stub,
+        )
+        monkeypatch.setattr(
+            segment_module,
+            "_evaluate_theory_stop",
+            lambda *_args, **_kwargs: None,
+        )
+        monkeypatch.setattr(
+            segment_module,
+            "_reverse_breaks_last_reverse_extreme",
+            lambda _direction, reverse_bi, _last_reverse_extreme: reverse_bi.bi_id == 7,
+        )
+
+        result = _extend_segment(
+            bis,
+            0,
+            strict_segment_rules=False,
+            enable_gap_false_defer=True,
+            enable_fallback_reverse_break=True,
+            enable_same_direction_fallback=True,
+        )
+
+        assert result is not None
+        end_idx, is_confirmed, break_idx, stop_reason, break_bi_id = result
+        assert end_idx == 6
+        assert is_confirmed is True
+        assert break_idx == 7
+        assert stop_reason == "reverse_break"
+        assert break_bi_id == 7
+        assert reclaim_calls == []
+
     def test_feature_sequence_elements_expose_explicit_context(self):
         bis = [
             _bi(0, BiDirection.UP, 120, 100),
@@ -566,12 +714,49 @@ class TestIdentifySegments:
             _bi(6, BiDirection.UP, 116, 107),
         ]
 
-        result = identify_segments(bis)
+        result = identify_segments(bis, bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED)
 
-        assert len(result) >= 1
-        assert result[0].direction == BiDirection.DOWN
-        assert result[-1].direction == BiDirection.UP
-        assert result[-1].stop_reason == "exhausted_confirmed_bis"
+        assert len(result) == 1
+        assert result[0].direction == BiDirection.UP
+        assert result[0].bi_ids == [0, 1, 2, 3, 4, 5, 6]
+        assert result[0].stop_reason == "exhausted_confirmed_bis"
+
+    def test_practical_continues_past_pending_segment_when_later_seed_confirms(self):
+        bis = [
+            _bi(0, BiDirection.UP, 76.18, 75.35),
+            _bi(1, BiDirection.DOWN, 76.18, 74.53),
+            _bi(2, BiDirection.UP, 78.22, 74.53),
+            _bi(3, BiDirection.DOWN, 78.22, 77.13),
+            _bi(4, BiDirection.UP, 78.02, 77.13),
+            _bi(5, BiDirection.DOWN, 78.02, 73.83),
+            _bi(6, BiDirection.UP, 76.77, 73.83),
+            _bi(7, BiDirection.DOWN, 76.77, 74.83),
+            _bi(8, BiDirection.UP, 75.61, 74.83),
+            _bi(9, BiDirection.DOWN, 75.61, 74.4),
+            _bi(10, BiDirection.UP, 79.87, 74.4),
+            _bi(11, BiDirection.DOWN, 79.87, 75.96),
+            _bi(12, BiDirection.UP, 77.88, 75.96),
+            _bi(13, BiDirection.DOWN, 77.88, 75.69),
+            _bi(14, BiDirection.UP, 77.45, 75.69),
+            _bi(15, BiDirection.DOWN, 77.45, 76.7),
+            _bi(16, BiDirection.UP, 80.75, 76.7),
+            _bi(17, BiDirection.DOWN, 80.75, 76.33),
+            _bi(18, BiDirection.UP, 80.58, 76.33),
+        ]
+
+        result = _identify_segments(bis, termination_mode="practical")
+
+        assert len(result) >= 3
+        assert result[0].direction == BiDirection.UP
+        assert result[0].start_bi_id == 0
+        assert result[0].end_bi_id == 2
+        assert result[1].direction == BiDirection.DOWN
+        assert result[1].start_bi_id == 3
+        assert result[1].end_bi_id == 9
+        assert result[1].stop_reason == "reverse_break"
+        assert result[1].is_confirmed is True
+        assert result[2].direction == BiDirection.UP
+        assert result[2].start_bi_id == 10
 
     def test_tail_interpretation_is_emitted_for_unconfirmed_tail_segment(self):
         bis = [
@@ -606,12 +791,49 @@ class TestIdentifySegments:
             _bi(6, BiDirection.UP, 116, 104),
         ]
 
-        result = identify_segments(bis)
+        result = identify_segments(bis, bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED)
 
-        assert len(result) >= 1
-        assert result[0].direction == BiDirection.DOWN
-        assert result[-1].direction == BiDirection.UP
-        assert result[-1].stop_reason == "exhausted_confirmed_bis"
+        assert len(result) == 1
+        assert result[0].direction == BiDirection.UP
+        assert result[0].bi_ids == [0, 1, 2, 3, 4, 5, 6]
+        assert result[0].stop_reason == "exhausted_confirmed_bis"
+
+    def test_merge_segments_same_direction_marks_reclaim_metadata(self):
+        bis = [
+            _bi(0, BiDirection.UP, 110, 100),
+            _bi(1, BiDirection.DOWN, 108, 103),
+            _bi(2, BiDirection.UP, 115, 104),
+            _bi(3, BiDirection.DOWN, 114, 105),
+            _bi(4, BiDirection.UP, 113, 106),
+            _bi(5, BiDirection.DOWN, 112, 106.5),
+            _bi(6, BiDirection.UP, 116, 107),
+        ]
+        previous = _identify_segments(bis[:3], bootstrap_mode=SEGMENT_BOOTSTRAP_AUTO, strict_segment_rules=False, termination_mode="practical")[0]
+        current = _identify_segments(bis[4:], bootstrap_mode=SEGMENT_BOOTSTRAP_AUTO, strict_segment_rules=False, termination_mode="practical")[0]
+        current.segment_id = 1
+        current.absorbed_segment_ids = [2]
+
+        merged = _merge_segments_same_direction(previous, current, bis)
+
+        assert merged.is_reclaimed is True
+        assert merged.absorbed_segment_ids == [1, 2]
+
+    def test_tail_interpretation_evidence_includes_reclaim_metadata(self):
+        bis = [
+            _bi(0, BiDirection.UP, 110, 100),
+            _bi(1, BiDirection.DOWN, 108, 103),
+            _bi(2, BiDirection.UP, 115, 104),
+        ]
+        segment = _identify_segments(bis, bootstrap_mode=SEGMENT_BOOTSTRAP_AUTO, strict_segment_rules=False, termination_mode="practical")[0]
+        segment.is_reclaimed = True
+        segment.absorbed_segment_ids = [1]
+
+        interpretation = build_segment_tail_interpretations(bis, [segment])[-1]
+
+        assert interpretation.is_reclaimed is True
+        assert interpretation.absorbed_segment_ids == [1]
+        assert "is_reclaimed=True" in interpretation.evidence
+        assert "absorbed_segment_ids=1" in interpretation.evidence
 
     def test_next_segment_waits_for_fresh_three_bi_seed_after_break(self):
         bis = [
@@ -638,10 +860,10 @@ class TestIdentifySegments:
         assert result[0].break_bi_id == 8
         assert result[0].is_confirmed is True
         assert result[1].direction == BiDirection.DOWN
-        assert result[1].bi_ids == [8, 9, 10]
-        assert result[1].break_bi_id == 11
-        assert result[1].stop_reason == "reverse_break"
-        assert result[1].is_confirmed is True
+        assert result[1].bi_ids == [8, 9, 10, 11, 12]
+        assert result[1].break_bi_id is None
+        assert result[1].stop_reason == "exhausted_confirmed_bis"
+        assert result[1].is_confirmed is False
 
     def test_extend_unconfirmed_segment_by_rising_pair(self):
         bis = [
@@ -655,10 +877,10 @@ class TestIdentifySegments:
         result = identify_segments(bis)
 
         assert len(result) == 1
-        assert result[0].bi_ids == [1, 2, 3]
-        assert result[0].is_confirmed is True
-        assert result[0].stop_reason == "reverse_break"
-        assert result[0].norm_bar_range == (1, 4)
+        assert result[0].bi_ids == [0, 1, 2, 3, 4]
+        assert result[0].is_confirmed is False
+        assert result[0].stop_reason == "exhausted_confirmed_bis"
+        assert result[0].norm_bar_range == (0, 5)
 
     def test_ignore_unconfirmed_bis_when_identifying_segments(self):
         bis = [

@@ -1,6 +1,7 @@
 """线段起点锚定策略测试。"""
 
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -15,6 +16,7 @@ from chanlun.segment import (
     classify_stop_reason,
     identify_segments as _identify_segments,
 )
+from tests.segment_regression_support import load_bis_from_csv
 
 
 def identify_segments(bis, **kwargs):
@@ -98,7 +100,7 @@ def test_skip_left_edge_bootstrap_moves_first_seed_right() -> None:
     assert anchored[0].bi_ids[0] >= 3
 
 
-def test_auto_bootstrap_selects_coherent_seed_without_manual_skip() -> None:
+def test_auto_bootstrap_can_keep_leftmost_pending_seed_without_manual_skip() -> None:
     bis = [
         _bi(0, BiDirection.UP, 10.0, 9.0),
         _bi(1, BiDirection.DOWN, 10.0, 8.0),
@@ -114,7 +116,9 @@ def test_auto_bootstrap_selects_coherent_seed_without_manual_skip() -> None:
     segments = identify_segments(bis, bootstrap_mode=SEGMENT_BOOTSTRAP_AUTO)
 
     assert segments
-    assert segments[0].start_bi_id > 0
+    assert segments[0].start_bi_id == 0
+    assert segments[0].is_confirmed is False
+    assert segments[0].stop_reason == "exhausted_confirmed_bis"
 
 
 def test_first_valid_seed_bypasses_scored_bootstrap_optimization() -> None:
@@ -138,7 +142,7 @@ def test_first_valid_seed_bypasses_scored_bootstrap_optimization() -> None:
 
     assert auto_segments
     assert first_seed_segments
-    assert auto_segments[0].start_bi_id > first_seed_segments[0].start_bi_id
+    assert auto_segments[0].start_bi_id >= first_seed_segments[0].start_bi_id
     assert first_seed_segments[0].start_bi_id == 0
 
 
@@ -166,6 +170,58 @@ def test_prefer_earlier_start_biases_left_within_near_best_quality() -> None:
     assert preferred_segments[0].start_bi_id <= auto_segments[0].start_bi_id
 
 
+@pytest.mark.parametrize(
+    ("mode", "expected_direction"),
+    [
+        (SEGMENT_BOOTSTRAP_AUTO, BiDirection.UP),
+        (SEGMENT_BOOTSTRAP_PREFER_EARLIER_START, BiDirection.UP),
+    ],
+)
+def test_scored_bootstrap_modes_keep_left_pending_segment_over_later_confirmed_seed(
+    mode: str,
+    expected_direction: BiDirection,
+) -> None:
+    bis = [
+        _bi(0, BiDirection.UP, 100, 90),
+        _bi(1, BiDirection.DOWN, 95, 85),
+        _bi(2, BiDirection.UP, 105, 95),
+        _bi(3, BiDirection.DOWN, 96, 80),
+        _bi(4, BiDirection.UP, 94, 86),
+        _bi(5, BiDirection.DOWN, 98, 81),
+        _bi(6, BiDirection.UP, 96, 87),
+    ]
+
+    segments = identify_segments(bis, bootstrap_mode=mode)
+
+    assert segments
+    assert segments[0].start_bi_id == 0
+    assert segments[0].direction == expected_direction
+    assert segments[0].is_confirmed is False
+    assert segments[0].stop_reason != "reverse_break"
+
+
+@pytest.mark.parametrize("mode", [SEGMENT_BOOTSTRAP_AUTO, SEGMENT_BOOTSTRAP_PREFER_EARLIER_START])
+def test_scored_bootstrap_modes_keep_left_reclaiming_segment_over_later_confirmed_seed(
+    mode: str,
+) -> None:
+    bis = [
+        _bi(0, BiDirection.UP, 110, 100),
+        _bi(1, BiDirection.DOWN, 108, 103),
+        _bi(2, BiDirection.UP, 115, 104),
+        _bi(3, BiDirection.DOWN, 114, 105),
+        _bi(4, BiDirection.UP, 113, 106),
+        _bi(5, BiDirection.DOWN, 112, 106.5),
+        _bi(6, BiDirection.UP, 116, 107),
+    ]
+
+    segments = identify_segments(bis, bootstrap_mode=mode)
+
+    assert segments
+    assert segments[0].start_bi_id == 0
+    assert segments[0].direction == BiDirection.UP
+    assert segments[0].is_confirmed is False
+
+
 def test_bootstrap_modes_do_not_introduce_unknown_stop_categories() -> None:
     bis = _sample_bis()
     modes = [
@@ -187,3 +243,67 @@ def test_bootstrap_modes_do_not_introduce_unknown_stop_categories() -> None:
             assert category != StopOutcomeCategory.UNKNOWN, (
                 f"unknown stop category under bootstrap_mode={mode}: {segment.stop_reason}"
             )
+
+
+@pytest.mark.parametrize(
+    "csv_path",
+    [
+        Path(r"c:\sandbox\sinba\stock\data\reports\000591\day\analyze\000591_day_20210902_to_20260818.csv"),
+        Path(r"c:\sandbox\sinba\stock\data\reports\000591\60m\analyze\000591_60m_20260213_to_20260618.csv"),
+        Path(r"c:\sandbox\sinba\stock\data\reports\300124\15m\analyze\300124_15m_20260506_to_20260618.csv"),
+        Path(r"c:\sandbox\sinba\stock\data\reports\300124\60m\analyze\300124_60m_20260213_to_20260618.csv"),
+        Path(r"c:\sandbox\sinba\stock\data\reports\00700\30m\analyze\00700_30m_20260527_to_20260814.csv"),
+        Path(r"c:\sandbox\sinba\stock\data\reports\00700\60m\analyze\00700_60m_20260213_to_20260624.csv"),
+        Path(r"c:\sandbox\sinba\stock\data\reports\03690\30m\analyze\03690_30m_20260527_to_20260814.csv"),
+    ],
+    ids=["000591-day", "000591-60m", "300124-15m", "300124-60m", "00700-30m", "00700-60m", "03690-30m"],
+)
+def test_preferred_bootstrap_keeps_left_seed_on_real_fixtures(csv_path: Path) -> None:
+    bis = load_bis_from_csv(csv_path)
+
+    first_seed_segments = identify_segments(
+        bis,
+        bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
+    )
+    auto_segments = identify_segments(
+        bis,
+        bootstrap_mode=SEGMENT_BOOTSTRAP_AUTO,
+    )
+    preferred_segments = identify_segments(
+        bis,
+        bootstrap_mode=SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
+    )
+
+    assert first_seed_segments
+    assert auto_segments
+    assert preferred_segments
+    assert preferred_segments[0].start_bi_id == first_seed_segments[0].start_bi_id
+    assert preferred_segments[0].direction == first_seed_segments[0].direction
+    assert auto_segments[0].start_bi_id == preferred_segments[0].start_bi_id
+    assert auto_segments[0].direction == preferred_segments[0].direction
+
+
+def test_practical_stop_outcome_is_stable_across_bootstrap_modes_on_000591_60m_fixture() -> None:
+    csv_path = Path(r"c:\sandbox\sinba\stock\data\reports\000591\60m\analyze\000591_60m_20260213_to_20260618.csv")
+    bis = load_bis_from_csv(csv_path)
+
+    first_seed_segments = identify_segments(
+        bis,
+        bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
+    )
+    auto_segments = identify_segments(
+        bis,
+        bootstrap_mode=SEGMENT_BOOTSTRAP_AUTO,
+    )
+    preferred_segments = identify_segments(
+        bis,
+        bootstrap_mode=SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
+    )
+
+    assert first_seed_segments
+    assert auto_segments
+    assert preferred_segments
+    assert first_seed_segments[0].start_bi_id == auto_segments[0].start_bi_id == preferred_segments[0].start_bi_id
+    assert first_seed_segments[0].end_bi_id == auto_segments[0].end_bi_id == preferred_segments[0].end_bi_id
+    assert first_seed_segments[0].is_confirmed == auto_segments[0].is_confirmed == preferred_segments[0].is_confirmed
+    assert first_seed_segments[0].stop_reason == auto_segments[0].stop_reason == preferred_segments[0].stop_reason
