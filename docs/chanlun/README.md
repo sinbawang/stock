@@ -4,10 +4,16 @@
 
 ## 文件清单
 
+- [chanlun-strict-theory-spec.md](chanlun-strict-theory-spec.md): 缠论严格理论规格
 - [chanlun-rule-spec.md](chanlun-rule-spec.md): 缠论规则规格
+- [chanlun-spec-tasks.md](chanlun-spec-tasks.md): 缠论规格与落地任务清单
+- [base-structure-spec.md](base-structure-spec.md): 基础结构规格（K线/包含/标准K/分型/笔）
+- [trend-divergence-spec.md](trend-divergence-spec.md): 走势类型与背驰规格
+- [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md): 买卖点与多级别联立规格
 - [segment-implementation-guide.md](segment-implementation-guide.md): 线段实现短说明
 - [segment-doc-map.md](segment-doc-map.md): 线段文档总导航（实现/分析/契约分层）
 - [segment-safety-checklist.md](segment-safety-checklist.md): 线段改动安全清单（提交前/发布前闸门）
+- [zhongshu-core-spec.md](zhongshu-core-spec.md): 中枢核心理论规格
 - [segment-stop-reason-contract.md](segment-stop-reason-contract.md): 线段 stop_reason 稳定接口契约
 - [segment-mode-consumer-examples.md](segment-mode-consumer-examples.md): 线段 theory/practical 双模式最小接入示例
 - [segment-to-zhongshu-mode-protocol-draft.md](segment-to-zhongshu-mode-protocol-draft.md): 线段到中枢模式传递协议草案

@@ -17,7 +17,9 @@
 ## 常用直达
 
 - [fundamental/fundamental-doc-map.md](fundamental/fundamental-doc-map.md): 基本面总导航
+- [chanlun/chanlun-strict-theory-spec.md](chanlun/chanlun-strict-theory-spec.md): 缠论严格理论规格
 - [chanlun/chanlun-rule-spec.md](chanlun/chanlun-rule-spec.md): 缠论规则规格
+- [chanlun/chanlun-spec-tasks.md](chanlun/chanlun-spec-tasks.md): 缠论规格与落地任务清单
 - [chanlun/segment-doc-map.md](chanlun/segment-doc-map.md): 线段文档总导航
 - [chanlun/segment-safety-checklist.md](chanlun/segment-safety-checklist.md): 线段改动安全清单
 - [capital/capital-flow-module-spec.md](capital/capital-flow-module-spec.md): 资金面模块设计规格

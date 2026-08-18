@@ -2,6 +2,8 @@
 
 本页用于给实现、图表、报告三方提供统一术语和主辅消费规则。
 
+本文件不重复定义“中枢严格理论本身”；中枢核心理论定义统一见 [zhongshu-core-spec.md](zhongshu-core-spec.md)。
+
 ## 1. 术语定义
 
 - 中枢：标准中枢，基于线段识别，主口径。
@@ -65,6 +67,7 @@
 ## 7. 关联文档
 
 - [chanlun-rule-spec.md](chanlun-rule-spec.md)
+- [zhongshu-core-spec.md](zhongshu-core-spec.md)
 - [segment-to-zhongshu-mode-protocol-draft.md](segment-to-zhongshu-mode-protocol-draft.md)
 - [zhongshu-original-review-matrix.md](zhongshu-original-review-matrix.md)
 - [../analysis/combined-analysis-output-spec.md](../analysis/combined-analysis-output-spec.md)
