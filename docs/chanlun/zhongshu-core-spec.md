@@ -12,6 +12,7 @@
 中枢相关文档的推荐分层：
 
 - [zhongshu-core-spec.md](zhongshu-core-spec.md): 中枢核心理论定义。
+- [zhongshu-review-entry.md](zhongshu-review-entry.md): 中枢 review 单页入口。
 - [zhongshu-dual-track-spec.md](zhongshu-dual-track-spec.md): 中枢/类中枢主辅消费与命名规范。
 - [zhongshu-original-review-matrix.md](zhongshu-original-review-matrix.md): 原文复核矩阵。
 - [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md): 图文化样例库。
@@ -160,6 +161,7 @@
 
 - [chanlun-rule-spec.md](chanlun-rule-spec.md)
 - [chanlun-strict-theory-spec.md](chanlun-strict-theory-spec.md)
+- [zhongshu-review-entry.md](zhongshu-review-entry.md)
 - [zhongshu-dual-track-spec.md](zhongshu-dual-track-spec.md)
 - [zhongshu-original-review-matrix.md](zhongshu-original-review-matrix.md)
 - [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md)

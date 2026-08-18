@@ -14,9 +14,9 @@
 | --- | --- | --- |
 | 严格理论规格整理 | 术语、结构、review 路径是否成体系可读 | 82% |
 | 原文逐课复核 | 是否已有逐课对照与差异记录 | 88% |
-| 当前工程口径沉淀 | 现状实现、契约、样例是否可追踪 | 78% |
-| 严格理论自动化实现 | 代码是否已按严格理论完整落地 | 42% |
-| 综合进度 | 文档、复核、实现三者合并后的总体估算 | 58% |
+| 当前工程口径沉淀 | 现状实现、契约、样例是否可追踪 | 81% |
+| 严格理论自动化实现 | 代码是否已按严格理论完整落地 | 47% |
+| 综合进度 | 文档、复核、实现三者合并后的总体估算 | 60% |
 
 说明：
 
@@ -35,6 +35,8 @@
 - [x] 建立中枢核心理论规格 [zhongshu-core-spec.md](zhongshu-core-spec.md)，把中枢理论定义与主辅消费/案例文档拆开。
 - [x] 建立主辅消费规范 [zhongshu-dual-track-spec.md](zhongshu-dual-track-spec.md)。
 - [x] 建立原文复核矩阵 [zhongshu-original-review-matrix.md](zhongshu-original-review-matrix.md)。
+- [x] 建立中枢 review 单页入口 [zhongshu-review-entry.md](zhongshu-review-entry.md)，统一原文、样例、消费红线入口。
+- [x] 建立中枢增量摘要 [zhongshu-review-diff-summary-2026-08.md](zhongshu-review-diff-summary-2026-08.md)，压缩本轮文档推进范围与剩余缺口。
 - [x] 为走势类型/背驰模块补齐“原文复核矩阵 + 图文化示例库”配套文档。
 - [x] 为买卖点/多级别联立模块补齐“原文复核矩阵 + 图文化示例库”配套文档。
 - [x] 建立线段专题导航 [segment-doc-map.md](segment-doc-map.md)。
@@ -52,6 +54,7 @@
 - [x] 线段终结、`stop_reason`、theory/practical 双模式已有契约和说明。
 - [x] 发布/分析消费端已有主辅冲突与降级语义的基本约束。
 - [x] 已沉淀样例包、图文化示例库、节奏回放模板。
+- [x] 已为中枢沉淀 `1m / 5m / 30m / day映射` 优先的 review 与消费示例链，其中 `HK.02357 1m` 已作为 watch/pending 场景锚点接入，`HK.01339 1m` 已作为 completed_then_new_type 场景锚点接入，`SH.601328 1m` 已作为预警前态代理锚点接入，`SZ.000651 1m` 已作为 confirmed 场景锚点接入。
 
 ## 3. 待完成任务
 
@@ -59,7 +62,7 @@
 
 | 任务 | 当前状态 | 完成度 | 说明 |
 | --- | --- | --- | --- |
-| 标准线段级中枢主实现 | 进行中 | 35% | 现有主运行链路仍以类中枢为主，严格中枢仍未成为默认主输出。 |
+| 标准线段级中枢主实现 | 进行中 | 63% | 主批量发布链已进一步锁定 `segment` 为唯一主口径，并阻断旧 `bi` 级 `5m tech.json` 继续作为主产物复用；同时 `identify_zhongshu(..., structure_level="segment")` 已改为只吃已确认线段，未确认尾段不再直接污染标准中枢主链，且 reclaim/重写后若 segment 链被并回单个未确认尾段，标准中枢结果会整体清空而不残留旧中心。本轮又把 `segment.is_reclaimed` / `absorbed_segment_ids` 接入尾段解释层、`segments.csv` 和 miniapp `summary/detail` 消费口径，线段重写吸收不再只能靠 `bi_ids` 反推；并修掉一条具体的提前确认路径：当初始转折仍处于 `TransitionState.PENDING` 时，practical `reverse_break` 兜底不再提前把该段确认为 completed。同时 `auto` / `prefer_earlier_start` 在选首种子时，若更靠右候选起点落在更靠左且仍未确认的旧段未解决窗口里，现已不再把该 later confirmed 新段当成 bootstrap 最优候选；进一步地，首种子评分已去掉对三笔以上首段的额外长度奖励，而 practical 下的 `gap false defer` 也已从 bootstrap 模式中解耦，使 `first_valid_seed` / `auto` / `prefer_earlier_start` 在 `000591`、`300124`、`00700`、`03690` 共 7 组真实 fixture 上，首段起点、方向、`is_confirmed` 与 `stop_reason` 都已对齐，不再因为选种子模式不同而分叉。本轮继续修掉四条后续段边界漂移：当本地 gap 候选被判 `INVALIDATED` 并跳到下一轮时，segment extreme 现已同步前推，后续段不再拿旧极值误判“仍在延伸”；`00700-60m` 的 practical 第 3 段已因此回到与 theory 一致的 `feature_sequence_fractal`，不再被更晚的 `reverse_break` 抢跑确认。进一步地，`gap` 候选在同一轮被判 `INVALIDATED` 且 transition reclaim 已经成立时，`_extend_segment()` 现已优先走 reclaim；但若该 `INVALIDATED` 只是前一轮 local gap false `DEFERRED` 的落地结果，则会先锁定 `gap false`、保留后续 `reverse_break` 确认轮，而不会被 reclaim 或同轮 fallback 提前吞掉。围绕这条 deferred->invalidated 路径，现已同时补齐一条 focused unit test，专门锁住“latent reclaim 不能盖过 later reverse_break”的 restart 语义；配合 focused matrix tests、`tests/test_segment.py` synthetic coverage、以及真实 fixture regression gate，当前这一分支已稳定受控。除此之外，practical 主循环不再在首个未确认段处一刀切停止；若后面已经存在能独立走出 confirmed 段的新三笔种子，现在会继续扫描而不是过早把整条链冻结为单个 pending 尾段。这个实现收敛已把 `300124 15m` practical 从 `up 0->2 / down 3->5 pending` 推进为 `up 0->2 / down 3->9 reverse_break / up 10->18 reverse_break / down 19->21 feature_sequence_fractal / up 22->24 feature_sequence_fractal / down 25->29 pending`，同时也让 `000591-day` 当前 live 窗口 practical 不再人为残留一个尾部 preprocessing 段。与此同时，`tests/test_segment_regression_000591.py` 已把 `000591 60m` 的 real restart anchor 单独锁住：第一段 practical `break_bi_id=9` 必须与下一段 `start_bi_id=9` 对齐，不得漂移到更晚的 latent reclaim 候选；同文件还已把 `000591 60m long` 的中段 overlap/reuse 语义锁住：中间 `down` 段必须保持 `break_bi_id=17`，后续 `up` 段继续从 `15` 起并复用到 `17`，并已把 `000591-day` 的 live fixture 切到当前 `20210902_to_20260818` 窗口，防止旧路径失效后 day guard 脱靶；`tests/test_segment_regression_suite.py` 现又把 `300124 60m` 的 mixed overlap/restart 语义锁住：第二段 `up 4->8` practical `break_bi_id=11` 必须继续被后续 `down 9->11` 复用，而其后的 `reverse_break` 段又必须分别按 `12`、`17` 精确重启；同文件也已把 `00700 60m` 的对应 restart anchor 锁住：第 4 段 practical `break_bi_id=16` 必须与下一段 `start_bi_id=16` 对齐；`tests/test_segment_regression_03690.py` 则已同步到当前 `03690 30m` 真实窗口，并把超长 `up 13->31` practical 段的 `break_bi_id=32 -> next start_bi_id=32` restart anchor 锁进 dedicated regression，同时新增 `03690 60m` 的 overlap/reuse + preprocess-tail 锚点：首段 `down 0->2` practical `break_bi_id=5` 必须继续落在后续未确认 `up` 段窗口内，而尾段仍保持 `same_direction_not_extending` 未确认状态。当前主要缺口已进一步收敛到：更复杂的 reclaim/重写与 gap 再分辨交界仍未彻底统一，标准中枢的完成、扩张与后续买卖点绑定因此仍可能漂移。 |
 | 严格同级别走势类型自动分解 | 待完成 | 25% | 文档已有方向，但代码仍未形成完整、稳定的自动分解闭环。 |
 | 趋势背驰严格自动判定 | 待完成 | 20% | 当前有工程化 divergence 输出，但不是完整原文判定链。 |
 | 盘整背驰严格自动判定 | 待完成 | 18% | 盘整背驰最容易被工程近似替代，需单列主口径实现。 |
@@ -72,7 +75,7 @@
 | 任务 | 当前状态 | 完成度 | 说明 |
 | --- | --- | --- | --- |
 | `chanlun-rule-spec` 与严格版差异标注 | 进行中 | 55% | 当前仍有部分段落把“现状”和“目标”写在一起。 |
-| 理论/实现/消费三层总差异表 | 进行中 | 74% | 已补字段级矩阵，后续主要剩字段缺失样例、页面误读样例与实际消费端回写。 |
+| 理论/实现/消费三层总差异表 | 进行中 | 89% | 已补字段级矩阵，并为中枢新增 review 入口、消费示例页与同案三栏对照；本轮已把 `zs_monitor_alert`、`zs_monitor_midline`、`zs_monitor_bias`、`same_level_decomposition_mode`、`post_divergence_route`、`oscillation_rhythm_state` 接入 `src -> summary/tech.json -> publish` 主链，并补上 `route_level_from/to`、节奏辅助文案与 `30m` 发布回归锚点；当前差异已收敛到“`1m` 真实落盘样本不足、`oscillation_rhythm_state` 严格阈值仍是工程近似、少量剩余字段未形成稳定主产物”；后续主要剩更多反例、真实 `1m` 样本与剩余字段回写。 |
 | `src/chanlun/analysis.py` 买卖点逻辑差异表 | 待完成 | 15% | 需要逐条标记当前 buy/sell 条件与严格理论的偏差。 |
 | 类中枢与标准中枢字段完全拆分 | 进行中 | 45% | 文档已拆，输出字段与消费端仍需继续收敛。 |
 | 主辅冲突样例库 | 进行中 | 50% | 已有框架，还缺足量正反例。 |
@@ -81,7 +84,7 @@
 
 | 任务 | 当前状态 | 完成度 | 说明 |
 | --- | --- | --- | --- |
-| 中枢严格定义图示库 | 进行中 | 60% | 已有示例库，但还需补进入段/本体/离开段分层图。 |
+| 中枢严格定义图示库 | 进行中 | 77% | 已有 review 入口、增量摘要、页内真实卡片与消费对照，并补入 `1m` 预警前态代理样本；仍需继续补进入段/本体/离开段分层图及真实 `1m pre_break*` 案例。 |
 | 线段严格定义案例库 | 进行中 | 58% | 已补复核矩阵与图示库骨架，仍需补 67/71 课正反例和 R1-R6 映射。 |
 | 背驰与盘整背驰标准案例包 | 进行中 | 45% | 已有复核矩阵与图示库骨架，仍需补统一正例、反例、易混淆例。 |
 | 一二三类买卖点标准案例包 | 进行中 | 48% | 已有复核矩阵与图示库骨架，仍需按最近中枢和级别填充案例。 |
@@ -91,9 +94,9 @@
 
 | 任务 | 当前状态 | 完成度 | 说明 |
 | --- | --- | --- | --- |
-| `tech.json` 严格结构状态字段补齐 | 进行中 | 46% | 已补字段级消费映射，但 `structure_state`、去向、监视字段仍未在全部主入口统一落地。 |
-| confirmed/pending/auxiliary 三态统一 | 进行中 | 60% | 已有统一字段级文档口径，剩余工作主要在真实消费端落实和回归。 |
-| 小程序/报告端主辅口径显式展示 | 进行中 | 74% | 已完成真实发布包样本首轮审计，并补齐发布链路完整性闸门、staging 原子替换、timing report 中的 `bundle_integrity` 与 `publish_failures` 观测字段。 |
+| `tech.json` 严格结构状态字段补齐 | 进行中 | 76% | 已补字段级消费映射，并为中枢补入 `1m / 5m / 30m / day映射` 的真实 `tech.json` 示例；本轮已补上 `zs_monitor_alert`、`zs_monitor_midline`、`zs_monitor_bias`、`same_level_decomposition_mode`、`post_divergence_route`、`oscillation_rhythm_state` 的真实生成、`summary/tech.json` 落盘、`advice_text` pending/auxiliary 降级、`route_level_from/to` 级别映射，以及 `30m pre_breakdown/pre_breakout -> published summary/detail` 回归锚点；后续仍需补真实 `1m` 预警样本、节奏阈值精化与少量剩余结构字段。 |
+| confirmed/pending/auxiliary 三态统一 | 进行中 | 68% | 已有统一字段级文档口径，并为中枢补入 confirmed、pending、auxiliary 的真实案例对照；剩余工作主要在真实消费端落实和回归。 |
+| 小程序/报告端主辅口径显式展示 | 进行中 | 81% | 已完成真实发布包样本首轮审计，并新增中枢专用消费展示对照页与同案三栏示例；剩余工作主要是 UI 落地和回归校验。 |
 
 ## 4. 下一阶段建议顺序
 
@@ -129,6 +132,12 @@
 - [segment-review-entry.md](segment-review-entry.md)
 - 用途：统一原文定义、当前实现、`pending_confirmation` / 再分辨 / 重写吸收样例，以及下游字段红线。
 - 当前进展：`segment-visual-example-library.md` 已从纯模板推进到“模板 + 规范回归案例 + 真实回归窗口案例”，现成入口包括 `SZ.000651 30m`、`SZ.000591 15m`、`HK.00700 15m`。
+
+本轮 `zhongshu` review 入口：
+
+- [zhongshu-review-entry.md](zhongshu-review-entry.md)
+- 用途：统一原文定义、页内真实卡片、`tech.json` / 报告 / 小程序消费红线，以及 `1m / 5m / 30m / day映射` 的示例优先级。
+- 当前进展：`zhongshu-visual-example-library.md` 第 1 至第 4 节均已进入页内可审状态；`zhongshu-consumer-display-examples.md` 已补同案三栏对照，当前主锚点包括 `HK.02357 1m range ongoing`、`HK.01339 1m completed_then_new_type`、`SH.601328 1m pre-warning proxy`、`SZ.000651 1m confirmed 3S`、`SH.601318 5m down_bias`、`SZ.000651 30m -> day`、`SZ.002594 30m pre_breakout`。
 
 ## 5. review 用任务拆分
 
