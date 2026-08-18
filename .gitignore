@@ -1,4 +1,6 @@
 .venv/*
+__pycache__/
+*.py[cod]
 data/*
 !data/chanzhongshuochan_lessons/
 !data/chanzhongshuochan_lessons/**
