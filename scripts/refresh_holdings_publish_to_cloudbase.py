@@ -77,6 +77,7 @@ def _write_timing_report(
     regeneration_summary: dict[str, object] | None,
     latest_dir: Path,
     build_summary: dict[str, object] | None,
+    publish_failures: list[dict[str, object]] | None = None,
 ) -> Path:
     REPORTS_META_DIR.mkdir(parents=True, exist_ok=True)
     stamp = completed_at.strftime("%Y%m%d_%H%M%S")
@@ -122,6 +123,8 @@ def _write_timing_report(
             "latest_dir": str(latest_dir),
             "missing_artifact_alert_count": (build_summary or {}).get("missing_artifact_alert_count"),
             "missing_artifact_alert_path": str((build_summary or {}).get("missing_artifact_alert_path")) if (build_summary or {}).get("missing_artifact_alert_path") else None,
+            "bundle_integrity": (build_summary or {}).get("bundle_integrity"),
+            "snapshot_bundle_integrity": (build_summary or {}).get("snapshot_bundle_integrity"),
         },
     }
     if regeneration_summary is not None:
@@ -134,6 +137,8 @@ def _write_timing_report(
             "per_market": _summarize_holding_timings(per_holding),
             "per_holding": per_holding,
         }
+    if publish_failures:
+        payload["publish_failures"] = publish_failures
 
     _write_json(archive_path, payload)
     _write_json(latest_path, payload)
@@ -352,6 +357,59 @@ def _run_command(command: list[str]) -> str:
     return completed.stdout
 
 
+def _classify_publish_failure(message: str) -> dict[str, str]:
+    text = str(message or "")
+    normalized = text.lower()
+
+    if "missing required publish entry files" in normalized:
+        return {
+            "code": "incomplete_bundle_missing_entry_files",
+            "hint": "build_miniapp_publish_bundle.py did not leave a complete latest bundle; check index.json and groups/portfolio.json generation before upload.",
+        }
+    if "chart payloads exist but stocks/*/(base|summary|detail).json are missing" in normalized:
+        return {
+            "code": "incomplete_bundle_missing_stock_meta",
+            "hint": "chart JSON exists without stock meta payloads; rebuild latest bundle and ensure stocks/*/{base,summary,detail}.json are present before upload.",
+        }
+    if "no files found under" in normalized:
+        return {
+            "code": "empty_upload_source_dir",
+            "hint": "upload source dir is empty after filtering; verify publish_root/latest contents and incremental upload selectors.",
+        }
+    if "all holdings failed" in normalized:
+        return {
+            "code": "holding_regeneration_failed",
+            "hint": "all holding regenerations failed before publish build; inspect per-holding failure lines above.",
+        }
+    return {
+        "code": "publish_stage_failed",
+        "hint": "inspect the stage-specific traceback and command output above.",
+    }
+
+
+def _print_publish_stage_failure_summary(
+    *,
+    stage: str,
+    error: Exception,
+    source_dir: Path | None = None,
+) -> dict[str, object]:
+    summary = _classify_publish_failure(str(error))
+    event = {
+        "stage": stage,
+        "code": summary["code"],
+        "hint": summary["hint"],
+        "error": str(error),
+        "source_dir": str(source_dir) if source_dir else None,
+    }
+    print(
+        f"publish_stage_failure stage={stage} code={summary['code']} source_dir={source_dir if source_dir else '-'}",
+        flush=True,
+    )
+    print(f"publish_stage_failure_hint= {summary['hint']}", flush=True)
+    print(f"publish_stage_failure_error= {error}", flush=True)
+    return event
+
+
 def select_holdings(args: argparse.Namespace):
     holdings = load_holdings(Path(args.holdings_file), market_filter=args.market)
     if args.symbols:
@@ -517,34 +575,62 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
     }
 
 
-def rebuild_publish_bundle(args: argparse.Namespace, regeneration_summary: dict[str, object] | None = None) -> dict[str, object]:
+def rebuild_publish_bundle(
+    args: argparse.Namespace,
+    regeneration_summary: dict[str, object] | None = None,
+    publish_failures: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
     failed_symbols = {
         str(item.get("symbol") or "")
         for item in (regeneration_summary or {}).get("failed_holdings", [])
         if isinstance(item, dict) and str(item.get("symbol") or "").strip()
     }
-    outputs = build_publish_bundle(
-        holdings_path=Path(args.holdings_file),
-        reports_root=Path(args.reports_root),
-        publish_root=Path(args.publish_root),
-        snapshot_stamp=args.snapshot_stamp,
-        latest_only=args.latest_only,
-        publish_timeframes=tuple(args.publish_timeframes) if args.publish_timeframes else None,
-        include_chart_images=not bool(args.publish_json_only),
-        expected_tech_timeframes=tuple(getattr(args, "tech_timeframes", []) or []) or None,
-        skip_regenerate_context=bool(getattr(args, "skip_regenerate", False)),
-        skip_gen_fund_context=bool(getattr(args, "skip_gen_fund", False)),
-        failed_symbols=failed_symbols,
-    )
+    try:
+        outputs = build_publish_bundle(
+            holdings_path=Path(args.holdings_file),
+            reports_root=Path(args.reports_root),
+            publish_root=Path(args.publish_root),
+            snapshot_stamp=args.snapshot_stamp,
+            latest_only=args.latest_only,
+            publish_timeframes=tuple(args.publish_timeframes) if args.publish_timeframes else None,
+            include_chart_images=not bool(args.publish_json_only),
+            expected_tech_timeframes=tuple(getattr(args, "tech_timeframes", []) or []) or None,
+            skip_regenerate_context=bool(getattr(args, "skip_regenerate", False)),
+            skip_gen_fund_context=bool(getattr(args, "skip_gen_fund", False)),
+            failed_symbols=failed_symbols,
+        )
+    except Exception as exc:  # noqa: BLE001
+        event = _print_publish_stage_failure_summary(
+            stage="build",
+            error=exc,
+            source_dir=Path(args.publish_root) / "latest",
+        )
+        if publish_failures is not None:
+            publish_failures.append(event)
+        raise
     print(f"latest= {outputs['latest']}", flush=True)
     print(f"missing_artifact_alert_count= {outputs['missing_artifact_alert_count']}", flush=True)
     print(f"missing_artifact_alert_path= {outputs['missing_artifact_alert_path']}", flush=True)
+    bundle_integrity = outputs.get("bundle_integrity") or {}
+    print(
+        "bundle_integrity "
+        f"index_present={bundle_integrity.get('index_present')} "
+        f"portfolio_group_present={bundle_integrity.get('portfolio_group_present')} "
+        f"stock_dir_count={bundle_integrity.get('stock_dir_count')} "
+        f"summary_json_count={bundle_integrity.get('summary_json_count')} "
+        f"detail_json_count={bundle_integrity.get('detail_json_count')}",
+        flush=True,
+    )
     if not args.latest_only:
         print(f"snapshot= {outputs['snapshot']}", flush=True)
     return outputs
 
 
-def upload_publish_bundle(args: argparse.Namespace, source_dir: Path) -> None:
+def upload_publish_bundle(
+    args: argparse.Namespace,
+    source_dir: Path,
+    publish_failures: list[dict[str, object]] | None = None,
+) -> None:
     command = [
         sys.executable,
         str(DEFAULT_UPLOAD_SCRIPT),
@@ -582,9 +668,18 @@ def upload_publish_bundle(args: argparse.Namespace, source_dir: Path) -> None:
     try:
         _run_command(command)
     except RuntimeError as exc:
+        event = _print_publish_stage_failure_summary(stage="upload_attempt_1", error=exc, source_dir=source_dir)
+        if publish_failures is not None:
+            publish_failures.append(event)
         print(f"upload attempt 1 failed: {exc}", flush=True)
         print("retrying upload once...", flush=True)
-        _run_command(command)
+        try:
+            _run_command(command)
+        except RuntimeError as retry_exc:
+            retry_event = _print_publish_stage_failure_summary(stage="upload_attempt_2", error=retry_exc, source_dir=source_dir)
+            if publish_failures is not None:
+                publish_failures.append(retry_event)
+            raise
 
 
 def _print_upload_verification_summary(manifest_path: Path, focus_symbols: list[str] | None) -> None:
@@ -752,6 +847,7 @@ def main() -> None:
     stage_seconds: dict[str, float] = {}
     regeneration_summary: dict[str, object] | None = None
     build_summary: dict[str, object] | None = None
+    publish_failures: list[dict[str, object]] = []
     if bool(getattr(args, "sync_kline_cache_restore_before_regenerate", False)):
         started_restore_kline = time.perf_counter()
         sync_kline_cache_restore(args)
@@ -767,7 +863,7 @@ def main() -> None:
     latest_dir = Path(args.publish_root) / "latest"
     if not args.skip_build:
         started_build = time.perf_counter()
-        build_summary = rebuild_publish_bundle(args, regeneration_summary)
+        build_summary = rebuild_publish_bundle(args, regeneration_summary, publish_failures)
         latest_dir = Path(str(build_summary["latest"]))
         stage_seconds["build_seconds"] = time.perf_counter() - started_build
         print(f"timing build_seconds={stage_seconds['build_seconds']:.2f}", flush=True)
@@ -779,7 +875,7 @@ def main() -> None:
             stage_seconds["sync_kline_cache_seconds"] = time.perf_counter() - started_sync_kline
             print(f"timing sync_kline_cache_seconds={stage_seconds['sync_kline_cache_seconds']:.2f}", flush=True)
         started_upload = time.perf_counter()
-        upload_publish_bundle(args, latest_dir)
+        upload_publish_bundle(args, latest_dir, publish_failures)
         stage_seconds["upload_seconds"] = time.perf_counter() - started_upload
         print(f"timing upload_seconds={stage_seconds['upload_seconds']:.2f}", flush=True)
         _print_upload_verification_summary(
@@ -797,6 +893,7 @@ def main() -> None:
         regeneration_summary=regeneration_summary,
         latest_dir=latest_dir,
         build_summary=build_summary,
+        publish_failures=publish_failures,
     )
     print(f"timing_report= {timing_report}", flush=True)
 

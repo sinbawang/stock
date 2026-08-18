@@ -195,6 +195,8 @@
 - 对 `source`、`artifacts`、`stats` 与更细的 `summary` 字段，必须按“有则用、无则降级”处理
 - 对 `precision_entry` 与 `precision_window_display`，当前可在 mixed 报告主链路中稳定依赖，但在其他旧入口仍应按 optional 处理
 
+若要判断这些字段在发布层应落到 `confirmed`、`pending` 还是 `auxiliary`，统一参考 [../chanlun/theory-implementation-consumer-diff-matrix.md](../chanlun/theory-implementation-consumer-diff-matrix.md) 的字段级消费映射。
+
 ### 3.4 `tech.json` 建议新增的走势结构状态字段
 
 根据 [../chanlun/chanlun-rule-spec.md](../chanlun/chanlun-rule-spec.md) 中新增的走势类型口径，后续 `tech.json` 建议补一组结构化字段，用来表达“上一个已完成走势类型”和“当前正在进行走势类型”。

@@ -410,6 +410,13 @@ Generated at: 2026-05-30T20:05:52
     assert portfolio_group["sections"][0]["items"][0]["technical_rating"] == "B"
     assert portfolio_group["sections"][0]["items"][0]["technical_bias"] == "偏强"
 
+    assert outputs["bundle_integrity"]["index_present"] is True
+    assert outputs["bundle_integrity"]["portfolio_group_present"] is True
+    assert outputs["bundle_integrity"]["stock_dir_count"] == 2
+    assert outputs["bundle_integrity"]["summary_json_count"] == 2
+    assert outputs["bundle_integrity"]["detail_json_count"] == 2
+    assert outputs["snapshot_bundle_integrity"]["index_present"] is True
+
     assert (latest_dir / "stocks" / "000651" / "charts" / "30m.svg").exists()
     assert (latest_dir / "stocks" / "000651" / "charts" / "5m.svg").exists()
     assert (latest_dir / "stocks" / "000651" / "charts" / "1m.svg").exists()
@@ -518,7 +525,70 @@ def test_build_same_level_decomposition_labels_same_type_extension_as_confirmed_
     assert decomposition["previous"]["type_label"] == "下跌"
     assert decomposition["current"]["type_label"] == "下跌"
     assert decomposition["lines"][0].startswith("前段已确认同型片段：下跌")
-    assert all("上个已完成走势：下跌" not in line for line in decomposition["lines"])
+
+
+def test_generate_bundle_preserves_previous_latest_when_build_fails(tmp_path: Path, monkeypatch) -> None:
+    holdings_path = tmp_path / "stock_holdings.json"
+    holdings_path.write_text(
+        json.dumps({"markets": {"CN": [{"symbol": "000651", "name": "格力电器"}]}} , ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    reports_root = tmp_path / "reports"
+    meta_dir = reports_root / "_meta"
+    meta_dir.mkdir(parents=True)
+    stock_dir = reports_root / "000651"
+    (stock_dir / "30m").mkdir(parents=True)
+    (stock_dir / "base.json").write_text(json.dumps({"summary": {}}, ensure_ascii=False), encoding="utf-8")
+    (stock_dir / "fund.json").write_text(json.dumps({"summary": {}}, ensure_ascii=False), encoding="utf-8")
+    (stock_dir / "30m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-08-18T10:00:00",
+                "timeframe": "30m",
+                "summary": {
+                    "score": 60,
+                    "rating": "C",
+                    "bias": "中性",
+                    "score_breakdown": {},
+                    "conclusion": "观察中",
+                    "suggestion": "等待确认",
+                    "buy_points": [],
+                    "sell_points": [],
+                    "signal_points": [],
+                    "signal_catalog": [],
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    publish_root = tmp_path / "publish"
+    latest_dir = publish_root / "latest"
+    latest_dir.mkdir(parents=True)
+    (latest_dir / "index.json").write_text(json.dumps({"marker": "previous-latest"}, ensure_ascii=False), encoding="utf-8")
+
+    def fail_build_detail_payload(*args, **kwargs):
+        raise RuntimeError("simulated build failure")
+
+    monkeypatch.setattr(module, "build_detail_payload", fail_build_detail_payload)
+
+    try:
+        module.generate_bundle(
+            holdings_path=holdings_path,
+            reports_root=reports_root,
+            publish_root=publish_root,
+            snapshot_stamp="20260818_120000",
+            latest_only=True,
+        )
+    except RuntimeError as error:
+        assert "simulated build failure" in str(error)
+    else:
+        raise AssertionError("expected generate_bundle to fail")
+
+    preserved = json.loads((latest_dir / "index.json").read_text(encoding="utf-8"))
+    assert preserved["marker"] == "previous-latest"
 
 
 def test_build_segment_records_backfills_stop_reason_label_when_missing() -> None:

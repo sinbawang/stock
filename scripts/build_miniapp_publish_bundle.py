@@ -1713,6 +1713,38 @@ def ensure_clean_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+def prepare_staging_dir(path: Path) -> Path:
+    if path.exists():
+        shutil.rmtree(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def finalize_staging_dir(staging_path: Path, target_path: Path) -> None:
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    if target_path.exists():
+        shutil.rmtree(target_path)
+    shutil.move(str(staging_path), str(target_path))
+
+
+def collect_bundle_integrity(bundle_dir: Path) -> dict[str, Any]:
+    stocks_dir = bundle_dir / "stocks"
+    stock_dirs = sorted(item for item in stocks_dir.iterdir() if item.is_dir()) if stocks_dir.exists() else []
+    return {
+        "bundle_dir": str(bundle_dir),
+        "index_present": (bundle_dir / "index.json").exists(),
+        "portfolio_group_present": (bundle_dir / "groups" / "portfolio.json").exists(),
+        "a_share_group_present": (bundle_dir / "groups" / "a_share.json").exists(),
+        "h_share_group_present": (bundle_dir / "groups" / "h_share.json").exists(),
+        "alerts_present": (bundle_dir / "alerts" / "missing_artifacts.json").exists(),
+        "stock_dir_count": len(stock_dirs),
+        "summary_json_count": sum(1 for stock_dir in stock_dirs if (stock_dir / "summary.json").exists()),
+        "detail_json_count": sum(1 for stock_dir in stock_dirs if (stock_dir / "detail.json").exists()),
+        "base_json_count": sum(1 for stock_dir in stock_dirs if (stock_dir / "base.json").exists()),
+    }
+
+
 def generate_bundle(
     holdings_path: Path,
     reports_root: Path,
@@ -1729,76 +1761,91 @@ def generate_bundle(
     stamp = snapshot_stamp or datetime.now().strftime("%Y%m%d_%H%M%S")
     latest_dir = publish_root / "latest"
     snapshot_dir = publish_root / "snapshots" / stamp
+    staging_root = publish_root / ".staging"
     meta_dir = reports_root / "_meta"
     holdings = load_holdings(holdings_path)
     previous_stock_payloads = load_previous_publish_stock_payloads(latest_dir)
     group_payloads = load_group_payloads(meta_dir)
     group_item_map = collect_group_item_map(group_payloads)
 
-    targets = [latest_dir] if latest_only else [latest_dir, snapshot_dir]
-    for target in targets:
-        ensure_clean_dir(target)
+    target_pairs: list[tuple[Path, Path]] = []
+    latest_staging_dir = prepare_staging_dir(staging_root / f"latest_{stamp}")
+    target_pairs.append((latest_staging_dir, latest_dir))
+    if not latest_only:
+        snapshot_staging_dir = prepare_staging_dir(staging_root / f"snapshot_{stamp}")
+        target_pairs.append((snapshot_staging_dir, snapshot_dir))
+
+    staging_targets = [staging for staging, _ in target_pairs]
 
     summary_payloads: list[dict[str, Any]] = []
     missing_alerts: list[dict[str, Any]] = []
     failed_symbol_set = failed_symbols or set()
-    for holding in holdings:
-        stock_dir = reports_root / holding.symbol
-        if not stock_dir.exists():
-            continue
-        missing_alerts.extend(
-            collect_missing_artifact_alerts(
-                holding=holding,
-                stock_dir=stock_dir,
-                expected_tech_timeframes=expected_tech_timeframes,
-                skip_regenerate_context=skip_regenerate_context,
-                skip_gen_fund_context=skip_gen_fund_context,
-                failed_symbols=failed_symbol_set,
+    try:
+        for holding in holdings:
+            stock_dir = reports_root / holding.symbol
+            if not stock_dir.exists():
+                continue
+            missing_alerts.extend(
+                collect_missing_artifact_alerts(
+                    holding=holding,
+                    stock_dir=stock_dir,
+                    expected_tech_timeframes=expected_tech_timeframes,
+                    skip_regenerate_context=skip_regenerate_context,
+                    skip_gen_fund_context=skip_gen_fund_context,
+                    failed_symbols=failed_symbol_set,
+                )
             )
-        )
-        base_source_path = stock_dir / "base.json"
-        summary_payload = build_summary_payload(
-            holding,
-            stock_dir,
-            group_item_map.get(holding.symbol),
-            publish_timeframes=publish_timeframes,
-            include_chart_images=include_chart_images,
-            fallback_summary_payload=(previous_stock_payloads.get(holding.symbol) or {}).get("summary"),
-        )
-        detail_payload, chart_specs = build_detail_payload(
-            holding,
-            stock_dir,
-            group_item_map.get(holding.symbol),
-            publish_timeframes=publish_timeframes,
-            include_chart_images=include_chart_images,
-            fallback_detail_payload=(previous_stock_payloads.get(holding.symbol) or {}).get("detail"),
-        )
-        summary_payloads.append(summary_payload)
-        for target in targets:
-            stock_target_dir = target / "stocks" / holding.symbol
-            copy_optional_json_asset(base_source_path, stock_target_dir / "base.json")
-            write_json(stock_target_dir / "summary.json", summary_payload)
-            write_json(stock_target_dir / "detail.json", detail_payload)
-            copy_chart_assets(chart_specs, stock_target_dir)
+            base_source_path = stock_dir / "base.json"
+            summary_payload = build_summary_payload(
+                holding,
+                stock_dir,
+                group_item_map.get(holding.symbol),
+                publish_timeframes=publish_timeframes,
+                include_chart_images=include_chart_images,
+                fallback_summary_payload=(previous_stock_payloads.get(holding.symbol) or {}).get("summary"),
+            )
+            detail_payload, chart_specs = build_detail_payload(
+                holding,
+                stock_dir,
+                group_item_map.get(holding.symbol),
+                publish_timeframes=publish_timeframes,
+                include_chart_images=include_chart_images,
+                fallback_detail_payload=(previous_stock_payloads.get(holding.symbol) or {}).get("detail"),
+            )
+            summary_payloads.append(summary_payload)
+            for target in staging_targets:
+                stock_target_dir = target / "stocks" / holding.symbol
+                copy_optional_json_asset(base_source_path, stock_target_dir / "base.json")
+                write_json(stock_target_dir / "summary.json", summary_payload)
+                write_json(stock_target_dir / "detail.json", detail_payload)
+                copy_chart_assets(chart_specs, stock_target_dir)
 
-    portfolio_payload = build_portfolio_group(summary_payloads, group_item_map)
-    generated_at = datetime.now().isoformat(timespec="seconds")
-    index_payload = build_index_payload(summary_payloads, generated_at)
-    missing_payload = build_missing_artifacts_payload(
-        alerts=missing_alerts,
-        expected_tech_timeframes=expected_tech_timeframes,
-        skip_regenerate_context=skip_regenerate_context,
-        skip_gen_fund_context=skip_gen_fund_context,
-        failed_symbols=failed_symbol_set,
-    )
-    for target in targets:
-        write_json(target / "index.json", index_payload)
-        if "a_share" in group_payloads:
-            write_json(target / "groups" / "a_share.json", group_payloads["a_share"])
-        if "h_share" in group_payloads:
-            write_json(target / "groups" / "h_share.json", group_payloads["h_share"])
-        write_json(target / "groups" / "portfolio.json", portfolio_payload)
-        write_json(target / "alerts" / "missing_artifacts.json", missing_payload)
+        portfolio_payload = build_portfolio_group(summary_payloads, group_item_map)
+        generated_at = datetime.now().isoformat(timespec="seconds")
+        index_payload = build_index_payload(summary_payloads, generated_at)
+        missing_payload = build_missing_artifacts_payload(
+            alerts=missing_alerts,
+            expected_tech_timeframes=expected_tech_timeframes,
+            skip_regenerate_context=skip_regenerate_context,
+            skip_gen_fund_context=skip_gen_fund_context,
+            failed_symbols=failed_symbol_set,
+        )
+        for target in staging_targets:
+            write_json(target / "index.json", index_payload)
+            if "a_share" in group_payloads:
+                write_json(target / "groups" / "a_share.json", group_payloads["a_share"])
+            if "h_share" in group_payloads:
+                write_json(target / "groups" / "h_share.json", group_payloads["h_share"])
+            write_json(target / "groups" / "portfolio.json", portfolio_payload)
+            write_json(target / "alerts" / "missing_artifacts.json", missing_payload)
+
+        for staging_path, target_path in target_pairs:
+            finalize_staging_dir(staging_path, target_path)
+    except Exception:
+        for staging_path, _ in target_pairs:
+            if staging_path.exists():
+                shutil.rmtree(staging_path, ignore_errors=True)
+        raise
 
     if missing_alerts:
         print(f"WARN missing_artifacts={len(missing_alerts)} affected_symbols={missing_payload['counts']['affected_symbols']}")
@@ -1806,11 +1853,16 @@ def generate_bundle(
             timeframe = f"/{item['timeframe']}" if item.get("timeframe") else ""
             print(f"WARN {item['symbol']}{timeframe} {item['kind']} reason={item['reason']}")
 
+    latest_integrity = collect_bundle_integrity(latest_dir)
+    snapshot_integrity = collect_bundle_integrity(snapshot_dir) if not latest_only else None
+
     return {
         "latest": latest_dir,
         "snapshot": snapshot_dir,
         "missing_artifact_alert_count": len(missing_alerts),
         "missing_artifact_alert_path": latest_dir / "alerts" / "missing_artifacts.json",
+        "bundle_integrity": latest_integrity,
+        "snapshot_bundle_integrity": snapshot_integrity,
     }
 
 

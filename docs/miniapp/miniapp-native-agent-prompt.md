@@ -69,6 +69,13 @@
    - `sections` 是数组，包含 `fundamental`、`technical`、`capital_flow`
    - `charts` 是数组，包含 `60m`、`15m`、`day` 图
 
+状态语义红线：
+
+1. `tags`、`priority`、`action`、`bucket` 是管理层标签，不是 confirmed/pending 机器状态。
+2. `summary.json` 和 `detail.json` 的摘要文案若未显式给出结构状态字段，只能保守展示为观察/待确认。
+3. 不要把 `precision_note`、执行层窗口、类中枢提示渲染成主结论 confirmed。
+4. 若页面需要状态标签，优先使用“观察”“待确认”“辅助提示”这类安全文案，而不是自行发明确认信号。
+
 请按下面的信息架构实现：
 
 一、页面与菜单

@@ -82,6 +82,13 @@
    - `overview`
    - `sections`
 
+状态语义红线：
+
+1. `priority/action/bucket/tags` 只作列表排序和筛选，不得直接映射为 confirmed。
+2. `cards.technical.conclusion`、`overview.summary` 这类摘要文案只能作轻量提示，不得单独升级为确认买卖点。
+3. 若显式结构字段缺失，默认按观察/待确认降级，不得脑补 `confirmed`。
+4. `precision_*` 字段只表示执行层或辅助层信息，不得覆盖高级别主结构结论。
+
 注意：
 
 1. 当前图表真实产物是 `svg`，不是旧口径的 `jpg/png`

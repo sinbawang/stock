@@ -129,6 +129,31 @@ def test_filter_incremental_files_can_skip_stock_meta_and_index_groups(tmp_path:
     ]
 
 
+def test_validate_source_bundle_requires_index_and_portfolio_for_publish_payloads(tmp_path: Path) -> None:
+    stock_dir = tmp_path / "stocks" / "03690"
+    charts_dir = stock_dir / "charts"
+    charts_dir.mkdir(parents=True, exist_ok=True)
+
+    (stock_dir / "summary.json").write_text("{}", encoding="utf-8")
+    (stock_dir / "detail.json").write_text("{}", encoding="utf-8")
+    (charts_dir / "5m.json").write_text("{}", encoding="utf-8")
+
+    files = module.iter_local_files(tmp_path, "miniapp-publish/latest")
+
+    try:
+        module.validate_source_bundle(
+            files,
+            include_stock_meta=True,
+            include_index_groups=True,
+        )
+    except module.CloudBaseUploadError as error:
+        assert "missing required publish entry files" in str(error)
+        assert "index.json" in str(error)
+        assert "groups/portfolio.json" in str(error)
+    else:
+        raise AssertionError("expected validate_source_bundle to fail for incomplete publish bundle")
+
+
 def test_verify_uploaded_files_retries_download_errors(monkeypatch, tmp_path: Path) -> None:
     local_path = tmp_path / "index.json"
     local_path.write_text('{"ok": true}', encoding="utf-8")

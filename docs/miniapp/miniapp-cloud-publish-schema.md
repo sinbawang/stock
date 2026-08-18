@@ -10,6 +10,7 @@
 
 - [../analysis/combined-analysis-output-spec.md](../analysis/combined-analysis-output-spec.md): 当前原始报告落盘格式
 - [../analysis/combined-analysis-service-interface.md](../analysis/combined-analysis-service-interface.md): 当前联合分析公共接口边界
+- [../chanlun/theory-implementation-consumer-diff-matrix.md](../chanlun/theory-implementation-consumer-diff-matrix.md): confirmed/pending/auxiliary 三态总映射
 
 ## 1. 目标与边界
 
@@ -221,6 +222,24 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
 - 每只股票的摘要和详情去哪里读
 - 首页默认该按什么顺序展示
 
+### 5.1 `index.json` 字段状态审计
+
+当前 `index.json` 更偏“发现与导航层”，不是结构确认层。
+
+| 字段 | 当前作用 | 推荐状态解释 | 消费红线 |
+| --- | --- | --- | --- |
+| `generated_at` | 顶层发布时间 | `neutral` | 不得当作单只股票结构更新时间。 |
+| `counts.*` | 首页统计 | `neutral` | 只作数量展示，不携带结构语义。 |
+| `groups.*` | 分组 JSON 跳转路径 | `neutral` | 不得从路径名推断状态等级。 |
+| `stocks[].updated_at` | 单股内容更新时间 | `neutral` | 不代表 confirmed 时间点。 |
+| `stocks[].summary` / `stocks[].detail` / `stocks[].cover_chart` | 资源定位 | `neutral` | 只是路径，不携带确认语义。 |
+| `stocks[].tags` | 列表页轻量标签 | `display_only` | `watch/mixed/P2/等待触发` 只能作列表排序和过滤，不得单独映射为 confirmed。 |
+
+当前结论：
+
+- `index.json` 本身不应产出 confirmed/pending/auxiliary 结论。
+- 首页若要展示状态标签，只能使用轻量展示语义，不能把 `tags` 直接解释为严格结构确认。
+
 ## 6. 列表页摘要协议
 
 建议每只股票至少产出一份 `summary.json`，供：
@@ -290,6 +309,28 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
 - 列表页只放摘要，不放大段原文
 - 关键字段尽量已经是展示友好的文案，不要求小程序再推理
 - `priority/action/bucket` 必须直接可用，避免前端自己再按三轴重新分组
+
+### 6.1 `summary.json` 字段状态审计
+
+当前 `summary.json` 是“列表摘要 + 轻量阅读提示”，不应承担严格结构确认职责。
+
+| 字段 | 当前作用 | 推荐状态解释 | 消费红线 |
+| --- | --- | --- | --- |
+| `priority` | 持仓管理排序 | `display_only` | 不得映射为 confirmed/pending。 |
+| `action` | 组合动作标签 | `display_only` | `等待触发/等待冲突缓解` 只能作管理提示，不等于买卖点确认。 |
+| `bucket` | 三轴分桶 | `display_only` | `watch/mixed/cautious` 是组合视角，不是缠论结构状态机。 |
+| `cards.fundamental.*` | 基本面摘要 | `separate_axis` | 不得和技术面状态混成一个 confirmed 标签。 |
+| `cards.technical.conclusion` | 技术面摘要文案 | `pending_or_confirmed_text` | 不能仅凭一句“偏强，持有为主”就打 confirmed。 |
+| `cards.technical.suggestion` | 技术面建议文案 | `action_text_optional` | 不得反推严格结构结论。 |
+| `cards.technical.precision_note` | 执行层说明 | `auxiliary_or_pending` | 只能解释区间套和执行层，不得覆盖主级别结构。 |
+| `cards.technical.precision_window_display` | 执行层展示块 | `auxiliary_or_pending` | `5M` 执行窗口不得单独升级为主结论 confirmed。 |
+| `cards.capital_flow.*` | 资金面摘要 | `separate_axis` | 不得与缠论结构确认混写为同一状态。 |
+| `comment` 或同类组合摘要文案 | 组合摘要 | `display_only` | 只作扫读，不作 machine-readable 状态。 |
+
+当前结论：
+
+- `summary.json` 适合首页卡片和搜索结果，但最多提供“轻量状态提示”。
+- 真正涉及 confirmed/pending/auxiliary 的解释，必须下钻到 `detail.json` 里的技术面块或其来源字段。
 
 ## 7. 详情页协议
 
@@ -389,6 +430,29 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
 - 不需要解析长文本
 - 不暴露本地路径和脚本内部结构
 
+### 7.1 `detail.json` 字段状态审计
+
+当前 `detail.json` 是最适合承接三态映射的发布层文件，但当前 schema 里仍有一部分字段只是文案摘要，不是显式状态字段。
+
+| 字段 | 当前作用 | 推荐状态解释 | 消费红线 |
+| --- | --- | --- | --- |
+| `headline.priority` / `headline.action` / `headline.bucket` | 详情页顶栏管理信息 | `display_only` | 仍属组合层，不得映射为严格结构 confirmed。 |
+| `overview.summary` | 页面顶部摘要 | `pending_or_confirmed_text` | 文案需结合技术 section 解释，不得单句定级。 |
+| `overview.bullets` | 快速扫读点 | `mixed_textual_state` | 若写到预警，必须保留“待确认/观察”字样。 |
+| `sections[key=fundamental]` | 基本面区块 | `separate_axis` | 不参与缠论状态升级。 |
+| `sections[key=technical].conclusion` | 技术面主摘要 | `pending_or_confirmed_text` | 若底层仍是 pending，不得在这里写成确认买卖点。 |
+| `sections[key=technical].suggestion` | 技术面建议 | `action_text_optional` | 不得覆盖主结构状态。 |
+| `sections[key=technical].precision_note` | 执行层说明 | `auxiliary_or_pending` | 默认按执行层/辅助层处理。 |
+| `sections[key=technical].overview` / `structure` / `signals` | 技术结构解释块 | `mixed_textual_state` | 若没有显式 `structure_state` 等字段，前端不得自行脑补 confirmed。 |
+| `sections[key=capital_flow]` | 资金面区块 | `separate_axis` | 与技术面状态分开展示。 |
+| `charts[*]` | 图表资源 | `neutral_asset` | 图片本身不携带 confirmed 标签；图例需另外区分主辅/pending。 |
+
+推荐页面实现：
+
+- 顶部卡片默认只显示 `display_only` 和 `pending_or_confirmed_text`，不用硬打 confirmed。
+- 若未来把 `structure_state.*`、`same_level_decomposition_mode`、`zs_monitor_alert` 等结构字段透出到 `detail.json`，再按 [../chanlun/theory-implementation-consumer-diff-matrix.md](../chanlun/theory-implementation-consumer-diff-matrix.md) 的 3.4 节做机器判级。
+- 在这些显式字段未透出前，详情页应优先使用“观察/待确认/辅助提示”保守措辞。
+
 ## 8. 组合页协议
 
 当前组合总览的原始 `.txt` 很有价值，但不适合手机端直接展示。
@@ -446,6 +510,32 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
 
 - 直接把 Markdown 表格塞进富文本
 - 让前端去解析 `P2 | 等待触发 | 000651 ...` 这种行文本
+
+### 8.1 `groups/*.json` 字段状态审计
+
+当前 `groups/*.json` 属于组合管理层，不是个股结构确认层。
+
+| 字段 | 当前作用 | 推荐状态解释 | 消费红线 |
+| --- | --- | --- | --- |
+| `counts.*` | 组合分区统计 | `neutral` | 不携带结构确认语义。 |
+| `sections[].title` | 组合分区标题 | `display_only` | `今日动作/观察池/风险池` 是管理桶，不是缠论确认状态。 |
+| `items[].priority` / `action` / `bucket` | 组合卡片标签 | `display_only` | 不得映射为个股 confirmed/pending/auxiliary。 |
+| `items[].technical` | 组合层技术摘要 | `pending_or_confirmed_text` | 只能作扫读摘要，不能替代 `detail.json` 技术块。 |
+| `items[].comment` | 组合层一句话评论 | `display_only` | 不得当作结构结论真源。 |
+| `items[].fundamental` / `capital_flow` | 其他维度摘要 | `separate_axis` | 与技术面状态分开呈现。 |
+
+当前结论：
+
+- 组合页的目标是排序、聚合、提示冲突，不是发结构确认信号。
+- 因此 `groups/*.json` 默认不产出 confirmed 标签；最多产出 watch/pending 风格的管理提示。
+
+## 8.2 当前发布层三态总红线
+
+在小程序发布层，当前统一遵守以下三条：
+
+1. `index.json` 和 `groups/*.json` 默认只有 `display_only` / `neutral` 语义，不承担严格结构确认。
+2. `summary.json` 只提供轻量提示；没有显式结构字段时，不得自行推导 confirmed。
+3. `detail.json` 是未来承接 machine-readable 状态的主落点；在结构字段未完全透出前，一律优先保守展示为观察/待确认/辅助提示。
 
 ## 9. 当前生产层到发布层的映射建议
 

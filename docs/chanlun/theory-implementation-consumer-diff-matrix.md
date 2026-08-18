@@ -79,6 +79,58 @@
 3. 把 pending/观察态写成 confirmed。
 4. 把 divergence 泛化为严格趋势背驰或盘整背驰。
 
+### 3.4 字段级消费映射
+
+这一层回答“具体字段到了 `tech.json`、联合报告、小程序时，应该按 confirmed、pending、auxiliary 的哪一档处理”。
+
+#### 3.4.1 `tech.json` 字段状态矩阵
+
+| 字段 | 当前来源层 | 推荐消费状态 | 当前约束 | 常见误读 | 正确消费方式 |
+| --- | --- | --- | --- | --- | --- |
+| `summary.conclusion` | 文本摘要层 | `pending_or_confirmed_text` | 可稳定读取，但本身不是 machine-readable 确认字段。 | 只看措辞就推断已确认买卖点。 | 必须结合结构字段或状态字段解释，不能单独当 confirmed signal。 |
+| `summary.suggestion` | 文本摘要层 | `action_text_optional` | 可稳定读取，但属于建议文案，不是结构状态。 | 把建议文案当成结构判定结果。 | 只能作阅读提示，不能反推理论确认。 |
+| `analysis_text` | 文本解释层 | `mixed_textual_state` | 当前仍是最广泛存在的解释载体。 | 从自由文本强行解析 confirmed/pending。 | 在结构字段缺失时可作说明来源，但不应单独驱动状态升级。 |
+| `advice_text` | 文本建议层 | `action_text_optional` | 适合展示，不适合做严格结构判断。 | 把操作建议当成严格主结论。 | 仅作建议附文，不能覆盖主结构字段。 |
+| `structure_state.last_completed` | 严格结构建议层 | `confirmed` | 若存在，应表示已完成走势类型。 | 与 `current_ongoing` 同型时误解为“旧走势完全切开”。 | 结合 `relationship.kind` 解读；同型延伸场景只表示“前段已确认片段”。 |
+| `structure_state.current_ongoing` | 严格结构建议层 | `pending` | 若存在，应表达当前进行结构，不代表已完成。 | 把 `candidate_completion` 当 confirmed。 | 一律按 ongoing/观察态处理，直到同级别完成条件闭合。 |
+| `structure_state.relationship` | 解释增强层 | `disambiguation_only` | 只用于解释 last/current 的关系。 | 把 `same_type_extension` 误读为新走势已确认。 | 仅作关系说明，不单独产出信号等级。 |
+| `same_level_decomposition_mode` | 中枢/走势分解层 | `confirmed_or_pending_gate` | `single_confirmed | dual_interpretation_pending`。 | 字段缺失默认当 `single_confirmed`。 | 缺失按 unknown 降级；`dual_interpretation_pending` 时所有高层结论降级为 pending/watch。 |
+| `post_divergence_route` | 背驰后去向层 | `pending_or_confirmed_context` | 只说明去向，不单独说明已确认。 | 看见 `higher_level_reverse_trend` 就直接认定反转确认。 | 只能作为去向候选，仍需级别闭合与结构确认。 |
+| `oscillation_rhythm_state` | 节奏监视层 | `auxiliary` | `balanced | up_bias | down_bias | pending`。 | 用节奏字段代替走势类型确认。 | 只作辅助监视与文案解释。 |
+| `zs_monitor_alert` | 中枢监视层 | `pending_or_auxiliary` | `pre_breakout | pre_breakdown` 只是预警。 | 把预突破/预破位写成 confirmed buy/sell。 | 只能生成 watch/pending 预警，不得直接升级 confirmed。 |
+| `precision_entry.status` | 次级别执行层 | `execution_pending_or_actionable` | 当前值如 `standby | watch | actionable`。 | 把 `actionable` 当高级别 confirmed。 | 仅表示执行层时机状态，必须受高级别主结构约束。 |
+| `precision_entry.nested_from` | 区间套绑定层 | `auxiliary_context` | 解释低级别信号绑定来源。 | 低级别窗口反向覆盖高级别结构。 | 只做来源解释，不改变主级别确认状态。 |
+| `zhongshus` | 标准中枢主口径 | `confirmed_or_pending_main` | 主口径来源。 | 与 `lei_zhongshus` 混写为同一层。 | 对外主结论默认引用它。 |
+| `lei_zhongshus` | 类中枢辅助口径 | `auxiliary` | 只能作辅助，不得单独升级。 | 文案里直接简称“中枢”。 | 明示“类中枢/辅助”，不得单独产出 confirmed signal。 |
+
+#### 3.4.2 报告文本字段映射
+
+| 文本块 | 推荐状态 | 允许用途 | 禁止用途 |
+| --- | --- | --- | --- |
+| `结论：观察/待确认...` | `pending` | 作为风险观察、等待确认提示。 | 改写成确认买卖点标题。 |
+| `结论：出现预警...` | `pending` | 作为中枢监视或背驰后去向预警。 | 省略“待确认”后直接发成 confirmed 信号。 |
+| `说明：类中枢结论仅为辅助...` | `auxiliary` | 保留辅口径存在感和解释价值。 | 让辅助文案覆盖主口径结论。 |
+| `建议：暂按 watch/pending 管理...` | `pending` | 提醒执行层降级。 | 被二次摘要成“建议买入/卖出已确认”。 |
+| `建议：等待离开-首次回抽不回中枢...` | `pending` | 表达 3B/3S 等候条件。 | 在条件未满足时提前升级三类点。 |
+
+#### 3.4.3 小程序展示映射
+
+| 页面位置 | 推荐展示来源 | 推荐状态映射 | 红线 |
+| --- | --- | --- | --- |
+| 首页卡片摘要 | `summary.conclusion` + 更新时间 | `confirmed`、`pending`、`auxiliary` 仅作轻量标签，不展开复杂理论词。 | 缺少结构字段时，不得默认打 `confirmed` 标签。 |
+| 单股详情-技术面概览 | `analysis_text` + `structure_state.*` + `same_level_decomposition_mode` | 先显示主结构状态，再显示观察态/辅助态说明。 | 不得把 `dual_interpretation_pending` 渲染成确定性方向。 |
+| 单股详情-预警卡片 | `zs_monitor_alert`、`post_divergence_route` | 统一按 `watch/pending` 处理。 | 预警卡片标题不得出现 confirmed buy/sell。 |
+| 单股详情-执行层卡片 | `precision_entry` | 仅标执行层 `standby/watch/actionable`，并附“受上级别约束”。 | `actionable` 不得单独升级为主结论 confirmed。 |
+| 图表图例/标注 | `zhongshus`、`lei_zhongshus`、segment 双模式信息 | 主辅分层显示，pending 单独标注。 | 不得把类中枢、pending 段和 confirmed 段混成同一图例。 |
+
+#### 3.4.4 三态统一规则
+
+| 状态 | 可来源字段/信号 | 允许对外文案 | 不允许的升级 |
+| --- | --- | --- | --- |
+| `confirmed` | `structure_state.last_completed`；`same_level_decomposition_mode=single_confirmed`；主口径 `zhongshus` 确认；线段 `theory_confirmed`；必要时实践层 `fallback_confirmed` 明示为工程确认 | `已确认`、`已完成`、`主口径确认` | 不得由 `lei_zhongshus`、`zs_monitor_alert`、`precision_entry.actionable` 单独产生 |
+| `pending` | `structure_state.current_ongoing`；`dual_interpretation_pending`；`zs_monitor_alert`；线段 `pending`；预警文本；未闭合背驰后去向 | `观察`、`待确认`、`预警`、`等待结构闭合` | 不得改写成买卖点已确认、趋势已反转 |
+| `auxiliary` | `lei_zhongshus`；`oscillation_rhythm_state`；`precision_entry.nested_from`；指标解释附注 | `辅助提示`、`辅助观察`、`执行层说明` | 不得覆盖主结构结论，不得独立升级为 confirmed |
+
 ## 4. 当前最重要的差异带
 
 ### 4.1 线段已较强，线段级中枢仍偏弱
@@ -93,6 +145,11 @@
 ### 4.3 下游消费的主要风险是过度确认
 
 - 一旦把辅助口径、工程近似、观察态写成确认结论，会让文档和实现差异被前端文案掩盖。
+
+### 4.4 当前最缺的是字段级统一，而不是抽象原则
+
+- confirmed/pending/auxiliary 的原则已经散见于线段、中枢、联合输出文档。
+- 真正缺口是把这些原则压成字段级映射，供 `tech.json`、报告、小程序复用同一套解释。
 
 ## 5. review 时的使用模板
 
@@ -110,6 +167,7 @@
 2. 再补严格同级别走势类型自动分解。
 3. 然后拆开趋势背驰、盘整背驰、一二三类买卖点的严格确认链。
 4. 最后统一 `tech.json`、报告、小程序的 confirmed/pending/auxiliary 展示语义。
+5. 若新增字段或页面卡片，先回写本页 3.4 的字段级矩阵，再扩展消费端。
 
 ## 7. 关联文档
 

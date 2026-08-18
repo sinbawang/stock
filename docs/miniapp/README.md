@@ -5,6 +5,7 @@
 ## 文件清单
 
 - [miniapp-cloud-publish-schema.md](miniapp-cloud-publish-schema.md): 小程序云存储发布层协议
+- [miniapp-publish-artifact-audit-2026-08.md](miniapp-publish-artifact-audit-2026-08.md): 基于真实 `build/miniapp-publish/latest` 样本的发布包审计
 - [miniapp-native-agent-prompt.md](miniapp-native-agent-prompt.md): 原生页生成提示词
 - [miniapp-native-agent-prompt-compact.md](miniapp-native-agent-prompt-compact.md): 原生页精简提示词
 - [miniapp-service-agent-prompt.md](miniapp-service-agent-prompt.md): 服务侧 agent 提示词

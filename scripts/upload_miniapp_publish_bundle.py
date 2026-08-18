@@ -297,6 +297,35 @@ def filter_incremental_files(
     return selected
 
 
+def validate_source_bundle(
+    files: list[LocalFile],
+    *,
+    include_stock_meta: bool,
+    include_index_groups: bool,
+) -> None:
+    relative_paths = {item.relative_path.replace("\\", "/") for item in files}
+    has_stock_payloads = any(STOCK_META_FILE_RE.match(path) for path in relative_paths)
+    has_chart_payloads = any(CHART_FILE_RE.match(path) for path in relative_paths)
+    has_publish_payloads = has_stock_payloads or has_chart_payloads
+
+    if include_index_groups and has_publish_payloads:
+        missing_index_group_paths = [
+            path
+            for path in ("index.json", "groups/portfolio.json")
+            if path not in relative_paths
+        ]
+        if missing_index_group_paths:
+            raise CloudBaseUploadError(
+                "source bundle is incomplete: missing required publish entry files "
+                + ", ".join(missing_index_group_paths)
+            )
+
+    if include_stock_meta and has_chart_payloads and not has_stock_payloads:
+        raise CloudBaseUploadError(
+            "source bundle is incomplete: chart payloads exist but stocks/*/(base|summary|detail).json are missing"
+        )
+
+
 def build_admin_url(env_id: str, region: str) -> str:
     seq_id = uuid.uuid4().hex
     return f"https://{env_id}.{region}.tcb-api.tencentcloudapi.com/admin?env={env_id}&seqId={seq_id}"
@@ -718,6 +747,11 @@ def main() -> int:
         raise CloudBaseUploadError("Missing --env-id or CLOUDBASE_ENV_ID/TCB_ENV_ID.")
 
     files = iter_local_files(source_dir, args.cloud_prefix)
+    validate_source_bundle(
+        files,
+        include_stock_meta=bool(args.include_stock_meta),
+        include_index_groups=bool(args.include_index_groups),
+    )
     chart_timeframes = {str(value).strip() for value in (args.chart_timeframes or []) if str(value).strip()}
     symbol_selector: set[str] = set()
     for raw_symbol in args.symbols or []:
