@@ -103,6 +103,8 @@
 
 - [chanlun-rule-spec.md](chanlun-rule-spec.md)
 - [chanlun-strict-theory-spec.md](chanlun-strict-theory-spec.md)
+- [trend-divergence-original-review-matrix.md](trend-divergence-original-review-matrix.md)
+- [trend-divergence-visual-example-library.md](trend-divergence-visual-example-library.md)
 - [zhongshu-dual-track-spec.md](zhongshu-dual-track-spec.md)
 - [zhongshu-original-review-matrix.md](zhongshu-original-review-matrix.md)
 - [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md)

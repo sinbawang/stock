@@ -8,39 +8,49 @@
 - [segment-implementation-guide.md](segment-implementation-guide.md)
 - 用途：说明当前工程实现如何识别线段，供人工核图、调试、回归使用。
 
-2. 原文对照与差异分析（背景文档）
+2. 原文复核与示例支撑（理论/评审文档）
+- [segment-original-review-matrix.md](segment-original-review-matrix.md)
+- 用途：逐课对照线段原文定义与当前仓库线段口径，显式标注理论与工程边界。
+- [segment-visual-example-library.md](segment-visual-example-library.md)
+- 用途：沉淀起段、终结、缺口再分辨、三层边界的图文化案例模板。
+
+3. 原文对照与差异分析（背景文档）
 - [../analysis/chanlun-line-segment-original-and-comparison.md](../analysis/chanlun-line-segment-original-and-comparison.md)
 - 用途：沉淀原文提炼、偏差来源、演进记录与理论层跟踪项。
 
-3. 稳定接口契约（消费方入口）
+4. 稳定接口契约（消费方入口）
 - [segment-stop-reason-contract.md](segment-stop-reason-contract.md)
 - 用途：统一 `stop_reason` / `stop_category` 语义，减少下游解释漂移。
 
-4. 变更快照（时点记录）
+5. 变更快照（时点记录）
 - [segment-implementation-changelog.md](segment-implementation-changelog.md)
 - 用途：沉淀阶段性测试结果、完成度估算和演进快照，避免污染主规范正文。
 
-5. 改动安全清单（执行闸门）
+6. 改动安全清单（执行闸门）
 - [segment-safety-checklist.md](segment-safety-checklist.md)
 - 用途：统一提交前/发布前必跑检查，降低“肉眼正确但回归退化”的风险。
 
-6. 双模式接入示例（消费方入口）
+7. 双模式接入示例（消费方入口）
 - [segment-mode-consumer-examples.md](segment-mode-consumer-examples.md)
 - 用途：给下游最小可运行的 theory/practical 对照接入范式。
 
-7. 线段到中枢协议草案
+8. 线段到中枢协议草案
 - [segment-to-zhongshu-mode-protocol-draft.md](segment-to-zhongshu-mode-protocol-draft.md)
 - 用途：约束中枢层如何继承 theory/practical 语义并处理 pending。
 
 ## 推荐阅读顺序
 
 1. 先读 [segment-implementation-guide.md](segment-implementation-guide.md)
-2. 再读 [segment-stop-reason-contract.md](segment-stop-reason-contract.md)
-3. 最后参考 [../analysis/chanlun-line-segment-original-and-comparison.md](../analysis/chanlun-line-segment-original-and-comparison.md)
+2. 再读 [segment-original-review-matrix.md](segment-original-review-matrix.md)
+3. 然后看 [segment-visual-example-library.md](segment-visual-example-library.md)
+4. 再读 [segment-stop-reason-contract.md](segment-stop-reason-contract.md)
+5. 最后参考 [../analysis/chanlun-line-segment-original-and-comparison.md](../analysis/chanlun-line-segment-original-and-comparison.md)
 
 ## 维护规则
 
 - 规则变更：先更新 [segment-implementation-guide.md](segment-implementation-guide.md)
+- 原文对照补充：更新 [segment-original-review-matrix.md](segment-original-review-matrix.md)
+- 图示/案例补充：更新 [segment-visual-example-library.md](segment-visual-example-library.md)
 - 契约变更：同步更新 [segment-stop-reason-contract.md](segment-stop-reason-contract.md)
 - 背景说明：补充到 [../analysis/chanlun-line-segment-original-and-comparison.md](../analysis/chanlun-line-segment-original-and-comparison.md)
 - 时点快照：记录到 [segment-implementation-changelog.md](segment-implementation-changelog.md)

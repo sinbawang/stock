@@ -124,4 +124,6 @@
 
 - [chanlun-rule-spec.md](chanlun-rule-spec.md)
 - [chanlun-strict-theory-spec.md](chanlun-strict-theory-spec.md)
+- [base-structure-original-review-matrix.md](base-structure-original-review-matrix.md)
+- [base-structure-visual-example-library.md](base-structure-visual-example-library.md)
 - [segment-implementation-guide.md](segment-implementation-guide.md)

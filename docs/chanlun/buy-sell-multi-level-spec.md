@@ -109,6 +109,8 @@
 
 - [chanlun-rule-spec.md](chanlun-rule-spec.md)
 - [chanlun-strict-theory-spec.md](chanlun-strict-theory-spec.md)
+- [buy-sell-multi-level-original-review-matrix.md](buy-sell-multi-level-original-review-matrix.md)
+- [buy-sell-multi-level-visual-example-library.md](buy-sell-multi-level-visual-example-library.md)
 - [trend-divergence-spec.md](trend-divergence-spec.md)
 - [zhongshu-dual-track-spec.md](zhongshu-dual-track-spec.md)
 - [chanlun-spec-tasks.md](chanlun-spec-tasks.md)

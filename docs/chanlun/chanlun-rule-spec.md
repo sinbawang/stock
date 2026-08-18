@@ -8,6 +8,7 @@
 
 - 若要看“严格按缠论原文整理的总纲”，先看 [chanlun-strict-theory-spec.md](chanlun-strict-theory-spec.md)。
 - 若要看“严格理论落地到了哪一步、还有哪些任务未完成”，看 [chanlun-spec-tasks.md](chanlun-spec-tasks.md)。
+- 若要看“理论定义、当前实现、下游消费三层差异总览”，看 [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md)。
 - 若要修改某一模块定义，优先改对应模块 spec，不要先改总入口。
 
 ## 1. 主入口定位
@@ -27,6 +28,7 @@
 - [chanlun-rule-spec.md](chanlun-rule-spec.md): 主入口、总原则、模块边界、阅读顺序。
 - [chanlun-strict-theory-spec.md](chanlun-strict-theory-spec.md): 严格理论总纲，只保留高层定义，不承接工程细节。
 - [chanlun-spec-tasks.md](chanlun-spec-tasks.md): 当前完成度、已完成任务、待完成任务。
+- [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md): 跨模块 review 用的三层差异总表。
 
 ### 2.2 基础结构模块
 

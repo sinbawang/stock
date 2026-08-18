@@ -16,6 +16,7 @@
 - 若问题是“缠论严格定义的总纲和红线是什么”，以本文件为准。
 - 若问题是“某个模块的严格定义细则是什么”，以对应模块 spec 为准。
 - 若问题是“当前代码做成了什么样”，以 [chanlun-rule-spec.md](chanlun-rule-spec.md) 和实现代码为准。
+- 若问题是“理论、实现、消费三层差异在哪里”，以 [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md) 为总入口。
 - 若两者不一致，应视为“实现尚未完全收敛到严格口径”，而不是反向改写理论定义。
 
 ## 1. 适用范围
@@ -64,6 +65,7 @@
 
 - [chanlun-rule-spec.md](chanlun-rule-spec.md): 规格主入口与文档结构。
 - [chanlun-spec-tasks.md](chanlun-spec-tasks.md): 完成度、已完成任务、待完成任务。
+- [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md): 理论/实现/消费差异总表。
 
 ### 3.2 基础结构模块
 
