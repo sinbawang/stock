@@ -2,11 +2,20 @@
 
 缠论相关文档索引。
 
+说明：
+
+- [chanlun-spec-tasks.md](chanlun-spec-tasks.md) 只保留跨模块总进度、优先级和 epic 摘要。
+- 具体执行拆解统一下沉到各模块 `*-tasks.md`，避免总表堆积成长段历史说明。
+
 ## 文件清单
 
 - [chanlun-strict-theory-spec.md](chanlun-strict-theory-spec.md): 缠论严格理论规格
 - [chanlun-rule-spec.md](chanlun-rule-spec.md): 缠论规则规格
 - [chanlun-spec-tasks.md](chanlun-spec-tasks.md): 缠论规格与落地任务清单
+- [segment-tasks.md](segment-tasks.md): 线段模块任务拆解（实现 / review / 回归闸门）
+- [zhongshu-tasks.md](zhongshu-tasks.md): 中枢模块任务拆解（标准中枢主链 / 字段分离 / 消费收口）
+- [trend-divergence-tasks.md](trend-divergence-tasks.md): 走势类型与背驰模块任务拆解
+- [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md): 买卖点与多级别联立模块任务拆解
 - [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md): 理论定义 / 当前实现 / 下游消费 总差异总表
 - [base-structure-spec.md](base-structure-spec.md): 基础结构规格（K线/包含/标准K/分型/笔）
 - [base-structure-original-review-matrix.md](base-structure-original-review-matrix.md): 基础结构原文复核矩阵

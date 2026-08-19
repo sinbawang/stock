@@ -7,6 +7,8 @@
 1. 现行实现口径（主文档）
 - [segment-implementation-guide.md](segment-implementation-guide.md)
 - 用途：说明当前工程实现如何识别线段，供人工核图、调试、回归使用。
+- [segment-tasks.md](segment-tasks.md)
+- 用途：把线段相关 epic 拆成可执行 task、验收口径和 blocker，供排期与 review 收口使用。
 
 2. 原文复核与示例支撑（理论/评审文档）
 - [segment-review-entry.md](segment-review-entry.md)
@@ -45,15 +47,17 @@
 ## 推荐阅读顺序
 
 1. 先读 [segment-implementation-guide.md](segment-implementation-guide.md)
-2. 再读 [segment-review-entry.md](segment-review-entry.md)
-3. 再读 [segment-original-review-matrix.md](segment-original-review-matrix.md)
-4. 然后看 [segment-visual-example-library.md](segment-visual-example-library.md)
-5. 再读 [segment-stop-reason-contract.md](segment-stop-reason-contract.md)
-6. 最后参考 [../analysis/chanlun-line-segment-original-and-comparison.md](../analysis/chanlun-line-segment-original-and-comparison.md)
+2. 再读 [segment-tasks.md](segment-tasks.md)
+3. 再读 [segment-review-entry.md](segment-review-entry.md)
+4. 再读 [segment-original-review-matrix.md](segment-original-review-matrix.md)
+5. 然后看 [segment-visual-example-library.md](segment-visual-example-library.md)
+6. 再读 [segment-stop-reason-contract.md](segment-stop-reason-contract.md)
+7. 最后参考 [../analysis/chanlun-line-segment-original-and-comparison.md](../analysis/chanlun-line-segment-original-and-comparison.md)
 
 ## 维护规则
 
 - 规则变更：先更新 [segment-implementation-guide.md](segment-implementation-guide.md)
+- 任务拆解与 blocker：更新 [segment-tasks.md](segment-tasks.md)
 - review 入口与任务收口：更新 [segment-review-entry.md](segment-review-entry.md)
 - 原文对照补充：更新 [segment-original-review-matrix.md](segment-original-review-matrix.md)
 - 图示/案例补充：更新 [segment-visual-example-library.md](segment-visual-example-library.md)

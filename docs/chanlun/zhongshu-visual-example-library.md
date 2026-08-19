@@ -271,8 +271,10 @@ flowchart TD
 2. [sample-case-pack-2026-08-v2.md](sample-case-pack-2026-08-v2.md) 第 1.3 节 `SZ.002594 30m` `pre_breakout` 后回中枢。
 3. [sample-case-pack-2026-08-v2.md](sample-case-pack-2026-08-v2.md) 第 2.1 节 `HK.00388 60m` `pre_breakdown` 后回中枢。
 4. [sample-case-pack-2026-08-v2.md](sample-case-pack-2026-08-v2.md) 第 3.3 节 `SZ.300124 15m` 预警后确认失败。
-5. [data/reports/000651/1m/tech.json](data/reports/000651/1m/tech.json) `SZ.000651 1m` 跌破中枢后反抽下沿失败，已给出 `三卖`。
+5. [data/reports/000651/1m/tech.json](data/reports/000651/1m/tech.json) `SZ.000651 1m` 已真实落盘 `pre_breakdown`，当前仍属 pending/watch。
 6. [data/reports/601328/1m/tech.json](data/reports/601328/1m/tech.json) `SH.601328 1m` 顶背驰迹象已出现，但仍停留在等待离开中枢的预警前态。
+
+当前 `1m` 接线规则：真实 `SZ.000651 1m pre_breakdown` 已经接入第 92 课的主预警锚点，`SH.601328 1m` 退回“预警前态代理”角色；`1m confirmed 3S` 当前则只保留为 regression reference，对应消费输出的 confirmed 对照。后续仍需对称补齐正式 `1m pre_breakout` 样本。
 
 ### 4.1 真实案例 A: HK.01024 60m 向下预警后首次回抽回中枢
 
@@ -320,29 +322,31 @@ flowchart LR
 - 上下方向的规则必须对称处理，不能下破严格、上破宽松。
 - 最终文案可固定为：`出现向上预警，但当前不构成确认三买。`
 
-### 4.3 真实案例 C: SZ.000651 1m 跌破中枢后反抽下沿失败，三卖已确认
+### 4.3 真实案例 C: SZ.000651 1m 向下预警已落盘，但确认链尚未闭合
 
-- 标的/级别/时间窗：SZ.000651 / 1m / 2026-07-30 09:41 ~ 2026-08-14 15:00
-- 当前中枢数量：`2`
-- 最新中枢区间：`40.04 - 40.51`
-- 当前进行结构：`down`
-- 当前信号结论：`三卖`
-- 关键信号说明：`跌破中枢后反抽下沿失败，参考价 40.04，关联中枢 ZS1`
+- 标的/级别/时间窗：SZ.000651 / 1m / 2026-07-31 13:07 ~ 2026-08-18 15:00
+- 当前中枢数量：`1`
+- 最新中枢区间：`40.02 - 40.26`
+- 当前进行结构：`range`
+- 当前信号结论：`出现向下预警，但当前不构成确认三卖`
+- 关键信号说明：`价格贴近最新中枢下沿 40.02，中枢中线 40.14，节奏偏弱`
 
 ```mermaid
 flowchart LR
-  A[跌破中枢 40.04-40.51] --> B[反抽下沿 40.04]
-  B --> C{是否重新回到中枢}
-  C -- 否 --> D[确认链继续闭合]
-  D --> E[confirmed 3S]
+  A[触发 pre_breakdown] --> B[观察首次回抽]
+  B --> C{是否已形成不回中枢的确认链}
+  C -- 否 --> D[维持 watch/pending]
+  D --> E[不得升级 confirmed 3S]
 ```
 
 图上 review 重点：
 
-- 这个 `1m` 案例和 `4.1`、`4.2` 的差别不在“是否先有预警”，而在首次回抽没有重新站回中枢，因此确认链没有被打断。
-- 当前 `tech.json` 已同时给出 `zhongshus`、`structure_state.current_ongoing=down` 与 `三卖` 文本说明，足够作为稳定的 `1m` 消费示例。
-- 这类场景适合作为“预警未确认”和“确认三卖”之间的对照，不应继续压成单纯风险提示。
-- 最终文案可固定为：`跌破中枢后反抽下沿失败，当前按三卖确认处理。`
+- 这个 `1m` 案例现在补上的是真实 `pre_breakdown` 字段链，而不是 confirmed 三卖链。
+- 当前 `tech.json` 已同时给出 `zs_monitor_alert=pre_breakdown`、`same_level_decomposition_mode=dual_interpretation_pending`、`oscillation_rhythm_state=down_bias` 与对应 `advice_text`，足够作为稳定的 `1m` 正式预警未确认示例。
+- 这类场景适合作为 `30m/60m` 预警案例在更低级别的真实补充锚点，也适合作为 proxy negative 的直接上游对照。
+- 最终文案可固定为：`出现向下预警，但当前不构成确认三卖。`
+
+补充说明：`1m confirmed 3S` 当前仍主要由具名 regression reference gate 承担，尚未在本页以新的真实 live 卡片回补。
 
 ### 4.4 真实案例 D: SH.601328 1m 顶背驰迹象已出现，但仍未进入 `pre_breakdown` 确认链
 
@@ -365,6 +369,7 @@ flowchart LR
 
 - 这个 `1m` 样本要解决的不是“有没有顶背驰”，而是顶背驰迹象出现后，消费端能否克制地停在观察态，而不是抢先升格为 `pre_breakdown` 或 `三卖`。
 - 当前仓库里还没有真实落盘的 `1m pre_breakout/pre_breakdown` 字段样本，因此这个案例应被明确标记为“预警前态代理样本”，不能假装它已经是正式 `pre_break*` 案例。
+- 后续只要任一方向的正式 `1m pre_break*` 样本形成稳定落盘与展示链，这张卡片就不应继续占据 `1m` 主预警位置，而应退回“字段未落盘前的前态代理/过渡说明”角色。
 - 它和 `4.1`、`4.2`、`4.3` 共同构成一条更完整的链：预警前态 -> 预警未确认 -> 确认链闭合。
 - 最终文案可固定为：`已有风险迹象，但仍需等待离开中枢后的预警或确认链，不提前升级。`
 

@@ -92,10 +92,10 @@
 当前可直接进入 review 的现成案例：
 
 1. [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 3 节第 39 课节奏示例，现优先使用 `SH.601318 5m down_bias`；`HK.01024 15m balanced` 暂作补充对照。
-2. [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 4 节第 92 课监视器预警与确认链对照示例，现优先使用 `SZ.002594 30m pre_breakout` 与 `SZ.000651 1m confirmed 3S`；`SH.601328 1m` 暂作 `1m` 预警前态代理样本，`HK.01024 60m pre_breakdown` 暂作补充对照。
+2. [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 4 节第 92 课监视器预警与确认链对照示例，现优先使用 `SZ.002594 30m pre_breakout` 与真实 `SZ.000651 1m pre_breakdown`；`SH.601328 1m` 暂作 `1m` 预警前态代理样本，`HK.01024 60m pre_breakdown` 暂作补充对照，`1m confirmed 3S` 当前只保留为回归参考锚点。后续仍需对称补齐正式落盘的 `1m pre_breakout` 样本。
 3. [rhythm-replay-log-2026-08-first-batch.md](rhythm-replay-log-2026-08-first-batch.md) 与 [rhythm-replay-log-2026-08-second-batch.md](rhythm-replay-log-2026-08-second-batch.md)。
 
-当前级别取样原则：尽可能优先使用 `1m / 5m / 30m / day`。本轮已稳定覆盖 `1m / 5m / 30m / day映射`，其中 `HK.02357 1m` 已可作为 watch/pending 场景锚点，`HK.01339 1m` 已可作为 completed_then_new_type 场景锚点，`SH.601328 1m` 已可作为预警前态代理锚点，`SZ.000651 1m` 已可作为 confirmed 场景锚点。
+当前级别取样原则：尽可能优先使用 `1m / 5m / 30m / day`。本轮已稳定覆盖 `1m / 5m / 30m / day映射`，其中 `HK.02357 1m` 已可作为 watch/pending 场景锚点，`HK.01339 1m` 已可作为 completed_then_new_type 场景锚点，真实 `SZ.000651 1m` 已可作为正式 `pre_breakdown` 场景锚点，`SH.601328 1m` 已可作为预警前态代理锚点；`1m confirmed 3S` 当前仍主要由具名 regression reference gate 承担。当前 `1m` 的主要缺口已收敛为正式 `pre_breakout` 样本与 confirmed 真实页内卡片。
 
 ## 4. 下游消费字段映射
 

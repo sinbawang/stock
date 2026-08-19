@@ -13,7 +13,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from chanlun.analysis import analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_signal_point_payloads, build_signal_summary_fields, build_structure_state
+from chanlun.analysis import _build_zs_monitor_state, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_signal_point_payloads, build_signal_summary_fields, build_structure_state
 from chanlun.models import Bi, BiDirection, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
 
@@ -292,6 +292,38 @@ def test_analyze_chanlun_signals_emits_pre_breakdown_when_close_presses_lower_zs
     assert signals["zs_monitor_alert"] == "pre_breakdown"
 
 
+def test_analyze_chanlun_signals_emits_pre_breakout_when_close_presses_upper_zs_edge() -> None:
+    raw_bars = [
+        SimpleNamespace(ts=datetime(2026, 5, 1, 10, 30), close=10.15),
+        SimpleNamespace(ts=datetime(2026, 5, 2, 14, 30), close=10.32),
+    ]
+
+    signals = analyze_chanlun_signals(
+        raw_bars,
+        [],
+        [_zhongshu(1, zs_low=10.0, zs_high=10.4, day=1)],
+        [],
+    )
+
+    assert signals["zs_monitor_alert"] == "pre_breakout"
+
+
+def test_build_zs_monitor_state_keeps_pre_breakout_when_buy3_exists_but_same_level_is_pending() -> None:
+    raw_bars = [
+        SimpleNamespace(ts=datetime(2026, 5, 1, 10, 30), close=10.15),
+        SimpleNamespace(ts=datetime(2026, 5, 2, 14, 30), close=10.32),
+    ]
+    monitor_state = _build_zs_monitor_state(
+        raw_bars,
+        _zhongshu(1, zs_low=10.0, zs_high=10.4, day=1),
+        buy_points=["buy_3"],
+        sell_points=[],
+    )
+
+    assert monitor_state["zs_monitor_bias"] == "strong"
+    assert monitor_state["zs_monitor_alert"] == "pre_breakout"
+
+
 def test_analyze_chanlun_signals_emits_down_bias_when_latest_up_strength_weakens_inside_zs() -> None:
     zhongshus = [_zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)]
     bis = [
@@ -348,6 +380,46 @@ def test_build_signal_summary_fields_includes_zs_monitor_alert() -> None:
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
     assert payload["post_divergence_route"] == "higher_level_range"
     assert payload["oscillation_rhythm_state"] == "down_bias"
+
+
+def test_build_signal_summary_fields_preserves_pre_breakdown_pending_gate() -> None:
+    payload = build_signal_summary_fields(
+        {
+            "buy_points": [],
+            "sell_points": [],
+            "signal_points": [],
+            "signal_catalog": [],
+            "structure_state": {"current_ongoing": {"type": "range"}},
+            "same_level_decomposition_mode": "dual_interpretation_pending",
+            "post_divergence_route": "higher_level_range",
+            "oscillation_rhythm_state": "down_bias",
+            "divergence": {"trend": {"active": False}},
+            "zs_monitor_alert": "pre_breakdown",
+        }
+    )
+
+    assert payload["zs_monitor_alert"] == "pre_breakdown"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+
+
+def test_build_signal_summary_fields_preserves_pre_breakout_pending_gate() -> None:
+    payload = build_signal_summary_fields(
+        {
+            "buy_points": [],
+            "sell_points": [],
+            "signal_points": [],
+            "signal_catalog": [],
+            "structure_state": {"current_ongoing": {"type": "range"}},
+            "same_level_decomposition_mode": "dual_interpretation_pending",
+            "post_divergence_route": "higher_level_reverse_trend",
+            "oscillation_rhythm_state": "balanced",
+            "divergence": {"trend": {"active": False}},
+            "zs_monitor_alert": "pre_breakout",
+        }
+    )
+
+    assert payload["zs_monitor_alert"] == "pre_breakout"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
 
 
 def test_build_signal_summary_fields_preserves_catalog_slots() -> None:
