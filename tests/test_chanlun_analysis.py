@@ -60,6 +60,14 @@ def test_build_structure_state_single_zhongshu_is_range_ongoing() -> None:
     assert state["current_ongoing"]["type"] == "range"
     assert state["current_ongoing"]["zs_count_so_far"] == 1
     assert state["current_structure_status"] == "ongoing_same_type"
+    assert state["consumption_level"] == "pending"
+
+
+def test_build_structure_state_without_same_level_zhongshu_is_auxiliary_only() -> None:
+    state = build_structure_state([], [])
+
+    assert state["current_ongoing"]["confirmation_basis"] == "no_same_level_zhongshu"
+    assert state["consumption_level"] == "auxiliary"
 
 
 def test_build_structure_state_two_non_overlapping_zhongshus_is_up_ongoing() -> None:
@@ -128,7 +136,9 @@ def test_build_structure_state_up_then_overlapping_return_becomes_new_range_ongo
     assert state["current_ongoing"]["zs_count_so_far"] == 1
     assert state["current_ongoing"]["confirmation_basis"] == "single_active_zhongshu"
     assert state["relationship"]["kind"] == "completed_then_new_type_ongoing"
+    assert state["relationship"]["transition_state"] == "candidate_new_type"
     assert state["current_structure_status"] == "candidate_completed_waiting_stability"
+    assert state["consumption_level"] == "pending"
 
 
 def test_analyze_chanlun_signals_marks_single_zhongshu_as_dual_interpretation_pending() -> None:
@@ -222,7 +232,22 @@ def test_build_structure_state_range_then_non_overlapping_up_marks_previous_rang
     assert state["current_ongoing"]["status"] == "ongoing"
     assert state["current_ongoing"]["zs_count_so_far"] == 2
     assert state["relationship"]["kind"] == "completed_then_new_type_ongoing"
+    assert state["relationship"]["transition_state"] == "ongoing_new_type"
     assert state["current_structure_status"] == "completed_then_new_type"
+    assert state["consumption_level"] == "confirmed"
+
+
+def test_build_structure_state_without_completed_predecessor_keeps_transition_state_none() -> None:
+    zhongshus = [
+        _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1),
+        _zhongshu(2, zs_low=11.5, zs_high=12.2, day=4),
+    ]
+
+    state = build_structure_state([], zhongshus)
+
+    assert state["last_completed"] is None
+    assert state["relationship"]["kind"] == "undetermined"
+    assert state["relationship"]["transition_state"] == "none"
 
 
 def test_analyze_chanlun_signals_marks_stable_new_type_as_single_confirmed() -> None:
@@ -236,6 +261,7 @@ def test_analyze_chanlun_signals_marks_stable_new_type_as_single_confirmed() -> 
     signals = analyze_chanlun_signals(raw_bars, [], zhongshus, [])
 
     assert signals["same_level_decomposition_mode"] == "single_confirmed"
+    assert signals["same_level_consumption_level"] == "confirmed"
 
 
 def test_analyze_chanlun_signals_marks_range_divergence_as_higher_level_range() -> None:

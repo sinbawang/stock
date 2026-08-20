@@ -128,6 +128,7 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
             "bucket": "watch",
             "structure_state": {"current_ongoing": {"type": "range"}},
             "same_level_decomposition_mode": "dual_interpretation_pending",
+            "same_level_consumption_level": "pending",
             "post_divergence_route": "higher_level_range",
             "oscillation_rhythm_state": "down_bias",
             "divergence": {"trend": {"active": False}, "range": {"active": False}},
@@ -174,6 +175,7 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     assert payload["structure"]["zhongshus"][0]["render_end_bi_id"] == 12
     assert payload["structure_state"]["current_ongoing"]["type"] == "range"
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["same_level_consumption_level"] == "pending"
     assert payload["post_divergence_route"] == "higher_level_range"
     assert payload["oscillation_rhythm_state"] == "down_bias"
     assert payload["route_level_from"] == "30m"

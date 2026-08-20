@@ -24,10 +24,14 @@ from chanlun.analysis import (
     analyze_chanlun_signals,
     build_signal_explanation_lines,
     build_signal_summary_fields,
+    describe_consumption_level,
     describe_reabsorbed_zhongshu_debug,
     describe_structure_status,
+    describe_transition_state,
     compute_bi_strengths as shared_compute_bi_strengths,
+    format_consumption_level_label,
     format_signal_point_labels,
+    format_transition_state_label,
 )
 from chanlun.models import Bar, Bi, NormalizedBar, Zhongshu
 from chanlun.normalize import normalize_bars
@@ -210,6 +214,14 @@ def analyze_current_state(
     structure_status_note = describe_structure_status(structure_state.get("current_structure_status"))
     if structure_status_note:
         structure_lines.append(f"切分状态：{structure_status_note}")
+    consumption_level = str(signals.get("same_level_consumption_level") or structure_state.get("consumption_level") or "").strip()
+    consumption_level_note = describe_consumption_level(consumption_level)
+    if consumption_level and consumption_level_note:
+        structure_lines.append(f"消费等级：{format_consumption_level_label(consumption_level)}，{consumption_level_note}")
+    transition_state = relationship.get("transition_state")
+    transition_state_note = describe_transition_state(transition_state)
+    if transition_state and transition_state != "none" and transition_state_note:
+        structure_lines.append(f"转场状态：{format_transition_state_label(transition_state)}，{transition_state_note}")
     reabsorption_note = describe_reabsorbed_zhongshu_debug(zhongshus, current_zs)
     if reabsorption_note:
         structure_lines.append(reabsorption_note)
@@ -268,6 +280,7 @@ def _extract_prefixed_value(text: str, prefix: str) -> str | None:
 def write_technical_report_json(
     *,
     path: Path,
+    signals: dict[str, object],
     symbol: str,
     name: str,
     timeframe: str,
@@ -319,6 +332,7 @@ def write_technical_report_json(
             },
             "structure_state": structure_state,
             "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
+            "same_level_consumption_level": signals.get("same_level_consumption_level"),
             "oscillation_rhythm_state": signals.get("oscillation_rhythm_state"),
             "divergence": divergence,
             "zs_monitor_alert": signals.get("zs_monitor_alert", "none"),
@@ -417,6 +431,7 @@ def main() -> None:
     }
     technical_report_path = write_technical_report_json(
         path=paths["base_dir"] / "tech.json",
+        signals=signals,
         symbol=normalized_symbol,
         name=args.name,
         timeframe="60m",

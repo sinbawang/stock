@@ -248,6 +248,7 @@
 - `post_divergence_route`
 - `route_level_from`
 - `route_level_to`
+- `same_level_consumption_level`
 - `same_level_decomposition_mode`
 - `recomposition_applied`
 - `oscillation_rhythm_state`
@@ -259,6 +260,7 @@
 建议值域与语义：
 
 - `post_divergence_route`: `last_zs_extension | higher_level_range | higher_level_reverse_trend`
+- `same_level_consumption_level`: `auxiliary | pending | confirmed`
 - `same_level_decomposition_mode`: `single_confirmed | dual_interpretation_pending`
 - `oscillation_rhythm_state`: `balanced | up_bias | down_bias | pending`
 - `zs_monitor_bias`: `strong | weak | neutral`
@@ -267,9 +269,10 @@
 展示层约束：
 
 - 这组字段属于“结构解释增强”，不能替代现有 `summary` 与 `analysis_text`。
-- 当 `same_level_decomposition_mode=dual_interpretation_pending` 时，文本建议必须降级为“观察/等待确认”，不得给出强触发结论。
+- 新消费者应优先读取 `same_level_consumption_level`：`pending` 时文本建议必须降级为“观察/等待确认”，`confirmed` 时才允许按主结构确认语气输出。
+- `same_level_decomposition_mode` 只保留为旧 payload 兼容 gate；当缺少 `same_level_consumption_level` 且它等于 `dual_interpretation_pending` 时，文本建议仍必须降级为“观察/等待确认”，不得给出强触发结论。
 - 当 `zs_monitor_alert` 非 `none` 时，建议在“观察重点”增加一条预警句，说明是“中枢上沿预突破”还是“中枢下沿预破位”。
-- 若字段缺失，下游必须优雅降级，不得按缺失推断为 `none` 或 `single_confirmed`。
+- 若字段缺失，下游必须优雅降级，不得按缺失推断为 `none`、`single_confirmed` 或 `confirmed`。
 
 ## 4. 文本结构规格
 
@@ -450,7 +453,8 @@
 
 模板使用红线：
 
-- 若 `same_level_decomposition_mode=dual_interpretation_pending`，结论只能使用“观察/待确认”语气。
+- 若 `same_level_consumption_level=pending`，结论只能使用“观察/待确认”语气。
+- 仅当新字段缺失时，才允许从 `same_level_decomposition_mode=dual_interpretation_pending` 回退为同等降级结论。
 - 预警模板不得产出 `confirmed_signal` 字样，除非主口径确认条件已满足。
 
 ## 5. 当前字段边界

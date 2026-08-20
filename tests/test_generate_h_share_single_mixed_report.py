@@ -243,7 +243,14 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
         lambda *args, **kwargs: {
             "bucket": "watch",
             "structure_state": {"current_ongoing": {"type": "range"}},
+            "same_level_decomposition_mode": "dual_interpretation_pending",
+            "same_level_consumption_level": "pending",
+            "post_divergence_route": "higher_level_range",
+            "oscillation_rhythm_state": "down_bias",
             "divergence": {"trend": {"active": False}, "range": {"active": False}},
+            "zs_monitor_alert": "pre_breakdown",
+            "zs_monitor_midline": 5.45,
+            "zs_monitor_bias": "weak",
         },
     )
     monkeypatch.setattr(module, "build_advice", lambda *args, **kwargs: "建议：观察")
@@ -283,7 +290,14 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     assert payload["structure"]["latest_lei_zhongshu"]["core_bi_ids"] == [19, 20, 21]
     assert payload["structure"]["lei_zhongshus"][0]["bi_ids"] == [19, 20, 21, 22]
     assert payload["structure_state"]["current_ongoing"]["type"] == "range"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["same_level_consumption_level"] == "pending"
+    assert payload["post_divergence_route"] == "higher_level_range"
+    assert payload["oscillation_rhythm_state"] == "down_bias"
     assert payload["divergence"]["trend"]["active"] is False
+    assert payload["zs_monitor_alert"] == "pre_breakdown"
+    assert payload["zs_monitor_midline"] == 5.45
+    assert payload["zs_monitor_bias"] == "weak"
     assert data_fetch["actual_source"] == "xueqiu"
     assert data_fetch["source_attempts"][0]["source"] == "xueqiu"
     assert data_fetch["actual_bar_count"] == len(raw_bars)
@@ -299,6 +313,13 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     assert lower_payload["pending_reverse_mode"] == "effective_only"
     assert lower_payload["zhongshu_level"] == "segment"
     assert lower_payload["structure"]["latest_lei_zhongshu"]["core_bi_ids"] == [19, 20, 21]
+    assert lower_payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert lower_payload["same_level_consumption_level"] == "pending"
+    assert lower_payload["post_divergence_route"] == "higher_level_range"
+    assert lower_payload["oscillation_rhythm_state"] == "down_bias"
+    assert lower_payload["zs_monitor_alert"] == "pre_breakdown"
+    assert lower_payload["zs_monitor_midline"] == 5.45
+    assert lower_payload["zs_monitor_bias"] == "weak"
     assert lower_payload["data_fetch"]["requested_min_rows"] == module.LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS
     assert lower_payload["data_fetch"]["fulfilled_min_rows"] is False
     assert lower_payload["data_fetch"]["source_probe_min_rows"] == module.LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS

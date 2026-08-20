@@ -19,9 +19,13 @@ if str(SRC) not in sys.path:
 from chanlun.analysis import (
     build_precision_window_display,
     build_signal_explanation_lines,
+    describe_consumption_level,
+    describe_transition_state,
     describe_structure_status,
     format_signal_point_labels,
+    format_consumption_level_label,
     format_structure_status_label,
+    format_transition_state_label,
 )
 from chanlun.models import Bi, BiDirection
 from chanlun.segment import (
@@ -488,6 +492,7 @@ def build_portfolio_item(summary_payload: dict[str, Any], group_item: dict[str, 
     technical = ((summary_payload.get("cards") or {}).get("technical") or {})
     fundamental = ((summary_payload.get("cards") or {}).get("fundamental") or {})
     capital_flow = ((summary_payload.get("cards") or {}).get("capital_flow") or {})
+    transition_fields = build_transition_summary_fields(technical)
     return {
         "priority": (group_item or {}).get("priority") or summary_payload.get("priority"),
         "action": (group_item or {}).get("action") or summary_payload.get("action"),
@@ -507,6 +512,7 @@ def build_portfolio_item(summary_payload: dict[str, Any], group_item: dict[str, 
         "technical_rating": technical.get("rating"),
         "technical_bias": technical.get("bias"),
         "technical_score_breakdown": technical.get("score_breakdown") or {},
+        **transition_fields,
         "tags": summary_payload.get("tags") or [],
     }
 
@@ -644,6 +650,44 @@ def infer_structure_status(structure_state: dict[str, Any], current: dict[str, A
     return "ongoing_same_type"
 
 
+def infer_transition_state(structure_state: dict[str, Any], current: dict[str, Any], relationship: dict[str, Any]) -> str:
+    explicit = safe_text(relationship.get("transition_state"))
+    if explicit:
+        return explicit
+
+    relationship_kind = safe_text(relationship.get("kind"))
+    if relationship_kind == "same_type_extension":
+        return "same_type_extension"
+    if relationship_kind == "completed_then_new_type_ongoing":
+        current_structure_status = safe_text(structure_state.get("current_structure_status"))
+        if current_structure_status == "candidate_completed_waiting_stability":
+            return "candidate_new_type"
+        if safe_text(current.get("type")):
+            return "ongoing_new_type"
+    return "none"
+
+
+def infer_consumption_level(
+    summary: dict[str, Any],
+    structure_state: dict[str, Any],
+    current: dict[str, Any],
+    relationship: dict[str, Any],
+) -> str:
+    explicit = safe_text(summary.get("same_level_consumption_level")) or safe_text(structure_state.get("consumption_level"))
+    if explicit:
+        return explicit
+
+    current_structure_status = infer_structure_status(structure_state, current, relationship)
+    confirmation_basis = safe_text((structure_state.get("current_ongoing") or {}).get("confirmation_basis"))
+    if confirmation_basis == "no_same_level_zhongshu":
+        return "auxiliary"
+    if current_structure_status == "candidate_completed_waiting_stability":
+        return "pending"
+    if confirmation_basis == "single_active_zhongshu":
+        return "pending"
+    return "confirmed"
+
+
 def normalize_signal_point(signal: dict[str, Any] | None) -> dict[str, Any] | None:
     if not signal:
         return None
@@ -743,6 +787,10 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
     }
     current_structure_status = infer_structure_status(structure_state, current, relationship)
     current_structure_status_note = describe_structure_status(current_structure_status)
+    transition_state = infer_transition_state(structure_state, current, relationship)
+    transition_state_note = describe_transition_state(transition_state)
+    consumption_level = infer_consumption_level(summary, structure_state, current, relationship)
+    consumption_level_note = safe_text(summary.get("same_level_consumption_level_note")) or describe_consumption_level(consumption_level)
     debug_context = build_same_level_debug_context(tech_payload)
     summary_note = "当前同级别走势输出为工程结构摘要，非严格递归分解后的最终理论标签。"
     same_type_extension = (
@@ -767,8 +815,20 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
     note = safe_text(relationship.get("note"))
     if note:
         lines.append(f"走势连接：{note}")
+    if transition_state_note:
+        transition_state_label = format_transition_state_label(transition_state)
+        if transition_state_label and transition_state_label != transition_state:
+            lines.append(f"转场状态：{transition_state_label}，{transition_state_note}")
+        else:
+            lines.append(f"转场状态：{transition_state_note}")
     if current_structure_status_note:
         lines.append(f"切分状态：{current_structure_status_note}")
+    if consumption_level_note:
+        consumption_level_label = safe_text(summary.get("same_level_consumption_level_label")) or format_consumption_level_label(consumption_level)
+        if consumption_level_label and consumption_level_label != consumption_level:
+            lines.append(f"消费等级：{consumption_level_label}，{consumption_level_note}")
+        else:
+            lines.append(f"消费等级：{consumption_level_note}")
     reabsorption_line = build_reabsorption_focus_line(debug_context)
     if reabsorption_line:
         lines.append(reabsorption_line)
@@ -781,6 +841,12 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
         "current_structure_status": current_structure_status,
         "current_structure_status_label": format_structure_status_label(current_structure_status),
         "current_structure_status_note": current_structure_status_note,
+        "same_level_consumption_level": consumption_level,
+        "same_level_consumption_level_label": safe_text(summary.get("same_level_consumption_level_label")) or format_consumption_level_label(consumption_level),
+        "same_level_consumption_level_note": consumption_level_note,
+        "transition_state": transition_state,
+        "transition_state_label": format_transition_state_label(transition_state),
+        "transition_state_note": transition_state_note,
         "debug_context": debug_context,
         "previous": previous,
         "current": current,
@@ -871,6 +937,52 @@ def build_technical_focus_lines(decomposition: dict[str, Any], signal_summary: d
     lines.extend(decomposition.get("lines") or [])
     lines.extend(signal_summary.get("lines") or [])
     return lines
+
+
+def build_transition_overview_bullet(technical: dict[str, Any]) -> str:
+    decomposition = technical.get("same_level_decomposition") or {}
+    transition_state = safe_text(decomposition.get("transition_state")).lower()
+    if not transition_state or transition_state == "none":
+        return ""
+    transition_label = safe_text(decomposition.get("transition_state_label")) or transition_state
+    structure_status_label = safe_text(decomposition.get("current_structure_status_label"))
+    consumption_level_label = safe_text(decomposition.get("same_level_consumption_level_label"))
+    if structure_status_label:
+        if consumption_level_label:
+            return f"结构转场 {transition_label}，切分 {structure_status_label}，消费 {consumption_level_label}"
+        return f"结构转场 {transition_label}，切分 {structure_status_label}"
+    if consumption_level_label:
+        return f"结构转场 {transition_label}，消费 {consumption_level_label}"
+    return f"结构转场 {transition_label}"
+
+
+def build_transition_summary_fields(technical: dict[str, Any]) -> dict[str, Any]:
+    decomposition = technical.get("same_level_decomposition") or {}
+    transition_state = safe_text(decomposition.get("transition_state")).lower()
+    consumption_level = safe_text(decomposition.get("same_level_consumption_level")).lower()
+    consumption_level_label = safe_text(decomposition.get("same_level_consumption_level_label")) or consumption_level
+    if not transition_state or transition_state == "none":
+        return {
+            "technical_transition_state": None,
+            "technical_transition_label": None,
+            "technical_transition_summary": None,
+            "technical_consumption_level": consumption_level or None,
+            "technical_consumption_label": consumption_level_label or None,
+        }
+    transition_label = safe_text(decomposition.get("transition_state_label")) or transition_state
+    structure_status_label = safe_text(decomposition.get("current_structure_status_label"))
+    summary = f"结构转场 {transition_label}"
+    if structure_status_label:
+        summary = f"{summary}，切分 {structure_status_label}"
+    if consumption_level_label:
+        summary = f"{summary}，消费 {consumption_level_label}"
+    return {
+        "technical_transition_state": transition_state,
+        "technical_transition_label": transition_label,
+        "technical_transition_summary": summary,
+        "technical_consumption_level": consumption_level or None,
+        "technical_consumption_label": consumption_level_label or None,
+    }
 
 
 def build_zhongshu_level_note(tech_payload: dict[str, Any]) -> str:
@@ -1711,8 +1823,11 @@ def build_detail_payload(
     overview_bullets = [
         f"基本面 {safe_text(fundamental.get('score'), 'missing')}/{safe_text(fundamental.get('rating'), 'missing')}",
         f"{technical_label} 技术面 {safe_text(technical.get('conclusion'), 'missing')}",
-        f"资金面 {safe_text(capital_flow.get('score'), 'missing')}/{safe_text(capital_flow.get('rating'), 'missing')}",
     ]
+    transition_overview_bullet = build_transition_overview_bullet(technical)
+    if transition_overview_bullet:
+        overview_bullets.append(transition_overview_bullet)
+    overview_bullets.append(f"资金面 {safe_text(capital_flow.get('score'), 'missing')}/{safe_text(capital_flow.get('rating'), 'missing')}")
     updated_at = max(
         safe_text(base_payload.get("generated_at")),
         safe_text(fund_payload.get("generated_at")),
@@ -1816,6 +1931,7 @@ def build_index_payload(summary_payloads: list[dict[str, Any]], generated_at: st
                 "technical_score": ((item.get("cards") or {}).get("technical") or {}).get("score"),
                 "technical_rating": ((item.get("cards") or {}).get("technical") or {}).get("rating"),
                 "technical_bias": ((item.get("cards") or {}).get("technical") or {}).get("bias"),
+                **build_transition_summary_fields(((item.get("cards") or {}).get("technical") or {})),
                 "tags": item.get("tags", []),
             }
             for item in ordered

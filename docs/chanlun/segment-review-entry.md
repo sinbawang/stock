@@ -127,7 +127,7 @@
 | 消费位置 | 关键字段/对象 | 正确口径 | 红线 |
 | --- | --- | --- | --- |
 | `tech.json` 结构摘要 | `segment_tail_interpretations` | 有 `pending_confirmation` 时统一按待确认解释 | 不得仅凭结论文案升级为 confirmed |
-| `tech.json` 同级别分解 | `same_level_decomposition_mode` | `dual_interpretation_pending` 时高层结构统一降级 | 不得默认当 `single_confirmed` |
+| `tech.json` 同级别消费等级 | `same_level_consumption_level` | `pending` 时高层结构统一降级；旧 payload 缺字段时再回退到 `same_level_decomposition_mode` | 不得默认当 `confirmed`，也不得把 `single_confirmed` 单独当成主确认依据 |
 | 报告技术要点 | `technical_focus_lines` | 允许写“候选完成待确认”“边界仍待右侧确认” | 不得压缩成“线段已完成” |
 | 小程序详情技术卡片 | `pending` / `confirmed` 标签 | 先展示主结构状态，再展示观察态说明 | 不得把 pending 段和 confirmed 段渲染成同一颜色/同一图例 |
 | 图表标注 | theory/practical 双模式段信息 | 主辅、确认/待确认分层显示 | 不得隐藏模式差异后只留单一结论 |

@@ -79,6 +79,7 @@
 - `post_divergence_route`
 - `route_level_from`
 - `route_level_to`
+- `same_level_consumption_level`
 - `same_level_decomposition_mode`
 - `recomposition_applied`
 - `oscillation_rhythm_state`
@@ -90,6 +91,7 @@
 建议值域（与主规范对齐）：
 
 - `post_divergence_route`: `last_zs_extension | higher_level_range | higher_level_reverse_trend`
+- `same_level_consumption_level`: `auxiliary | pending | confirmed`
 - `same_level_decomposition_mode`: `single_confirmed | dual_interpretation_pending`
 - `oscillation_rhythm_state`: `balanced | up_bias | down_bias | pending`
 - `zs_monitor_bias`: `strong | weak | neutral`
@@ -105,7 +107,7 @@
 | 冲突场景 | 主结论来源 | 辅助结论处理 | 对外输出要求 |
 | --- | --- | --- | --- |
 | `zhongshus` 与 `lei_zhongshus` 对去向结论不一致 | `zhongshus` | `lei_zhongshus` 降级为辅助提示 | 必须输出“中枢主口径优先” |
-| 主口径 `same_level_decomposition_mode=dual_interpretation_pending` | `zhongshus` | 辅助口径不得升级为确认买卖点 | 建议语气降级为“观察/等待确认” |
+| 主口径 `same_level_consumption_level=pending` | `zhongshus` | 辅助口径不得升级为确认买卖点 | 建议语气降级为“观察/等待确认”；旧 payload 缺字段时才回退到 `same_level_decomposition_mode=dual_interpretation_pending` |
 | 主口径 `zs_monitor_alert=none`，辅口径出现预警 | `zhongshus` | 可记录辅助预警但不升格主风险 | 输出“类中枢提示，未触发主预警” |
 | 主口径有 `pre_breakout/pre_breakdown` 预警，辅口径无预警 | `zhongshus` | 辅口径缺失不抵消主预警 | 必须保留主预警并提示待确认 |
 
@@ -113,5 +115,5 @@
 
 - 一二三类买卖点的 `confirmed_signal` 只能由 `zhongshus` 路径产生。
 - `lei_zhongshus` 只能产出 `auxiliary_signal`，不得单独把状态提升为 `confirmed_signal`。
-- 当 `same_level_decomposition_mode=dual_interpretation_pending` 时，无论主辅是否同向，都只能输出 `pending_signal`。
+- 当 `same_level_consumption_level=pending` 时，无论主辅是否同向，都只能输出 `pending_signal`；仅在缺少该字段时才回退到 `same_level_decomposition_mode=dual_interpretation_pending`。
 - 指标信号（MACD/均线/量能）只可作为解释附注，不得覆盖以上主辅判定链路。

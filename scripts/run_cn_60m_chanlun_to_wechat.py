@@ -268,6 +268,7 @@ def _extract_prefixed_value(text: str, prefix: str) -> str | None:
 def write_technical_report_json(
     *,
     path: Path,
+    signals: dict[str, object],
     symbol: str,
     name: str,
     timeframe: str,
@@ -319,6 +320,7 @@ def write_technical_report_json(
             },
             "structure_state": structure_state,
             "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
+            "same_level_consumption_level": signals.get("same_level_consumption_level"),
             "oscillation_rhythm_state": signals.get("oscillation_rhythm_state"),
             "divergence": divergence,
             "zs_monitor_alert": signals.get("zs_monitor_alert", "none"),
@@ -417,6 +419,7 @@ def main() -> None:
     }
     technical_report_path = write_technical_report_json(
         path=paths["base_dir"] / "tech.json",
+        signals=signals,
         symbol=normalized_symbol,
         name=args.name,
         timeframe="60m",

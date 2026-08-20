@@ -81,6 +81,7 @@
 
 ```json
 {
+  "same_level_consumption_level": "pending",
   "same_level_decomposition_mode": "dual_interpretation_pending",
   "post_divergence_route": "higher_level_range",
   "route_level_from": "30m",
@@ -94,7 +95,8 @@
 消费要求：
 
 - `post_divergence_route` 只说明当前最强去向候选，不说明结构已完成。
-- 若 `same_level_decomposition_mode=dual_interpretation_pending`，则结论只能按 pending/watch 消费。
+- 新消费者优先读取 `same_level_consumption_level`；若它等于 `pending`，则结论只能按 pending/watch 消费。
+- `same_level_decomposition_mode=dual_interpretation_pending` 只作为旧 payload 缺少新字段时的兼容回退。
 - 若主口径与类中枢冲突，主结论仍应优先引用 `zhongshus`。
 
 报告/小程序允许文案：
@@ -242,7 +244,7 @@
 
 | 展示位 | 推荐写法 | 绝对红线 |
 | --- | --- | --- |
-| `tech.json` | `post_divergence_route=higher_level_range`，`route_level_from=30m`，`route_level_to=day`，若 `same_level_decomposition_mode=dual_interpretation_pending` 则摘要保留“观察期” | 不得只因去向字段存在就补成 `confirmed_reverse` 一类状态 |
+| `tech.json` | `post_divergence_route=higher_level_range`，`route_level_from=30m`，`route_level_to=day`，若 `same_level_consumption_level=pending` 则摘要保留“观察期”；旧 payload 缺字段时再回退到 `same_level_decomposition_mode=dual_interpretation_pending` | 不得只因去向字段存在就补成 `confirmed_reverse` 一类状态 |
 | 报告 | `背驰后进入更大级别盘整观察期，当前等待日线级别闭合。` | 不得写成 `日线反转已确认` |
 | 小程序/图表 | 标签用 `pending/watch`；图例仍显示中枢主口径，必要时补 `待级别闭合` 副标签 | 不得使用 `confirmed`、`反转成立` 之类强确认标签 |
 

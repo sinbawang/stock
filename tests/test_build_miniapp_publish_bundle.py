@@ -204,7 +204,11 @@ def test_generate_bundle_writes_index_groups_and_stock_payloads(tmp_path: Path) 
                                 "note": "上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。",
                             },
                             "current_structure_status": "candidate_completed_waiting_stability",
+                            "consumption_level": "pending",
                         },
+                        "same_level_consumption_level": "pending",
+                        "same_level_consumption_level_label": "待确认消费",
+                        "same_level_consumption_level_note": "当前已有结构线索，但还不能直接升级为同级别强确认结论。",
                         "precision_entry": {
                             "operation_level": "5M",
                             "timeframe": "5m",
@@ -308,6 +312,11 @@ Generated at: 2026-05-30T20:05:52
     assert index_payload["stocks"][0]["technical_score"] == 78
     assert index_payload["stocks"][0]["technical_rating"] == "B"
     assert index_payload["stocks"][0]["technical_bias"] == "偏强"
+    assert index_payload["stocks"][0]["technical_transition_state"] == "candidate_new_type"
+    assert index_payload["stocks"][0]["technical_transition_label"] == "新走势候选"
+    assert index_payload["stocks"][0]["technical_transition_summary"] == "结构转场 新走势候选，切分 候选完成待确认，消费 待确认消费"
+    assert index_payload["stocks"][0]["technical_consumption_level"] == "pending"
+    assert index_payload["stocks"][0]["technical_consumption_label"] == "待确认消费"
 
     summary_payload = json.loads((latest_dir / "stocks" / "000651" / "summary.json").read_text(encoding="utf-8"))
     assert summary_payload["priority"] == "P2"
@@ -339,19 +348,26 @@ Generated at: 2026-05-30T20:05:52
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["current_structure_status"] == "candidate_completed_waiting_stability"
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["current_structure_status_label"] == "候选完成待确认"
     assert "边界仍待右侧结构确认稳定" in summary_payload["cards"]["technical"]["same_level_decomposition"]["current_structure_status_note"]
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["same_level_consumption_level"] == "pending"
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["same_level_consumption_level_label"] == "待确认消费"
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["same_level_consumption_level_note"] == "当前已有结构线索，但还不能直接升级为同级别强确认结论。"
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["debug_context"]["auto_reabsorption_detected"] is True
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["debug_context"]["latest_zhongshu"]["zs_id"] == 3
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["debug_context"]["reabsorbed_predecessor"]["zs_id"] == 2
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["debug_context"]["reabsorbed_predecessor"]["superseded_by_zs_id"] == 3
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["previous"]["type_label"] == "上涨"
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["current"]["type_label"] == "下跌"
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["transition_state"] == "candidate_new_type"
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["transition_state_label"] == "新走势候选"
     assert summary_payload["cards"]["technical"]["latest_signal_summary"]["latest_buy"]["label"] == "二买"
     assert summary_payload["cards"]["technical"]["latest_signal_summary"]["latest_sell"]["label"] == "三卖"
     assert summary_payload["cards"]["technical"]["technical_focus_lines"] == [
         "上个已完成走势：上涨 2026-04-01T10:30:00 -> 2026-05-10T10:30:00",
         "当前进行走势：下跌 自 2026-05-15T10:30:00 起，最新 2026-05-29T10:30:00",
         "走势连接：上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。",
+        "转场状态：新走势候选，前段走势已完成，但当前新走势仍处候选待确认阶段。",
         "切分状态：前段走势已具备完成候选，但边界仍待右侧结构确认稳定。",
+        "消费等级：待确认消费，当前已有结构线索，但还不能直接升级为同级别强确认结论。",
         "重写说明：前一中枢 ZS2 的走出笔 29 被当前中枢 ZS3 复用为进入笔 29，当前按更大级别扩展吸收处理。",
         "口径说明：当前同级别走势输出为工程结构摘要，非严格递归分解后的最终理论标签。",
         "最近买点：二买 2026-05-29T10:30:00，价格 10.25",
@@ -375,6 +391,8 @@ Generated at: 2026-05-30T20:05:52
     assert detail_payload["sections"][1]["rating"] == "B"
     assert detail_payload["sections"][1]["bias"] == "偏强"
     assert detail_payload["overview"]["bullets"][1].startswith("30M 技术面")
+    assert detail_payload["overview"]["bullets"][2] == "结构转场 新走势候选，切分 候选完成待确认，消费 待确认消费"
+    assert detail_payload["overview"]["bullets"][3].startswith("资金面 ")
     assert detail_payload["sections"][1]["precision_entry"]["timeframe"] == "5m"
     assert detail_payload["sections"][1]["precision_window_basis_label"] == "中枢到锚点窗口"
     assert detail_payload["sections"][1]["precision_window_basis_description"] == "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。"
@@ -388,16 +406,21 @@ Generated at: 2026-05-30T20:05:52
     assert detail_payload["sections"][1]["same_level_decomposition"]["summary_note"].startswith("当前同级别走势输出为工程结构摘要")
     assert detail_payload["sections"][1]["same_level_decomposition"]["current_structure_status"] == "candidate_completed_waiting_stability"
     assert detail_payload["sections"][1]["same_level_decomposition"]["current_structure_status_label"] == "候选完成待确认"
+    assert detail_payload["sections"][1]["same_level_decomposition"]["same_level_consumption_level"] == "pending"
+    assert detail_payload["sections"][1]["same_level_decomposition"]["same_level_consumption_level_label"] == "待确认消费"
     assert detail_payload["sections"][1]["same_level_decomposition"]["debug_context"]["auto_reabsorption_detected"] is True
     assert detail_payload["sections"][1]["same_level_decomposition"]["debug_context"]["reabsorbed_predecessor"]["zs_id"] == 2
     assert detail_payload["sections"][1]["same_level_decomposition"]["previous"]["type_label"] == "上涨"
     assert detail_payload["sections"][1]["same_level_decomposition"]["current"]["type_label"] == "下跌"
+    assert detail_payload["sections"][1]["same_level_decomposition"]["transition_state"] == "candidate_new_type"
+    assert detail_payload["sections"][1]["same_level_decomposition"]["transition_state_label"] == "新走势候选"
     assert detail_payload["sections"][1]["latest_signal_summary"]["latest_overall"]["label"] == "二买"
     assert detail_payload["sections"][1]["technical_focus_lines"][0].startswith("上个已完成走势：上涨")
     assert any("重写说明：前一中枢 ZS2 的走出笔 29 被当前中枢 ZS3 复用为进入笔 29" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert detail_payload["sections"][1]["segment_tail_interpretations"]
     assert detail_payload["sections"][1]["segment_tail_interpretations"][-1]["kind"] == "pending_confirmation"
     assert detail_payload["sections"][1]["segment_tail_interpretations"][-1]["is_reclaimed"] is False
+    assert any("转场状态：新走势候选，前段走势已完成，但当前新走势仍处候选待确认阶段。" == line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert any("候选完成待确认" in line or "边界仍待右侧结构确认稳定" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert any("工程结构摘要" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert any("停驻原因：" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
@@ -411,6 +434,11 @@ Generated at: 2026-05-30T20:05:52
     assert portfolio_group["sections"][0]["items"][0]["technical_score"] == 78
     assert portfolio_group["sections"][0]["items"][0]["technical_rating"] == "B"
     assert portfolio_group["sections"][0]["items"][0]["technical_bias"] == "偏强"
+    assert portfolio_group["sections"][0]["items"][0]["technical_transition_state"] == "candidate_new_type"
+    assert portfolio_group["sections"][0]["items"][0]["technical_transition_label"] == "新走势候选"
+    assert portfolio_group["sections"][0]["items"][0]["technical_transition_summary"] == "结构转场 新走势候选，切分 候选完成待确认，消费 待确认消费"
+    assert portfolio_group["sections"][0]["items"][0]["technical_consumption_level"] == "pending"
+    assert portfolio_group["sections"][0]["items"][0]["technical_consumption_label"] == "待确认消费"
 
     assert outputs["bundle_integrity"]["index_present"] is True
     assert outputs["bundle_integrity"]["portfolio_group_present"] is True
@@ -542,7 +570,46 @@ def test_build_same_level_decomposition_labels_same_type_extension_as_confirmed_
 
     assert decomposition["previous"]["type_label"] == "下跌"
     assert decomposition["current"]["type_label"] == "下跌"
+    assert decomposition["transition_state"] == "same_type_extension"
+    assert decomposition["transition_state_label"] == "同型延伸"
     assert decomposition["lines"][0].startswith("前段已确认同型片段：下跌")
+
+
+def test_build_same_level_decomposition_exposes_candidate_new_type_transition_state() -> None:
+    decomposition = module.build_same_level_decomposition(
+        {
+            "summary": {
+                "structure_state": {
+                    "last_completed": {
+                        "type": "up",
+                        "status": "completed",
+                        "start_ts": "2026-05-01T10:30:00",
+                        "end_ts": "2026-05-10T10:30:00",
+                        "zs_count": 2,
+                    },
+                    "current_ongoing": {
+                        "type": "down",
+                        "status": "ongoing",
+                        "start_ts": "2026-05-15T10:30:00",
+                        "latest_ts": "2026-05-29T10:30:00",
+                        "zs_count_so_far": 1,
+                        "confirmation_basis": "single_active_zhongshu",
+                    },
+                    "relationship": {
+                        "kind": "completed_then_new_type_ongoing",
+                        "transition_state": "candidate_new_type",
+                        "note": "上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。",
+                    },
+                    "current_structure_status": "candidate_completed_waiting_stability",
+                }
+            }
+        }
+    )
+
+    assert decomposition["transition_state"] == "candidate_new_type"
+    assert decomposition["transition_state_label"] == "新走势候选"
+    assert "当前新走势仍处候选待确认阶段" in decomposition["transition_state_note"]
+    assert any("转场状态：新走势候选，前段走势已完成，但当前新走势仍处候选待确认阶段。" == line for line in decomposition["lines"])
 
 
 def test_build_latest_signal_summary_includes_pending_zs_monitor_line() -> None:
@@ -655,19 +722,25 @@ def test_build_summary_and_detail_payload_preserve_30m_pre_breakdown_publish_anc
 
     assert technical_card["conclusion"] == "出现向下预警，但当前不构成确认三卖。"
     assert technical_card["suggestion"] == "继续观察首次回抽是否回中枢。"
+    assert technical_card["same_level_decomposition"]["same_level_consumption_level"] == "pending"
+    assert technical_card["same_level_decomposition"]["same_level_consumption_level_label"] == "待确认消费"
     assert technical_card["same_level_decomposition"]["current"]["type_label"] == "盘整"
     assert technical_card["oscillation_rhythm_state"] == "down_bias"
     assert technical_card["post_divergence_route"] == "higher_level_range"
     assert technical_card["route_level_from"] == "30m"
     assert technical_card["route_level_to"] == "day"
+    assert any("消费等级：待确认消费，当前已有结构线索，但还不能直接升级为同级别强确认结论。" in line for line in technical_card["technical_focus_lines"])
     assert any("中枢预警：向下预警，当前不构成确认三卖（中线 10.45，节奏偏弱）" in line for line in technical_card["technical_focus_lines"])
     assert any("去向候选：更大级别盘整（30m -> day），当前只按观察态处理" in line for line in technical_card["technical_focus_lines"])
     assert any("节奏监视：节奏偏弱，当前只作辅助观察" in line for line in technical_card["technical_focus_lines"])
     assert technical_section["conclusion"] == "出现向下预警，但当前不构成确认三卖。"
+    assert technical_section["same_level_decomposition"]["same_level_consumption_level"] == "pending"
+    assert technical_section["same_level_decomposition"]["same_level_consumption_level_label"] == "待确认消费"
     assert technical_section["oscillation_rhythm_state"] == "down_bias"
     assert technical_section["post_divergence_route"] == "higher_level_range"
     assert technical_section["route_level_from"] == "30m"
     assert technical_section["route_level_to"] == "day"
+    assert any("消费等级：待确认消费，当前已有结构线索，但还不能直接升级为同级别强确认结论。" in line for line in technical_section["technical_focus_lines"])
     assert any("中枢预警：向下预警，当前不构成确认三卖（中线 10.45，节奏偏弱）" in line for line in technical_section["technical_focus_lines"])
     assert any("去向候选：更大级别盘整（30m -> day），当前只按观察态处理" in line for line in technical_section["technical_focus_lines"])
     assert any("节奏监视：节奏偏弱，当前只作辅助观察" in line for line in technical_section["technical_focus_lines"])
@@ -764,19 +837,25 @@ def test_build_summary_and_detail_payload_preserve_30m_pre_breakout_publish_anch
 
     assert technical_card["conclusion"] == "出现向上预警，但当前不构成确认三买。"
     assert technical_card["suggestion"] == "继续观察首次回试是否回中枢。"
+    assert technical_card["same_level_decomposition"]["same_level_consumption_level"] == "pending"
+    assert technical_card["same_level_decomposition"]["same_level_consumption_level_label"] == "待确认消费"
     assert technical_card["same_level_decomposition"]["current"]["type_label"] == "盘整"
     assert technical_card["oscillation_rhythm_state"] == "balanced"
     assert technical_card["post_divergence_route"] == "higher_level_reverse_trend"
     assert technical_card["route_level_from"] == "30m"
     assert technical_card["route_level_to"] == "day"
+    assert any("消费等级：待确认消费，当前已有结构线索，但还不能直接升级为同级别强确认结论。" in line for line in technical_card["technical_focus_lines"])
     assert any("中枢预警：向上预警，当前不构成确认三买（中线 18.25，节奏偏强）" in line for line in technical_card["technical_focus_lines"])
     assert any("去向候选：更大级别反趋势（30m -> day），当前只按观察态处理" in line for line in technical_card["technical_focus_lines"])
     assert any("节奏监视：节奏平衡，当前只作辅助观察" in line for line in technical_card["technical_focus_lines"])
     assert technical_section["conclusion"] == "出现向上预警，但当前不构成确认三买。"
+    assert technical_section["same_level_decomposition"]["same_level_consumption_level"] == "pending"
+    assert technical_section["same_level_decomposition"]["same_level_consumption_level_label"] == "待确认消费"
     assert technical_section["oscillation_rhythm_state"] == "balanced"
     assert technical_section["post_divergence_route"] == "higher_level_reverse_trend"
     assert technical_section["route_level_from"] == "30m"
     assert technical_section["route_level_to"] == "day"
+    assert any("消费等级：待确认消费，当前已有结构线索，但还不能直接升级为同级别强确认结论。" in line for line in technical_section["technical_focus_lines"])
     assert any("中枢预警：向上预警，当前不构成确认三买（中线 18.25，节奏偏强）" in line for line in technical_section["technical_focus_lines"])
     assert any("去向候选：更大级别反趋势（30m -> day），当前只按观察态处理" in line for line in technical_section["technical_focus_lines"])
     assert any("节奏监视：节奏平衡，当前只作辅助观察" in line for line in technical_section["technical_focus_lines"])

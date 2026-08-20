@@ -161,6 +161,7 @@ def test_build_advice_downgrades_buy_signal_when_same_level_decomposition_is_pen
         "sell_points": [],
         "top_divergence": False,
         "bottom_divergence": False,
+        "same_level_consumption_level": "pending",
         "same_level_decomposition_mode": "dual_interpretation_pending",
         "signal_points": [
             {
@@ -177,9 +178,34 @@ def test_build_advice_downgrades_buy_signal_when_same_level_decomposition_is_pen
     text = build_advice("示例标的", "60M", raw_bars, signals)
 
     assert "结论：观察，等待确认。" in text
-    assert "已出现 二买，但同级别分解仍处待确认状态，当前不能直接上升为已确认买点。" in text
-    assert "dual_interpretation_pending" in text
+    assert "已出现 二买，但当前同级别结构仍处待确认消费，不能直接上升为已确认买点。" in text
+    assert "消费说明：当前同级别结构处于 待确认消费，当前已有结构线索，但还不能直接升级为同级别强确认结论。" in text
     assert "结论：偏多，允许轻仓试错。" not in text
+
+
+def test_build_advice_explains_candidate_new_type_transition_state() -> None:
+    signals = {
+        "current_zs": _sample_zhongshu(),
+        "latest_confirmed_up": None,
+        "latest_down": None,
+        "buy_points": [],
+        "sell_points": [],
+        "top_divergence": False,
+        "bottom_divergence": False,
+        "same_level_decomposition_mode": "dual_interpretation_pending",
+        "structure_state": {
+            "relationship": {
+                "kind": "completed_then_new_type_ongoing",
+                "transition_state": "candidate_new_type",
+            }
+        },
+    }
+    raw_bars = [SimpleNamespace(close=10.5)]
+
+    text = build_advice("示例标的", "60M", raw_bars, signals)
+
+    assert "消费说明：当前同级别结构处于 待确认消费，当前已有结构线索，但还不能直接升级为同级别强确认结论。" in text
+    assert "转场说明：新走势候选，前段走势已完成，但当前新走势仍处候选待确认阶段。" in text
 
 
 def test_analyze_current_state_mentions_core_and_extended_bis(monkeypatch) -> None:
@@ -224,6 +250,73 @@ def test_analyze_current_state_includes_cut_status_text(monkeypatch) -> None:
     text = cn_report.analyze_current_state("示例标的", raw_bars, bis, [_sample_zhongshu(13)], [])
 
     assert "切分状态：前段走势已具备完成候选，但边界仍待右侧结构确认稳定。" in text
+
+
+def test_analyze_current_state_includes_consumption_level_text(monkeypatch) -> None:
+    monkeypatch.setattr(cn_report, "compute_bi_strengths", lambda bis, macd_points: {})
+    original_analyze = cn_report.analyze_chanlun_signals
+    raw_bars = [
+        SimpleNamespace(ts=datetime(2026, 5, 1, 10, 30), close=10.2),
+        SimpleNamespace(ts=datetime(2026, 5, 29, 14, 30), close=10.6),
+    ]
+    bis = [
+        FakeBi(7, "up", datetime(2026, 5, 1, 10, 30), datetime(2026, 5, 8, 14, 30), 10.9, 10.0),
+        FakeBi(12, "down", datetime(2026, 5, 9, 10, 30), datetime(2026, 5, 29, 14, 30), 10.8, 10.2, is_confirmed=False),
+    ]
+
+    def fake_analyze(raw_bars, bis, zhongshus, macd_points):
+        payload = original_analyze(raw_bars, bis, zhongshus, macd_points)
+        payload["same_level_consumption_level"] = "pending"
+        payload["structure_state"]["consumption_level"] = "pending"
+        return payload
+
+    monkeypatch.setattr(cn_report, "analyze_chanlun_signals", fake_analyze)
+
+    text = cn_report.analyze_current_state("示例标的", raw_bars, bis, [_sample_zhongshu(13)], [])
+
+    assert "消费等级：待确认消费，当前已有结构线索，但还不能直接升级为同级别强确认结论。" in text
+
+
+def test_analyze_current_state_includes_transition_state_text(monkeypatch) -> None:
+    monkeypatch.setattr(cn_report, "compute_bi_strengths", lambda bis, macd_points: {})
+    original_analyze = cn_report.analyze_chanlun_signals
+    raw_bars = [
+        SimpleNamespace(ts=datetime(2026, 5, 1, 10, 30), close=10.2),
+        SimpleNamespace(ts=datetime(2026, 5, 29, 14, 30), close=10.6),
+    ]
+    bis = [
+        FakeBi(7, "up", datetime(2026, 5, 1, 10, 30), datetime(2026, 5, 8, 14, 30), 10.9, 10.0),
+        FakeBi(12, "down", datetime(2026, 5, 9, 10, 30), datetime(2026, 5, 29, 14, 30), 10.8, 10.2, is_confirmed=False),
+    ]
+
+    def fake_analyze(raw_bars, bis, zhongshus, macd_points):
+        payload = original_analyze(raw_bars, bis, zhongshus, macd_points)
+        payload["structure_state"] = {
+            "last_completed": {
+                "type": "up",
+                "status": "completed",
+                "start_ts": "2026-05-01T10:30:00",
+                "end_ts": "2026-05-10T10:30:00",
+            },
+            "current_ongoing": {
+                "type": "down",
+                "status": "ongoing",
+                "start_ts": "2026-05-15T10:30:00",
+                "latest_ts": "2026-05-29T10:30:00",
+            },
+            "relationship": {
+                "kind": "completed_then_new_type_ongoing",
+                "transition_state": "candidate_new_type",
+            },
+            "current_structure_status": "candidate_completed_waiting_stability",
+        }
+        return payload
+
+    monkeypatch.setattr(cn_report, "analyze_chanlun_signals", fake_analyze)
+
+    text = cn_report.analyze_current_state("示例标的", raw_bars, bis, [_sample_zhongshu(13)], [])
+
+    assert "转场状态：新走势候选，前段走势已完成，但当前新走势仍处候选待确认阶段。" in text
 
 
 def test_analyze_current_state_includes_reabsorption_debug_text(monkeypatch) -> None:
@@ -330,9 +423,13 @@ def test_build_technical_summary_includes_action_value_score() -> None:
         "signal_catalog": [],
         "structure_state": {
             "current_ongoing": {"type": "up"},
-            "relationship": {"kind": "completed_then_new_type_ongoing"},
+            "relationship": {
+                "kind": "completed_then_new_type_ongoing",
+                "transition_state": "ongoing_new_type",
+            },
         },
         "same_level_decomposition_mode": "single_confirmed",
+        "same_level_consumption_level": "confirmed",
         "post_divergence_route": "higher_level_reverse_trend",
         "oscillation_rhythm_state": "balanced",
         "divergence": {
@@ -359,6 +456,9 @@ def test_build_technical_summary_includes_action_value_score() -> None:
     assert summary["rating"] == "A"
     assert summary["bias"] == "偏多"
     assert summary["same_level_decomposition_mode"] == "single_confirmed"
+    assert summary["same_level_consumption_level"] == "confirmed"
+    assert summary["same_level_consumption_level_label"] == "已确认消费"
+    assert summary["same_level_consumption_level_note"] == "当前同级别结构已具备稳定消费基础，可直接按主结构结论解释。"
     assert summary["post_divergence_route"] == "higher_level_reverse_trend"
     assert summary["oscillation_rhythm_state"] == "balanced"
     assert summary["route_level_from"] == "30m"
@@ -366,6 +466,9 @@ def test_build_technical_summary_includes_action_value_score() -> None:
     assert summary["zs_monitor_alert"] == "pre_breakout"
     assert summary["zs_monitor_midline"] == 10.45
     assert summary["zs_monitor_bias"] == "strong"
+    assert summary["transition_state"] == "ongoing_new_type"
+    assert summary["transition_state_label"] == "新走势进行中"
+    assert summary["transition_state_note"] == "前段走势已完成，当前新的同级别走势类型正在运行中。"
     assert summary["score_breakdown"] == {
         "structure": 30,
         "location": 18,

@@ -26,7 +26,11 @@ from chanlun.analysis import (
     analyze_chanlun_signals,
     build_signal_explanation_lines,
     build_signal_summary_fields,
+    describe_consumption_level,
+    describe_transition_state,
+    format_consumption_level_label,
     format_signal_point_labels,
+    format_transition_state_label,
 )
 from chanlun.bi import identify_bis
 from chanlun.chart_export import save_structure_charts
@@ -649,6 +653,7 @@ def build_technical_summary(
 ) -> dict[str, object]:
     conclusion = _extract_prefixed_value_from_text(advice_text, "结论：") or None
     route_fields = _build_route_level_fields(timeframe_label, signals)
+    transition_fields = _extract_transition_state_fields(signals)
     return {
         "operation_level": timeframe_label,
         "conclusion": conclusion,
@@ -656,6 +661,7 @@ def build_technical_summary(
         **build_technical_score_summary(raw_bars, signals, conclusion=conclusion, precision_entry=precision_entry),
         **build_signal_summary_fields(signals),
         **route_fields,
+        **transition_fields,
     }
 
 
@@ -687,6 +693,52 @@ def _build_route_level_fields(timeframe_label: str, signals: dict[str, object]) 
     }
 
 
+def _extract_transition_state_fields(signals: dict[str, object]) -> dict[str, str | None]:
+    structure_state = signals.get("structure_state") or {}
+    relationship = structure_state.get("relationship") or {}
+    transition_state = str(relationship.get("transition_state") or "").strip() or None
+    if not transition_state:
+        return {
+            "transition_state": None,
+            "transition_state_label": None,
+            "transition_state_note": None,
+        }
+    return {
+        "transition_state": transition_state,
+        "transition_state_label": format_transition_state_label(transition_state),
+        "transition_state_note": describe_transition_state(transition_state) or None,
+    }
+
+
+def _resolve_same_level_consumption_level(signals: dict[str, object]) -> str | None:
+    explicit = str(signals.get("same_level_consumption_level") or "").strip()
+    if explicit:
+        return explicit
+
+    structure_state = signals.get("structure_state") or {}
+    structure_explicit = str(structure_state.get("consumption_level") or "").strip()
+    if structure_explicit:
+        return structure_explicit
+
+    current_ongoing = structure_state.get("current_ongoing") or {}
+    confirmation_basis = str(current_ongoing.get("confirmation_basis") or "").strip()
+    if confirmation_basis == "no_same_level_zhongshu":
+        return "auxiliary"
+
+    current_status = str(structure_state.get("current_structure_status") or "").strip()
+    if current_status == "candidate_completed_waiting_stability":
+        return "pending"
+    if confirmation_basis == "single_active_zhongshu":
+        return "pending"
+
+    same_level_decomposition_mode = str(signals.get("same_level_decomposition_mode") or "").strip()
+    if same_level_decomposition_mode == "dual_interpretation_pending":
+        return "pending"
+    if same_level_decomposition_mode == "single_confirmed":
+        return "confirmed"
+    return None
+
+
 def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, object]) -> str:
     current_zs = signals["current_zs"]
     latest_up = signals["latest_confirmed_up"]
@@ -695,49 +747,50 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
     sell_points = signals["sell_points"]
     top_divergence = signals["top_divergence"]
     bottom_divergence = signals["bottom_divergence"]
-    same_level_decomposition_mode = signals.get("same_level_decomposition_mode")
+    same_level_consumption_level = _resolve_same_level_consumption_level(signals)
     oscillation_rhythm_state = signals.get("oscillation_rhythm_state")
     zs_monitor_alert = signals.get("zs_monitor_alert") or "none"
     zs_monitor_midline = signals.get("zs_monitor_midline")
     zs_monitor_bias = signals.get("zs_monitor_bias")
+    transition_fields = _extract_transition_state_fields(signals)
     close_price = raw_bars[-1].close
     signal_explanations = build_signal_explanation_lines(signals)
     buy_labels = "、".join(format_signal_point_labels(buy_points))
     sell_labels = "、".join(format_signal_point_labels(sell_points))
-    dual_pending = same_level_decomposition_mode == "dual_interpretation_pending"
+    pending_consumption = same_level_consumption_level == "pending"
 
     lines = [f"【{name} {timeframe_label} 操作建议】"]
-    if dual_pending and buy_points:
+    if pending_consumption and buy_points:
         signal_text = buy_labels or "买点信号"
         lines.extend(
             [
                 "结论：观察，等待确认。",
-                f"理由：已出现 {signal_text}，但同级别分解仍处待确认状态，当前不能直接上升为已确认买点。",
+                f"理由：已出现 {signal_text}，但当前同级别结构仍处待确认消费，不能直接上升为已确认买点。",
                 "建议：先按观察态处理，等待离开-回抽或级别闭合后再决定是否升级。",
             ]
         )
-    elif dual_pending and sell_points:
+    elif pending_consumption and sell_points:
         signal_text = sell_labels or "卖点信号"
         lines.extend(
             [
                 "结论：观察，等待确认。",
-                f"理由：已出现 {signal_text}，但同级别分解仍处待确认状态，当前不能直接上升为已确认卖点。",
+                f"理由：已出现 {signal_text}，但当前同级别结构仍处待确认消费，不能直接上升为已确认卖点。",
                 "建议：先按观察态处理，等待反抽失败或级别闭合后再决定是否升级。",
             ]
         )
-    elif dual_pending and current_zs and latest_down and latest_down.low < current_zs.zs_low:
+    elif pending_consumption and current_zs and latest_down and latest_down.low < current_zs.zs_low:
         lines.extend(
             [
                 "结论：观察，等待确认。",
-                f"理由：价格已落到最新中枢下沿 {current_zs.zs_low:.2f} 下方，但同级别分解仍待确认。",
+                f"理由：价格已落到最新中枢下沿 {current_zs.zs_low:.2f} 下方，但当前同级别结构仍处待确认消费。",
                 f"建议：等待重新站回 {current_zs.zs_low:.2f}-{current_zs.zs_high:.2f} 或后续级别闭合后再判断是否升级。",
             ]
         )
-    elif dual_pending and current_zs and close_price >= current_zs.zs_high:
+    elif pending_consumption and current_zs and close_price >= current_zs.zs_high:
         lines.extend(
             [
                 "结论：观察，等待确认。",
-                f"理由：价格运行到中枢上沿 {current_zs.zs_high:.2f} 附近或上方，但同级别分解仍待确认。",
+                f"理由：价格运行到中枢上沿 {current_zs.zs_high:.2f} 附近或上方，但当前同级别结构仍处待确认消费。",
                 f"建议：先看回试是否回中枢，未完成确认链前不按趋势延续或三买确认处理。",
             ]
         )
@@ -825,8 +878,17 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
         lines.append(f"监视器：中枢中线 {midline_text}，当前{bias_text}，预警状态 {alert_text}。")
     if signal_explanations:
         lines.append(f"信号说明：{'；'.join(signal_explanations)}。")
-    if dual_pending:
-        lines.append("分解说明：当前同级别分解仍处 dual_interpretation_pending，所有高层结论统一按观察/等待确认处理。")
+    if pending_consumption:
+        consumption_label = format_consumption_level_label(same_level_consumption_level)
+        consumption_note = describe_consumption_level(same_level_consumption_level)
+        lines.append(
+            f"消费说明：当前同级别结构处于 {consumption_label}，{consumption_note or '所有高层结论统一按观察/等待确认处理。'}"
+        )
+    if transition_fields["transition_state"] and transition_fields["transition_state"] != "none":
+        transition_summary = f"转场说明：{transition_fields['transition_state_label']}"
+        if transition_fields["transition_state_note"]:
+            transition_summary = f"{transition_summary}，{transition_fields['transition_state_note']}"
+        lines.append(f"{transition_summary}。")
     rhythm_text = {
         "up_bias": "节奏偏强",
         "down_bias": "节奏偏弱",
@@ -965,6 +1027,7 @@ def export_case(
             },
             "structure_state": signals.get("structure_state"),
             "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
+            "same_level_consumption_level": signals.get("same_level_consumption_level"),
             "post_divergence_route": signals.get("post_divergence_route"),
             "route_level_from": timeframe,
             "route_level_to": _next_route_level(timeframe) if signals.get("post_divergence_route") else None,

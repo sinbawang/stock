@@ -391,6 +391,7 @@ def _save_technical_report(
             },
             "structure_state": signals.get("structure_state"),
             "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
+            "same_level_consumption_level": signals.get("same_level_consumption_level"),
             "post_divergence_route": signals.get("post_divergence_route"),
             "oscillation_rhythm_state": signals.get("oscillation_rhythm_state"),
             "route_level_from": "30m",

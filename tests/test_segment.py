@@ -23,6 +23,7 @@ from chanlun.segment import (
     identify_segments as _identify_segments,
 )
 from chanlun.visualization import Plotter
+from chanlun.zhongshu import identify_zhongshu
 
 
 def identify_segments(bis, **kwargs):
@@ -639,6 +640,63 @@ class TestIdentifySegments:
         assert stop_reason == "reverse_break"
         assert break_bi_id == 7
         assert reclaim_calls == []
+
+    def test_deferred_then_invalidated_gap_false_does_not_leave_segment_level_ghost_zhongshu(self, monkeypatch):
+        bis = [
+            _bi(0, BiDirection.UP, 110, 100),
+            _bi(1, BiDirection.DOWN, 109, 101),
+            _bi(2, BiDirection.UP, 112, 102),
+            _bi(3, BiDirection.DOWN, 108, 101.5),
+            _bi(4, BiDirection.UP, 111, 102.5),
+            _bi(5, BiDirection.DOWN, 107, 100.5),
+            _bi(6, BiDirection.UP, 113, 103),
+            _bi(7, BiDirection.DOWN, 106, 99.5),
+            _bi(8, BiDirection.UP, 114, 103.5),
+        ]
+
+        gap_states = iter(
+            [
+                (GapCandidateState.DEFERRED, False, None, None, None),
+                (GapCandidateState.INVALIDATED, False, None, None, None),
+            ]
+        )
+
+        monkeypatch.setattr(
+            segment_module,
+            "_gap_feature_sequence_candidate",
+            lambda _bis, reverse_indices, _direction: 3 if len(reverse_indices) <= 2 else None,
+        )
+        monkeypatch.setattr(
+            segment_module,
+            "_evaluate_gap_candidate_state",
+            lambda *_args, **_kwargs: next(gap_states),
+        )
+        monkeypatch.setattr(
+            segment_module,
+            "_reclaims_transition_back_to_prior_segment",
+            lambda *_args, **_kwargs: 8,
+        )
+        monkeypatch.setattr(
+            segment_module,
+            "_evaluate_theory_stop",
+            lambda *_args, **_kwargs: None,
+        )
+        monkeypatch.setattr(
+            segment_module,
+            "_reverse_breaks_last_reverse_extreme",
+            lambda _direction, reverse_bi, _last_reverse_extreme: reverse_bi.bi_id == 7,
+        )
+
+        segments = identify_segments(bis, bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED)
+
+        zhongshus = identify_zhongshu(segments, structure_level="segment")
+
+        assert len(segments) == 1
+        assert segments[0].end_bi_id == 6
+        assert segments[0].stop_reason == "reverse_break"
+        assert segments[0].is_confirmed is True
+        assert segments[0].break_bi_id == 7
+        assert zhongshus == []
 
     def test_feature_sequence_elements_expose_explicit_context(self):
         bis = [

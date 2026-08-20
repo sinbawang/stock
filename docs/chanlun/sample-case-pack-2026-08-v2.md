@@ -88,12 +88,13 @@
 ### 3.1 A股60m-案例G（主辅冲突降级）
 
 - 标的/级别/时间窗：SH.600036 / 60m / 2026-07-30 ~ 2026-08-13
-- 主口径：`same_level_decomposition_mode=dual_interpretation_pending`
+- 主口径：`same_level_consumption_level=pending`
+- 兼容回退：旧 payload 缺少新字段时，按 `same_level_decomposition_mode=dual_interpretation_pending` 解释
 - 辅口径：类中枢偏向提前确认
 - 冲突处理：主结论优先，辅助降级
 - 最终文案：
   - 结论：结构待确认，保持观察。
-  - 理由：主口径仍处双解释待确认。
+  - 理由：主口径同级别消费仍处待确认。
   - 建议：不采用辅助口径提前确认信号。
 
 ### 3.2 港股30m-案例H（反趋势候选回退）

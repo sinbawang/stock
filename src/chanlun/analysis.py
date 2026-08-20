@@ -40,6 +40,36 @@ STRUCTURE_STATUS_NOTES = {
 }
 
 
+TRANSITION_STATE_LABELS = {
+    "none": "无转场",
+    "same_type_extension": "同型延伸",
+    "candidate_new_type": "新走势候选",
+    "ongoing_new_type": "新走势进行中",
+}
+
+
+TRANSITION_STATE_NOTES = {
+    "none": "当前还不能从已完成前段稳定推出新的同级别走势转场。",
+    "same_type_extension": "当前仍按前一走势类型的同类延伸处理。",
+    "candidate_new_type": "前段走势已完成，但当前新走势仍处候选待确认阶段。",
+    "ongoing_new_type": "前段走势已完成，当前新的同级别走势类型正在运行中。",
+}
+
+
+CONSUMPTION_LEVEL_LABELS = {
+    "auxiliary": "仅辅助观察",
+    "pending": "待确认消费",
+    "confirmed": "已确认消费",
+}
+
+
+CONSUMPTION_LEVEL_NOTES = {
+    "auxiliary": "当前还没有稳定的同级别中枢主结构，只能按辅助观察信号消费。",
+    "pending": "当前已有结构线索，但还不能直接升级为同级别强确认结论。",
+    "confirmed": "当前同级别结构已具备稳定消费基础，可直接按主结构结论解释。",
+}
+
+
 def compute_bi_strengths(bis: list[Bi], macd_points: list[Any]) -> dict[int, dict[str, float]]:
     strengths: dict[int, dict[str, float]] = {}
     for bi in bis:
@@ -84,6 +114,22 @@ def format_structure_status_label(value: Any) -> str:
 
 def describe_structure_status(value: Any) -> str:
     return STRUCTURE_STATUS_NOTES.get(str(value or ""), "")
+
+
+def format_transition_state_label(value: Any) -> str:
+    return TRANSITION_STATE_LABELS.get(str(value or ""), str(value or ""))
+
+
+def describe_transition_state(value: Any) -> str:
+    return TRANSITION_STATE_NOTES.get(str(value or ""), "")
+
+
+def format_consumption_level_label(value: Any) -> str:
+    return CONSUMPTION_LEVEL_LABELS.get(str(value or ""), str(value or ""))
+
+
+def describe_consumption_level(value: Any) -> str:
+    return CONSUMPTION_LEVEL_NOTES.get(str(value or ""), "")
 
 
 def describe_reabsorbed_zhongshu_debug(zhongshus: list[Any], current_zs: Any | None) -> str:
@@ -326,6 +372,20 @@ def _build_same_level_decomposition_mode(structure_state: dict[str, object]) -> 
     return "single_confirmed"
 
 
+def _build_same_level_consumption_level(structure_state: dict[str, object]) -> str:
+    current_status = str(structure_state.get("current_structure_status") or "").strip()
+    current_ongoing = structure_state.get("current_ongoing") or {}
+    confirmation_basis = str(current_ongoing.get("confirmation_basis") or "").strip()
+
+    if confirmation_basis == "no_same_level_zhongshu":
+        return "auxiliary"
+    if current_status == "candidate_completed_waiting_stability":
+        return "pending"
+    if confirmation_basis == "single_active_zhongshu":
+        return "pending"
+    return "confirmed"
+
+
 def _build_post_divergence_route(
     structure_state: dict[str, object],
     divergence: dict[str, object],
@@ -393,9 +453,11 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
             },
             "relationship": {
                 "kind": "undetermined",
+                "transition_state": "none",
                 "note": "当前尚未形成可用于同级别走势分解的中枢。",
             },
             "current_structure_status": "ongoing_same_type",
+            "consumption_level": "auxiliary",
         }
 
     if len(zhongshus) == 1:
@@ -414,9 +476,11 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
             },
             "relationship": {
                 "kind": "undetermined",
+                "transition_state": "none",
                 "note": "当前只有一个同级别中枢，按工程口径先视为盘整进行中。",
             },
             "current_structure_status": "ongoing_same_type",
+            "consumption_level": "pending",
         }
 
     relations = [_relation_kind(previous, current) for previous, current in zip(zhongshus, zhongshus[1:])]
@@ -470,15 +534,22 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
         )
 
     relationship_kind = "undetermined"
+    transition_state = "none"
     relationship_note = "当前同级别结构仍在演化，尚不能把新旧走势关系完全定型。"
     current_structure_status = "ongoing_same_type"
     if last_completed is not None:
         if str(last_completed.get("type")) == str(current_ongoing.get("type")):
             relationship_kind = "same_type_extension"
+            transition_state = "same_type_extension"
             relationship_note = "当前结构更接近前一走势类型的同类延伸，暂未看到清晰的新类型完成边界。"
             current_structure_status = "ongoing_same_type"
         else:
             relationship_kind = "completed_then_new_type_ongoing"
+            transition_state = (
+                "candidate_new_type"
+                if current_ongoing.get("confirmation_basis") == "single_active_zhongshu"
+                else "ongoing_new_type"
+            )
             relationship_note = "上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。"
             current_structure_status = (
                 "candidate_completed_waiting_stability"
@@ -492,14 +563,23 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
         relationship_note = "当前主要围绕最近同级别中枢展开，按工程口径视为盘整进行中。"
         current_structure_status = "ongoing_same_type"
 
+    consumption_level = _build_same_level_consumption_level(
+        {
+            "current_ongoing": current_ongoing,
+            "current_structure_status": current_structure_status,
+        }
+    )
+
     return {
         "last_completed": last_completed,
         "current_ongoing": current_ongoing,
         "relationship": {
             "kind": relationship_kind,
+            "transition_state": transition_state,
             "note": relationship_note,
         },
         "current_structure_status": current_structure_status,
+        "consumption_level": consumption_level,
     }
 
 
@@ -654,6 +734,7 @@ def analyze_chanlun_signals(
 
     structure_state = build_structure_state(raw_bars, zhongshus)
     same_level_decomposition_mode = _build_same_level_decomposition_mode(structure_state)
+    same_level_consumption_level = _build_same_level_consumption_level(structure_state)
     divergence = build_divergence_state(
         structure_state,
         top_divergence=top_divergence,
@@ -697,6 +778,7 @@ def analyze_chanlun_signals(
         "signal_catalog": signal_catalog,
         "structure_state": structure_state,
         "same_level_decomposition_mode": same_level_decomposition_mode,
+        "same_level_consumption_level": same_level_consumption_level,
         "post_divergence_route": post_divergence_route,
         "oscillation_rhythm_state": oscillation_rhythm_state,
         "divergence": divergence,
@@ -799,6 +881,9 @@ def build_signal_summary_fields(signals: dict[str, object]) -> dict[str, object]
         "signal_catalog": list(signals.get("signal_catalog", [])),
         "structure_state": signals.get("structure_state"),
         "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
+        "same_level_consumption_level": signals.get("same_level_consumption_level"),
+        "same_level_consumption_level_label": format_consumption_level_label(signals.get("same_level_consumption_level")),
+        "same_level_consumption_level_note": describe_consumption_level(signals.get("same_level_consumption_level")) or None,
         "post_divergence_route": signals.get("post_divergence_route"),
         "oscillation_rhythm_state": signals.get("oscillation_rhythm_state"),
         "divergence": signals.get("divergence"),

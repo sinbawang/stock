@@ -86,7 +86,7 @@
 | ZS1.3 | 锁定首次成立回归样例 | 待完成 | focused regression + review 示例 |
 | ZS2.1 | 定义完成 / 扩张 / 新中枢状态图 | 待完成 | 状态机草图、字段草案 |
 | ZS2.2 | 绑定再进入 / 回抽 / 区间重叠规则 | 待完成 | 判定顺序、冲突裁决规则 |
-| ZS2.3 | 把状态机落到机器字段 | 待完成 | machine-readable 状态字段、消费契约 |
+| ZS2.3 | 把状态机落到机器字段 | 进行中 | `ZS2.3a` 已完成首版转场字段与全消费链接线；`ZS2.3b` 仍待补统一消费等级字段与复杂交界 gate |
 | ZS3.1 | 统一 reclaim / 吸收后的清空与重建 | 进行中 | 中枢重算顺序、旧中心清理规则 |
 | ZS3.2 | 统一 gap defer / invalidated 交界 | 待完成 | gap 交界重算优先级 |
 | ZS3.3 | 锁住复杂重写回归集 | 待完成 | focused regressions |
@@ -182,10 +182,72 @@
 - 明确下游只能消费哪些强状态，哪些只能显示成 watch / pending。
 - 同步定义状态变化时 summary / publish 层应该如何表现。
 
+当前进展：
+
+- `build_structure_state(...)` 已新增 `structure_state.relationship.transition_state`，首版可区分 `none / same_type_extension / candidate_new_type / ongoing_new_type`。
+- 当前先不替换既有 `current_structure_status`，优先用附加 machine-readable 字段把“前段已完成”与“当前新段仍在运行”拆开，减少下游只能靠文本猜状态。
+- `build_same_level_decomposition(...)` 已把 `transition_state` 接进 summary/detail 消费 payload，并补了 focused regression，当前同级别分解卡片已能同时看到 `current_structure_status` 与转场状态说明。
+- 小程序 `technical_focus_lines` 已把 `transition_state` 升级为“标签 + 说明”展示，summary/detail 卡片不再只显示一段 note 文本。
+- detail `overview.bullets` 已新增结构转场短句，非技术明细区也能直接看到“新走势候选 / 新走势进行中”。
+- `index.json` 与 `groups/portfolio.json` 聚合 item 已输出 `technical_transition_*` 字段，列表页/分组页无需打开详情也能拿到结构转场摘要。
+- `build_advice(...)` / `build_technical_summary(...)` 已开始消费 `transition_state`：`advice_text` 会补充“转场说明”，`tech.json summary` 会输出 `transition_state / transition_state_label / transition_state_note`，当前报告链不再只靠 `current_structure_status` 表达“候选新走势 / 新走势进行中”。
+- `analyze_current_state(...)` 已开始输出 `转场状态：...` 文本，主分析文案现在也能直接区分“新走势候选 / 新走势进行中”，不再只显示 `切分状态`。
+- 已有 focused regression 覆盖“无已完成前段”“新段候选待确认”“新段进行中”三类切换场景。
+
+阶段拆分（当前建议作为正式执行口径）：
+
+- `ZS2.3a 已完成`：首版 machine-readable 转场字段 `relationship.transition_state` 已落地，并已贯通 `tech.json`、报告、小程序卡片、overview、index/group 聚合层与 focused regression。
+- `ZS2.3b 阶段性完成`：`structure_state.consumption_level` 首版已落地，并已镜像到 `signals.same_level_consumption_level`、`tech.json root` 与 `summary.same_level_consumption_level*`；miniapp bundle 的 `same_level_decomposition`、focus lines、overview bullet、index/group 聚合字段，以及 `build_advice(...)` / `analyze_current_state(...)` 的主文本判定与展示，也已开始优先读取该字段。当前 advice 主文案也已改成直接表述“待确认消费 / 已确认消费”，不再把 `same_level_decomposition_mode` 当主语义字段；standalone 60m / wechat / mixed-report 技术产物的 root `tech.json` 也都已补出 `same_level_consumption_level`，并已有 A/H mixed-report 与 CN/HK report/wechat 60m focused regression 锁住这些独立产物链。`combined-analysis-output-spec`、`theory-implementation-consumer-diff-matrix`、`zhongshu-consumer-display-examples` 这三份核心 consumer/spec 契约页，以及 `zhongshu-dual-track-spec`、`segment-review-entry`、`sample-case-pack-2026-08-v2` 这批外围消费示例页，也都已切到“`same_level_consumption_level` 主消费、`same_level_decomposition_mode` 仅兼容回退”的正式口径。旧 payload fallback regression 继续锁住缺少该字段时仍能从 `same_level_decomposition_mode / current_structure_status` 稳定回退。当前剩余事项更适合归到后续清理/扩展，而不再阻塞 `ZS2.3b` 本阶段收口。
+- `ZS2.3` 整体暂不标完成：因为复杂 `reclaim / rewrite / gap` 交界尚未完全收口，最复杂窗口上的转场真值仍可能被 `ZS3` 上游边界重算影响。
+
+当前判定：
+
+- 不 `on hold`。`ZS2.3` 仍可以继续推进，但不应再把主要精力放在新增展示层接线。
+- 当前最合理的继续方向是：先补 `ZS3.2 / ZS3.3` 收口复杂交界真值，并优先找到真实 `1m pre_breakout` 与 confirmed live 卡片样本；`ZS2.3b` 本阶段已不再阻塞主线，可只保留少量兼容清理和增量 regression。
+
+`ZS2.3 / ZS3` 下一阶段最小任务：
+
+1. 先补 `ZS3` 真实复杂交界样本，尤其是 `reclaim / rewrite / gap` 下的真值窗口，确认 `transition_state / same_level_consumption_level` 在这些窗口不漂移。
+2. 找到并落地真实 `1m pre_breakout` 与 confirmed live 卡片样本，把当前 consumer phase-complete 状态延伸到真实样本主锚点。
+3. 只保留少量兼容清理：继续减少零散消费者手工组合旧字段，但不再把展示层接线当作当前阶段 blocker。
+
+字段契约（首版冻结）：
+
+| 字段 | 当前来源 | 允许值 / 结构 | 当前语义 | 消费红线 |
+| --- | --- | --- | --- | --- |
+| `structure_state.relationship.transition_state` | `build_structure_state(raw_bars, zhongshus)` | `none` / `same_type_extension` / `candidate_new_type` / `ongoing_new_type` | 标准中枢主链上的“前段已完成后，当前同级别走势处于什么转场阶段” | 这是 `ZS2` 当前唯一稳定 machine-readable 转场字段；下游不得再从自由文本反推同类语义。 |
+| `structure_state.current_structure_status` | `build_structure_state(raw_bars, zhongshus)` | 现阶段仍保留既有状态枚举 | 描述当前切分状态与稳定性，强调“能否按强结论消费” | 当前不废弃；凡需要判断 pending/watch 风险时，仍要保留与 `transition_state` 并读。 |
+| `structure_state.consumption_level` | `build_structure_state(raw_bars, zhongshus)` | `auxiliary` / `pending` / `confirmed` | 统一表达“当前同级别结构能否按主结论消费” | 新消费者应优先读取该字段；它是 `ZS2.3b` 首版统一 machine field。 |
+| `summary.transition_state` | `build_technical_summary(...)` | 与 `structure_state.relationship.transition_state` 同步；缺失时可为空 | `tech.json summary` 的稳定摘要镜像，供报告与发布链统一取值 | 只能镜像主链 `transition_state`，不得引入新的独立枚举。 |
+| `summary.same_level_consumption_level` / `summary.same_level_consumption_level_label` / `summary.same_level_consumption_level_note` | `build_technical_summary(...)` | 与 `signals.same_level_consumption_level` 同步 | `tech.json summary` 的统一消费等级镜像，供报告与发布链直接消费 | 这是首版 summary mirror；下游不应再自行把 `same_level_decomposition_mode` 当成消费等级。 |
+| `summary.transition_state_label` / `summary.transition_state_note` | `build_technical_summary(...)` | 文本 | 给消费端直接展示的标签与说明 | 展示层优先复用这两个字段，不得再在不同端各自维护一套中文映射。 |
+| `same_level_decomposition.transition_state*` | `build_same_level_decomposition(...)` | 与主字段同步；必要时允许从旧 payload backward infer | miniapp 技术卡片里的分解视图镜像 | 兼容旧样本时允许推断，但新产物应优先输出原始 `relationship.transition_state`。 |
+| `technical_transition_*` | miniapp bundle 聚合层 | `state` / `label` / `summary` 三字段 | 列表页、group 页、index 页用的聚合短摘要 | 只做展示压缩，不得反向替代底层状态字段。 |
+
+消费规则（当前稳定口径）：
+
+- `transition_state` 只表达“转场阶段”，不单独表达 `confirmed / pending / auxiliary` 三态；新消费者应优先读取 `consumption_level`，只在旧 payload 兼容路径上再回退到 `current_structure_status`、`same_level_decomposition_mode`、`zs_monitor_*` 等字段。
+- `consumption_level` 是当前首版统一消费等级字段：`auxiliary` 表示尚无稳定同级别中枢主结构，`pending` 表示已有结构线索但仍待确认，`confirmed` 表示可按主结构结论直接消费。
+- `candidate_new_type` 表示“前段走势已完成，但当前新走势还不能直接升级为强确认结论”；报告、小程序、聚合层都应保持 watch / pending 风格，不得直接包装成已确认趋势延续。
+- `ongoing_new_type` 表示“前段走势已完成，当前新的同级别走势已经在运行”；它允许比 `candidate_new_type` 更强的结构表述，但仍不等价于买卖点已确认。
+- `same_type_extension` 表示当前仍按前一走势类型内部延伸处理；若消费端只关心“是否切到新走势”，该值应明确按“未切换”对待。
+- `none` 不是错误态，而是“当前没有足够证据稳定推出转场结论”；消费端不得把它误渲染成“无结构”或“无中枢”。
+
+兼容边界（当前明确不承诺）：
+
+- 当前 `transition_state` 只绑定标准中枢主链，不代表类中枢辅助链状态；若后续类中枢需要同类字段，必须单独命名，不得共用当前主字段。
+- 当前仅冻结四个首版枚举，不承诺已经覆盖 ZS2 全部未来状态；若新增枚举，必须先补 focused regression 与消费契约，再进入主产物。
+- 当前 backward inference 只用于旧 `summary/detail` 样本兼容，不应成为新数据生产的长期依赖。
+
 产出：
 
-- 状态字段草案。
-- 消费契约草案。
+- 状态字段草案（首版已落文档）。
+- 消费契约草案（首版已落文档）。
+
+剩余产出：
+
+- `ZS2.3b` 的统一消费等级字段草案。
+- 对应复杂交界 regression 清单。
 
 验收：
 
@@ -224,6 +286,10 @@
 - gap 交界优先级清单。
 - pending / confirmed 共存红线。
 
+当前进展补充：
+
+- 已新增 `tests/test_segment.py::test_deferred_then_invalidated_gap_false_does_not_leave_segment_level_ghost_zhongshu`，把 `deferred -> invalidated -> later reverse_break` 这条 practical gap-false 路径直接接到 `identify_zhongshu(..., structure_level="segment")`，锁住最终必须保持空集、不得残留旧中心。
+
 #### ZS3.3 锁住复杂重写回归集
 
 - 补 focused regressions，专门锁定“旧中枢不得残留”和“新中枢不得被过早吞掉”两类错误。
@@ -234,6 +300,14 @@
 
 - focused regression 清单。
 - 真实窗口映射表。
+
+当前进展补充：
+
+- 已新增 `tests/test_zhongshu.py` focused regression，单独锁住 `segment` 级 follow-up center 的 overlap/reuse 会把前一已终结中枢标记为 `is_reabsorbed_by_larger_expansion=true`。
+- 已新增 `tests/test_zhongshu.py` focused regression，约束 lineage 不能跨非重叠的最终 successor 错误传递塌缩，避免把本应保留的中间中枢误吞成更晚中心的前驱。
+- 已新增 `tests/test_zhongshu_regression_real_fixtures.py` 真实窗口 regression：当前 `00700 30m` 在多次 `gap / reverse_break / rewrite` 后仍只保留一个活跃 `segment` 级中枢，不会平白长出前驱幽灵。
+- 已新增 `tests/test_zhongshu_regression_real_fixtures.py` 真实窗口 regression：`000591 60m long` 在 overlap-reuse 之后仍保持 `segment-level zhongshu == []`，锁住“复杂重写后不残留旧中心”的空集真值。
+- 已补 `build/find_segment_reabsorbed_zhongshu_cases.py` 作为真实样本探针；当前对既有具名 fixture 与若干常用 `data/reports` 窗口的扫描结果仍未发现带 `reabsorbed lineage` 的真实 cutoff，说明这部分真实样本仍是当前缺口，而不是单纯缺测试入口。
 
 验收：
 
@@ -457,7 +531,7 @@
 | --- | --- | --- | --- | --- | --- |
 | `structure_state.last_completed` | 已完成结构事实 | 严格结论字段 | `confirmed` | 与 `current_ongoing` 同型时，被误读成“旧走势完全切开、当前新走势也已成立”。 | 只能说明上一段已完成，不自动确认当前新段。 |
 | `structure_state.current_ongoing` | 当前进行结构事实 | 进行中事实字段 | `pending` | 把 `candidate_completion` 或 ongoing 当 confirmed。 | 一律按观察态处理，直到同级别完成条件闭合。 |
-| `structure_state.relationship` | last/current 关系解释 | 关系解释字段 | `disambiguation_only` | 把 `same_type_extension`、`completed_then_new_type` 直接翻译成已确认转折。 | 只解释关系，不单独产出信号等级。 |
+| `structure_state.relationship` | last/current 关系解释 | 关系解释字段 | `disambiguation_only` | 把 `same_type_extension`、`completed_then_new_type` 直接翻译成已确认转折。 | 当前已补 `transition_state` 首版 machine-readable 字段；关系解释仍不得单独产出信号等级。 |
 | `same_level_decomposition_mode` | 同级别分解降级 gate | pending gate | `confirmed_or_pending_gate` | 当前工程映射被误读成“严格唯一分解已完成”。 | `dual_interpretation_pending` 时必须统一降级；`single_confirmed` 也只代表当前工程口径已收敛，不等于全部理论缺口关闭。 |
 | `post_divergence_route` | 背驰后去向候选 | 观察路线字段 | `pending_or_context` | 看见 `higher_level_reverse_trend` 就直接认定反转确认。 | 只说明当前候选去向，不单独说明结构已完成。 |
 | `route_level_from` / `route_level_to` | 去向级别上下文 | 上下文字段 | `context_only` | 被当成“级别已经切换完成”的证据。 | 只补级别解释，不能独立提升结论强度。 |
