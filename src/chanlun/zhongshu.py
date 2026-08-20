@@ -23,6 +23,16 @@ def _zones_overlap(previous: Zhongshu, current: Zhongshu) -> bool:
     return max(previous.zs_low, current.zs_low) < min(previous.zs_high, current.zs_high)
 
 
+def _primary_segment_items(items: List[Bi | Segment]) -> List[Bi | Segment]:
+    last_usable_index = len(items) - 1
+    while last_usable_index >= 0:
+        item = items[last_usable_index]
+        if getattr(item, "is_confirmed", False):
+            break
+        last_usable_index -= 1
+    return items[:last_usable_index + 1]
+
+
 def _mark_reabsorbed_lineage(zhongshus: List[Zhongshu]) -> None:
     for previous, current in zip(zhongshus, zhongshus[1:]):
         if not previous.is_terminated:
@@ -82,10 +92,11 @@ def identify_zhongshu(items: List[Bi | Segment], *, structure_level: str = "bi")
         raise ValueError(f"Unsupported structure_level: {structure_level}")
 
     if structure_level == "segment":
-        # Standard segment-level centers should be built only on confirmed segment boundaries.
-        # Pending tail interpretations stay in the auxiliary explanation layer and must not
-        # rewrite the primary zhongshu chain before the segment itself is confirmed.
-        items = [item for item in items if getattr(item, "is_confirmed", False)]
+        # Keep the primary chain stable by trimming only the active pending tail.
+        # Historical middle segments may still carry pending stop labels while already
+        # being part of the realized alternating chain; dropping them would distort the
+        # segment sequence and suppress valid same-level centers.
+        items = _primary_segment_items(items)
 
     if len(items) < 5:
         return []

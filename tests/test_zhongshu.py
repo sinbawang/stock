@@ -200,6 +200,24 @@ class TestIdentifyZhongshu:
 
         assert len(result) == 0
 
+    def test_identify_segment_zhongshu_keeps_historical_pending_segments_before_confirmed_follow_on(self):
+        segments = [
+            _segment(0, BiDirection.DOWN, 110, 98, is_confirmed=True),
+            _segment(1, BiDirection.UP, 106, 100, is_confirmed=True),
+            _segment(2, BiDirection.DOWN, 104, 101, is_confirmed=False),
+            _segment(3, BiDirection.UP, 103, 102, is_confirmed=True),
+            _segment(4, BiDirection.DOWN, 102, 96, is_confirmed=True),
+        ]
+
+        result = identify_zhongshu(segments, structure_level="segment")
+
+        assert len(result) == 1
+        assert result[0].structure_level == "segment"
+        assert result[0].entering_bi_id == 0
+        assert result[0].core_bi_ids == [1, 2, 3]
+        assert result[0].bi_ids == [1, 2, 3]
+        assert result[0].exit_bi_id == 4
+
     def test_identify_segment_zhongshu_ignores_transition_pending_tail_from_segment_pipeline(self):
         bis = [
             _bi(0, BiDirection.UP, 100, 90),
