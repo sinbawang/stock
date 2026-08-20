@@ -26,7 +26,7 @@ sys.modules[module_spec.name] = module
 module_spec.loader.exec_module(module)
 
 
-def test_parse_args_defaults_include_1200_bar_targets_and_1m_3000(monkeypatch):
+def test_parse_args_defaults_include_5m_1500_and_1m_3000(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["refresh_holdings_publish_to_cloudbase.py"])
     args = module.parse_args()
 
@@ -34,7 +34,7 @@ def test_parse_args_defaults_include_1200_bar_targets_and_1m_3000(monkeypatch):
     assert args.m60_bars == 1200
     assert args.m30_bars == 1200
     assert args.m15_bars == 1200
-    assert args.m5_bars == 1200
+    assert args.m5_bars == 1500
     assert args.m1_bars == 3000
     assert args.sync_kline_cache is True
     assert args.kline_cache_cloud_prefix == "stock-kline-cache/latest"
@@ -121,7 +121,7 @@ def test_write_timing_report_persists_publish_failures(tmp_path: Path, monkeypat
         m60_bars=1200,
         m30_bars=1200,
         m15_bars=1200,
-        m5_bars=1200,
+        m5_bars=1500,
         m1_bars=3000,
         pending_reverse_mode="effective_only",
         zhongshu_level="segment",

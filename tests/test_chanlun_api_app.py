@@ -33,14 +33,14 @@ def test_resolve_technical_timeframes_expands_30m_chain() -> None:
     assert module._resolve_technical_timeframes("m30_intraday", ["30m"]) == ["30m", "5m", "1m"]
 
 
-def test_publish_refresh_request_defaults_to_1200_bars_except_1m_3000() -> None:
+def test_publish_refresh_request_defaults_to_5m_1500_and_1m_3000() -> None:
     request = module.PublishRefreshRequest()
 
     assert request.day_bars == 1200
     assert request.m60_bars == 1200
     assert request.m30_bars == 1200
     assert request.m15_bars == 1200
-    assert request.m5_bars == 1200
+    assert request.m5_bars == 1500
     assert request.m1_bars == 3000
 
 
@@ -50,7 +50,7 @@ def test_publish_refresh_request_ignores_local_store_read_only_true() -> None:
     assert request.local_store_read_only is False
 
 
-def test_technical_refresh_request_defaults_to_1200_bars_except_1m_3000() -> None:
+def test_technical_refresh_request_defaults_to_5m_1500_and_1m_3000() -> None:
     request = module.TechnicalRefreshRequest()
 
     assert request.parallelism >= 1
@@ -58,7 +58,7 @@ def test_technical_refresh_request_defaults_to_1200_bars_except_1m_3000() -> Non
     assert request.m60_bars == 1200
     assert request.m30_bars == 1200
     assert request.m15_bars == 1200
-    assert request.m5_bars == 1200
+    assert request.m5_bars == 1500
     assert request.m1_bars == 3000
 
 
@@ -137,7 +137,7 @@ def test_run_publish_refresh_reroutes_intraday_only_request(monkeypatch) -> None
     assert rerouted.publish_timeframes == ["5m", "1m"]
     assert rerouted.day_bars == 1200
     assert rerouted.m30_bars == 1200
-    assert rerouted.m5_bars == 1200
+    assert rerouted.m5_bars == 1500
     assert rerouted.m1_bars == 3000
 
 

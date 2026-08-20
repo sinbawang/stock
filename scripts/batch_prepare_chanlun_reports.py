@@ -218,7 +218,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--m15-start", default=None, help="15M 起始时间；未指定时按 15M 根数自动回推")
     parser.add_argument("--m15-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="15M 抓取目标根数，默认 1200")
     parser.add_argument("--m5-start", default=None, help="5M 起始时间；未指定时按 5M 根数自动回推")
-    parser.add_argument("--m5-bars", type=int, default=INTRADAY_SOURCE_PROBE_ROWS, help="5M 抓取目标根数，默认 1200")
+    parser.add_argument("--m5-bars", type=int, default=1500, help="5M 抓取目标根数，默认 1500")
     parser.add_argument("--m1-start", default=None, help="1M 起始时间；未指定时按 1M 根数自动回推")
     parser.add_argument("--m1-bars", type=int, default=M1_BAR_DEFAULT, help="1M 抓取目标根数，默认 3000")
     parser.add_argument(
@@ -1470,7 +1470,7 @@ def run_batch_prepare(
     m15_start: str | None = None,
     m15_bars: int = INTRADAY_SOURCE_PROBE_ROWS,
     m5_start: str | None = None,
-    m5_bars: int = INTRADAY_SOURCE_PROBE_ROWS,
+    m5_bars: int = 1500,
     m1_start: str | None = None,
     m1_bars: int = M1_BAR_DEFAULT,
     pending_reverse_mode: str = "effective_only",

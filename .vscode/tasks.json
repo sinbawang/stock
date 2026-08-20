@@ -1564,6 +1564,51 @@
 				"--stat"
 			],
 			"isBackground": false
+		},
+		{
+			"label": "count-600900-5m-bars",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"(Get-Content 'data/reports/600900/5m/analyze/600900_5m_20260717_to_20260820.csv' | Measure-Object -Line).Lines"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "scan-5m-csv-linecounts",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Get-ChildItem 'data/reports' -Recurse -File -Filter '*_5m_*.csv' | ForEach-Object { $lines=(Get-Content $_.FullName | Measure-Object -Line).Lines; [PSCustomObject]@{Path=$_.FullName; Lines=$lines} } | Sort-Object Lines -Descending | Select-Object -First 20 | Format-Table -AutoSize"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "runone-help",
+			"type": "shell",
+			"command": "bin\\runone.bat",
+			"args": [
+				"--help"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-5m-default-1500-targeted",
+			"type": "shell",
+			"command": "pytest tests/test_chanlun_api_app.py tests/test_batch_generate_and_send_portfolio_mixed_reports.py tests/test_refresh_holdings_publish_to_cloudbase.py -q",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "pytest-5m-default-1500-targeted-py",
+			"type": "shell",
+			"command": "py -m pytest tests/test_chanlun_api_app.py tests/test_batch_generate_and_send_portfolio_mixed_reports.py tests/test_refresh_holdings_publish_to_cloudbase.py -q",
+			"problemMatcher": [],
+			"group": "test"
 		}
 	]
 }
