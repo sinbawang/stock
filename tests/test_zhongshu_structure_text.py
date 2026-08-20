@@ -152,6 +152,67 @@ def test_real_1m_pre_breakdown_sample_keeps_pending_watch_advice_and_analysis() 
     assert "确认三卖" not in payload["analysis_text"]
 
 
+def test_real_01024_1m_confirmed_3s_live_sample_keeps_confirmed_advice_and_analysis() -> None:
+    sample_path = ROOT / "data" / "reports" / "01024" / "1m" / "tech.json"
+    payload = json.loads(sample_path.read_text(encoding="utf-8"))
+
+    assert payload["timeframe"] == "1m"
+    assert payload["summary"]["conclusion"] == "跌破中枢后反抽下沿失败，当前按三卖确认处理。"
+    assert payload["summary"]["same_level_consumption_level"] == "confirmed"
+    assert payload["summary"]["same_level_consumption_level_label"] == "已确认消费"
+    assert payload["summary"]["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["summary"]["oscillation_rhythm_state"] == "down_bias"
+    assert payload["summary"]["buy_points"] == ["buy1"]
+    assert payload["summary"]["sell_points"] == ["sell3"]
+    assert "消费等级：已确认消费" in payload["analysis_text"]
+    assert "卖点：三卖" in payload["analysis_text"]
+    assert "结论：跌破中枢后反抽下沿失败，当前按三卖确认处理。" in payload["advice_text"]
+    assert "理由：出现 三卖，且当前同级别结构已具备稳定消费基础。" in payload["advice_text"]
+    assert "建议：反抽不过 33.94 以减仓为主，不逆势加仓。" in payload["advice_text"]
+    assert "偏多，允许轻仓试错。" not in payload["advice_text"]
+    assert "出现向下预警，但当前不构成确认三卖。" not in payload["advice_text"]
+
+
+def test_real_002555_1m_confirmed_3s_live_sample_keeps_confirmed_advice_and_analysis() -> None:
+    sample_path = ROOT / "data" / "reports" / "002555" / "1m" / "tech.json"
+    payload = json.loads(sample_path.read_text(encoding="utf-8"))
+
+    assert payload["timeframe"] == "1m"
+    assert payload["summary"]["conclusion"] == "跌破中枢后反抽下沿失败，当前按三卖确认处理。"
+    assert payload["summary"]["same_level_consumption_level"] == "confirmed"
+    assert payload["summary"]["same_level_consumption_level_label"] == "已确认消费"
+    assert payload["summary"]["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["summary"]["buy_points"] == []
+    assert payload["summary"]["sell_points"] == ["sell3"]
+    assert "消费等级：已确认消费" in payload["analysis_text"]
+    assert "卖点：三卖" in payload["analysis_text"]
+    assert "结论：跌破中枢后反抽下沿失败，当前按三卖确认处理。" in payload["advice_text"]
+    assert "理由：出现 三卖，且当前同级别结构已具备稳定消费基础。" in payload["advice_text"]
+    assert "建议：反抽不过 18.56 以减仓为主，不逆势加仓。" in payload["advice_text"]
+    assert "偏空，优先减仓或兑现。" not in payload["advice_text"]
+    assert "出现向下预警，但当前不构成确认三卖。" not in payload["advice_text"]
+
+
+def test_real_600900_1m_confirmed_3b_live_sample_keeps_confirmed_advice_and_analysis() -> None:
+    sample_path = ROOT / "data" / "reports" / "600900" / "1m" / "tech.json"
+    payload = json.loads(sample_path.read_text(encoding="utf-8"))
+
+    assert payload["timeframe"] == "1m"
+    assert payload["summary"]["conclusion"] == "突破中枢并完成回试，当前按三买确认处理。"
+    assert payload["summary"]["same_level_consumption_level"] == "confirmed"
+    assert payload["summary"]["same_level_consumption_level_label"] == "已确认消费"
+    assert payload["summary"]["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["summary"]["buy_points"] == ["buy3"]
+    assert payload["summary"]["sell_points"] == []
+    assert "消费等级：已确认消费" in payload["analysis_text"]
+    assert "买点：三买" in payload["analysis_text"]
+    assert "结论：突破中枢并完成回试，当前按三买确认处理。" in payload["advice_text"]
+    assert "理由：出现 三买，且当前同级别结构已具备稳定消费基础。" in payload["advice_text"]
+    assert "建议：回试不破 28.10 前以持有或顺势跟踪为主。" in payload["advice_text"]
+    assert "偏多，允许轻仓试错。" not in payload["advice_text"]
+    assert "出现向上预警，但当前不构成确认三买。" not in payload["advice_text"]
+
+
 def test_build_advice_downgrades_buy_signal_when_same_level_decomposition_is_pending() -> None:
     signals = {
         "current_zs": _sample_zhongshu(),
@@ -180,6 +241,52 @@ def test_build_advice_downgrades_buy_signal_when_same_level_decomposition_is_pen
     assert "结论：观察，等待确认。" in text
     assert "已出现 二买，但当前同级别结构仍处待确认消费，不能直接上升为已确认买点。" in text
     assert "消费说明：当前同级别结构处于 待确认消费，当前已有结构线索，但还不能直接升级为同级别强确认结论。" in text
+    assert "结论：偏多，允许轻仓试错。" not in text
+
+
+def test_build_advice_prefers_confirmed_sell3_when_downtrend_conflicts_with_buy1() -> None:
+    signals = {
+        "current_zs": _sample_zhongshu(),
+        "latest_confirmed_up": SimpleNamespace(high=33.94),
+        "latest_down": SimpleNamespace(low=33.52),
+        "buy_points": ["buy_1"],
+        "sell_points": ["sell_3"],
+        "top_divergence": False,
+        "bottom_divergence": True,
+        "same_level_consumption_level": "confirmed",
+        "structure_state": {
+            "current_ongoing": {
+                "type": "down",
+                "status": "ongoing",
+                "start_ts": "2026-08-05T10:18:00",
+                "latest_ts": "2026-08-20T15:56:00",
+                "zs_count_so_far": 3,
+            }
+        },
+        "signal_points": [
+            {
+                "point": "buy1",
+                "active": True,
+                "price": 33.52,
+                "basis": "bottom_divergence_near_zs_low",
+                "related_zs_id": 2,
+            },
+            {
+                "point": "sell3",
+                "active": True,
+                "price": 33.94,
+                "basis": "leave_zs_then_rebound_fails_lower_edge",
+                "related_zs_id": 2,
+            },
+        ],
+    }
+    raw_bars = [SimpleNamespace(close=33.52)]
+
+    text = build_advice("示例标的", "1M", raw_bars, signals)
+
+    assert "结论：跌破中枢后反抽下沿失败，当前按三卖确认处理。" in text
+    assert "理由：出现 三卖，且当前同级别结构已具备稳定消费基础。" in text
+    assert "建议：反抽不过 33.94 以减仓为主，不逆势加仓。" in text
     assert "结论：偏多，允许轻仓试错。" not in text
 
 

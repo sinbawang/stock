@@ -23,7 +23,7 @@
 
 | 级别 | 当前状态 | 当前主锚点 |
 | --- | --- | --- |
-| `1m` | 已有五类消费示例 | `HK.02357 1m range ongoing`、`HK.01339 1m completed_then_new_type`、真实 `SZ.000651 1m pre_breakdown`、`SH.601328 1m pre-warning proxy`、`1m confirmed 3S` regression reference |
+| `1m` | 已有七类消费示例 | `HK.02357 1m range ongoing`、`HK.01339 1m completed_then_new_type`、真实 `SZ.000651 1m pre_breakdown`、真实 replay `002555 1m pre_breakout`、真实 `01024 1m confirmed 3S`、真实 `600900 1m confirmed 3B`、`SH.601328 1m pre-warning proxy`、confirmed regression reference |
 | `5m` | 已有稳定节奏案例 | `SH.601318 5m down_bias` |
 | `30m` | 已有稳定扩张、去向、预警案例 | `SZ.000651 30m`、`SZ.002594 30m` |
 | `day` | 当前主要作为上级别闭合/映射目标出现 | `30m -> day` 的去向与扩张解释 |
@@ -34,39 +34,43 @@
 - `60m / 15m` 仍保留，但当前主要作为补充样例，而不是首选锚点。
 - `1m` 现在已有稳定消费示例，但理论层和样例层仍可继续补更细的多案例对照。
 - 真实 `SZ.000651 1m pre_breakdown` 已接入后，`SH.601328 1m` 不再承担主预警锚点角色，只保留为“预警前态代理/过渡说明”样本。
-- 当前仍缺真实 `1m pre_breakout` 样本，以及可直接页内审阅的真实 `1m confirmed 3S` 卡片。
+- 当前 `1m pre_breakout` 已有真实 replay 样本链，真实 `1m confirmed 3S` 与 `1m confirmed 3B` live 卡片也已分别由 `01024 1m`、`600900 1m` 补齐；剩余工作主要转为扩更多 confirmed 对照样本，而不是补角色空位。
 
 ### 1.2 `1m` 当前稳定消费锚点
 
-当前 `1m` 首选锚点由四个真实产物加一个 regression reference 组成：
+当前 `1m` 首选锚点由六个真实产物/回放锚点加一个 regression reference 组成：
 
 1. [data/reports/02357/1m/tech.json](data/reports/02357/1m/tech.json)：单中枢 `range ongoing`
 2. [data/reports/01339/1m/tech.json](data/reports/01339/1m/tech.json)：`completed_then_new_type`
 3. [data/reports/000651/1m/tech.json](data/reports/000651/1m/tech.json)：真实 `pre_breakdown`，当前仍属 pending/watch
-4. [data/reports/601328/1m/tech.json](data/reports/601328/1m/tech.json)：顶背驰迹象已出现，但仍未进入正式 `pre_breakdown` 字段链
-5. `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_confirmed_3s_reference_anchor`：`1m confirmed 3S` regression reference gate
+4. [build/scan_real_1m_prebreakout_samples.json](build/scan_real_1m_prebreakout_samples.json)：真实 replay `002555 1m pre_breakout`，cutoff=`2026-08-05 11:07`，当前仍属 pending/watch
+5. [data/reports/01024/1m/tech.json](data/reports/01024/1m/tech.json)：真实 live `confirmed 3S`，当前已确认消费
+6. [data/reports/601328/1m/tech.json](data/reports/601328/1m/tech.json)：顶背驰迹象已出现，但仍未进入正式 `pre_breakdown` 字段链
+7. `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_confirmed_3s_reference_anchor`：`1m confirmed 3S` regression reference gate
 
 当前已锁定事实：
 
 - 真实 `SZ.000651 1m`：`zs_monitor_alert=pre_breakdown`，摘要明确给出“出现向下预警，但当前不构成确认三卖”，并保留 `dual_interpretation_pending + down_bias` 的降级语义。
+- 真实 replay `002555 1m`：`zs_monitor_alert=pre_breakout`，摘要明确给出“出现向上预警，但当前不构成确认三买。”，并保留 `dual_interpretation_pending + 待确认消费 + up_bias` 的降级语义。
 - `HK.02357 1m`：`zhongshus=1`，`current_structure_status=ongoing_same_type`，`relationship.kind=undetermined`，且无确认一二三类买卖点。
 - `HK.01339 1m`：`last_completed.type=up`，`current_structure_status=completed_then_new_type`，当前新段为 `down ongoing`，但仍无确认一二三类买卖点。
+- 真实 `01024 1m`：`sell_points=[sell3]`、`same_level_consumption_level=confirmed`、摘要明确给出“跌破中枢后反抽下沿失败，当前按三卖确认处理。”，当前可直接作为 confirmed `3S` live 锚点。
 - `SH.601328 1m`：中枢仍在运行，`advice_text` 已明确提示“等向上离开或向下跌破后再做决策”，并补充“已有顶背驰迹象”，但没有正式 `zs_monitor_alert` 字段落盘。
-- `1m confirmed 3S`：当前已由具名 regression reference gate 锁住消费输出，但不对应当前 live `data/reports/000651/1m/tech.json`。
-- 进一步确认：`zs_monitor_alert` 已在 `src / scripts / tests` 形成稳定主链，当前缺的重点已经从“字段是否存在”收敛到“`1m pre_breakout` 真实样本”和“真实 confirmed 页内卡片”。
-- 这说明当前 `1m` 已经有“watch/pending”“前段完成后新段进行中”“正式预警未确认”“预警前态代理”四类真实消费案例，并额外有一条 confirmed regression reference。
+- `1m confirmed 3S` regression reference：当前继续作为兜底 gate，防止 live 样本未来漂移时把 confirmed 文案退回 pending/watch。
+- 进一步确认：`zs_monitor_alert` 与 confirmed `3S` 已在 `src / scripts / tests` 形成双链稳定主口径，当前缺的重点已经从“角色是否存在”收敛到“是否补更多同类样本对照”。
+- 这说明当前 `1m` 已经有“watch/pending”“前段完成后新段运行中”“正式向下预警未确认”“正式向上预警未确认”“真实 confirmed 3S”“预警前态代理”六类真实消费案例，并额外有一条 confirmed regression reference。
 
 当前适用方式：
 
 - 可用于校验 `1m` 在 `tech.json`、报告和小程序里，如何把“单中枢盘整进行中”“前段完成后新段运行中”“正式预警未确认”“风险迹象已出现但尚未进入正式预警字段链”“confirmed reference”稳定区分开。
-- `HK.02357 1m` 可直接作为 watch/pending 示例，`HK.01339 1m` 可直接作为 completed_then_new_type 示例，真实 `SZ.000651 1m` 可直接作为正式 `pre_breakdown` 示例，`SH.601328 1m` 可直接作为预警前态代理示例，`1m confirmed 3S` 当前则保留为 regression reference。
-- 后续若补真实 `1m pre_breakout` 样例，应优先补齐当前 `1m` 主预警链的上破方向；只有在需要展示“尚未进入正式字段链”时才继续保留 `SH.601328 1m`。
+- `HK.02357 1m` 可直接作为 watch/pending 示例，`HK.01339 1m` 可直接作为 completed_then_new_type 示例，真实 `SZ.000651 1m` 可直接作为正式 `pre_breakdown` 示例，真实 replay `002555 1m` 可直接作为正式 `pre_breakout` 示例，真实 `01024 1m` 可直接作为 confirmed `3S` live 示例，`SH.601328 1m` 可直接作为预警前态代理示例，`1m confirmed 3S` reference gate 当前则保留为兜底回归。
+- 只有在需要展示“尚未进入正式字段链”时才继续保留 `SH.601328 1m`；它不再承担 `1m` 主预警链上破方向的缺口填补角色。
 
 正式样本接线要求：
 
 1. `1m pre_breakdown` 与 `1m pre_breakout` 应成对补入，避免消费页只展示单边预警。
 2. `tech.json`、报告、小程序三处写法必须同轮更新，不能只换页内案例名而保留旧代理描述。
-3. `1m confirmed 3S` 继续保留为确认链对照锚点，但当前应明确标注为 regression reference，而不是 live `tech.json` 主样本。
+3. `1m confirmed 3S` 继续同时保留真实 live 锚点与 regression reference：前者负责 review/消费审阅，后者负责自动化兜底。
 
 ## 2. 去向候选展示
 
@@ -157,9 +161,9 @@
 1. [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 4.2 节 `SZ.002594 30m pre_breakout`
 2. [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 4.1 节 `HK.01024 60m pre_breakdown`
 
-当前优先口径：先用 `30m` 预警回中枢案例做主示例，再用真实 `SZ.000651 1m pre_breakdown` 做 `1m` 正式预警未确认锚点，`60m` 继续保留作补充方向对照；`1m confirmed 3S` 当前只作回归对照参考。
+当前优先口径：先用 `30m` 预警回中枢案例做主示例，再用真实 `SZ.000651 1m pre_breakdown` 与真实 replay `002555 1m pre_breakout` 组成 `1m` 双向正式预警未确认锚点，`60m` 继续保留作补充方向对照；`1m confirmed 3S` 当前只作回归对照参考。
 
-补充说明：当前仓库已经有真实落盘的 `1m pre_breakdown` 字段样本，并且 `src / scripts / tests` 侧已有稳定实现锚点；本节现已从“预警前态代理样本 + confirmed 样本”的最小闭环，推进到“真实 `1m pre_breakdown` + proxy negative + confirmed reference”的结构。剩余主要缺口是正式 `1m pre_breakout` 样本，以及可直接页内审阅的真实 confirmed 卡片。
+补充说明：当前仓库已经有真实落盘的 `1m pre_breakdown` 字段样本，以及真实历史回放的 `1m pre_breakout` 样本，并且 `src / scripts / tests` 侧已有稳定实现锚点；本节现已从“真实 `1m pre_breakdown` + 真实 replay `1m pre_breakout` + proxy negative + confirmed reference”的结构推进。剩余主要缺口是可直接页内审阅的真实 confirmed 卡片。
 
 ### 4.1 `tech.json` 推荐表达
 
@@ -266,18 +270,18 @@
 
 级别说明：当前仍保留这个 `60m` 案例，是因为它适合作为更高一级的向下预警补充对照；真实 `1m pre_breakdown` 现已由 `SZ.000651 1m` 承担主锚点。
 
-### 7.3 `1m confirmed 3S` regression reference
+### 7.3 `01024 1m` confirmed `3S` live anchor
 
-对应入口： [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 4.3 节；`tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_confirmed_3s_reference_anchor`。
+对应案例： [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 4.5 节；兜底 gate 为 `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_confirmed_3s_reference_anchor`。
 
 | 展示位 | 推荐写法 | 绝对红线 |
 | --- | --- | --- |
 
-| `tech.json` / payload | 保留 `sell_points` 与 `最近卖点：三卖` 一类 confirmed 说明 | 不得把这个 confirmed reference 再降写成只有 `watch/pending` 的模糊风险提示 |
+| `tech.json` / payload | 保留 `sell_points=[sell3]`、`same_level_consumption_level=confirmed` 与 `最近卖点：三卖` 一类 confirmed 说明 | 不得把这个真实 confirmed live 卡片再降写成只有 `watch/pending` 的模糊风险提示 |
 | 报告 | `1m ... 当前按三卖确认处理。` | 不得把已闭合确认链重新写成 `仅预警` |
 | 小程序/图表 | 可显示 `confirmed` 风险或卖点标签，但必须与 `30m/5m` 的 pending/auxiliary 标签区分开 | 不得把 `1m confirmed 3S` 与 `30m pre_breakout`、`5m down_bias` 渲染成同一状态 |
 
-最小消费结论：这个 `1m` confirmed 场景当前仍由 regression reference gate 承担，用来对照 `30m`、`60m` 与真实 `1m pre_breakdown` 的未确认预警案例。
+最小消费结论：这个 `1m` confirmed 场景现在已经由真实 `01024 1m` live 样本承担，用来对照 `30m`、`60m` 与真实 `1m pre_breakdown/pre_breakout` 的未确认预警案例；旧 reference gate 只保留作自动化兜底。
 
 ### 7.4 `HK.02357 1m` `range ongoing`
 
@@ -303,9 +307,23 @@
 
 最小消费结论：这个 `1m` 例子用于说明“上一段已完成”只能推出结构切换，不足以直接推出当前新段的确认买卖点，是 `1m` 中间态的主锚点。
 
-### 7.6 `SH.601328 1m` pre-warning proxy
+### 7.6 `002555 1m` pre_breakout replay anchor
 
 对应案例： [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 4.4 节。
+
+| 展示位 | 推荐写法 | 绝对红线 |
+| --- | --- | --- |
+| `tech.json` / replay payload | 保留 `zs_monitor_alert=pre_breakout`、`same_level_decomposition_mode=dual_interpretation_pending`、`same_level_consumption_level=pending`，摘要明确写 `出现向上预警，但当前不构成确认三买。` | 不得把历史 replay 锚点偷换成 `confirmed 3B`，也不得省略 `待确认消费` 降级说明 |
+| 报告 | `出现向上预警，但首次回试确认链尚未闭合，继续观察是否回中枢。` | 不得写成 `向上突破已确认`、`确认三买，可直接执行` |
+| 小程序/图表 | 可显示 `watch/pending` 上破预警标签，但必须同时保留 `未确认` 或 `待确认消费` 说明 | 不得和 confirmed `3B` 使用同一主标题或同级强标签 |
+
+最小消费结论：这个 `1m` 例子用于说明真实 `pre_breakout` 已经可以进入消费链，但它仍然只是“向上预警未确认”，不是 confirmed 三买。
+
+实现差异说明：当前这个锚点来自历史回放与真实 replay gate，而不是最新 live `tech.json` 快照；因此消费端要锁的是语义一致性，而不是把它误读成当前最新页内终态。
+
+### 7.7 `SH.601328 1m` pre-warning proxy
+
+对应案例： [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 4.6 节。
 
 | 展示位 | 推荐写法 | 绝对红线 |
 | --- | --- | --- |

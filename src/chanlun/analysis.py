@@ -108,24 +108,30 @@ def format_signal_point_labels(points: list[str]) -> list[str]:
     return [format_signal_point_label(point) for point in points]
 
 
-def format_structure_status_label(value: Any) -> str:
-    return STRUCTURE_STATUS_LABELS.get(str(value or ""), str(value or ""))
+def format_structure_status_label(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    return STRUCTURE_STATUS_LABELS.get(str(value), str(value))
 
 
 def describe_structure_status(value: Any) -> str:
     return STRUCTURE_STATUS_NOTES.get(str(value or ""), "")
 
 
-def format_transition_state_label(value: Any) -> str:
-    return TRANSITION_STATE_LABELS.get(str(value or ""), str(value or ""))
+def format_transition_state_label(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    return TRANSITION_STATE_LABELS.get(str(value), str(value))
 
 
 def describe_transition_state(value: Any) -> str:
     return TRANSITION_STATE_NOTES.get(str(value or ""), "")
 
 
-def format_consumption_level_label(value: Any) -> str:
-    return CONSUMPTION_LEVEL_LABELS.get(str(value or ""), str(value or ""))
+def format_consumption_level_label(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    return CONSUMPTION_LEVEL_LABELS.get(str(value), str(value))
 
 
 def describe_consumption_level(value: Any) -> str:
@@ -286,6 +292,38 @@ def _is_reabsorbed_tail(zhongshu: Zhongshu) -> bool:
     )
 
 
+def _is_live_zhongshu(zhongshu: Zhongshu) -> bool:
+    return getattr(zhongshu, "superseded_by_zs_id", None) is None and not getattr(
+        zhongshu, "is_reabsorbed_by_larger_expansion", False
+    )
+
+
+def _split_live_zhongshu_runs(zhongshus: list[Zhongshu]) -> list[list[Zhongshu]]:
+    runs: list[list[Zhongshu]] = []
+    current_run: list[Zhongshu] = []
+    for zhongshu in zhongshus:
+        if _is_live_zhongshu(zhongshu):
+            current_run.append(zhongshu)
+            continue
+        if current_run:
+            runs.append(current_run)
+            current_run = []
+    if current_run:
+        runs.append(current_run)
+    return runs
+
+
+def _build_completed_run_state(zhongshus: list[Zhongshu]) -> dict[str, object]:
+    return _build_group_state(
+        zhongshus,
+        0,
+        len(zhongshus) - 1,
+        status="completed",
+        latest_ts=zhongshus[-1].end_ts,
+        confirmation_basis="confirmed_by_following_same_level_structure",
+    )
+
+
 def _safe_float(value: object) -> float | None:
     if value is None:
         return None
@@ -440,7 +478,9 @@ def _build_oscillation_rhythm_state(
 
 def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dict[str, object]:
     latest_bar_ts = raw_bars[-1].ts if raw_bars else None
-    if not zhongshus:
+    live_runs = _split_live_zhongshu_runs(zhongshus)
+
+    if not live_runs:
         return {
             "last_completed": None,
             "current_ongoing": {
@@ -460,10 +500,23 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
             "consumption_level": "auxiliary",
         }
 
-    if len(zhongshus) == 1:
-        only = zhongshus[0]
+    current_run = live_runs[-1]
+    previous_run = live_runs[-2] if len(live_runs) > 1 else None
+
+    if len(current_run) == 1:
+        only = current_run[0]
+        last_completed = _build_completed_run_state(previous_run) if previous_run else None
+        relationship_kind = "undetermined"
+        transition_state = "none"
+        relationship_note = "当前只有一个同级别中枢，按工程口径先视为盘整进行中。"
+        current_structure_status = "ongoing_same_type"
+        if last_completed is not None:
+            relationship_kind = "completed_then_new_type_ongoing"
+            transition_state = "candidate_new_type"
+            relationship_note = "上一段同级别走势已结束，当前新的同级别走势仍处候选待确认阶段。"
+            current_structure_status = "candidate_completed_waiting_stability"
         return {
-            "last_completed": None,
+            "last_completed": last_completed,
             "current_ongoing": {
                 "type": "range",
                 "status": "ongoing",
@@ -475,15 +528,15 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
                 "end_zs_id": only.zs_id,
             },
             "relationship": {
-                "kind": "undetermined",
-                "transition_state": "none",
-                "note": "当前只有一个同级别中枢，按工程口径先视为盘整进行中。",
+                "kind": relationship_kind,
+                "transition_state": transition_state,
+                "note": relationship_note,
             },
-            "current_structure_status": "ongoing_same_type",
+            "current_structure_status": current_structure_status,
             "consumption_level": "pending",
         }
 
-    relations = [_relation_kind(previous, current) for previous, current in zip(zhongshus, zhongshus[1:])]
+    relations = [_relation_kind(previous, current) for previous, current in zip(current_run, current_run[1:])]
     current_kind = relations[-1]
     current_start_relation = len(relations) - 1
     while current_start_relation > 0 and relations[current_start_relation - 1] == current_kind:
@@ -491,7 +544,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
     current_start_index = current_start_relation
     if current_kind == "range" and current_start_relation > 0:
         previous_run_kind = relations[current_start_relation - 1]
-        previous_tail = zhongshus[-2]
+        previous_tail = current_run[-2]
         previous_tail_is_same_type_extension = not bool(getattr(previous_tail, "is_terminated", False)) or _is_reabsorbed_tail(previous_tail)
         if previous_run_kind in {"up", "down"} and previous_tail_is_same_type_extension:
             while current_start_relation > 1 and relations[current_start_relation - 2] == previous_run_kind:
@@ -502,11 +555,11 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
             # When a new overlap suffix appears after a finished up/down run,
             # treat the latest zhongshu as the start of the new ongoing range.
             current_start_index = current_start_relation + 1
-    current_group_count = len(zhongshus) - current_start_index
+    current_group_count = len(current_run) - current_start_index
     current_ongoing = _build_group_state(
-        zhongshus,
+        current_run,
         current_start_index,
-        len(zhongshus) - 1,
+        len(current_run) - 1,
         status="ongoing",
         latest_ts=latest_bar_ts,
         confirmation_basis=(
@@ -525,13 +578,15 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
             while previous_start_index > 0 and relations[previous_start_index - 1] == previous_kind:
                 previous_start_index -= 1
         last_completed = _build_group_state(
-            zhongshus,
+            current_run,
             previous_start_index,
             previous_end_index,
             status="completed",
-            latest_ts=zhongshus[previous_end_index].end_ts,
+            latest_ts=current_run[previous_end_index].end_ts,
             confirmation_basis="confirmed_by_following_same_level_structure",
         )
+    elif previous_run is not None:
+        last_completed = _build_completed_run_state(previous_run)
 
     relationship_kind = "undetermined"
     transition_state = "none"
@@ -874,6 +929,7 @@ def build_signal_point_payloads(
 
 
 def build_signal_summary_fields(signals: dict[str, object]) -> dict[str, object]:
+    same_level_consumption_level = signals.get("same_level_consumption_level")
     return {
         "buy_points": [_format_signal_point_name(str(point)) for point in signals.get("buy_points", [])],
         "sell_points": [_format_signal_point_name(str(point)) for point in signals.get("sell_points", [])],
@@ -881,9 +937,9 @@ def build_signal_summary_fields(signals: dict[str, object]) -> dict[str, object]
         "signal_catalog": list(signals.get("signal_catalog", [])),
         "structure_state": signals.get("structure_state"),
         "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
-        "same_level_consumption_level": signals.get("same_level_consumption_level"),
-        "same_level_consumption_level_label": format_consumption_level_label(signals.get("same_level_consumption_level")),
-        "same_level_consumption_level_note": describe_consumption_level(signals.get("same_level_consumption_level")) or None,
+        "same_level_consumption_level": same_level_consumption_level,
+        "same_level_consumption_level_label": format_consumption_level_label(same_level_consumption_level) or None,
+        "same_level_consumption_level_note": describe_consumption_level(same_level_consumption_level) or None,
         "post_divergence_route": signals.get("post_divergence_route"),
         "oscillation_rhythm_state": signals.get("oscillation_rhythm_state"),
         "divergence": signals.get("divergence"),

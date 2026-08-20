@@ -758,6 +758,12 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
     buy_labels = "、".join(format_signal_point_labels(buy_points))
     sell_labels = "、".join(format_signal_point_labels(sell_points))
     pending_consumption = same_level_consumption_level == "pending"
+    confirmed_consumption = same_level_consumption_level == "confirmed"
+    structure_state = signals.get("structure_state") or {}
+    current_ongoing = structure_state.get("current_ongoing") or {}
+    current_ongoing_type = str(current_ongoing.get("type") or "").strip()
+    confirmed_sell3 = confirmed_consumption and "sell_3" in sell_points and current_ongoing_type == "down"
+    confirmed_buy3 = confirmed_consumption and "buy_3" in buy_points and current_ongoing_type == "up"
 
     lines = [f"【{name} {timeframe_label} 操作建议】"]
     if pending_consumption and buy_points:
@@ -792,6 +798,24 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
                 "结论：观察，等待确认。",
                 f"理由：价格运行到中枢上沿 {current_zs.zs_high:.2f} 附近或上方，但当前同级别结构仍处待确认消费。",
                 f"建议：先看回试是否回中枢，未完成确认链前不按趋势延续或三买确认处理。",
+            ]
+        )
+    elif confirmed_buy3:
+        add_hint = f"{current_zs.zs_high:.2f}" if current_zs else (f"{latest_up.high:.2f}" if latest_up else "最近高点")
+        lines.extend(
+            [
+                "结论：突破中枢并完成回试，当前按三买确认处理。",
+                f"理由：出现 {buy_labels}，且当前同级别结构已具备稳定消费基础。",
+                f"建议：回试不破 {add_hint} 前以持有或顺势跟踪为主。",
+            ]
+        )
+    elif confirmed_sell3:
+        reduce_hint = f"{latest_up.high:.2f}" if latest_up else "最近高点"
+        lines.extend(
+            [
+                "结论：跌破中枢后反抽下沿失败，当前按三卖确认处理。",
+                f"理由：出现 {sell_labels}，且当前同级别结构已具备稳定消费基础。",
+                f"建议：反抽不过 {reduce_hint} 以减仓为主，不逆势加仓。",
             ]
         )
     elif buy_points:

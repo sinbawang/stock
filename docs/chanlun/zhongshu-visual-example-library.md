@@ -272,9 +272,10 @@ flowchart TD
 3. [sample-case-pack-2026-08-v2.md](sample-case-pack-2026-08-v2.md) 第 2.1 节 `HK.00388 60m` `pre_breakdown` 后回中枢。
 4. [sample-case-pack-2026-08-v2.md](sample-case-pack-2026-08-v2.md) 第 3.3 节 `SZ.300124 15m` 预警后确认失败。
 5. [data/reports/000651/1m/tech.json](data/reports/000651/1m/tech.json) `SZ.000651 1m` 已真实落盘 `pre_breakdown`，当前仍属 pending/watch。
-6. [data/reports/601328/1m/tech.json](data/reports/601328/1m/tech.json) `SH.601328 1m` 顶背驰迹象已出现，但仍停留在等待离开中枢的预警前态。
+6. [build/scan_real_1m_prebreakout_samples.json](build/scan_real_1m_prebreakout_samples.json) `002555 1m` 在历史回放 `2026-08-05 11:07` 已出现真实 `pre_breakout`，且仍保留 pending/watch。
+7. [data/reports/601328/1m/tech.json](data/reports/601328/1m/tech.json) `SH.601328 1m` 顶背驰迹象已出现，但仍停留在等待离开中枢的预警前态。
 
-当前 `1m` 接线规则：真实 `SZ.000651 1m pre_breakdown` 已经接入第 92 课的主预警锚点，`SH.601328 1m` 退回“预警前态代理”角色；`1m confirmed 3S` 当前则只保留为 regression reference，对应消费输出的 confirmed 对照。后续仍需对称补齐正式 `1m pre_breakout` 样本。
+当前 `1m` 接线规则：真实 `SZ.000651 1m pre_breakdown` 与真实 replay `002555 1m pre_breakout` 已经接入第 92 课的双向主预警锚点，`SH.601328 1m` 退回“预警前态代理”角色；`1m confirmed 3S` 当前则只保留为 regression reference，对应消费输出的 confirmed 对照。
 
 ### 4.1 真实案例 A: HK.01024 60m 向下预警后首次回抽回中枢
 
@@ -346,9 +347,58 @@ flowchart LR
 - 这类场景适合作为 `30m/60m` 预警案例在更低级别的真实补充锚点，也适合作为 proxy negative 的直接上游对照。
 - 最终文案可固定为：`出现向下预警，但当前不构成确认三卖。`
 
-补充说明：`1m confirmed 3S` 当前仍主要由具名 regression reference gate 承担，尚未在本页以新的真实 live 卡片回补。
+补充说明：`1m confirmed 3S` 现已由真实 `01024 1m` live 样本回补到本页，同时继续保留具名 regression reference gate 作为自动化兜底。
 
-### 4.4 真实案例 D: SH.601328 1m 顶背驰迹象已出现，但仍未进入 `pre_breakdown` 确认链
+### 4.4 真实案例 D: 002555 1m 向上预警已通过历史回放锁定，但确认链尚未闭合
+
+- 标的/级别/时间窗：002555 / 1m / 2026-08-05 09:37 ~ 2026-08-05 11:07
+- 样本来源：`build/scan_real_1m_prebreakout_samples.json` + replay gate
+- 当前中枢数量：`1`
+- 最新中枢区间：`19.97 - 20.24`
+- 当前进行结构：`range`
+- 当前信号结论：`出现向上预警，但当前不构成确认三买。`
+- 关键信号说明：`价格贴近最新中枢上沿 20.24，中枢中线 20.10，节奏偏强；同级别消费仍是待确认。`
+
+```mermaid
+flowchart LR
+  A[触发 pre_breakout] --> B[观察首次回试]
+  B --> C{是否已形成不回中枢的确认链}
+  C -- 否 --> D[维持 watch/pending]
+  D --> E[不得升级 confirmed 3B]
+```
+
+图上 review 重点：
+
+- 这个 `1m` 案例补上的是真实历史回放 `pre_breakout` 字段链，而不是 synthetic 造数。
+- 当前 replay 结果同时给出 `zs_monitor_alert=pre_breakout`、`same_level_decomposition_mode=dual_interpretation_pending`、`zs_monitor_midline=20.10`、`zs_monitor_bias=strong` 与 `消费说明：当前同级别结构处于 待确认消费`，足够作为稳定的 `1m` 正式向上预警未确认示例。
+- 它和 `4.3` 的 `SZ.000651 1m pre_breakdown` 正好构成 `1m` 双向预警对照，能直接约束消费端不要把“向上预警”误写成 confirmed 三买。
+- 最终文案可固定为：`出现向上预警，但当前不构成确认三买。`
+
+### 4.5 真实案例 E: 01024 1m 已进入 confirmed 3S，但不能和预警/代理态混写
+
+- 标的/级别/时间窗：01024 / 1m / 2026-08-07 15:31 ~ 2026-08-20 16:00
+- 当前中枢数量：`2`
+- 最新中枢区间：`40.00 - 40.36`
+- 当前进行结构：`down`
+- 当前信号结论：`跌破中枢后反抽下沿失败，当前按三卖确认处理。`
+- 关键信号说明：`当前同级别结构处于已确认消费，最近卖点为三卖，参考价 33.94。`
+
+```mermaid
+flowchart LR
+  A[跌破中枢] --> B[反抽下沿失败]
+  B --> C[confirmed 3S]
+  C --> D[维持 confirmed]
+  D --> E[不得降写成 pending 或 pre_breakdown]
+```
+
+图上 review 重点：
+
+- 这个 `1m` 案例现在补上的是实时 `tech.json` confirmed `3S` live 卡片，不再只是 synthetic/reference gate。
+- 当前 `tech.json` 已同时给出 `sell_points=[sell3]`、`same_level_consumption_level=confirmed`、`same_level_decomposition_mode=single_confirmed` 与 confirmed 结论文案，足够作为 `1m pre_break*` 的 confirmed 对照锚点。
+- 它和 `4.3`、`4.4` 分别形成“向下预警未确认 / 向上预警未确认 / confirmed 三卖”三段式对照，能直接约束消费端不要把 pending/watch 与 confirmed 混写。
+- 最终文案可固定为：`跌破中枢后反抽下沿失败，当前按三卖确认处理。`
+
+### 4.6 真实案例 F: SH.601328 1m 顶背驰迹象已出现，但仍未进入 `pre_breakdown` 确认链
 
 - 标的/级别/时间窗：SH.601328 / 1m / 2026-07-30 09:38 ~ 2026-08-14 15:00
 - 当前中枢数量：`2`
@@ -368,8 +418,8 @@ flowchart LR
 图上 review 重点：
 
 - 这个 `1m` 样本要解决的不是“有没有顶背驰”，而是顶背驰迹象出现后，消费端能否克制地停在观察态，而不是抢先升格为 `pre_breakdown` 或 `三卖`。
-- 当前仓库里还没有真实落盘的 `1m pre_breakout/pre_breakdown` 字段样本，因此这个案例应被明确标记为“预警前态代理样本”，不能假装它已经是正式 `pre_break*` 案例。
-- 后续只要任一方向的正式 `1m pre_break*` 样本形成稳定落盘与展示链，这张卡片就不应继续占据 `1m` 主预警位置，而应退回“字段未落盘前的前态代理/过渡说明”角色。
+- 当前仓库已经有真实 `1m pre_breakdown` 落盘样本和真实 `1m pre_breakout` 历史回放样本，因此这个案例必须明确标记为“预警前态代理样本”，不能假装它已经是正式 `pre_break*` 案例。
+- 现在双向正式 `1m pre_break*` 锚点已建立，这张卡片不应继续占据 `1m` 主预警位置，而应稳定退回“字段未落盘前的前态代理/过渡说明”角色。
 - 它和 `4.1`、`4.2`、`4.3` 共同构成一条更完整的链：预警前态 -> 预警未确认 -> 确认链闭合。
 - 最终文案可固定为：`已有风险迹象，但仍需等待离开中枢后的预警或确认链，不提前升级。`
 

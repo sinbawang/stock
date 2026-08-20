@@ -1406,7 +1406,15 @@ def _extend_segment(
                                     cursor = reclaimed_idx + 1
                                     continue
                                 if gap_state == GapCandidateState.DEFERRED:
+                                    if direction == BiDirection.UP:
+                                        last_reverse_extreme = reverse_bi.low
+                                        last_same_extreme = same_dir_bi.high
+                                    else:
+                                        last_reverse_extreme = reverse_bi.high
+                                        last_same_extreme = same_dir_bi.low
                                     end_idx = cursor + 1
+                                    defer_next_reverse_break = True
+                                    reverse_indices = [idx for idx in reverse_indices if idx > cursor]
                                     cursor += 2
                                     continue
                                 pending_gap_break_idx = None
@@ -1514,7 +1522,15 @@ def _extend_segment(
                                     cursor = reclaimed_idx + 1
                                     continue
                                 if gap_state == GapCandidateState.DEFERRED:
+                                    if direction == BiDirection.UP:
+                                        last_reverse_extreme = reverse_bi.low
+                                        last_same_extreme = same_dir_bi.high
+                                    else:
+                                        last_reverse_extreme = reverse_bi.high
+                                        last_same_extreme = same_dir_bi.low
                                     end_idx = cursor + 1
+                                    defer_next_reverse_break = True
+                                    reverse_indices = [idx for idx in reverse_indices if idx > cursor]
                                     cursor += 2
                                     continue
                                 pending_gap_break_idx = None

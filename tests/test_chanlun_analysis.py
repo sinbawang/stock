@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import importlib.util
 import json
 from pathlib import Path
 import sys
@@ -17,6 +18,16 @@ if str(SRC) not in sys.path:
 from chanlun.analysis import _build_zs_monitor_state, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_signal_point_payloads, build_signal_summary_fields, build_structure_state
 from chanlun.models import Bi, BiDirection, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
+
+
+PROBE_SPEC = importlib.util.spec_from_file_location(
+    "probe_intraday_prebreak_sample",
+    ROOT / "build" / "probe_intraday_prebreak_sample.py",
+)
+if PROBE_SPEC is None or PROBE_SPEC.loader is None:
+    raise RuntimeError("failed to load probe_intraday_prebreak_sample.py for tests")
+probe_module = importlib.util.module_from_spec(PROBE_SPEC)
+PROBE_SPEC.loader.exec_module(probe_module)
 
 
 def _zhongshu(zs_id: int, *, zs_low: float, zs_high: float, day: int) -> Zhongshu:
@@ -154,6 +165,20 @@ def test_analyze_chanlun_signals_marks_single_zhongshu_as_dual_interpretation_pe
     assert signals["same_level_decomposition_mode"] == "dual_interpretation_pending"
 
 
+def test_build_signal_summary_fields_keeps_missing_consumption_level_as_none() -> None:
+    summary = build_signal_summary_fields({
+        "buy_points": [],
+        "sell_points": [],
+        "signal_points": [],
+        "signal_catalog": [],
+        "same_level_consumption_level": None,
+    })
+
+    assert summary["same_level_consumption_level"] is None
+    assert summary["same_level_consumption_level_label"] is None
+    assert summary["same_level_consumption_level_note"] is None
+
+
 def test_build_structure_state_unterminated_trend_tail_overlap_stays_same_trend_ongoing() -> None:
     zhongshus = [
         _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1),
@@ -248,6 +273,27 @@ def test_build_structure_state_without_completed_predecessor_keeps_transition_st
     assert state["last_completed"] is None
     assert state["relationship"]["kind"] == "undetermined"
     assert state["relationship"]["transition_state"] == "none"
+
+
+def test_build_structure_state_ignores_reabsorbed_ghost_zhongshu_in_current_group() -> None:
+    first = _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1)
+    second = _zhongshu(2, zs_low=10.4, zs_high=10.9, day=4)
+    third = _zhongshu(3, zs_low=11.5, zs_high=12.2, day=7)
+    second.is_terminated = True
+    second.is_reabsorbed_by_larger_expansion = True
+    second.superseded_by_zs_id = third.zs_id
+
+    state = build_structure_state([], [first, second, third])
+
+    assert state["last_completed"] is not None
+    assert state["last_completed"]["start_zs_id"] == first.zs_id
+    assert state["last_completed"]["end_zs_id"] == first.zs_id
+    assert state["current_ongoing"]["start_zs_id"] == third.zs_id
+    assert state["current_ongoing"]["end_zs_id"] == third.zs_id
+    assert state["current_ongoing"]["zs_count_so_far"] == 1
+    assert state["relationship"]["kind"] == "completed_then_new_type_ongoing"
+    assert state["relationship"]["transition_state"] == "candidate_new_type"
+    assert state["current_structure_status"] == "candidate_completed_waiting_stability"
 
 
 def test_analyze_chanlun_signals_marks_stable_new_type_as_single_confirmed() -> None:
@@ -467,6 +513,26 @@ def test_real_1m_pre_breakdown_sample_preserves_independent_tech_json_gate() -> 
     assert summary["post_divergence_route"] == "higher_level_range"
     assert summary["oscillation_rhythm_state"] == "down_bias"
     assert summary["zs_monitor_alert"] == "pre_breakdown"
+
+
+def test_real_1m_pre_breakout_replay_sample_preserves_independent_gate() -> None:
+    rows = probe_module._load_rows("002555", "1m")
+    payload = probe_module._replay("002555", "三七互娱", "2026-08-05 11:07", rows)
+
+    assert payload["cutoff"] == "2026-08-05 11:07"
+    assert payload["zs_monitor_alert"] == "pre_breakout"
+    assert payload["zs_monitor_midline"] == 20.1
+    assert payload["zs_monitor_bias"] == "strong"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["buy_points"] == []
+    assert payload["sell_points"] == []
+    assert payload["conclusion"] == "出现向上预警，但当前不构成确认三买。"
+    assert payload["latest_zs_low"] == 19.97
+    assert payload["latest_zs_high"] == 20.24
+    assert "结论：出现向上预警，但当前不构成确认三买。" in payload["advice_text"]
+    assert "监视器：中枢中线 20.10，当前偏强，预警状态 向上预警。" in payload["advice_text"]
+    assert "消费说明：当前同级别结构处于 待确认消费" in payload["advice_text"]
+    assert "确认三买" in payload["advice_text"]
 
 
 def test_build_signal_summary_fields_preserves_catalog_slots() -> None:

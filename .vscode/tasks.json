@@ -941,6 +941,629 @@
 			"command": "tcb.cmd --env-id cloudbase-d9gplq92zc1d88ee6 storage download miniapp-publish/latest/stocks/01024/charts/1m.json build/cloud-compare/01024-1m-cloud.json; python build/verify_01024_cloud_chart.py",
 			"problemMatcher": [],
 			"group": "test"
+		},
+		{
+			"label": "rerun-002555-confirmed-live",
+			"type": "shell",
+			"command": "bin/runone.bat",
+			"args": [
+				"002555",
+				"三七互娱",
+				"CN",
+				"--skip-build",
+				"--skip-upload",
+				"--parallelism",
+				"1",
+				"--tech-timeframes",
+				"day",
+				"30m",
+				"5m",
+				"1m",
+				"--publish-timeframes",
+				"day",
+				"30m",
+				"5m",
+				"1m"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "rerun-600900-confirmed-buy3",
+			"type": "shell",
+			"command": "bin/runone.bat",
+			"args": [
+				"600900",
+				"长江电力",
+				"CN",
+				"--skip-build",
+				"--skip-upload",
+				"--parallelism",
+				"1",
+				"--tech-timeframes",
+				"day",
+				"30m",
+				"5m",
+				"1m",
+				"--publish-timeframes",
+				"day",
+				"30m",
+				"5m",
+				"1m"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-300124-60m-zhongshu",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-c",
+				"from pathlib import Path; from tests.segment_regression_support import identify_segments_from_csv; from chanlun.zhongshu import identify_zhongshu; from chanlun.analysis import build_structure_state; root=Path(r'c:\\sandbox\\sinba\\stock'); csv=root/'data'/'reports'/'300124'/'60m'/'analyze'/'300124_60m_20260213_to_20260618.csv'; segments=identify_segments_from_csv(csv); zs=identify_zhongshu(segments, structure_level='segment'); print('segments', [(s.direction.value, s.start_bi_id, s.end_bi_id, s.break_bi_id, s.stop_reason, s.is_confirmed) for s in segments]); print('zhongshus', [(z.zs_id, z.start_bi_id, z.end_bi_id, z.entering_bi_id, z.exit_bi_id, z.is_terminated, z.superseded_by_zs_id, z.is_reabsorbed_by_larger_expansion) for z in zs]); print('state', build_structure_state([], zs))"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-300124-60m-zhongshu-2",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-c",
+				"from pathlib import Path; from tests.segment_regression_support import identify_segments_from_csv; from chanlun.zhongshu import identify_zhongshu; from chanlun.analysis import build_structure_state; csv = Path(\"c:/sandbox/sinba/stock/data/reports/300124/60m/analyze/300124_60m_20260213_to_20260618.csv\"); segments = identify_segments_from_csv(csv); zs = identify_zhongshu(segments, structure_level=\"segment\"); print(\"segments\", [(s.direction.value, s.start_bi_id, s.end_bi_id, s.break_bi_id, s.stop_reason, s.is_confirmed) for s in segments]); print(\"zhongshus\", [(z.zs_id, z.start_bi_id, z.end_bi_id, z.entering_bi_id, z.exit_bi_id, z.is_terminated, z.superseded_by_zs_id, z.is_reabsorbed_by_larger_expansion) for z in zs]); print(\"state\", build_structure_state([], zs))"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-300124-60m-zhongshu-script",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"build\\inspect_300124_60m_zhongshu.py"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-300124-60m-zhongshu-script-rerun",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"build\\inspect_300124_60m_zhongshu.py"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-300124-60m-zhongshu-script-rerun-2",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"build\\inspect_300124_60m_zhongshu.py"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-zhongshu-real-fixtures",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_zhongshu_regression_real_fixtures.py",
+				"-q"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-03690-30m-zhongshu",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"build\\inspect_03690_30m_zhongshu.py"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-zhongshu-real-fixtures-rerun",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_zhongshu_regression_real_fixtures.py",
+				"-q"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-defer-gap",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-defer-gap-rerun",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-defer-gap-rerun-2",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-defer-gap-rerun-3",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-gap-slice",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"tests/test_segment_rediscrimination_matrix.py",
+				"-q",
+				"-k",
+				"deferred_then_invalidated_gap_false or nested_deferred_then_invalidated_gap_false or late_reverse_break or weak_recovery_then_late_reverse_break or weak_reverse_then_late_strong_same_dir_confirms_break"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-000591-60m-bis-head",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-c",
+				"from pathlib import Path; from tests.segment_regression_support import load_bis_from_csv; p=Path('data/reports/000591/60m/analyze/000591_60m_20260213_to_20260618.csv'); bis=load_bis_from_csv(p); print('len',len(bis));\nfor b in bis[:20]: print(b.bi_id,b.direction.value,b.high,b.low)"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-000591-60m-bis-head-rerun",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-c",
+				"from pathlib import Path; from tests.segment_regression_support import load_bis_from_csv; p=Path(\"data/reports/000591/60m/analyze/000591_60m_20260213_to_20260618.csv\"); bis=load_bis_from_csv(p); print(\"len\", len(bis)); [print(b.bi_id, b.direction.value, b.high, b.low) for b in bis[:20]]"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-000591-60m-bis-head-script",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"build/inspect_000591_60m_bis_head.py"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-000591-60m-bis-head-script-rerun",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"build/inspect_000591_60m_bis_head.py"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-000591-60m-bis-head-script-rerun-2",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"build/inspect_000591_60m_bis_head.py"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-real-window",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-real-window-rerun",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-real-window-rerun-2",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-gap-slice-after-real-window",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"tests/test_segment_rediscrimination_matrix.py",
+				"-q",
+				"-k",
+				"deferred_then_invalidated_gap_false or nested_deferred_then_invalidated_gap_false or late_reverse_break or weak_recovery_then_late_reverse_break or weak_reverse_then_late_strong_same_dir_confirms_break"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-03690-30m-bis-head",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"build/inspect_03690_30m_bis_head.py"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-real-window-30m",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-gap-slice-after-30m-anchor",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"tests/test_segment_rediscrimination_matrix.py",
+				"-q",
+				"-k",
+				"deferred_then_invalidated_gap_false or nested_deferred_then_invalidated_gap_false or late_reverse_break or weak_recovery_then_late_reverse_break or weak_reverse_then_late_strong_same_dir_confirms_break"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "scan-report-csv-timeframes",
+			"type": "shell",
+			"command": "rg",
+			"args": [
+				"--files",
+				"data/reports"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "scan-report-csv-timeframes-powershell",
+			"type": "shell",
+			"command": "powershell",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"Get-ChildItem -Path data/reports -Recurse -File -Filter *.csv | Select-Object -ExpandProperty FullName"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-600900-5m-bis-head",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"build/inspect_600900_5m_bis_head.py"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-5m-anchor",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim_600900_5m"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-gap-slice-dual-anchor",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"tests/test_segment_rediscrimination_matrix.py",
+				"-q",
+				"-k",
+				"deferred_then_invalidated_gap_false or nested_deferred_then_invalidated_gap_false or late_reverse_break or weak_recovery_then_late_reverse_break or weak_reverse_then_late_strong_same_dir_confirms_break"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-03690-day-bis-head",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"build/inspect_03690_day_bis_head.py"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-day-anchor",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim_03690_day"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-gap-slice-triple-anchor",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"tests/test_segment_rediscrimination_matrix.py",
+				"-q",
+				"-k",
+				"deferred_then_invalidated_gap_false or nested_deferred_then_invalidated_gap_false or late_reverse_break or weak_recovery_then_late_reverse_break or weak_reverse_then_late_strong_same_dir_confirms_break"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-600900-1m-bis-head",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"build/inspect_600900_1m_bis_head.py"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-1m-anchor",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim_600900_1m"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-gap-slice-four-anchor",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"tests/test_segment_rediscrimination_matrix.py",
+				"-q",
+				"-k",
+				"deferred_then_invalidated_gap_false or nested_deferred_then_invalidated_gap_false or late_reverse_break or weak_recovery_then_late_reverse_break or weak_reverse_then_late_strong_same_dir_confirms_break"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "inspect-01024-1m-bis-head",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"build/inspect_01024_1m_bis_head.py"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-01024-1m-anchor",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim_01024_1m"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-gap-slice-five-anchor",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"tests/test_segment_rediscrimination_matrix.py",
+				"-q",
+				"-k",
+				"deferred_then_invalidated_gap_false or nested_deferred_then_invalidated_gap_false or late_reverse_break or weak_recovery_then_late_reverse_break or weak_reverse_then_late_strong_same_dir_confirms_break"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-parametrized",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-gap-slice-after-parametrize",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"tests/test_segment_rediscrimination_matrix.py",
+				"-q",
+				"-k",
+				"deferred_then_invalidated_gap_false or nested_deferred_then_invalidated_gap_false or late_reverse_break or weak_recovery_then_late_reverse_break or weak_reverse_then_late_strong_same_dir_confirms_break"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-nested-after-anchor-constants",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-gap-slice-after-anchor-constants",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"tests/test_segment_rediscrimination_matrix.py",
+				"-q",
+				"-k",
+				"deferred_then_invalidated_gap_false or nested_deferred_then_invalidated_gap_false or late_reverse_break or weak_recovery_then_late_reverse_break or weak_reverse_then_late_strong_same_dir_confirms_break"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-anchor-health",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"-q",
+				"-k",
+				"nested_deferred_then_invalidated_anchor_health"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "pytest-segment-gap-slice-after-anchor-health",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest",
+				"tests/test_segment.py",
+				"tests/test_segment_rediscrimination_matrix.py",
+				"-q",
+				"-k",
+				"deferred_then_invalidated_gap_false or nested_deferred_then_invalidated_gap_false or late_reverse_break or weak_recovery_then_late_reverse_break or weak_reverse_then_late_strong_same_dir_confirms_break"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "git-status-short-release-check",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"status",
+				"--short"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "git-diff-stat-release-check",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"diff",
+				"--stat"
+			],
+			"isBackground": false
 		}
 	]
 }

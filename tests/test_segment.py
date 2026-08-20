@@ -1,9 +1,12 @@
 """线段识别与映射测试。"""
 
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import chanlun.segment as segment_module
+import pytest
 
+from chanlun.analysis import build_structure_state
 from chanlun.models import Bar, Bi, BiDirection, NormalizedBar
 from chanlun.segment import (
     SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
@@ -24,6 +27,46 @@ from chanlun.segment import (
 )
 from chanlun.visualization import Plotter
 from chanlun.zhongshu import identify_zhongshu
+from tests.segment_regression_support import load_bis_from_csv
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SAMPLE_03690_30M_CSV = ROOT / "data" / "reports" / "03690" / "30m" / "analyze" / "03690_30m_20260527_to_20260814.csv"
+SAMPLE_03690_DAY_CSV = ROOT / "data" / "reports" / "03690" / "day" / "analyze" / "03690_day_20230925_to_20260618.csv"
+SAMPLE_01024_1M_CSV = ROOT / "data" / "reports" / "01024" / "1m" / "analyze" / "01024_1m_20260807_to_20260820.csv"
+SAMPLE_600900_1M_CSV = ROOT / "data" / "reports" / "600900" / "1m" / "analyze" / "600900_1m_20260804_to_20260820.csv"
+SAMPLE_600900_5M_CSV = ROOT / "data" / "reports" / "600900" / "5m" / "analyze" / "600900_5m_20260717_to_20260820.csv"
+
+NESTED_DEFERRED_INVALIDATED_ANCHORS = [
+    (
+        SAMPLE_03690_30M_CSV,
+        ["down", "up", "down", "up", "down", "up", "down", "up", "down", "up", "down"],
+    ),
+    (
+        SAMPLE_600900_5M_CSV,
+        ["down", "up", "down", "up", "down", "up", "down", "up", "down", "up", "down"],
+    ),
+    (
+        SAMPLE_03690_DAY_CSV,
+        ["up", "down", "up", "down", "up", "down", "up", "down", "up", "down", "up"],
+    ),
+    (
+        SAMPLE_600900_1M_CSV,
+        ["up", "down", "up", "down", "up", "down", "up", "down", "up", "down", "up"],
+    ),
+    (
+        SAMPLE_01024_1M_CSV,
+        ["down", "up", "down", "up", "down", "up", "down", "up", "down", "up", "down"],
+    ),
+]
+
+NESTED_DEFERRED_INVALIDATED_ANCHOR_IDS = [
+    "03690-30m",
+    "600900-5m",
+    "03690-day",
+    "600900-1m",
+    "01024-1m",
+]
 
 
 def identify_segments(bis, **kwargs):
@@ -605,7 +648,7 @@ class TestIdentifySegments:
 
         def reclaim_stub(_bis, cursor, _direction):
             reclaim_calls.append(cursor)
-            return 8
+            return None
 
         monkeypatch.setattr(
             segment_module,
@@ -697,6 +740,108 @@ class TestIdentifySegments:
         assert segments[0].is_confirmed is True
         assert segments[0].break_bi_id == 7
         assert zhongshus == []
+
+        structure_state = build_structure_state([], zhongshus)
+
+        assert structure_state["last_completed"] is None
+        assert structure_state["current_ongoing"]["confirmation_basis"] == "no_same_level_zhongshu"
+        assert structure_state["relationship"]["transition_state"] == "none"
+        assert structure_state["consumption_level"] == "auxiliary"
+
+    def _assert_nested_deferred_then_invalidated_no_reopen(
+        self,
+        monkeypatch,
+        *,
+        sample_csv: Path,
+        expected_directions: list[str],
+    ) -> None:
+        bis = load_bis_from_csv(sample_csv)[:11]
+        assert [bi.direction.value for bi in bis] == expected_directions
+
+        gap_candidates = iter([None, 3, 3])
+        gap_states = iter(
+            [
+                (GapCandidateState.DEFERRED, False, None, None, None),
+                (GapCandidateState.INVALIDATED, False, None, None, None),
+            ]
+        )
+        reclaim_calls = []
+
+        monkeypatch.setattr(
+            segment_module,
+            "_gap_feature_sequence_candidate",
+            lambda *_args, **_kwargs: next(gap_candidates, None),
+        )
+        monkeypatch.setattr(
+            segment_module,
+            "_evaluate_gap_candidate_state",
+            lambda *_args, **_kwargs: next(gap_states),
+        )
+
+        def reclaim_stub(_bis, cursor, _direction):
+            reclaim_calls.append(cursor)
+            return None
+
+        monkeypatch.setattr(
+            segment_module,
+            "_reclaims_transition_back_to_prior_segment",
+            reclaim_stub,
+        )
+        monkeypatch.setattr(
+            segment_module,
+            "_evaluate_theory_stop",
+            lambda *_args, **_kwargs: None,
+        )
+        monkeypatch.setattr(
+            segment_module,
+            "_reverse_breaks_last_reverse_extreme",
+            lambda _direction, reverse_bi, _last_reverse_extreme: reverse_bi.bi_id == 9,
+        )
+
+        result = _extend_segment(
+            bis,
+            1,
+            strict_segment_rules=False,
+            enable_gap_false_defer=True,
+            enable_fallback_reverse_break=True,
+            enable_same_direction_fallback=True,
+        )
+
+        assert result is not None
+        assert reclaim_calls == [4]
+
+    @pytest.mark.parametrize(
+        ("sample_csv", "expected_directions"),
+        NESTED_DEFERRED_INVALIDATED_ANCHORS,
+        ids=NESTED_DEFERRED_INVALIDATED_ANCHOR_IDS,
+    )
+    def test_nested_deferred_then_invalidated_anchor_health(
+        self,
+        sample_csv: Path,
+        expected_directions: list[str],
+    ) -> None:
+        # Keep this check lightweight: ensure anchor files are available and still expose enough BI depth.
+        assert sample_csv.exists()
+        bis = load_bis_from_csv(sample_csv)
+        assert len(bis) >= len(expected_directions)
+        assert [bi.direction.value for bi in bis[: len(expected_directions)]] == expected_directions
+
+    @pytest.mark.parametrize(
+        ("sample_csv", "expected_directions"),
+        NESTED_DEFERRED_INVALIDATED_ANCHORS,
+        ids=NESTED_DEFERRED_INVALIDATED_ANCHOR_IDS,
+    )
+    def test_nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim(
+        self,
+        monkeypatch,
+        sample_csv: Path,
+        expected_directions: list[str],
+    ) -> None:
+        self._assert_nested_deferred_then_invalidated_no_reopen(
+            monkeypatch,
+            sample_csv=sample_csv,
+            expected_directions=expected_directions,
+        )
 
     def test_feature_sequence_elements_expose_explicit_context(self):
         bis = [
