@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import json
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -420,6 +421,26 @@ def test_build_signal_summary_fields_preserves_pre_breakout_pending_gate() -> No
 
     assert payload["zs_monitor_alert"] == "pre_breakout"
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+
+
+def test_real_1m_pre_breakdown_sample_preserves_independent_tech_json_gate() -> None:
+    sample_path = ROOT / "data" / "reports" / "000651" / "1m" / "tech.json"
+    payload = json.loads(sample_path.read_text(encoding="utf-8"))
+    summary = payload["summary"]
+
+    assert payload["timeframe"] == "1m"
+    assert payload["zs_monitor_alert"] == "pre_breakdown"
+    assert payload["zs_monitor_midline"] == 40.14
+    assert payload["zs_monitor_bias"] == "weak"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["post_divergence_route"] == "higher_level_range"
+    assert summary["conclusion"] == "出现向下预警，但当前不构成确认三卖。"
+    assert summary["suggestion"] == "继续观察首次回抽是否回中枢，未完成离开-回抽确认链前不升级为三卖。"
+    assert summary["sell_points"] == []
+    assert summary["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert summary["post_divergence_route"] == "higher_level_range"
+    assert summary["oscillation_rhythm_state"] == "down_bias"
+    assert summary["zs_monitor_alert"] == "pre_breakdown"
 
 
 def test_build_signal_summary_fields_preserves_catalog_slots() -> None:

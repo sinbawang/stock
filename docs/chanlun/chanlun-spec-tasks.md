@@ -56,7 +56,7 @@
 - [x] 发布/分析消费端已有主辅冲突与降级语义的基本约束。
 - [x] 已沉淀样例包、图文化示例库、节奏回放模板。
 - [x] 已为中枢沉淀 `1m / 5m / 30m / day映射` 优先的 review 与消费示例链，其中 `HK.02357 1m` 已作为 watch/pending 场景锚点接入，`HK.01339 1m` 已作为 completed_then_new_type 场景锚点接入，真实 `SZ.000651 1m` 已作为正式 `pre_breakdown` 场景锚点接入，`SH.601328 1m` 已作为预警前态代理锚点接入，`1m confirmed 3S` 当前由 regression reference gate 保留；后续优先缺口收敛为真实 `1m pre_breakout` 样本与真实 confirmed 页内卡片。
-- [x] `zhongshu-tasks.md` 已补 `ZS5.3.e + ZS6.3` 首版文档-测试映射：`30m pre_breakdown` / `pre_breakout`、`5m down_bias` 已回链到具名 pytest；`1m-confirmed-3s-reference-gate` 与 `1m-proxy-negative-transition-gate` 已落地具名 pytest；`1m pre_breakdown` 的真实样本 publish regression 也已接入，`1m pre_breakout` 仍待真实样本驱动。
+- [x] `zhongshu-tasks.md` 已补 `ZS5.3.e + ZS6.3` 首版文档-测试映射：`30m pre_breakdown` / `pre_breakout`、`5m down_bias` 已回链到具名 pytest；`1m-confirmed-3s-reference-gate` 与 `1m-proxy-negative-transition-gate` 已落地具名 pytest；`1m pre_breakdown` 已同时补到真实 `tech.json` gate 与真实样本 publish regression，`1m pre_breakout` 仍待真实样本驱动。
 
 ## 3. 待完成任务
 
@@ -73,11 +73,54 @@
 - 模块任务页更新可执行 task、验收口径、当前 blocker。
 - 具体实现或 review 完成后，先回写模块任务页，再同步回本页百分比。
 
+### 3.0A 按任务类型看板
+
+阅读方式：
+
+- 文档任务：规格、review、样例库、差异表这类“让 reviewer 看懂”的工作。
+- 测试任务：regression gate、fixture、publish 核验、回放工具校验这类“锁结果不漂”的工作。
+- 代码任务：严格判定链、字段生成、状态机、消费输出这类“真正改变产物行为”的工作。
+- 优先级：`高` 表示当前主线直接依赖；`中` 表示紧跟主线的并行项；`低` 表示需要保留，但不是眼下第一落点。
+
+当前重点：
+
+1. 测试：补真实 `1m pre_breakout` 样本，并落地 [样本 gate](zhongshu-tasks.md#zs53c-pre-breakout-sample) + [publish gate](zhongshu-tasks.md#zs53d-pre-breakout-publish)。
+2. 代码：继续收口 [标准中枢主状态机](zhongshu-tasks.md#zs2-state-machine) 与 [同级别走势类型主链](trend-divergence-tasks.md#td1-route-chain)。
+3. 文档：把 `1m pre_breakout` 与 confirmed live 卡片补进 [review / 图示主入口](zhongshu-tasks.md#zs53e-review-gate-map)。
+
+#### 文档任务
+
+| 任务 | 优先级 | 当前重点 | 当前状态 | 完成度 | 执行入口 | 说明 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 理论/实现/消费三层总差异表 | 高 | 继续压缩 `1m pre_breakout` 与 confirmed live 卡片缺口 | 进行中 | 92% | [中枢映射](zhongshu-tasks.md#zs53e-review-gate-map) / [背驰字段](trend-divergence-tasks.md#td4-output-fields) / [买卖点差异](buy-sell-multi-level-tasks.md#bs1-diff-map) | `1m pre_breakdown` 的真实样本、`tech.json` gate、文案、发布链和 review 主锚点已收口。 |
+| 中枢严格定义图示库 | 高 | 补真实 `1m pre_breakout` 卡片与 confirmed live 卡片 | 进行中 | 82% | [样例卡片](zhongshu-tasks.md#zs62-review-cases) | 当前真实 `SZ.000651 1m pre_breakdown` 已接管 `1m` 向下预警主位。 |
+| `chanlun-rule-spec` 与严格版差异标注 | 中 | 把“现状 vs 目标”继续拆干净 | 进行中 | 55% | [线段主链](segment-tasks.md#s1-segment-bootstrap) / [走势主链](trend-divergence-tasks.md#td1-route-chain) / [买卖点差异](buy-sell-multi-level-tasks.md#bs1-diff-map) | 当前仍有部分段落把现状与目标写在一起；这是总规格文档继续收口的主入口。 |
+| 线段 / 背驰 / 买卖点案例库 | 中 | 继续补原文正反例与映射 | 进行中 | 45%-58% | [线段回归](segment-tasks.md#s4-regression-gates) / [背驰案例](trend-divergence-tasks.md#td5-case-gates) / [买卖点案例](buy-sell-multi-level-tasks.md#bs6-case-gates) | 这三块 review 资料已起骨架，但距离“拿来即审”还有明显缺口。 |
+
+#### 测试任务
+
+| 任务 | 优先级 | 当前重点 | 当前状态 | 完成度 | 执行入口 | 说明 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `1m pre_breakout` 对称 gate 链 | 高 | 找到真实样本并补齐 `tech.json` + publish gate | 待完成 | 35% | [样本任务](zhongshu-tasks.md#zs53c-pre-breakout-sample) / [发布核验](zhongshu-tasks.md#zs53d-pre-breakout-publish) | 当前只有 synthetic gate，缺真实落盘样本。 |
+| `1m pre_break*` 历史回放工具 | 高 | 用自动扫描缩短真实样本发现路径 | 进行中 | 65% | [探测链路](zhongshu-tasks.md#zs53c-pre-breakout-sample) | `build/probe_intraday_prebreak_sample.py` 已支持手工 cutoff 与 `--auto-find` 扫描。 |
+| `1m pre_breakdown` 真实 gate 链 | 中 | 保持 `tech.json` / 文案 / publish 三层真实样本回归 | 进行中 | 86% | [中枢样本](zhongshu-tasks.md#zs53c-pre-breakout-sample) / [发布链](zhongshu-tasks.md#zs53d-pre-breakout-publish) | 真实 `000651 1m` 已补齐独立 `tech.json` gate、文案回归与 publish regression。 |
+| 主辅冲突与重写回归集 | 中 | 补复杂 reclaim / gap / rewrite focused regressions | 进行中 | 58% | [线段回归](segment-tasks.md#s4-regression-gates) / [中枢回归](zhongshu-tasks.md#zs3-rewrite-gap) | 现有多组 focused regression 已落地，但复杂交界仍未完全锁死。 |
+
+#### 代码任务
+
+| 任务 | 优先级 | 当前重点 | 当前状态 | 完成度 | 执行入口 | 说明 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 标准线段级中枢主实现 | 高 | 收口真实 `1m pre_breakout` 之外的主状态机缺口 | 进行中 | 82% | [状态机](zhongshu-tasks.md#zs2-state-machine) / [重写交界](zhongshu-tasks.md#zs3-rewrite-gap) | 当前主缺口集中在复杂 reclaim/重写与 gap 再分辨交界、中枢完成/扩张/新中枢切换、买卖点绑定稳定化。 |
+| 严格同级别走势类型自动分解 | 高 | 形成稳定自动判定闭环 | 待完成 | 25% | [TD1 主链](trend-divergence-tasks.md#td1-route-chain) | 文档已有方向，但代码仍未闭环。 |
+| `tech.json` / 报告 / 小程序口径统一 | 高 | 继续把 pending / confirmed / auxiliary 三态落到消费层 | 进行中 | 73%-84% | [中枢消费](zhongshu-tasks.md#zs43-consumer-output) / [中枢三态](zhongshu-tasks.md#zs52-tristate-output) / [多级别降级](buy-sell-multi-level-tasks.md#bs5-multi-level-consumer) | `1m pre_breakdown` 已打通，下一重点是 `1m pre_breakout` 与 confirmed live 卡片。 |
+| 趋势背驰 / 盘整背驰严格自动判定 | 中 | 把工程化 divergence 收口成严格判定链 | 待完成 | 18%-20% | [趋势背驰](trend-divergence-tasks.md#td2-trend-divergence) / [盘整背驰](trend-divergence-tasks.md#td3-range-divergence) | 当前输出仍偏工程近似。 |
+| 一二三类买卖点严格确认 | 中 | 与最近中枢、首次回抽、级别绑定收口 | 待完成 | 20%-28% | [一类点](buy-sell-multi-level-tasks.md#bs2-buy1) / [二类点](buy-sell-multi-level-tasks.md#bs3-buy2) / [三类点](buy-sell-multi-level-tasks.md#bs4-buy3) | 当前 buy/sell 规则还不等于严格原文确认链。 |
+
 ### 3.1 P0 严格理论主链路
 
 | 任务 | 当前状态 | 完成度 | 说明 |
 | --- | --- | --- | --- |
-| 标准线段级中枢主实现 | 进行中 | 81% | 当前已完成 `segment` 主口径锁定、仅已确认线段参与标准中枢、reclaim/吸收字段下沉、bootstrap / gap / reclaim / reverse_break 多条边界修正，以及多组真实 fixture regression 锁定；同时 `1m pre_breakdown` 已补到真实 `tech.json / advice_text / publish` 回归，review 主锚点也已切到真实样本，并新增 `build/probe_intraday_prebreak_sample.py` 作为 `1m pre_break*` 历史 cutoff 回放工具。剩余主缺口集中在“真实 `1m pre_breakout` 样本”“真实 confirmed 页内卡片”“复杂 reclaim/重写 与 gap 再分辨交界统一”“中枢完成/扩张/新中枢切换”“标准中枢与后续买卖点绑定稳定化”。 |
+| 标准线段级中枢主实现 | 进行中 | 82% | 当前已完成 `segment` 主口径锁定、仅已确认线段参与标准中枢、reclaim/吸收字段下沉、bootstrap / gap / reclaim / reverse_break 多条边界修正，以及多组真实 fixture regression 锁定；同时 `1m pre_breakdown` 已补到真实 `tech.json / advice_text / publish` 回归，review 主锚点也已切到真实样本，并新增 `build/probe_intraday_prebreak_sample.py` 作为 `1m pre_break*` 历史 cutoff 回放工具。剩余主缺口集中在“真实 `1m pre_breakout` 样本”“真实 confirmed 页内卡片”“复杂 reclaim/重写 与 gap 再分辨交界统一”“中枢完成/扩张/新中枢切换”“标准中枢与后续买卖点绑定稳定化”。 |
 | 严格同级别走势类型自动分解 | 待完成 | 25% | 文档已有方向，但代码仍未形成完整、稳定的自动分解闭环；执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 趋势背驰严格自动判定 | 待完成 | 20% | 当前有工程化 divergence 输出，但不是完整原文判定链；执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 盘整背驰严格自动判定 | 待完成 | 18% | 盘整背驰最容易被工程近似替代，需单列主口径实现；执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
@@ -90,7 +133,7 @@
 | 任务 | 当前状态 | 完成度 | 说明 |
 | --- | --- | --- | --- |
 | `chanlun-rule-spec` 与严格版差异标注 | 进行中 | 55% | 当前仍有部分段落把“现状”和“目标”写在一起；后续需按模块任务页逐项回写。 |
-| 理论/实现/消费三层总差异表 | 进行中 | 91% | 字段级矩阵已大体成型；`1m pre_breakdown` 的真实样本、文案、发布链和 review 主锚点已收口，剩余主要是真实 `1m pre_breakout`、真实 confirmed 页内卡片、工程近似阈值和少量未落主产物字段，详见 [zhongshu-tasks.md](zhongshu-tasks.md) 与 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
+| 理论/实现/消费三层总差异表 | 进行中 | 92% | 字段级矩阵已大体成型；`1m pre_breakdown` 的真实样本、`tech.json` gate、文案、发布链和 review 主锚点已收口，剩余主要是真实 `1m pre_breakout`、真实 confirmed 页内卡片、工程近似阈值和少量未落主产物字段，详见 [zhongshu-tasks.md](zhongshu-tasks.md) 与 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | `src/chanlun/analysis.py` 买卖点逻辑差异表 | 待完成 | 15% | 需要逐条标记当前 buy/sell 条件与严格理论的偏差；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
 | 类中枢与标准中枢字段完全拆分 | 进行中 | 45% | 文档已拆，输出字段与消费端仍需继续收敛；执行拆解见 [zhongshu-tasks.md](zhongshu-tasks.md)。 |
 | 主辅冲突样例库 | 进行中 | 50% | 已有框架，还缺足量正反例；优先围绕中枢主辅冲突和买卖点降级补样例。 |
@@ -109,8 +152,8 @@
 
 | 任务 | 当前状态 | 完成度 | 说明 |
 | --- | --- | --- | --- |
-| `tech.json` 严格结构状态字段补齐 | 进行中 | 80% | 已完成大部分字段级接线；`1m pre_breakdown` 真实 `tech.json` 已有回归和主锚点接线，剩余真实 `1m pre_breakout`、节奏阈值精化与少量结构字段收口见 [zhongshu-tasks.md](zhongshu-tasks.md) 与 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
-| confirmed/pending/auxiliary 三态统一 | 进行中 | 72% | 已有统一字段级文档口径；`1m pre_breakdown` 的 pending/watch 链已覆盖真实 `tech.json`、文案与发布输出，剩余主要是真实 `1m pre_breakout` 与 confirmed live 卡片落地，优先跟随 [zhongshu-tasks.md](zhongshu-tasks.md) 和 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md) 收口。 |
+| `tech.json` 严格结构状态字段补齐 | 进行中 | 82% | 已完成大部分字段级接线；`1m pre_breakdown` 真实 `tech.json` 已补齐独立真实 gate、回归和主锚点接线，剩余真实 `1m pre_breakout`、节奏阈值精化与少量结构字段收口见 [zhongshu-tasks.md](zhongshu-tasks.md) 与 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
+| confirmed/pending/auxiliary 三态统一 | 进行中 | 73% | 已有统一字段级文档口径；`1m pre_breakdown` 的 pending/watch 链已覆盖真实 `tech.json` gate、文案与发布输出，剩余主要是真实 `1m pre_breakout` 与 confirmed live 卡片落地，优先跟随 [zhongshu-tasks.md](zhongshu-tasks.md) 和 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md) 收口。 |
 | 小程序/报告端主辅口径显式展示 | 进行中 | 84% | 已完成真实发布包样本首轮审计，并补上 `1m pre_breakdown` 的真实文案 / 发布 / review 主锚点闭环；剩余主要是真实 `1m pre_breakout`、confirmed live 卡片和 UI 回归校验。 |
 
 ## 4. 下一阶段建议顺序
@@ -160,7 +203,7 @@
 - 用途：统一原文定义、页内真实卡片、`tech.json` / 报告 / 小程序消费红线，以及 `1m / 5m / 30m / day映射` 的示例优先级。
 - 当前进展：`zhongshu-visual-example-library.md` 第 1 至第 4 节均已进入页内可审状态；`zhongshu-consumer-display-examples.md` 已补同案三栏对照，当前主锚点包括 `HK.02357 1m range ongoing`、`HK.01339 1m completed_then_new_type`、真实 `SZ.000651 1m pre_breakdown`、`SH.601328 1m pre-warning proxy`、`1m confirmed 3S` regression reference、`SH.601318 5m down_bias`、`SZ.000651 30m -> day`、`SZ.002594 30m pre_breakout`。其中 `SH.601328 1m` 目前仅作 `1m` 预警前态代理锚点；真实 `SZ.000651 1m` 已接管向下预警主入口，当前主要缺口收敛为真实 `1m pre_breakout` 与真实 confirmed 页内卡片。
 - 当前进展补充：已新增 `build/probe_intraday_prebreak_sample.py` 作为 `1m pre_break*` 历史 cutoff 回放工具，并已用它首轮回放否定 `00981 / 00728 / 06088` 三组高优先 `1m pre_breakout` 窗口；下一步应扩历史窗口或换新标的，不再重复把这三组首轮窗口当主候选。
-- 当前进展补充：`zhongshu-tasks.md` 的 `ZS6.3` 已把 `30m pre_breakout`、`30m pre_breakdown/route`、`5m down_bias` 收口到具名 pytest；`1m-confirmed-3s-reference-gate` 与 `1m-proxy-negative-transition-gate` 也已落到 `tests/test_build_miniapp_publish_bundle.py`；正式 `1m pre_breakdown` 已新增真实样本 publish regression，`1m pre_breakout` 仍停留在 synthetic gate 与样本缺口阶段。
+- 当前进展补充：`zhongshu-tasks.md` 的 `ZS6.3` 已把 `30m pre_breakout`、`30m pre_breakdown/route`、`5m down_bias` 收口到具名 pytest；`1m-confirmed-3s-reference-gate` 与 `1m-proxy-negative-transition-gate` 也已落到 `tests/test_build_miniapp_publish_bundle.py`；正式 `1m pre_breakdown` 现已同时具备真实样本 `tech.json` gate 与 publish regression，`1m pre_breakout` 仍停留在 synthetic gate 与样本缺口阶段。
 
 ## 5. review 用任务拆分
 
