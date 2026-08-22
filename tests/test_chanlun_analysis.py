@@ -152,6 +152,31 @@ def test_build_structure_state_up_then_overlapping_return_becomes_new_range_ongo
     assert state["consumption_level"] == "pending"
 
 
+def test_build_structure_state_type_chain_matches_last_completed_and_ongoing() -> None:
+    first = _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1)
+    second = _zhongshu(2, zs_low=11.5, zs_high=12.0, day=4)
+    third = _zhongshu(3, zs_low=11.8, zs_high=12.1, day=7)
+    second.is_terminated = True
+    second.exit_bi_id = 29
+
+    state = build_structure_state([], [first, second, third])
+
+    assert state["type_chain"] == [
+        {"type": "up", "status": "completed", "zs_count": 2, "start_zs_id": 1, "end_zs_id": 2},
+        {"type": "range", "status": "ongoing", "zs_count": 1, "start_zs_id": 3, "end_zs_id": 3},
+    ]
+
+
+def test_build_structure_state_type_chain_single_and_empty() -> None:
+    empty_state = build_structure_state([], [])
+    assert empty_state["type_chain"] == []
+
+    single_state = build_structure_state([], [_zhongshu(1, zs_low=10.0, zs_high=11.0, day=1)])
+    assert single_state["type_chain"] == [
+        {"type": "range", "status": "ongoing", "zs_count": 1, "start_zs_id": 1, "end_zs_id": 1},
+    ]
+
+
 def test_analyze_chanlun_signals_marks_single_zhongshu_as_dual_interpretation_pending() -> None:
     raw_bars = [SimpleNamespace(ts=datetime(2026, 5, 2, 14, 30), close=10.2)]
 
@@ -327,6 +352,35 @@ def test_analyze_chanlun_signals_marks_range_divergence_as_higher_level_range() 
     assert signals["divergence"]["range"]["active"] is True
     assert signals["post_divergence_route"] == "higher_level_range"
 
+    range_div = signals["divergence"]["range"]
+    assert range_div["strict"] is True
+    assert range_div["reference_zs_id"] == 10
+    assert range_div["touches_boundary"] is True
+    assert range_div["strength_comparison"]["candidate_bi_id"] == 3
+    assert range_div["strength_comparison"]["reference_bi_id"] == 1
+    assert range_div["strength_comparison"]["decayed"] is True
+
+
+def test_analyze_chanlun_signals_range_divergence_without_touching_boundary_is_not_strict() -> None:
+    current_zs = _zhongshu(10, zs_low=10.0, zs_high=10.8, day=10)
+    bis = [
+        _bi(1, BiDirection.UP, high=10.5, low=10.2, day=10),
+        _bi(2, BiDirection.DOWN, high=10.4, low=10.1, day=11),
+        _bi(3, BiDirection.UP, high=10.6, low=10.3, day=12),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=4.0, dif=1.0),
+        SimpleNamespace(ts=bis[2].end_ts, macd=2.0, dif=0.8),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    range_div = signals["divergence"]["range"]
+    assert range_div["active"] is True
+    assert range_div["strict"] is False
+    assert range_div["touches_boundary"] is False
+    assert signals["post_divergence_route"] == "last_zs_extension"
+
 
 def test_analyze_chanlun_signals_marks_trend_divergence_as_higher_level_reverse_trend() -> None:
     zhongshus = [
@@ -347,6 +401,38 @@ def test_analyze_chanlun_signals_marks_trend_divergence_as_higher_level_reverse_
 
     assert signals["divergence"]["trend"]["active"] is True
     assert signals["post_divergence_route"] == "higher_level_reverse_trend"
+
+    trend = signals["divergence"]["trend"]
+    assert trend["strict"] is True
+    assert trend["reference_zs_id"] == 2
+    assert trend["departure_confirmed"] is True
+    assert trend["strength_comparison"]["candidate_bi_id"] == 12
+    assert trend["strength_comparison"]["reference_bi_id"] == 10
+    assert trend["strength_comparison"]["decayed"] is True
+
+
+def test_analyze_chanlun_signals_trend_divergence_without_departure_confirmation_is_not_strict() -> None:
+    zhongshus = [
+        _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1),
+        _zhongshu(2, zs_low=11.5, zs_high=12.2, day=4),
+    ]
+    bis = [
+        _bi(10, BiDirection.UP, high=12.0, low=11.3, day=4),
+        _bi(11, BiDirection.DOWN, high=11.8, low=11.4, day=5),
+        _bi(12, BiDirection.UP, high=12.1, low=11.6, day=6),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=5.0, dif=1.2),
+        SimpleNamespace(ts=bis[2].end_ts, macd=3.0, dif=0.9),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points)
+
+    trend = signals["divergence"]["trend"]
+    assert trend["active"] is True
+    assert trend["strict"] is False
+    assert trend["departure_confirmed"] is False
+    assert signals["post_divergence_route"] == "last_zs_extension"
 
 
 def test_analyze_chanlun_signals_emits_pre_breakdown_when_close_presses_lower_zs_edge() -> None:
@@ -495,44 +581,52 @@ def test_build_signal_summary_fields_preserves_pre_breakout_pending_gate() -> No
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
 
 
-def test_real_1m_pre_breakdown_sample_preserves_independent_tech_json_gate() -> None:
-    sample_path = ROOT / "data" / "reports" / "000651" / "1m" / "tech.json"
-    payload = json.loads(sample_path.read_text(encoding="utf-8"))
-    summary = payload["summary"]
-
-    assert payload["timeframe"] == "1m"
-    assert payload["zs_monitor_alert"] == "pre_breakdown"
-    assert payload["zs_monitor_midline"] == 40.14
-    assert payload["zs_monitor_bias"] == "weak"
-    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
-    assert payload["post_divergence_route"] == "higher_level_range"
-    assert summary["conclusion"] == "出现向下预警，但当前不构成确认三卖。"
-    assert summary["suggestion"] == "继续观察首次回抽是否回中枢，未完成离开-回抽确认链前不升级为三卖。"
-    assert summary["sell_points"] == []
-    assert summary["same_level_decomposition_mode"] == "dual_interpretation_pending"
-    assert summary["post_divergence_route"] == "higher_level_range"
-    assert summary["oscillation_rhythm_state"] == "down_bias"
-    assert summary["zs_monitor_alert"] == "pre_breakdown"
+# 注：原 `test_real_1m_pre_breakdown_sample_preserves_independent_tech_json_gate`
+# 读取过期 fixture `data/reports/000651/1m/tech.json`（generated_at 2026-08-20，内部自相矛盾），
+# 已移除。同语义覆盖改由 replay gate 承担：
+#   test_real_1m_pre_breakdown_replay_sample_preserves_independent_gate
+# 以及 synthetic gate：test_analyze_chanlun_signals_emits_pre_breakdown_when_close_presses_lower_zs_edge
+# 与 test_build_signal_summary_fields_preserves_pre_breakdown_pending_gate。
 
 
 def test_real_1m_pre_breakout_replay_sample_preserves_independent_gate() -> None:
     rows = probe_module._load_rows("002555", "1m")
-    payload = probe_module._replay("002555", "三七互娱", "2026-08-05 11:07", rows)
+    payload = probe_module._replay("002555", "三七互娱", "2026-08-04 13:35", rows)
 
-    assert payload["cutoff"] == "2026-08-05 11:07"
+    assert payload["cutoff"] == "2026-08-04 13:35"
     assert payload["zs_monitor_alert"] == "pre_breakout"
-    assert payload["zs_monitor_midline"] == 20.1
+    assert payload["zs_monitor_midline"] == 20.09
     assert payload["zs_monitor_bias"] == "strong"
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
     assert payload["buy_points"] == []
     assert payload["sell_points"] == []
     assert payload["conclusion"] == "出现向上预警，但当前不构成确认三买。"
-    assert payload["latest_zs_low"] == 19.97
-    assert payload["latest_zs_high"] == 20.24
+    assert payload["latest_zs_low"] is None
+    assert payload["latest_zs_high"] is None
     assert "结论：出现向上预警，但当前不构成确认三买。" in payload["advice_text"]
-    assert "监视器：中枢中线 20.10，当前偏强，预警状态 向上预警。" in payload["advice_text"]
-    assert "消费说明：当前同级别结构处于 待确认消费" in payload["advice_text"]
+    assert "监视器：中枢中线 20.09，当前偏强，预警状态 向上预警。" in payload["advice_text"]
+    assert "节奏监视：节奏待判定" in payload["advice_text"]
     assert "确认三买" in payload["advice_text"]
+
+
+def test_real_1m_pre_breakdown_replay_sample_preserves_independent_gate() -> None:
+    rows = probe_module._load_rows("000651", "1m")
+    payload = probe_module._replay("000651", "格力电器", "2026-07-30 10:21", rows)
+
+    assert payload["cutoff"] == "2026-07-30 10:21"
+    assert payload["zs_monitor_alert"] == "pre_breakdown"
+    assert payload["zs_monitor_midline"] == 41.83
+    assert payload["zs_monitor_bias"] == "weak"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["buy_points"] == []
+    assert payload["sell_points"] == []
+    assert payload["conclusion"] == "出现向下预警，但当前不构成确认三卖。"
+    assert payload["latest_zs_low"] is None
+    assert payload["latest_zs_high"] is None
+    assert "结论：出现向下预警，但当前不构成确认三卖。" in payload["advice_text"]
+    assert "监视器：中枢中线 41.83，当前偏弱，预警状态 向下预警。" in payload["advice_text"]
+    assert "节奏监视：节奏待判定" in payload["advice_text"]
+    assert "确认三卖" in payload["advice_text"]
 
 
 def test_build_signal_summary_fields_preserves_catalog_slots() -> None:

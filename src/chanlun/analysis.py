@@ -324,6 +324,50 @@ def _build_completed_run_state(zhongshus: list[Zhongshu]) -> dict[str, object]:
     )
 
 
+def _completed_run_type_entries(live_runs: list[list[Zhongshu]]) -> list[dict[str, object]]:
+    """把当前 run 之前的所有 run 折叠成 completed 类型链条目（run 粒度）。"""
+    entries: list[dict[str, object]] = []
+    for run in live_runs[:-1]:
+        group_type = "range" if len(run) < 2 else _relation_kind(run[0], run[1])
+        entries.append(
+            {
+                "type": group_type,
+                "status": "completed",
+                "zs_count": len(run),
+                "start_zs_id": run[0].zs_id,
+                "end_zs_id": run[-1].zs_id,
+            }
+        )
+    return entries
+
+
+def _group_type_chain_entry(group: dict[str, object]) -> dict[str, object]:
+    """把 `_build_group_state(...)` 产出的 group 快照转成类型链条目。"""
+    return {
+        "type": group.get("type"),
+        "status": group.get("status"),
+        "zs_count": group.get("zs_count") if group.get("zs_count") is not None else group.get("zs_count_so_far"),
+        "start_zs_id": group.get("start_zs_id"),
+        "end_zs_id": group.get("end_zs_id"),
+    }
+
+
+def _find_reabsorbed_tail_before_current(zhongshus: list[Zhongshu], current: Zhongshu | None) -> Zhongshu | None:
+    if current is None:
+        return None
+    target_id = getattr(current, "zs_id", None)
+    if target_id is None:
+        return None
+    for item in reversed(zhongshus):
+        if item is current:
+            continue
+        if getattr(item, "superseded_by_zs_id", None) != target_id:
+            continue
+        if getattr(item, "is_reabsorbed_by_larger_expansion", False):
+            return item
+    return None
+
+
 def _safe_float(value: object) -> float | None:
     if value is None:
         return None
@@ -333,6 +377,28 @@ def _safe_float(value: object) -> float | None:
         return None
 
 
+def _recent_local_zs_band(raw_bars: list[Bar], *, lookback: int = 20) -> tuple[float, float] | None:
+    if not raw_bars:
+        return None
+    window = raw_bars[-lookback:]
+    lows: list[float] = []
+    highs: list[float] = []
+    for bar in window:
+        close_value = _safe_float(getattr(bar, "close", None))
+        low_value = _safe_float(getattr(bar, "low", None))
+        high_value = _safe_float(getattr(bar, "high", None))
+        if close_value is not None:
+            lows.append(close_value)
+            highs.append(close_value)
+        if low_value is not None:
+            lows.append(low_value)
+        if high_value is not None:
+            highs.append(high_value)
+    if not lows or not highs:
+        return None
+    return min(lows), max(highs)
+
+
 def _build_zs_monitor_state(
     raw_bars: list[Bar],
     current_zs: Zhongshu | None,
@@ -340,26 +406,40 @@ def _build_zs_monitor_state(
     buy_points: list[str],
     sell_points: list[str],
 ) -> dict[str, object]:
-    if current_zs is None or not raw_bars:
+    if not raw_bars:
         return {
             "zs_monitor_midline": None,
             "zs_monitor_bias": None,
             "zs_monitor_alert": "none",
         }
-    if "buy_3" in buy_points or "sell_3" in sell_points:
-        alert = "none"
-    else:
-        alert = "none"
 
+    alert = "none"
     latest_close = _safe_float(getattr(raw_bars[-1], "close", None))
-    zs_low = _safe_float(getattr(current_zs, "zs_low", None))
-    zs_high = _safe_float(getattr(current_zs, "zs_high", None))
-    if latest_close is None or zs_low is None or zs_high is None:
+    if latest_close is None:
         return {
             "zs_monitor_midline": None,
             "zs_monitor_bias": None,
             "zs_monitor_alert": "none",
         }
+
+    if current_zs is not None:
+        zs_low = _safe_float(getattr(current_zs, "zs_low", None))
+        zs_high = _safe_float(getattr(current_zs, "zs_high", None))
+        if zs_low is None or zs_high is None:
+            return {
+                "zs_monitor_midline": None,
+                "zs_monitor_bias": None,
+                "zs_monitor_alert": "none",
+            }
+    else:
+        fallback_band = _recent_local_zs_band(raw_bars)
+        if fallback_band is None:
+            return {
+                "zs_monitor_midline": None,
+                "zs_monitor_bias": None,
+                "zs_monitor_alert": "none",
+            }
+        zs_low, zs_high = fallback_band
 
     width = zs_high - zs_low
     if width <= 0:
@@ -436,9 +516,9 @@ def _build_post_divergence_route(
     trend = divergence.get("trend") or {}
     range_divergence = divergence.get("range") or {}
 
-    if trend.get("active"):
+    if trend.get("strict"):
         return "higher_level_reverse_trend"
-    if range_divergence.get("active"):
+    if range_divergence.get("strict"):
         return "higher_level_range"
     if top_divergence or bottom_divergence or confirmation_basis == "still_inside_last_zs_extension":
         return "last_zs_extension"
@@ -498,6 +578,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
             },
             "current_structure_status": "ongoing_same_type",
             "consumption_level": "auxiliary",
+            "type_chain": [],
         }
 
     current_run = live_runs[-1]
@@ -505,7 +586,13 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
 
     if len(current_run) == 1:
         only = current_run[0]
-        last_completed = _build_completed_run_state(previous_run) if previous_run else None
+        reabsorbed_tail = _find_reabsorbed_tail_before_current(zhongshus, only)
+        last_completed = None
+        current_group_type = "range"
+        if previous_run and not (reabsorbed_tail is not None and max(reabsorbed_tail.zs_low, only.zs_low) < min(reabsorbed_tail.zs_high, only.zs_high)):
+            last_completed = _build_completed_run_state(previous_run)
+        if reabsorbed_tail is not None and max(reabsorbed_tail.zs_low, only.zs_low) < min(reabsorbed_tail.zs_high, only.zs_high):
+            current_group_type = _relation_kind(previous_run[-1], only) if previous_run else "range"
         relationship_kind = "undetermined"
         transition_state = "none"
         relationship_note = "当前只有一个同级别中枢，按工程口径先视为盘整进行中。"
@@ -518,7 +605,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
         return {
             "last_completed": last_completed,
             "current_ongoing": {
-                "type": "range",
+                "type": current_group_type,
                 "status": "ongoing",
                 "start_ts": _isoformat_ts(only.start_ts),
                 "latest_ts": _isoformat_ts(latest_bar_ts or only.end_ts),
@@ -534,6 +621,16 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
             },
             "current_structure_status": current_structure_status,
             "consumption_level": "pending",
+            "type_chain": _completed_run_type_entries(live_runs)
+            + [
+                {
+                    "type": current_group_type,
+                    "status": "ongoing",
+                    "zs_count": 1,
+                    "start_zs_id": only.zs_id,
+                    "end_zs_id": only.zs_id,
+                }
+            ],
         }
 
     relations = [_relation_kind(previous, current) for previous, current in zip(current_run, current_run[1:])]
@@ -625,6 +722,11 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
         }
     )
 
+    type_chain = _completed_run_type_entries(live_runs)
+    if last_completed is not None:
+        type_chain.append(_group_type_chain_entry(last_completed))
+    type_chain.append(_group_type_chain_entry(current_ongoing))
+
     return {
         "last_completed": last_completed,
         "current_ongoing": current_ongoing,
@@ -635,6 +737,25 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
         },
         "current_structure_status": current_structure_status,
         "consumption_level": consumption_level,
+        "type_chain": type_chain,
+    }
+
+
+def _build_strength_comparison(
+    candidate: Bi | None,
+    reference: Bi | None,
+    strengths: dict[int, dict[str, float]],
+) -> dict[str, object] | None:
+    if candidate is None or reference is None:
+        return None
+    candidate_strength = strengths.get(candidate.bi_id, {}).get("macd_sum_abs", 0.0)
+    reference_strength = strengths.get(reference.bi_id, {}).get("macd_sum_abs", 0.0)
+    return {
+        "candidate_bi_id": candidate.bi_id,
+        "candidate_strength": round(float(candidate_strength), 4),
+        "reference_bi_id": reference.bi_id,
+        "reference_strength": round(float(reference_strength), 4),
+        "decayed": candidate_strength < reference_strength,
     }
 
 
@@ -645,34 +766,86 @@ def build_divergence_state(
     bottom_divergence: bool,
     latest_confirmed_up: Bi | None,
     latest_down: Bi | None,
+    previous_confirmed_up: Bi | None = None,
+    previous_confirmed_down: Bi | None = None,
+    strengths: dict[int, dict[str, float]] | None = None,
+    current_zs: Zhongshu | None = None,
 ) -> dict[str, object]:
+    strengths = strengths or {}
     ongoing = structure_state.get("current_ongoing") or {}
     ongoing_type = ongoing.get("type")
 
     trend_active = False
     trend_direction = None
     trend_signal_bi = None
+    trend_reference_bi = None
     if ongoing_type == "up" and top_divergence:
         trend_active = True
         trend_direction = "up"
         trend_signal_bi = latest_confirmed_up
+        trend_reference_bi = previous_confirmed_up
     elif ongoing_type == "down" and bottom_divergence:
         trend_active = True
         trend_direction = "down"
         trend_signal_bi = latest_down
+        trend_reference_bi = previous_confirmed_down
 
     range_active = False
     range_direction = None
     range_signal_bi = None
+    range_reference_bi = None
     if ongoing_type == "range":
         if top_divergence:
             range_active = True
             range_direction = "up"
             range_signal_bi = latest_confirmed_up
+            range_reference_bi = previous_confirmed_up
         elif bottom_divergence:
             range_active = True
             range_direction = "down"
             range_signal_bi = latest_down
+            range_reference_bi = previous_confirmed_down
+
+    reference_zs_id = current_zs.zs_id if current_zs is not None else None
+
+    def _departure_confirmed(signal_bi: Bi | None, direction: str | None) -> bool:
+        if current_zs is None or signal_bi is None:
+            return False
+        if direction == "up":
+            return signal_bi.high > current_zs.zs_high
+        if direction == "down":
+            return signal_bi.low < current_zs.zs_low
+        return False
+
+    def _touches_boundary(signal_bi: Bi | None, direction: str | None) -> bool:
+        if current_zs is None or signal_bi is None:
+            return False
+        if direction == "up":
+            return signal_bi.high >= current_zs.zs_high
+        if direction == "down":
+            return signal_bi.low <= current_zs.zs_low
+        return False
+
+    trend_strength = _build_strength_comparison(trend_signal_bi, trend_reference_bi, strengths)
+    range_strength = _build_strength_comparison(range_signal_bi, range_reference_bi, strengths)
+
+    trend_departure_confirmed = _departure_confirmed(trend_signal_bi, trend_direction)
+    trend_strict = bool(
+        trend_active
+        and reference_zs_id is not None
+        and trend_departure_confirmed
+        and trend_strength is not None
+        and trend_strength.get("decayed")
+    )
+
+    range_touches_boundary = _touches_boundary(range_signal_bi, range_direction)
+    range_strict = bool(
+        range_active
+        and reference_zs_id is not None
+        and range_touches_boundary
+        and range_strength is not None
+        and range_strength.get("decayed")
+    )
 
     return {
         "top": {
@@ -696,6 +869,10 @@ def build_divergence_state(
             if trend_signal_bi
             else None,
             "basis": "same_level_trend_macd_strength" if trend_active else None,
+            "strict": trend_strict,
+            "reference_zs_id": reference_zs_id if trend_active else None,
+            "departure_confirmed": trend_departure_confirmed if trend_active else None,
+            "strength_comparison": trend_strength if trend_active else None,
         },
         "range": {
             "active": range_active,
@@ -706,6 +883,10 @@ def build_divergence_state(
             if range_signal_bi
             else None,
             "basis": "first_same_level_zhongshu_failed_departure" if range_active else None,
+            "strict": range_strict,
+            "reference_zs_id": reference_zs_id if range_active else None,
+            "touches_boundary": range_touches_boundary if range_active else None,
+            "strength_comparison": range_strength if range_active else None,
         },
     }
 
@@ -796,6 +977,10 @@ def analyze_chanlun_signals(
         bottom_divergence=bottom_divergence,
         latest_confirmed_up=latest_confirmed_up,
         latest_down=latest_down,
+        previous_confirmed_up=previous_confirmed_up,
+        previous_confirmed_down=previous_confirmed_down,
+        strengths=strengths,
+        current_zs=current_zs,
     )
     post_divergence_route = _build_post_divergence_route(
         structure_state,

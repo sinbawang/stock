@@ -229,8 +229,8 @@ def analyze_current_state(
     signal_lines = [
         "顶背驰：有" if top_divergence else "顶背驰：无",
         "底背驰：有" if bottom_divergence else "底背驰：无",
-        f"趋势背驰：{'有' if signals['divergence']['trend']['active'] else '无'}",
-        f"盘整背驰：{'有' if signals['divergence']['range']['active'] else '无'}",
+        f"趋势背驰：{'确认' if signals['divergence']['trend']['strict'] else ('迹象' if signals['divergence']['trend']['active'] else '无')}",
+        f"盘整背驰：{'确认' if signals['divergence']['range']['strict'] else ('迹象' if signals['divergence']['range']['active'] else '无')}",
         f"买点：{', '.join(format_signal_point_labels(buy_points))}" if buy_points else "买点：当前无确认一二三类买点",
         f"卖点：{', '.join(format_signal_point_labels(sell_points))}" if sell_points else "卖点：当前无确认一二三类卖点",
     ]

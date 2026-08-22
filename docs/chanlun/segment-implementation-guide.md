@@ -457,6 +457,38 @@ A/B 最小验证命令：
 
 建议测试文件：`tests/test_segment_rediscrimination_matrix.py`。
 
+### 8.5 gap defer / invalidated 交界优先级清单（工程已锁定）
+
+本清单把 `_extend_segment(...)` 主循环里 `pending_gap_break_idx` 被触发后的判决顺序固定下来，
+避免“同图不同判”。`GapCandidateState` 取值与含义：
+
+- `NONE`：无缺口候选。
+- `CONFIRMED`：缺口再分辨为 `True`（后续同向先破第一笔终点）。
+- `INVALIDATED`：缺口再分辨为 `False`（后续反向先破第一笔起点），且未进入 defer。
+- `DEFERRED`：缺口再分辨为 `False`，但满足 `enable_gap_false_defer` 且候选恰为当前 cursor、后续笔数足够，延迟到下一轮再判。
+- `PENDING`：再分辨为 `None`（证据不足），暂不下结论。
+
+判决优先级（高 → 低）：
+
+1. **CONFIRMED**：立即按缺口分型终结，`stop_reason` 为 `feature_sequence_gap_fractal` 或
+   `feature_sequence_gap_fractal_delayed_true`。唯一例外是“下行弱缺口未破 `last_same_extreme`”
+   会继续保持 pending，不提前确认。
+2. **INVALIDATED + reclaim**：非 defer 窗口下，先尝试 `_reclaims_transition_back_to_prior_segment(...)`；
+   若反向笔已破第一笔起点、转折被收回前段，则回退 cursor、清空 gap 候选、继续扫描。
+3. **DEFERRED**：更新 `last_same_extreme / last_reverse_extreme`、置 `defer_next_reverse_break=True`、
+   裁掉旧 `reverse_indices`，`cursor += 2` 进入下一轮，本轮不确认。
+4. **INVALIDATED（无可 reclaim）**：置 `gap_false_locked=True` 锁死候选，清 `defer_next_reverse_break`，
+   转 fallback 路径（`reverse_break` / theory stop / `same_direction_not_extending`）。
+
+pending / confirmed 共存红线：
+
+- 只有 `CONFIRMED` 才允许写 confirmed 终结码；`DEFERRED / INVALIDATED / PENDING` 一律不得提前写 confirmed。
+- `DEFERRED` 期间 `defer_next_reverse_break=True` 会抑制下一轮 fallback `reverse_break`，保证结构未落定前不确认。
+- `INVALIDATED` 后 `gap_false_locked=True`，后续不再接受 gap 候选 True 翻案（“先破起点优先”），
+  已作废的 pending 候选不得与后续 confirmed 在同一角色并存。
+- 下游中枢层只消费 confirmed 段（未确认尾段被裁，见 [zhongshu-input-qualification.md](zhongshu-input-qualification.md)），
+  因此 defer / invalidated 期间的“候选转折”不会漏进中枢输入。
+
 ## 9. 线段与中枢的关系
 
 当前项目里的线段，可以作为后续“线段级中枢实验口径”的输入候选，但这里有两个边界必须先说清楚：

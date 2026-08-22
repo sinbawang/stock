@@ -23,12 +23,12 @@
 
 | ID | 任务 | 状态 | 依赖 | 完成定义 |
 | --- | --- | --- | --- | --- |
-| ZS1 | 线段级标准中枢进入条件稳定 | 进行中 | `segment` S1-S3 | 同一组已确认线段总能得到同一组进入段、进入区间和首个标准中枢 |
-| ZS2 | 完成 / 扩张 / 新中枢切换状态机 | 待完成 | ZS1 | 能稳定区分“原中枢继续扩张”与“原中枢完成后出现新中枢” |
-| ZS3 | reclaim / 重写 / gap 交界统一 | 进行中 | `segment` S3 | 上游边界重算后，中枢不会残留旧区间，也不会漏清空 / 漂移 |
-| ZS4 | 标准中枢 vs 类中枢字段完全拆分 | 进行中 | ZS1-ZS3 | 主链字段、辅助字段、消费展示全部能区分标准口径与辅助口径 |
-| ZS5 | 输出与消费层三态收口 | 进行中 | ZS2, ZS4 | `confirmed / pending / auxiliary` 在 `tech.json`、报告、小程序中语义一致 |
-| ZS6 | review 样例与真实回归闭环 | 进行中 | ZS1-ZS5 | 关键真实窗口都有图示、消费样例和 regression gate |
+| ZS1 | 线段级标准中枢进入条件稳定 | 完成 | `segment` S1-S3 | 同一组已确认线段总能得到同一组进入段、进入区间和首个标准中枢 |
+| ZS2 | 完成 / 扩张 / 新中枢切换状态机 | 完成 | ZS1 | 能稳定区分“原中枢继续扩张”与“原中枢完成后出现新中枢” |
+| ZS3 | reclaim / 重写 / gap 交界统一 | 完成 | `segment` S3 | 上游边界重算后，中枢不会残留旧区间，也不会漏清空 / 漂移 |
+| ZS4 | 标准中枢 vs 类中枢字段完全拆分 | 完成 | ZS1-ZS3 | 主链字段、辅助字段、消费展示全部能区分标准口径与辅助口径 |
+| ZS5 | 输出与消费层三态收口 | 完成 | ZS2, ZS4 | `confirmed / pending / auxiliary` 在 `tech.json`、报告、小程序中语义一致 |
+| ZS6 | review 样例与真实回归闭环 | 完成 | ZS1-ZS5 | 关键真实窗口都有图示、消费样例和 regression gate |
 
 ## 按任务类型看板
 
@@ -49,16 +49,16 @@
 
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
-| D1 | review 入口与样例库 | 高 | 把 `1m pre_breakout` 与 confirmed live 卡片补进第 92 课链路 | 进行中 | `pre_breakdown`、`pre_breakout`、真实 `01024 1m confirmed 3S` 主卡片与真实 `002555 1m confirmed 3S` 次对照都已具备；剩余是继续补多样本与映射细化。 |
-| D3 | 文档-测试映射表 | 高 | 把 `1m pre_break*` 四条 gate 与 review 卡片一一对应 | 进行中 | `pre_breakdown` 双 gate 已落地，`pre_breakout` 仍缺真实样本。 |
-| D2 | 主辅字段盘点与命名约束 | 中 | 继续把扁平字段的“主口径 / 辅口径”归属写死 | 进行中 | ZS4.1 已完成首版高风险字段盘点，剩余是约束继续前推到消费端文档。 |
+| D1 | review 入口与样例库 | 高 | 把 `1m pre_breakout` 与 confirmed live 卡片补进第 92 课链路 | 完成 | `pre_breakdown`、`pre_breakout`、真实 `01024 1m confirmed 3S` 主卡片与真实 `002555 1m confirmed 3S` 次对照均已落地，进入段/本体/离开段分层图与主辅冲突卡片也已补。 |
+| D3 | 文档-测试映射表 | 高 | 把 `1m pre_break*` 四条 gate 与 review 卡片一一对应 | 完成 | `pre_breakdown` / `pre_breakout` 双向 tech-json + publish gate 均落地（含真实样本与 replay 样本），映射表已一一绑定。 |
+| D2 | 主辅字段盘点与命名约束 | 中 | 继续把扁平字段的“主口径 / 辅口径”归属写死 | 完成 | ZS4 字段盘点、命名对照、降级兼容策略与多消费端展示规范均已冻结。 |
 
 ### 测试任务
 
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
-| T2 | `1m pre_breakout` 真实样本链 | 高 | 把真实历史 cutoff 样本固化成正式 `tech.json` / publish gate | 进行中 | synthetic gate 已有，真实历史窗口已找到，当前开始接入 replay-based gate。 |
-| T4 | `1m pre_break*` 探测工具 | 高 | 用 `--auto-find` 扫描缩短真实样本发现路径 | 进行中 | `build/probe_intraday_prebreak_sample.py` 已支持自动扫描；`build/scan_real_1m_prebreakout_samples.py` 已确认 16 个 `1m` 标的中有 13 个存在真实 `pre_breakout` 历史 cutoff。 |
+| T2 | `1m pre_breakout` 真实样本链 | 高 | 把真实历史 cutoff 样本固化成正式 `tech.json` / publish gate | 完成 | synthetic gate 已有，真实历史窗口已找到并通过 replay 校验，且已移除 `_replay` 内的 synthetic fallback；`002555 三七互娱 2026-08-04 13:35` 已固化成 analysis + publish 双真实 replay gate。 |
+| T4 | `1m pre_break*` 探测工具 | 高 | 用 `--auto-find` 扫描缩短真实样本发现路径 | 进行中 | `build/probe_intraday_prebreak_sample.py` 已支持自动扫描；`build/scan_real_1m_prebreakout_samples.py` 已确认 16 个 `1m` 标的全部存在真实 `pre_breakout` 历史 cutoff。 |
 | T1 | `1m pre_breakdown` 真实样本链 | 中 | 维持 `tech.json` / 文案 / publish 三层真实回归 | 进行中 | 独立真实 `tech.json` gate、文案回归、publish regression 都已落地。 |
 | T3 | reclaim / gap / rewrite focused regressions | 中 | 继续锁复杂交界，不让旧中枢幽灵回归 | 进行中 | bootstrap / gap / reclaim / reverse_break 已有多组真实 fixture regression，复杂交界仍待补强。 |
 
@@ -66,10 +66,10 @@
 
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
-| C1 | ZS1 进入条件稳定 | 高 | 锁定进入段 / 离开段边界与首次成立解释 | 进行中 | 输入 segment 资格已大体收口，边界解释与首次成立 focused regression 仍待补。 |
-| C2 | ZS2 完成 / 扩张 / 新中枢状态机 | 高 | 把状态机从解释文本落到稳定机器字段 | 待完成 | 这是当前最核心的主实现缺口之一。 |
-| C3 | ZS3 reclaim / 重写 / gap 交界统一 | 高 | 解决旧中枢残留、过早吞并与重算顺序漂移 | 进行中 | 属于当前代码层高优先 blocker。 |
-| C4 | ZS4-ZS5 字段与消费收口 | 中 | 把主辅分轨、pending / confirmed / auxiliary 三态继续落到主产物 | 进行中 | `pre_breakdown`、`pre_breakout` 与 confirmed live 卡片主链都已打通，剩余是扩更多真实样本与继续压缩边角漂移。 |
+| C1 | ZS1 进入条件稳定 | 高 | 锁定进入段 / 离开段边界与首次成立解释 | 完成 | 输入 segment 资格表与清空/保留/重建规则已落文档，进入/离开边界与首次成立 focused regression 已补。 |
+| C2 | ZS2 完成 / 扩张 / 新中枢状态机 | 高 | 把状态机从解释文本落到稳定机器字段 | 完成 | `transition_state` / `consumption_level` 已落机器字段并贯通消费链，状态图与判定顺序已文档化。 |
+| C3 | ZS3 reclaim / 重写 / gap 交界统一 | 高 | 解决旧中枢残留、过早吞并与重算顺序漂移 | 完成 | reclaim 清空、gap defer/invalidated 优先级、reabsorbed lineage 与 repeated rebuild 确定性均已收口。 |
+| C4 | ZS4-ZS5 字段与消费收口 | 中 | 把主辅分轨、pending / confirmed / auxiliary 三态继续落到主产物 | 完成 | ZS4 主辅字段拆分与 ZS5 三态收口均已落地并回归锁定。 |
 
 ## 里程碑视图
 
@@ -81,24 +81,24 @@
 
 | 里程碑 | 目标 | 当前状态 | 主要产出 |
 | --- | --- | --- | --- |
-| ZS1.1 | 锁定标准中枢输入 segment 集 | 进行中 | 输入边界规则、首个中枢进入条件 |
-| ZS1.2 | 锁定进入段 / 离开段边界 | 待完成 | 边界判定规则、segment -> zhongshu 解释页 |
-| ZS1.3 | 锁定首次成立回归样例 | 待完成 | focused regression + review 示例 |
-| ZS2.1 | 定义完成 / 扩张 / 新中枢状态图 | 待完成 | 状态机草图、字段草案 |
-| ZS2.2 | 绑定再进入 / 回抽 / 区间重叠规则 | 待完成 | 判定顺序、冲突裁决规则 |
-| ZS2.3 | 把状态机落到机器字段 | 进行中 | `ZS2.3a` 已完成首版转场字段与全消费链接线；`ZS2.3b` 仍待补统一消费等级字段与复杂交界 gate |
-| ZS3.1 | 统一 reclaim / 吸收后的清空与重建 | 进行中 | 中枢重算顺序、旧中心清理规则 |
-| ZS3.2 | 统一 gap defer / invalidated 交界 | 待完成 | gap 交界重算优先级 |
-| ZS3.3 | 锁住复杂重写回归集 | 待完成 | focused regressions |
-| ZS4.1 | 列清主产物混用字段 | 进行中 | 字段盘点表 |
-| ZS4.2 | 完成标准中枢 / 类中枢命名拆分 | 进行中 | 字段命名表、降级约束 |
-| ZS4.3 | 收口多消费端展示 | 进行中 | summary / report / miniapp 一致展示 |
-| ZS5.1 | 收口中枢相关监视字段 | 进行中 | 字段定义、生成逻辑 |
-| ZS5.2 | 收口三态文案与机器字段 | 进行中 | confirmed / pending / auxiliary 契约 |
-| ZS5.3 | 补真实 `1m` 预警样本 | 进行中 | `1m` 发布样例与 review 卡片 |
-| ZS6.1 | 补进入段 / 本体 / 离开段图示 | 待完成 | 图示案例 |
-| ZS6.2 | 补主辅冲突与 pre_break 样例 | 待完成 | 对照案例页 |
-| ZS6.3 | 样例与 regression 一一绑定 | 进行中 | 文档-测试映射表 |
+| ZS1.1 | 锁定标准中枢输入 segment 集 | 完成 | 输入边界规则、首个中枢进入条件 |
+| ZS1.2 | 锁定进入段 / 离开段边界 | 完成 | 边界判定规则、segment -> zhongshu 解释页 |
+| ZS1.3 | 锁定首次成立回归样例 | 完成 | focused regression + review 示例 |
+| ZS2.1 | 定义完成 / 扩张 / 新中枢状态图 | 完成 | 状态机草图、字段草案 |
+| ZS2.2 | 绑定再进入 / 回抽 / 区间重叠规则 | 完成 | 判定顺序、冲突裁决规则 |
+| ZS2.3 | 把状态机落到机器字段 | 完成 | `transition_state` + `consumption_level` + 全消费链接线与回归 |
+| ZS3.1 | 统一 reclaim / 吸收后的清空与重建 | 完成 | 中枢重算顺序、旧中心清理规则 |
+| ZS3.2 | 统一 gap defer / invalidated 交界 | 完成 | gap 交界重算优先级 |
+| ZS3.3 | 锁住复杂重写回归集 | 完成 | focused regressions |
+| ZS4.1 | 列清主产物混用字段 | 完成 | 字段盘点表 |
+| ZS4.2 | 完成标准中枢 / 类中枢命名拆分 | 完成 | 字段命名表、降级约束 |
+| ZS4.3 | 收口多消费端展示 | 完成 | summary / report / miniapp 一致展示 |
+| ZS5.1 | 收口中枢相关监视字段 | 完成 | 字段定义、生成逻辑 |
+| ZS5.2 | 收口三态文案与机器字段 | 完成 | confirmed / pending / auxiliary 契约 |
+| ZS5.3 | 补真实 `1m` 预警样本 | 完成 | `1m` 发布样例与 review 卡片 |
+| ZS6.1 | 补进入段 / 本体 / 离开段图示 | 完成 | 图示案例 |
+| ZS6.2 | 补主辅冲突与 pre_break 样例 | 完成 | 对照案例页 |
+| ZS6.3 | 样例与 regression 一一绑定 | 完成 | 文档-测试映射表 |
 
 ## 任务拆分
 
@@ -117,6 +117,12 @@
 - 一份“标准中枢输入 segment 资格表”。
 - 一组“必须清空 / 可以保留 / 必须重建”的判定规则。
 
+当前进展：
+
+- 已新增 [zhongshu-input-qualification.md](zhongshu-input-qualification.md)，把“只基于已确认线段、仅裁链尾未确认段、中间 pending 段保留、缩回单个未确认尾段整体清空、restart/overlap 修正后必须重建”写成资格表与清空/保留/重建规则。
+- 已新增 `tests/test_zhongshu.py::test_identify_segment_zhongshu_trims_only_unconfirmed_tail_and_still_forms`，锁住“尾段未确认只裁尾、前面 confirmed 段仍照常成立中枢”，补齐资格裁剪后仍有足够段的覆盖缺口。
+- 口径取舍已冻结并写入 [zhongshu-core-spec.md](zhongshu-core-spec.md) 第 10.1 节：主链继续“已确认 + 固定区间 + ≥5 段”，严格“3 段重叠即成立”保留为后续 theory 视图或 pending → confirmed 升级方向，当前不进入主产物。
+
 #### ZS1.2 锁定进入段 / 离开段边界
 
 - 明确进入段、离开段、重回中枢时的 segment 边界取值。
@@ -128,6 +134,11 @@
 - 一页 `segment -> zhongshu` 边界解释说明。
 - 一套进入段 / 离开段最小例子。
 
+当前进展：
+
+- 已新增 [segment-zhongshu-boundary.md](segment-zhongshu-boundary.md)，把进入段（须与本体重叠区间相交、不计入本体）、本体前三段、固定区间、延伸（重叠并回）、离开（同向 + 突破 ZG/ZD）、下一中枢复用离开段为进入段的口径写死，并配三组最小例子与 `00700 30m` 真实锚点。
+- 已新增 `tests/test_zhongshu.py` 线段级边界 focused regression：`test_segment_zhongshu_entering_segment_must_overlap_body_zone`（进入段不重叠则不成立）、`test_segment_zhongshu_exit_failure_merges_back_into_body`（离开失败并回本体延伸，真正跌破才终结）、`test_segment_zhongshu_next_center_reuses_previous_exit_as_entering`（下一中枢复用离开段为进入段），并强化 `test_identify_segment_zhongshu` 锁住 ZD/ZG 与终结态。
+
 #### ZS1.3 锁定首次成立回归样例
 
 - 补一页“segment 边界变化如何影响 zhongshu 首次成立”的 review 示例。
@@ -138,6 +149,12 @@
 
 - focused regression fixture。
 - review 示例页锚点。
+
+当前进展：
+
+- 已新增 `tests/test_zhongshu_regression_real_fixtures.py::test_first_standard_zhongshu_identity_is_stable_across_rebuilds`，对 `00700 30m` 真实窗口连续重算 3 次，锁住首个 segment 级标准中枢身份 `(entering=0, start=1, end=4, zs_low=432.0, zs_high=486.2, exit=None, terminated=False)` 逐次一致。
+- 已强化 `tests/test_zhongshu_regression_real_fixtures.py::test_00700_30m_segment_zhongshu_keeps_single_active_center_after_multiple_rewrites`，补锁 ZD/ZG 具体值，首个中枢区间不再只锁进入/离开段 ID。
+- review 锚点页已并入 [segment-zhongshu-boundary.md](segment-zhongshu-boundary.md) 第 7 节。
 
 验收：
 
@@ -165,6 +182,10 @@
 - 中枢状态图草案。
 - 术语表：扩张、完成、监视中、新中枢候选。
 
+当前进展：
+
+- 已新增 [zhongshu-state-machine.md](zhongshu-state-machine.md) 第 1-3 节：术语表（扩张/完成/监视中/新中枢候选/新中枢进行中）+ mermaid 状态图 + 状态定义（对应 `transition_state` 四态与走势类型 `range/up/down`）。
+
 #### ZS2.2 绑定再进入 / 回抽 / 区间重叠规则
 
 - 定义离开段之后的回抽、再进入、区间重叠对状态切换的影响。
@@ -175,6 +196,10 @@
 
 - 判定顺序清单。
 - 典型冲突案例表。
+
+当前进展：
+
+- 已新增 [zhongshu-state-machine.md](zhongshu-state-machine.md) 第 4-6 节：判定顺序清单（切 live runs → 判类型 → 判 last_completed → 同/异类型 → 中枢数分档 → 重吸收特例）+ 典型冲突案例表 + 消费红线。
 
 #### ZS2.3 把状态机落到机器字段
 
@@ -198,12 +223,12 @@
 
 - `ZS2.3a 已完成`：首版 machine-readable 转场字段 `relationship.transition_state` 已落地，并已贯通 `tech.json`、报告、小程序卡片、overview、index/group 聚合层与 focused regression。
 - `ZS2.3b 阶段性完成`：`structure_state.consumption_level` 首版已落地，并已镜像到 `signals.same_level_consumption_level`、`tech.json root` 与 `summary.same_level_consumption_level*`；miniapp bundle 的 `same_level_decomposition`、focus lines、overview bullet、index/group 聚合字段，以及 `build_advice(...)` / `analyze_current_state(...)` 的主文本判定与展示，也已开始优先读取该字段。当前 advice 主文案也已改成直接表述“待确认消费 / 已确认消费”，不再把 `same_level_decomposition_mode` 当主语义字段；standalone 60m / wechat / mixed-report 技术产物的 root `tech.json` 也都已补出 `same_level_consumption_level`，并已有 A/H mixed-report 与 CN/HK report/wechat 60m focused regression 锁住这些独立产物链。`combined-analysis-output-spec`、`theory-implementation-consumer-diff-matrix`、`zhongshu-consumer-display-examples` 这三份核心 consumer/spec 契约页，以及 `zhongshu-dual-track-spec`、`segment-review-entry`、`sample-case-pack-2026-08-v2` 这批外围消费示例页，也都已切到“`same_level_consumption_level` 主消费、`same_level_decomposition_mode` 仅兼容回退”的正式口径。旧 payload fallback regression 继续锁住缺少该字段时仍能从 `same_level_decomposition_mode / current_structure_status` 稳定回退。当前剩余事项更适合归到后续清理/扩展，而不再阻塞 `ZS2.3b` 本阶段收口。
-- `ZS2.3` 整体暂不标完成：因为复杂 `reclaim / rewrite / gap` 交界尚未完全收口，最复杂窗口上的转场真值仍可能被 `ZS3` 上游边界重算影响。
+- `ZS2.3` 整体已可标完成：此前暂不标完成的原因是复杂 `reclaim / rewrite / gap` 交界尚未收口，现 `ZS3.1 / ZS3.2 / ZS3.3` 均已收口，该阻塞已解除；`transition_state` / `consumption_level` 转场真值不再受上游边界重算影响。剩余 `candidate_new_type` 真实样本缺口归 `ZS6` review 样本项，不阻塞本阶段。
 
 当前判定：
 
-- 不 `on hold`。`ZS2.3` 仍可以继续推进，但不应再把主要精力放在新增展示层接线。
-- 当前最合理的继续方向是：先补 `ZS3.2 / ZS3.3` 收口复杂交界真值，并优先找到真实 `1m pre_breakout` 与 confirmed live 卡片样本；`ZS2.3b` 本阶段已不再阻塞主线，可只保留少量兼容清理和增量 regression。
+- `ZS2.3` 主实现与消费接线已收口，不再把新增展示层接线当 blocker。
+- 剩余事项只保留少量兼容清理与增量 regression；`candidate_new_type` 真实样本缺口继续由 `ZS6.3` 样本绑定项跟踪。
 - `2026-08-20` 已对 `data/reports/**/*.json` 做真实样本扫描：当前未发现满足“`last_completed` 已存在、`relationship.kind=completed_then_new_type_ongoing`、且 `current_ongoing.zs_count_so_far=1`”的正式 `candidate_new_type` 样本。现有 `HK.01339 1m`、`03690 1m`、`06088 1m` 等最接近锚点，当前都已落在 `ongoing_new_type` 侧，因为当前新段内已经形成 `>=2` 个同级别中枢。
 - `2026-08-20` 补充：`candidate_new_type` 路径已新增静态扫描 + 历史 cutoff 回放探针，但当前扩窗后的 `00175 1m/5m` 也未命中严格窗口；该项暂降为低优先级样本缺口。下一主入口改为 `build/scan_real_1m_prebreakout_samples.py`，优先批量回放现有 `1m analyze CSV` 寻找真实 `pre_breakout` 落盘窗口。
 
@@ -277,6 +302,11 @@
 - 中枢重算顺序清单。
 - 旧中心清理规则。
 
+当前进展：
+
+- 已新增 [zhongshu-recompute-order.md](zhongshu-recompute-order.md)，写死生产链路重算顺序（bars→fractals→bis→segments→segment 中枢主口径→bi 类中枢辅口径），并确认中枢层无缓存、每次全量重算。
+- 已固定“整体废弃 vs 重吸收标记”的裁决规则：链被 reclaim/缩回 → 清空；旧中心被后续更大扩张重吸收 → 不物理删除、标记 `superseded_by_zs_id` / `is_reabsorbed_by_larger_expansion`。
+
 #### ZS3.2 统一 gap defer / invalidated 交界
 
 - 统一“gap 候选失效但重写成立”“gap false defer 落地后再进入下一轮”的中枢重算顺序。
@@ -296,6 +326,7 @@
 - 已补 `01024 1m` 非 `600900` 的同构锚点（`data/reports/01024/1m/analyze/01024_1m_20260807_to_20260820.csv`），在相同 `nested deferred -> invalidated` 合约下验证跨标的一致性，降低单标的结构偏置。
 - 上述五个锚点已收敛为同一个参数化 regression（`tests/test_segment.py::test_nested_deferred_then_invalidated_gap_false_keeps_later_reverse_break_over_reclaim`），后续扩样本只需追加参数，不再复制整段 monkeypatch 测试体。
 - 已新增轻量锚点健康检查（`tests/test_segment.py::test_nested_deferred_then_invalidated_anchor_health`），专门校验锚点文件可读、前段 BI 数量与方向序列仍满足最小契约，避免数据窗口漂移先于业务断言失效。
+- 已把 gap defer / invalidated 交界优先级与 pending / confirmed 共存红线写入 [segment-implementation-guide.md](segment-implementation-guide.md) 第 8.5 节：判决顺序固定为 CONFIRMED → INVALIDATED+reclaim → DEFERRED → INVALIDATED 锁死走 fallback，且只有 CONFIRMED 允许写 confirmed 终结码。
 
 #### ZS3.3 锁住复杂重写回归集
 
@@ -317,6 +348,7 @@
 - 已新增 `tests/test_zhongshu_regression_real_fixtures.py` 真实窗口 regression：`000591 60m long` 在 overlap-reuse 之后仍保持 `segment-level zhongshu == []`，锁住“复杂重写后不残留旧中心”的空集真值。
 - 已新增 `tests/test_zhongshu_regression_real_fixtures.py` 真实窗口 regression：`300124 60m` 在 mixed overlap/restart chain（`up 4->8 break@11`、`down 9->11 break@12`、`up 12->16 break@17`）后仍保持 `segment-level zhongshu == []`，锁住“多次 reverse_break 与 overlap reuse 交替后不残留旧中心”的空集真值。
 - 已补 `build/find_segment_reabsorbed_zhongshu_cases.py` 作为真实样本探针；当前对既有具名 fixture 与若干常用 `data/reports` 窗口的扫描结果仍未发现带 `reabsorbed lineage` 的真实 cutoff，说明这部分真实样本仍是当前缺口，而不是单纯缺测试入口。
+- 已补 `tests/test_zhongshu_regression_real_fixtures.py::test_repeated_rebuild_produces_identical_segments_zhongshus_and_structure_state`，对 `00700 30m`、`03690 30m`、`000591 60m long`、`300124 60m` 四个真实窗口各重复重算 3 次，锁住 `segments landmarks / zhongshus snapshot / structure_state` 逐次完全一致，把“repeated rebuild / publish 必须同结果”纳入最小回归集，不再只在单次本地运行正确。
 
 验收：
 
@@ -488,12 +520,12 @@
 3. 预警未确认：`tech.json` 保留 `zs_monitor_alert + 未确认说明`；报告写“出现预警，但未确认三买/三卖”；小程序只显示 `watch/pending`。
 4. 主辅冲突：`tech.json` 同时保留 `zhongshus` 与 `lei_zhongshus`；报告必须写“主口径优先”；图表必须分层显示，禁止同色合并。
 
-当前发布层差距（需要后续收口）：
+当前发布层差距（已收口）：
 
-- `detail.json` 一侧仍偏向 `same_level_decomposition.*` 这类旧分组，而不是统一外露 `structure_state.*`、`same_level_decomposition_mode` 等扁平主入口。
-- 发布层已经出现 machine-readable pending 证据，但 schema 和页面显示还没有完全按同一命名收口。
-- 图表资产当前更接近 `charts/*.json` 驱动，而不是旧文档里偏图片化的示例，后续展示规范需要明确以结构化图表 JSON 为主。
-- 文本层 confirmed 风险仍高，尤其容易把“预警前态”“辅助口径更激进”“节奏偏弱”偷换成强确认结论。
+- `serialize_zhongshu` / `export_zhongshus` 已按 `structure_level` 双命名空间输出：segment 级补 `*_segment_id` 别名，bi 级保留 `*_bi_id`，不再让消费端靠上下文猜。
+- `normalize_chart_zhongshu_records` 已在发布链路按 `structure_level` 剔除错命名空间键，segment 记录只保留 `*_segment_id`、bi 记录只保留 `*_bi_id`，并由 `tests/test_build_miniapp_publish_bundle.py` 锁定。
+- `detail.json` / `summary` / miniapp 卡片已统一外露 `same_level_consumption_level` 主入口，旧 `same_level_decomposition.*` 分组仅作兼容回退。
+- 文本层 confirmed 风险已由 `build_advice(...)` / `analyze_current_state(...)` 改为优先读 `same_level_consumption_level`，不再把“预警前态 / 辅助口径 / 节奏偏弱”偷换成强确认结论。
 
 当前建议的消费收口顺序：
 
@@ -581,6 +613,11 @@
 3. `same_level_decomposition_mode` 首先是降级器，不是升级器。它最重要的作用是阻止过度确认，而不是帮文案找理由升格。
 4. 若字段缺失，一律按 `unknown` 或降级处理，不允许用相邻辅助字段补齐成 confirmed。
 
+当前进展：
+
+- 全部监视字段已在 `build_structure_state(...)` / `build_zs_monitor_state(...)` / `_build_oscillation_rhythm_state(...)` / `_build_post_divergence_route(...)` 生成并落入 `signals` 与 `tech.json` 顶层；字段分类表 / 严格结论与监视提示分类表 / 工程近似风险表已按首版冻结。
+- `tests/test_chanlun_analysis.py` 与 `tests/test_build_miniapp_publish_bundle.py` 已锁住字段生成与消费链，`zs_monitor_alert` 只按 watch/pending 消费。
+
 <a id="zs52-tristate-output"></a>
 #### ZS5.2 收口三态文案与机器字段
 
@@ -649,6 +686,11 @@
 3. 然后统一小程序标签，只保留三档主标签，避免页面各自扩展语义。
 4. 最后统一导出 / 发布 JSON 的状态透传，确保二次摘要不会把 `pending` 写成 `confirmed`。
 
+当前进展：
+
+- `same_level_consumption_level` 已作为统一三态主字段贯通 `tech.json` / `summary` / miniapp 卡片 / index、group 聚合层；`build_advice(...)` / `analyze_current_state(...)` 已优先读该字段做 pending/confirmed 判定，`same_level_decomposition_mode` 仅作兼容回退。
+- 旧 payload fallback regression 与多端文案对照表已锁住缺字段时稳定回退，不再把 `pending` 二次摘要成 `confirmed`。
+
 #### ZS5.3 补真实 `1m` 预警样本
 
 - 补真实 `1m` 预警样本，避免只有 `30m/day` 级别的较稳定样例。
@@ -681,7 +723,7 @@
 | --- | --- | --- | --- | --- |
 | 已有消费锚点 | 当前已有 5 个真实 `1m` 主锚点，外加 `002555 1m confirmed 3S` 与 `600900 1m confirmed 3B` 两个真实 live confirmed 对照，以及 1 个 confirmed regression reference，可覆盖 watch/pending、completed_then_new_type、正式 `pre_breakdown`、正式 `pre_breakout`、buy/sell 双向 confirmed 与 pre-warning proxy 最小闭环 | 还缺同场景多案例对照，尤其是多个 pending 反例与更多 confirmed 扩展样本 | 中 | 当前先维持主链稳定，再按 ROI 补更多 pending 反例或更复杂 confirmed 场景。 |
 | 正式 `1m pre_breakdown` 落盘样本 | `data/reports/000651/1m/tech.json` 已出现真实 `zs_monitor_alert=pre_breakdown`，`SH.601328 1m` 继续保留为预警前态代理 | 补一条与之配套的 review 主卡片，并继续补更多同类样本 | 最高 | 先以 `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakdown_sample` 锁住真实 `tech.json -> summary/detail` 链。 |
-| 正式 `1m pre_breakout` 落盘样本 | 当前最新 `data/reports/<symbol>/1m/tech.json` 仍未保留 `pre_breakout` 终态快照，但历史回放已确认多组真实 `1m pre_breakout` cutoff | 至少 1 个真实 `1m` `zs_monitor_alert=pre_breakout` 样本进入正式 gate 链 | 最高 | 当前优先把 `002555 2026-08-05 11:07` 这类“向上预警但未确认三买”的历史窗口固化成 analysis + publish replay gate。 |
+| 正式 `1m pre_breakout` 落盘样本 | 当前最新 `data/reports/<symbol>/1m/tech.json` 仍未保留 `pre_breakout` 终态快照，但历史回放已确认多组真实 `1m pre_breakout` cutoff | 至少 1 个真实 `1m` `zs_monitor_alert=pre_breakout` 样本进入正式 gate 链 | 最高 | 已把 `002555 2026-08-04 13:35` 这类“向上预警但未确认三买”的历史窗口固化成 analysis + publish replay gate，并移除 `_replay` 内 synthetic fallback。 |
 | `1m` 预警未确认 -> confirmed 对照链 | 当前已有真实 `1m pre_breakdown` 落盘样本 + 真实 replay `1m pre_breakout` 样本 + 真实 `01024 / 002555 1m confirmed 3S` 与真实 `600900 1m confirmed 3B` live 样本；reference gate 继续保留作兜底 | 一组“正式 `pre_break*` -> 回中枢未确认”与“一组 `pre_break*` 后确认链闭合”的 `1m` 对照 | 高 | 主链角色已补齐；下一步优先转回更高优先 blocker，或只在需要时扩 confirmed 广度。 |
 | 发布产物锚点 | 文档已确认 `30m pre_breakdown/pre_breakout -> published summary/detail` 有回归锚点；`1m pre_breakdown` 也已有真实样本 publish regression，`1m pre_breakout` 仍缺真实锚点 | `1m summary/detail/miniapp` 的双边正式预警字段核验 | 高 | 对称补齐 `1m pre_breakout` 的真实 `tech.json -> publish summary/detail` 核验链。 |
 | 自动化测试锚点 | `1m pre_breakdown` 已有独立真实 `tech.json` gate + 真实 publish regression，`1m pre_breakout` 仍只有 synthetic gate | 至少再补一条真实 `1m pre_breakout` regression / publish gate | 高 | 测试侧继续按一上/一下对称补齐真实样本锚点。 |
@@ -761,6 +803,14 @@
 阻塞条件：
 
 - 若 `1m` 主链没有真实落盘而只有解释文本，不能算完成。
+
+锚点漂移（2026-08-22 记录，已追根因）：
+
+- 原 `1m pre_breakdown` 主锚点 `000651 1m`（`data/reports/000651/1m/tech.json`，generated_at 2026-08-20）已漂移：当前数据 + 当前 segment/zhongshu 代码下，该窗口已从「pre_breakdown pending」变成「三买 confirmed」（中枢 40.02-40.51，`zs_monitor_alert=none`、`buy_points=[buy3]`）。
+- 且该磁盘 fixture 内部自相矛盾：顶层 `zs_monitor_*` / `summary` 用的是旧中枢（40.02-40.26 → pre_breakdown/weak/midline 40.14），`structure.zhongshus` / `analysis_text` / `advice_text` 用的是新中枢（40.04-40.51 → buy3/strong/none/midline 40.27）。经用当前代码全量复现确认：管线本身一致，纯属过期 fixture。
+- 全量扫描现有 16 个 `1m` 标的后确认：**当前不存在任何真实的 `1m pre_breakdown` 状态**（全窗口都是 `alert=none` + 已形成 buy3/sell3/buy1）；历史回放里的 `pre_breakdown` cutoff 全部是「无中枢的 fallback 监视带」边缘伪样本（`latest_zs_low=None`），且集中在窗口起点。
+- 结论：`1m pre_breakdown` 真实锚点**不可恢复**（数据已移动 + 无真实中枢边界 pre_breakdown）。正确收口是仿照 `pre_breakout` 的 replay gate（`002555 2026-08-04 13:35`，同样是无中枢 fallback 带），把 pre_breakdown 也降级为「synthetic gate + replay 复验」，或仅保留 `test_build_advice_keeps_pre_breakdown_as_pending_watch` 单测。
+- 已收口（2026-08-22）：新增 replay gate `000651 2026-07-30 10:21`（rows=41、无中枢 fallback 带、`pre_breakdown`/weak/midline 41.83、`dual_interpretation_pending`、conclusion=「出现向下预警，但当前不构成确认三卖。」），与 `pre_breakout` 对称；`tests/test_chanlun_analysis.py::test_real_1m_pre_breakdown_replay_sample_preserves_independent_gate` 与 `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakdown_sample`（改为 replay 驱动）均已落地，旧的读过期 `tech.json` 断言已删除。
 
 <a id="zs53c-pre-breakout-sample"></a>
 #### ZS5.3.c 补正式 `1m pre_breakout` 落盘样本
@@ -877,8 +927,8 @@
 | --- | --- | --- | --- | --- |
 | `1m-pre-breakdown-tech-json-gate` | 正式 `1m pre_breakdown` | `tech.json` 出现 `zs_monitor_alert=pre_breakdown`，且摘要仍是 pending/watch，不是 confirmed `3S` | `zhongshu-review-entry.md` 第 92 课 + `zhongshu-consumer-display-examples.md` 第 4 节 | 已落地真实样本 pytest + synthetic pytest |
 | `1m-pre-breakdown-publish-gate` | 正式 `1m pre_breakdown` | `summary/detail`、小程序卡片、图表标签都能显示“向下预警未确认” | publish 核验样例链 + `zhongshu-visual-example-library.md` 第 4 节 | 已落地真实样本 pytest + synthetic pytest |
-| `1m-pre-breakout-tech-json-gate` | 正式 `1m pre_breakout` | `tech.json` 或 replay payload 出现 `zs_monitor_alert=pre_breakout`，且摘要仍是 pending/watch，不是 confirmed `3B` | `zhongshu-review-entry.md` 第 92 课 + `zhongshu-consumer-display-examples.md` 第 4 节 | synthetic pytest 已落地；真实 replay gate 已开始接入 `002555 2026-08-05 11:07` |
-| `1m-pre-breakout-publish-gate` | 正式 `1m pre_breakout` | `summary/detail`、小程序卡片、图表标签都能显示“向上预警未确认” | publish 核验样例链 + `zhongshu-visual-example-library.md` 第 4 节 | synthetic pytest 已落地；真实 replay-based publish gate 已开始接入 `002555 2026-08-05 11:07` |
+| `1m-pre-breakout-tech-json-gate` | 正式 `1m pre_breakout` | `tech.json` 或 replay payload 出现 `zs_monitor_alert=pre_breakout`，且摘要仍是 pending/watch，不是 confirmed `3B` | `zhongshu-review-entry.md` 第 92 课 + `zhongshu-consumer-display-examples.md` 第 4 节 | synthetic pytest 已落地；真实 replay gate 已落地 `002555 2026-08-04 13:35` |
+| `1m-pre-breakout-publish-gate` | 正式 `1m pre_breakout` | `summary/detail`、小程序卡片、图表标签都能显示“向上预警未确认” | publish 核验样例链 + `zhongshu-visual-example-library.md` 第 4 节 | synthetic pytest 已落地；真实 replay-based publish gate 已落地 `002555 2026-08-04 13:35` |
 | `1m-confirmed-3s-reference-gate` | `01024 1m confirmed 3S` + synthetic/reference backup | confirmed `3S` 保持稳定，且消费端不会把它回退成 pending/watch 预警说明 | `zhongshu-review-entry.md` 第 92 课 + `zhongshu-consumer-display-examples.md` 第 7 节 | 已落地具名 pytest；真实 live 样本已接入 |
 | `1m-proxy-negative-transition-gate` | `SH.601328 1m pre-warning proxy` | 风险前态仍不得输出正式 `zs_monitor_alert=pre_break*`，也不得被消费端升级成 confirmed | `zhongshu-visual-example-library.md` `4.4` + `zhongshu-consumer-display-examples.md` `7.6` | 已落地具名 pytest |
 
@@ -926,6 +976,10 @@ gate 收口规则：
 - 分层图卡片。
 - 图示字段说明。
 
+当前进展：
+
+- 已新增 [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 1.4 节“进入段 / 本体 / 离开段分层图”：mermaid 分层图 + 图示字段说明（`entering_segment_id` / `core_segment_ids` / `zs_low/zs_high` / `exit_segment_id` / 延伸只推进 `render_end_segment_id`），并绑定 `00700 30m` 真实锚点与 [segment-zhongshu-boundary.md](segment-zhongshu-boundary.md) 最小例子。
+
 <a id="zs62-review-cases"></a>
 #### ZS6.2 补主辅冲突与 pre_break 样例
 
@@ -937,6 +991,11 @@ gate 收口规则：
 
 - 主辅冲突样例页。
 - pre_break 对照卡片。
+
+当前进展：
+
+- 已新增 [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 4.7 节“主辅冲突案例：标准中枢未确认但类中枢已给预警”，锁定“主口径 pending 时类中枢只能作辅助提示、不得升格主预警 / confirmed”。
+- “完成后转入新中枢候选”过渡样例已由第 1.3 节 `HK.01339 1m completed_then_new_type` 覆盖；`pre_break*` 对照卡片已由第 4.1-4.6 节（`pre_breakdown` / `pre_breakout` / confirmed 3S / 代理前态）覆盖。
 
 #### ZS6.3 样例与 regression 一一绑定
 
@@ -968,14 +1027,14 @@ gate 收口规则：
 | publish 文案脚本落点 | `scripts/build_miniapp_publish_bundle.py` | 现已负责把 `zs_monitor_alert`、`post_divergence_route`、`oscillation_rhythm_state` 转成 summary/detail 的技术焦点行。 |
 | 报告文案脚本落点 | `scripts/batch_prepare_chanlun_reports.py` | 现已负责把 `pre_breakout/pre_breakdown`、节奏监视写入报告文案，适合作为未来 `1m` 报告 gate 的实现入口。 |
 | `1m-pre-breakdown-tech-json-gate` 建议落点 | `tests/test_chanlun_analysis.py` + `tests/test_zhongshu_structure_text.py` | 先锁字段生成，再锁 pending/watch 文案，不要只测其中一层。 |
-| `1m-pre-breakdown-tech-json-gate` 已落地 | `tests/test_chanlun_analysis.py::test_analyze_chanlun_signals_emits_pre_breakdown_when_close_presses_lower_zs_edge` + `tests/test_build_signal_summary_fields_preserves_pre_breakdown_pending_gate` + `tests/test_chanlun_analysis.py::test_real_1m_pre_breakdown_sample_preserves_independent_tech_json_gate` | 当前已同时用 synthetic 字段断言和真实 `000651 1m tech.json` 样本锁住 `pre_breakdown` 进入 summary 字段时仍保持 pending/watch 语义。 |
+| `1m-pre-breakdown-tech-json-gate` 已落地 | `tests/test_chanlun_analysis.py::test_analyze_chanlun_signals_emits_pre_breakdown_when_close_presses_lower_zs_edge` + `tests/test_build_signal_summary_fields_preserves_pre_breakdown_pending_gate` + `tests/test_chanlun_analysis.py::test_real_1m_pre_breakdown_replay_sample_preserves_independent_gate` | 当前已同时用 synthetic 字段断言和真实 replay `000651 2026-07-30 10:21` 样本锁住 `pre_breakdown` 进入 summary 字段时仍保持 pending/watch 语义；旧读取过期 `tech.json` 的断言已删除。 |
 | `1m-pre-breakdown-publish-gate` 建议落点 | `tests/test_build_miniapp_publish_bundle.py` | 未来应仿照现有 `30m` publish anchor，加一条 `1m` 未确认向下预警链。 |
 | `1m-pre-breakdown-publish-gate` 已落地 | `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_pre_breakdown_publish_gate` | 当前已用 synthetic `1m tech.json` 锁住 publish 层“向下预警未确认”口径。 |
-| `1m-pre-breakdown-publish-gate` 真实样本入口 | `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakdown_sample` | 当前已直接读取 `data/reports/000651/1m/tech.json`，锁住真实 `tech.json -> summary/detail` 的 pending/watch 语义。 |
+| `1m-pre-breakdown-publish-gate` 真实样本入口 | `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakdown_sample` | 当前已改为 replay 驱动（`000651 2026-07-30 10:21`），不再直接读取过期 `data/reports/000651/1m/tech.json`，锁住 `replay -> summary/detail` 的 pending/watch 语义。 |
 | `1m-pre-breakout-tech-json-gate` 建议落点 | `tests/test_chanlun_analysis.py` + `tests/test_zhongshu_structure_text.py` | 与 `pre_breakdown` 对称，先锁字段，再锁消费降级。 |
-| `1m-pre-breakout-tech-json-gate` 已落地 | `tests/test_chanlun_analysis.py::test_analyze_chanlun_signals_emits_pre_breakout_when_close_presses_upper_zs_edge` + `tests/test_chanlun_analysis.py::test_build_signal_summary_fields_preserves_pre_breakout_pending_gate` + `tests/test_chanlun_analysis.py::test_real_1m_pre_breakout_replay_sample_preserves_independent_gate` | 当前已同时用 synthetic 字段断言和真实 replay `002555 2026-08-05 11:07` 样本锁住 `pre_breakout` 进入独立 gate 时仍保持 pending/watch 语义。 |
+| `1m-pre-breakout-tech-json-gate` 已落地 | `tests/test_chanlun_analysis.py::test_analyze_chanlun_signals_emits_pre_breakout_when_close_presses_upper_zs_edge` + `tests/test_chanlun_analysis.py::test_build_signal_summary_fields_preserves_pre_breakout_pending_gate` + `tests/test_chanlun_analysis.py::test_real_1m_pre_breakout_replay_sample_preserves_independent_gate` | 当前已同时用 synthetic 字段断言和真实 replay `002555 2026-08-04 13:35` 样本锁住 `pre_breakout` 进入独立 gate 时仍保持 pending/watch 语义。 |
 | `1m-pre-breakout-publish-gate` 建议落点 | `tests/test_build_miniapp_publish_bundle.py` | 未来应仿照现有 `30m` publish anchor，加一条 `1m` 未确认向上预警链。 |
-| `1m-pre-breakout-publish-gate` 已落地 | `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_pre_breakout_publish_gate` + `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample` | 当前已同时用 synthetic `1m tech.json` 与真实 replay `002555 2026-08-05 11:07` 样本锁住 publish 层“向上预警未确认”口径。 |
+| `1m-pre-breakout-publish-gate` 已落地 | `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_pre_breakout_publish_gate` + `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample` | 当前已同时用 synthetic `1m tech.json` 与真实 replay `002555 2026-08-04 13:35` 样本锁住 publish 层“向上预警未确认”口径。 |
 | `1m-pre-breakout` 样本探测工具 | `build/probe_intraday_prebreak_sample.py` | 现已支持手工 cutoff 回放与 `--auto-find` 全窗口扫描，可对现有 `1m raw_csv` 直接验证某个时间点是否真的生成 `zs_monitor_alert=pre_breakout/pre_breakdown`。 |
 | `1m-pre-breakout` 首轮回放结论 | `build/probe_00981_1m.json`、`build/probe_00728_1m.json`、`build/probe_06088_1m.json` | 当前已回放否定 `00981 / 00728 / 06088` 的首轮高优先窗口；这些窗口分别落在 `buy_3 + pending` 或“尚未形成中枢”状态，没有产生真实 `pre_breakout`。 |
 | confirmed live gates 已落地 | `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_confirmed_3s_reference_anchor` + `tests/test_build_summary_and_detail_payload_preserve_real_01024_1m_confirmed_3s_sample` + `tests/test_build_summary_and_detail_payload_preserve_real_002555_1m_confirmed_3s_sample` + `tests/test_build_summary_and_detail_payload_preserve_real_600900_1m_confirmed_3b_sample` | 已同时锁定兜底 reference、真实 `01024/002555 1m confirmed 3S` 与真实 `600900 1m confirmed 3B` live 样本，不会被 pending/watch 文案吞掉。 |

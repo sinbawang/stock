@@ -111,9 +111,9 @@
 | 任务 | 优先级 | 当前重点 | 当前状态 | 完成度 | 执行入口 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 标准线段级中枢主实现 | 高 | 收口真实 `1m pre_breakout` 之外的主状态机缺口 | 进行中 | 89% | [状态机](zhongshu-tasks.md#zs2-state-machine) / [重写交界](zhongshu-tasks.md#zs3-rewrite-gap) | `ZS2.3a` 已完成首版转场字段与消费契约；`ZS3` 已补 synthetic + real fixture 两层 regression，当前新增锁住了 `00700 30m` 单活跃中枢与 `000591 60m long` 空集真值，并补了 `build/find_segment_reabsorbed_zhongshu_cases.py` 作为真实重吸收窗口探针。`nested deferred -> invalidated` 路径现已由参数化 regression 统一收口，覆盖 `1m/5m/30m/day` 首选级别与 `600900/01024` 跨标的锚点，并新增锚点健康检查确保数据窗口漂移不会先于业务断言失效；常用真实样本首轮扫描 `SCANNED 142 / MATCHED 0`，说明当前主缺口已更明确地落在“真实重吸收 cutoff 样本不足”以及 `ZS2.3b` 统一消费等级字段。 |
-| 严格同级别走势类型自动分解 | 高 | 形成稳定自动判定闭环 | 待完成 | 25% | [TD1 主链](trend-divergence-tasks.md#td1-route-chain) | 文档已有方向，但代码仍未闭环。 |
+| 严格同级别走势类型自动分解 | 高 | 形成稳定自动判定闭环 | 进行中 | 45% | [TD1 主链](trend-divergence-tasks.md#td1-route-chain) | TD1 已落地 `type_chain` 首版并锁回归，背驰严格化进入 TD2/TD3。 |
 | `tech.json` / 报告 / 小程序口径统一 | 高 | 继续把 pending / confirmed / auxiliary 三态落到消费层 | 进行中 | 82%-90% | [中枢消费](zhongshu-tasks.md#zs43-consumer-output) / [中枢三态](zhongshu-tasks.md#zs52-tristate-output) / [多级别降级](buy-sell-multi-level-tasks.md#bs5-multi-level-consumer) | `1m pre_breakdown` 已打通，本轮又把 `transition_state` 接进同级别分解、报告 summary/advice、主分析文案、小程序 focus lines、detail overview bullets 与 index/group 聚合 item 消费链；下一重点是 `1m pre_breakout` 与 confirmed live 卡片。 |
-| 趋势背驰 / 盘整背驰严格自动判定 | 中 | 把工程化 divergence 收口成严格判定链 | 待完成 | 18%-20% | [趋势背驰](trend-divergence-tasks.md#td2-trend-divergence) / [盘整背驰](trend-divergence-tasks.md#td3-range-divergence) | 当前输出仍偏工程近似。 |
+| 趋势背驰 / 盘整背驰严格自动判定 | 中 | 把工程化 divergence 收口成严格判定链 | 进行中 | 65% | [趋势背驰](trend-divergence-tasks.md#td2-trend-divergence) / [盘整背驰](trend-divergence-tasks.md#td3-range-divergence) | 严格判定字段（TD2/TD3）与消费措辞（TD4）均已收口，案例回归归 TD5。 |
 | 一二三类买卖点严格确认 | 中 | 与最近中枢、首次回抽、级别绑定收口 | 待完成 | 20%-28% | [一类点](buy-sell-multi-level-tasks.md#bs2-buy1) / [二类点](buy-sell-multi-level-tasks.md#bs3-buy2) / [三类点](buy-sell-multi-level-tasks.md#bs4-buy3) | 当前 buy/sell 规则还不等于严格原文确认链。 |
 
 ### 3.1 P0 严格理论主链路
@@ -121,9 +121,9 @@
 | 任务 | 当前状态 | 完成度 | 说明 |
 | --- | --- | --- | --- |
 | 标准线段级中枢主实现 | 进行中 | 84% | 当前已完成 `segment` 主口径锁定、仅已确认线段参与标准中枢、reclaim/吸收字段下沉、bootstrap / gap / reclaim / reverse_break 多条边界修正，以及多组真实 fixture regression 锁定；同时 `1m pre_breakdown` 已补到真实 `tech.json / advice_text / publish` 回归，review 主锚点也已切到真实样本，并新增 `build/probe_intraday_prebreak_sample.py` 作为 `1m pre_break*` 历史 cutoff 回放工具；本轮又补了 `relationship.transition_state` 首版 machine-readable 转场字段，并已接进同级别分解 summary/detail 消费层。`nested deferred -> invalidated` 交界已由参数化 regression 统一收口到 `1m/5m/30m/day` 首选级别并扩到 `600900/01024` 跨标的，同时增加了锚点健康检查。剩余主缺口集中在“真实 `1m pre_breakout` 样本”“真实 confirmed 页内卡片”“复杂 reclaim/重写 与 gap 再分辨交界统一”“中枢完成/扩张/新中枢切换”“标准中枢与后续买卖点绑定稳定化”。 |
-| 严格同级别走势类型自动分解 | 待完成 | 25% | 文档已有方向，但代码仍未形成完整、稳定的自动分解闭环；执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
-| 趋势背驰严格自动判定 | 待完成 | 20% | 当前有工程化 divergence 输出，但不是完整原文判定链；执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
-| 盘整背驰严格自动判定 | 待完成 | 18% | 盘整背驰最容易被工程近似替代，需单列主口径实现；执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
+| 严格同级别走势类型自动分解 | 进行中 | 45% | TD1 已落地 machine-readable `type_chain` 与过渡段转场字段；TD2/TD3 背驰严格判定仍待收口，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
+| 趋势背驰严格自动判定 | 进行中 | 55% | TD2 已落地 `divergence.trend` 的 `strict / reference_zs_id / departure_confirmed / strength_comparison`；消费端按 `strict` 措辞归 TD4，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
+| 盘整背驰严格自动判定 | 进行中 | 50% | TD3 已落地 `divergence.range` 的 `strict / reference_zs_id / touches_boundary / strength_comparison`；消费端措辞归 TD4，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 一类买卖点严格确认 | 待完成 | 22% | 当前 buy_1/sell_1 更接近工程规则，不等于严格原文确认链；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
 | 二类买卖点严格确认 | 待完成 | 20% | 需绑定 1 类点后的首次确认性回抽语义；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
 | 三类买卖点严格确认 | 待完成 | 28% | 文档较清楚，但代码还需与最近中枢、首次回抽严格绑定；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |

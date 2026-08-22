@@ -132,24 +132,12 @@ def test_build_advice_keeps_pre_breakdown_as_pending_watch() -> None:
     assert "节奏监视：节奏偏弱，当前只作辅助观察，不单独升级主结论。" in text
 
 
-def test_real_1m_pre_breakdown_sample_keeps_pending_watch_advice_and_analysis() -> None:
-    sample_path = ROOT / "data" / "reports" / "000651" / "1m" / "tech.json"
-    payload = json.loads(sample_path.read_text(encoding="utf-8"))
-
-    assert payload["timeframe"] == "1m"
-    assert payload["zs_monitor_alert"] == "pre_breakdown"
-    assert payload["zs_monitor_midline"] == 40.14
-    assert payload["zs_monitor_bias"] == "weak"
-    assert payload["summary"]["conclusion"] == "出现向下预警，但当前不构成确认三卖。"
-    assert payload["summary"]["same_level_decomposition_mode"] == "dual_interpretation_pending"
-    assert payload["summary"]["oscillation_rhythm_state"] == "down_bias"
-    assert "观察重点：是否重新站回中枢 40.02-40.26" in payload["analysis_text"]
-    assert "结论：出现向下预警，但当前不构成确认三卖。" in payload["advice_text"]
-    assert "建议：继续观察首次回抽是否回中枢，未完成离开-回抽确认链前不升级为三卖。" in payload["advice_text"]
-    assert "监视器：中枢中线 40.14，当前偏弱，预警状态 向下预警。" in payload["advice_text"]
-    assert "分解说明：当前同级别分解仍处 dual_interpretation_pending，所有高层结论统一按观察/等待确认处理。" in payload["advice_text"]
-    assert "节奏监视：节奏偏弱，当前只作辅助观察，不单独升级主结论。" in payload["advice_text"]
-    assert "确认三卖" not in payload["analysis_text"]
+# 注：原 `test_real_1m_pre_breakdown_sample_keeps_pending_watch_advice_and_analysis`
+# 已移除：其锚点 `data/reports/000651/1m/tech.json`（generated_at 2026-08-20）过期且内部自相矛盾，
+# 且当前 16 个 1m 标的中不存在真实 `pre_breakdown`（见 zhongshu-tasks.md ZS5.3.b 锚点漂移记录）。
+# 同语义覆盖改由 replay gate 承担：
+#   tests/test_chanlun_analysis.py::test_real_1m_pre_breakdown_replay_sample_preserves_independent_gate
+# 以及 build_advice 单测 test_build_advice_keeps_pre_breakdown_as_pending_watch。
 
 
 def test_real_01024_1m_confirmed_3s_live_sample_keeps_confirmed_advice_and_analysis() -> None:

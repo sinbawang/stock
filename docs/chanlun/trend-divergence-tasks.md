@@ -14,10 +14,10 @@
 
 | ID | 任务 | 状态 | 依赖 | 完成定义 |
 | --- | --- | --- | --- | --- |
-| TD1 | 同级别走势类型自动分解主链 | 待完成 | `segment`, `zhongshu` 稳定 | 给定同级别结构后，能稳定拆出盘整 / 趋势 / 过渡段，而不是只输出工程摘要 |
-| TD2 | 趋势背驰严格判定 | 待完成 | TD1 | 背驰判定可对应原文条件、最近中枢、离开段和力度比较 |
-| TD3 | 盘整背驰严格判定 | 待完成 | TD1 | 盘整背驰不再被趋势背驰或工程近似规则替代 |
-| TD4 | 输出字段与消费解释收口 | 进行中 | TD2, TD3 | `post_divergence_route`、`oscillation_rhythm_state` 等字段能稳定表达结构状态 |
+| TD1 | 同级别走势类型自动分解主链 | 完成 | `segment`, `zhongshu` 稳定 | 给定同级别结构后，能稳定拆出盘整 / 趋势 / 过渡段，而不是只输出工程摘要 |
+| TD2 | 趋势背驰严格判定 | 完成 | TD1 | 背驰判定可对应原文条件、最近中枢、离开段和力度比较 |
+| TD3 | 盘整背驰严格判定 | 完成 | TD1 | 盘整背驰不再被趋势背驰或工程近似规则替代 |
+| TD4 | 输出字段与消费解释收口 | 完成 | TD2, TD3 | `post_divergence_route`、`oscillation_rhythm_state` 等字段能稳定表达结构状态 |
 | TD5 | 标准案例包与回归闸门 | 进行中 | TD1-TD4 | 正例、反例、易混淆例都能自动化回归和文档 review |
 
 ## 按任务类型看板
@@ -46,18 +46,18 @@
 
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
-| T1 | 走势类型主链 regressions | 高 | 锁 repeated rebuild 下的类型链不漂移 | 待完成 | 依赖 TD1 主链先成型。 |
+| T1 | 走势类型主链 regressions | 高 | 锁 repeated rebuild 下的类型链不漂移 | 进行中 | TD1 主链已成型，已有 `type_chain` 单例与空集回归，复杂前缀链回归仍待补。 |
 | T2 | 趋势背驰 / 盘整背驰回归 | 中 | 为正例、反例、易混淆例建立最小自动化锚点 | 进行中 | 当前已能做局部字段断言，但严格回归链仍未闭合。 |
-| T3 | 字段与消费核验 | 中 | 核验 `post_divergence_route`、`oscillation_rhythm_state` 不被误升为 confirmed | 进行中 | 已有部分消费层约束，但需要跟严格判定链同步补强。 |
+| T3 | 字段与消费核验 | 中 | 核验 `post_divergence_route`、`oscillation_rhythm_state` 不被误升为 confirmed | 完成 | `post_divergence_route` 已按 `strict` 输出，非严格背驰回落到 `last_zs_extension`。 |
 
 ### 代码任务
 
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
-| C1 | TD1 同级别走势类型自动分解主链 | 高 | 形成 machine-readable 的稳定类型链 | 待完成 | 是整个模块的控制性前置条件。 |
-| C2 | TD2 趋势背驰严格判定 | 中 | 绑定最近中枢、离开段与力度比较 | 待完成 | 当前 divergence 输出还不等于严格趋势背驰结论。 |
-| C3 | TD3 盘整背驰严格判定 | 中 | 建立独立于趋势背驰的判定入口 | 待完成 | 这是当前最容易被工程近似替代的缺口。 |
-| C4 | TD4 输出字段与消费解释收口 | 中 | 统一严格结论、预警、监视字段的边界 | 进行中 | 需要跟 TD1-TD3 的主实现同步推进。 |
+| C1 | TD1 同级别走势类型自动分解主链 | 高 | 形成 machine-readable 的稳定类型链 | 完成 | `type_chain` 已落地并锁回归；过渡段由 `transition_state` 表达。 |
+| C2 | TD2 趋势背驰严格判定 | 中 | 绑定最近中枢、离开段与力度比较 | 完成 | `divergence.trend` 已补 `strict / reference_zs_id / departure_confirmed / strength_comparison`。 |
+| C3 | TD3 盘整背驰严格判定 | 中 | 建立独立于趋势背驰的判定入口 | 完成 | `divergence.range` 已补 `strict / reference_zs_id / touches_boundary / strength_comparison`。 |
+| C4 | TD4 输出字段与消费解释收口 | 中 | 统一严格结论、预警、监视字段的边界 | 完成 | `post_divergence_route` 改为按 `strict` 输出；60m 报告文案区分“确认/迹象/无”。 |
 
 ## 任务拆分
 
@@ -73,6 +73,12 @@
 - 同一窗口在 repeated rebuild 中不会切出不同走势类型链。
 - 下游背驰、买卖点模块能引用稳定的走势类型结果，而不是重新各自猜一遍。
 
+当前进展：
+
+- 已新增 [trend-type-decomposition.md](trend-type-decomposition.md)，写死输入边界（confirmed segments → segment 中枢 → live runs）、切换条件（盘整延续 / 趋势延续 / 完成后转入新类型 / 重吸收）与 machine-readable 输出契约。
+- `build_structure_state(...)` 已新增 `type_chain` 字段：`[{type, status, zs_count, start_zs_id, end_zs_id}]`，与 `last_completed` / `current_ongoing` 严格一致（completed 段取自 `last_completed`，ongoing 段取自 `current_ongoing`），早前 run 按 run 粒度折叠为 completed；过渡段继续由 `relationship.transition_state` 表达。
+- 已新增 `tests/test_chanlun_analysis.py::test_build_structure_state_type_chain_matches_last_completed_and_ongoing` 与 `test_build_structure_state_type_chain_single_and_empty`，锁住 up→range 拆出 completed up + ongoing range、单中枢与空集三档真值。
+
 <a id="td2-trend-divergence"></a>
 ### TD2 趋势背驰严格判定
 
@@ -84,6 +90,16 @@
 
 - 每个趋势背驰结论都能回溯到明确的走势类型、最近中枢和力度对比。
 - 消费端不会把工程预警字段直接当作严格趋势背驰结论。
+
+当前进展：
+
+- `build_divergence_state(...)` 的 `divergence.trend` 已补 machine-readable 严格判定字段：
+  `strict`（严格趋势背驰确认，需趋势 + 最近中枢绑定 + 离开段突破 + 力度衰减）、
+  `reference_zs_id`（最近中枢绑定）、`departure_confirmed`（离开段是否突破 ZG/ZD）、
+  `strength_comparison`（`candidate_bi_id / candidate_strength / reference_bi_id / reference_strength / decayed`）。
+- 已新增 `tests/test_chanlun_analysis.py::test_analyze_chanlun_signals_marks_trend_divergence_as_higher_level_reverse_trend` 断言补上 `strict/reference_zs_id/departure_confirmed/strength_comparison`，并新增
+  `test_analyze_chanlun_signals_trend_divergence_without_departure_confirmation_is_not_strict`，锁住“力度衰减但离开段未突破 → 工程提示，非严格背驰”的区分。
+- 消费端读取 `strict` 决定是否按严格背驰结论措辞，归 TD4 收口。
 
 <a id="td3-range-divergence"></a>
 ### TD3 盘整背驰严格判定
@@ -97,6 +113,16 @@
 - 盘整背驰有独立字段、独立样例和独立 regression。
 - reviewer 能清楚区分“盘整背驰缺失”与“只是工程近似提示”。
 
+当前进展：
+
+- `build_divergence_state(...)` 的 `divergence.range` 已补独立 machine-readable 判定字段：
+  `strict`（盘整背驰严格确认，需盘整 + 最近中枢绑定 + 试探边界 + 力度衰减）、
+  `reference_zs_id`、`touches_boundary`（同方向试探是否触及 ZG/ZD，`>=` / `<=`）、
+  `strength_comparison`（与趋势背驰同构的力度对比详情）。
+- 盘整背驰与趋势背驰通过 `ongoing_type` 分轨（`range` vs `up/down`），不复用趋势判定分支。
+- 已新增 `tests/test_chanlun_analysis.py::test_analyze_chanlun_signals_marks_range_divergence_as_higher_level_range` 断言补上 `strict/reference_zs_id/touches_boundary/strength_comparison`，并新增
+  `test_analyze_chanlun_signals_range_divergence_without_touching_boundary_is_not_strict`，锁住“力度衰减但未试探到边界 → 工程提示，非严格盘整背驰”的区分。
+
 <a id="td4-output-fields"></a>
 ### TD4 输出字段与消费解释收口
 
@@ -108,6 +134,12 @@
 
 - 字段命名、严格程度、展示文案三者一致。
 - 消费端不会把 pending / watch 误展示成 confirmed 背驰。
+
+当前进展：
+
+- `_build_post_divergence_route(...)` 改为按 `divergence.trend.strict` / `divergence.range.strict` 输出：严格背驰才给 `higher_level_reverse_trend` / `higher_level_range`，工程提示回落到 `last_zs_extension`（最后中枢扩展观察）。
+- 四个 60m 报告 / wechat 文案消费者（`run_cn_60m_*`、`run_hk_60m_*`）的“趋势背驰 / 盘整背驰”行改为三档：`确认`（strict）/ `迹象`（active 但非 strict）/ `无`。
+- 已新增非严格路由断言：`test_analyze_chanlun_signals_trend_divergence_without_departure_confirmation_is_not_strict` 与 `test_analyze_chanlun_signals_range_divergence_without_touching_boundary_is_not_strict` 均锁定 `post_divergence_route == "last_zs_extension"`。
 
 <a id="td5-case-gates"></a>
 ### TD5 标准案例包与回归闸门
@@ -121,10 +153,17 @@
 - [trend-divergence-visual-example-library.md](trend-divergence-visual-example-library.md) 中每个重点结论都能找到自动化锚点。
 - 新增背驰规则前后，最小回归集能及时指出行为变化。
 
+当前进展 / 锚点漂移（2026-08-22 记录）：
+
+- 已新增 [trend-divergence-visual-example-library.md](trend-divergence-visual-example-library.md) 第 8 节「案例 → 回归映射表」：趋势背驰正例/反例、盘整背驰正例/反例、趋势 vs 盘整分轨五条案例均绑定具名 pytest（`test_chanlun_analysis.py`）。
+- 真实样本锚点依赖 `zhongshu` 模块的 `1m` 预警锚点；原 `000651 1m pre_breakdown` 锚点已漂移（见 [zhongshu-tasks.md](zhongshu-tasks.md) ZS5.3.b），当前数据+代码下已变成「三买 confirmed」。
+- 背驰模块自身尚无独立的真实 `1m/5m` 过渡态样本锚点；`test_zhongshu_structure_text.py::test_real_1m_pre_breakdown_sample_...` 目前暂按过期 fixture 内容维持，非长期正确态。
+- 因此 TD5 的「绑定真实过渡态样本」仍需先解决上游锚点漂移，再补背驰自身案例。
+
 ## 当前 blocker
 
-- 同级别走势类型分解尚未形成稳定主链，背驰严格化还不能完全脱离工程近似。
-- 上游标准中枢若未收口，最近中枢绑定会持续漂移。
+- TD1-TD4 已闭环；剩余 TD5 被「真实样本锚点漂移」卡住：原 `1m pre_breakdown` 锚点已漂成三买，需重新选锚点或重新生成 fixture。
+- 背驰案例库与图示库仍缺正例/反例/易混淆例的系统化绑定。
 
 ## 推荐执行顺序
 

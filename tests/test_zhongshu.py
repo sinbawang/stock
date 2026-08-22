@@ -130,8 +130,9 @@ class TestIdentifyZhongshu:
             _bi(1, BiDirection.UP, 106, 100),
             _bi(2, BiDirection.DOWN, 104, 101),
             _bi(3, BiDirection.UP, 103, 102),
-            _bi(4, BiDirection.DOWN, 103.2, 102.5),
-            _bi(5, BiDirection.DOWN, 101.8, 96),
+            _bi(4, BiDirection.DOWN, 103.2, 101.5),   # 与区间重叠，并回本体延伸
+            _bi(5, BiDirection.UP, 103.5, 101.8),     # 继续延伸
+            _bi(6, BiDirection.DOWN, 101.9, 96),      # 真正跌破 ZD，才是离开笔
         ]
 
         result = identify_zhongshu(bis)
@@ -140,10 +141,10 @@ class TestIdentifyZhongshu:
         zs = result[0]
         assert zs.zs_low == 102
         assert zs.zs_high == 103
-        assert zs.bi_ids == [1, 2, 3, 4]
+        assert zs.bi_ids == [1, 2, 3, 4, 5]
         assert zs.core_bi_ids == [1, 2, 3]
-        assert zs.render_end_bi_id == 4
-        assert zs.exit_bi_id == 5
+        assert zs.render_end_bi_id == 5
+        assert zs.exit_bi_id == 6
         assert zs.superseded_by_zs_id is None
         assert zs.is_reabsorbed_by_larger_expansion is False
 
@@ -181,11 +182,78 @@ class TestIdentifyZhongshu:
         result = identify_zhongshu(segments, structure_level="segment")
 
         assert len(result) == 1
-        assert result[0].structure_level == "segment"
-        assert result[0].entering_bi_id == 0
-        assert result[0].core_bi_ids == [1, 2, 3]
+        zs = result[0]
+        assert zs.structure_level == "segment"
+        assert zs.entering_bi_id == 0
+        assert zs.core_bi_ids == [1, 2, 3]
+        assert zs.bi_ids == [1, 2, 3]
+        assert zs.exit_bi_id == 4
+        assert zs.zs_low == 102
+        assert zs.zs_high == 103
+        assert zs.is_terminated is True
+        assert zs.render_start_bi_id == 1
+        assert zs.render_end_bi_id == 3
+
+    def test_segment_zhongshu_entering_segment_must_overlap_body_zone(self):
+        segments = [
+            _segment(0, BiDirection.UP, 120, 115),    # does not overlap [102,103]
+            _segment(1, BiDirection.DOWN, 106, 100),
+            _segment(2, BiDirection.UP, 104, 101),
+            _segment(3, BiDirection.DOWN, 103, 102),
+            _segment(4, BiDirection.UP, 112, 101),
+        ]
+
+        assert identify_zhongshu(segments, structure_level="segment") == []
+
+    def test_segment_zhongshu_exit_failure_merges_back_into_body(self):
+        segments = [
+            _segment(0, BiDirection.DOWN, 110, 98),
+            _segment(1, BiDirection.UP, 106, 100),
+            _segment(2, BiDirection.DOWN, 104, 101),
+            _segment(3, BiDirection.UP, 103, 102),
+            _segment(4, BiDirection.DOWN, 103.2, 101.5),   # 离开失败，并回本体延伸
+            _segment(5, BiDirection.UP, 103.5, 101.8),     # 继续延伸
+            _segment(6, BiDirection.DOWN, 101.9, 95),      # 真正跌破 ZD，才是离开段
+        ]
+
+        result = identify_zhongshu(segments, structure_level="segment")
+
+        assert len(result) == 1
+        zs = result[0]
+        assert zs.zs_low == 102
+        assert zs.zs_high == 103
+        assert zs.core_bi_ids == [1, 2, 3]
+        assert zs.bi_ids == [1, 2, 3, 4, 5]
+        assert zs.render_end_bi_id == 5
+        assert zs.exit_bi_id == 6
+        assert zs.is_terminated is True
+        assert zs.superseded_by_zs_id is None
+        assert zs.is_reabsorbed_by_larger_expansion is False
+
+    def test_segment_zhongshu_next_center_reuses_previous_exit_as_entering(self):
+        segments = [
+            _segment(0, BiDirection.DOWN, 110, 98),
+            _segment(1, BiDirection.UP, 106, 100),
+            _segment(2, BiDirection.DOWN, 104, 101),
+            _segment(3, BiDirection.UP, 103, 102),
+            _segment(4, BiDirection.DOWN, 102, 96),   # 第一个中枢离开段 / 第二个中枢进入段
+            _segment(5, BiDirection.UP, 99, 97),
+            _segment(6, BiDirection.DOWN, 99, 97),
+            _segment(7, BiDirection.UP, 101, 97),
+            _segment(8, BiDirection.DOWN, 98, 95),
+        ]
+
+        result = identify_zhongshu(segments, structure_level="segment")
+
+        assert len(result) == 2
         assert result[0].bi_ids == [1, 2, 3]
         assert result[0].exit_bi_id == 4
+        assert result[0].is_terminated is True
+        assert result[1].entering_bi_id == 4
+        assert result[1].bi_ids == [5, 6, 7, 8]
+        assert result[1].render_end_bi_id == 8
+        assert result[1].exit_bi_id is None
+        assert result[1].is_terminated is False
 
     def test_identify_segment_zhongshu_ignores_unconfirmed_tail_segment(self):
         segments = [
@@ -217,6 +285,26 @@ class TestIdentifyZhongshu:
         assert result[0].core_bi_ids == [1, 2, 3]
         assert result[0].bi_ids == [1, 2, 3]
         assert result[0].exit_bi_id == 4
+
+    def test_identify_segment_zhongshu_trims_only_unconfirmed_tail_and_still_forms(self):
+        segments = [
+            _segment(0, BiDirection.DOWN, 110, 98),
+            _segment(1, BiDirection.UP, 106, 100),
+            _segment(2, BiDirection.DOWN, 104, 101),
+            _segment(3, BiDirection.UP, 103, 102),
+            _segment(4, BiDirection.DOWN, 102, 96),
+            _segment(5, BiDirection.UP, 103.5, 101.8, is_confirmed=False),
+        ]
+
+        result = identify_zhongshu(segments, structure_level="segment")
+
+        assert len(result) == 1
+        zs = result[0]
+        assert zs.entering_bi_id == 0
+        assert zs.core_bi_ids == [1, 2, 3]
+        assert zs.bi_ids == [1, 2, 3]
+        assert zs.exit_bi_id == 4
+        assert zs.is_terminated is True
 
     def test_identify_segment_zhongshu_ignores_transition_pending_tail_from_segment_pipeline(self):
         bis = [

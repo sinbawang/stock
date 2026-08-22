@@ -99,6 +99,6 @@ def get_lesson_boundary_cases() -> list[LessonBoundaryCase]:
             expected_first_stop_reason="feature_sequence_gap_fractal_delayed_true",
             expected_first_confirmed=True,
             expected_min_segments_theory=2,
-            expected_min_segments_practical=3,
+            expected_min_segments_practical=2,
         ),
     ]

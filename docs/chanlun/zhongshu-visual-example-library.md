@@ -105,6 +105,32 @@ flowchart LR
 - `current_structure_status=completed_then_new_type` 应被解释成结构切换已发生、当前新段仍在展开，而不是直接输出交易动作型确认。
 - 最终文案可固定为：`上一段同级别走势已结束，当前新段运行中，继续观察是否形成有效确认。`
 
+### 1.4 进入段 / 本体 / 离开段分层图（ZS6.1）
+
+场景目标：把标准中枢的进入段 / 本体 / 离开段三层边界画清，避免把进入段当本体、把离开段并回本体。
+
+```mermaid
+flowchart LR
+  E[进入段] --> B1[本体段 1]
+  B1 --> B2[本体段 2]
+  B2 --> B3[本体段 3]
+  B3 --> X{后续段与区间重叠?}
+  X -- 重叠 --> EXT[并入本体延伸]
+  X -- 不重叠且同向突破 ZG/ZD --> L[离开段 → 中枢终结]
+  X -- 否则 --> STOP[终止扫描, 不终结]
+```
+
+图示字段说明：
+
+- `entering_segment_id`：进入段，只负责把走势带入重叠区，**不计入本体**。
+- `core_segment_ids`：本体前三段（`start_segment_id` .. `end_segment_id`）。
+- `zs_low / zs_high`：由本体前三段重叠固定，不随延伸重算。
+- `exit_segment_id`：与进入段同向、突破 ZG/ZD 的离开段；未出现则为 `None`。
+- 延伸段只推进 `render_end_segment_id`，不改变 `zs_low / zs_high`。
+
+真实锚点：`00700 30m` 首个标准中枢 `entering=0, core=[1,2,3], exit=None`；最小例子见
+[segment-zhongshu-boundary.md](segment-zhongshu-boundary.md) 第 6 节。
+
 ## 2. 第29课：背驰后三级去向示例
 
 场景目标：演示背驰后只允许三类去向。
@@ -272,7 +298,7 @@ flowchart TD
 3. [sample-case-pack-2026-08-v2.md](sample-case-pack-2026-08-v2.md) 第 2.1 节 `HK.00388 60m` `pre_breakdown` 后回中枢。
 4. [sample-case-pack-2026-08-v2.md](sample-case-pack-2026-08-v2.md) 第 3.3 节 `SZ.300124 15m` 预警后确认失败。
 5. [data/reports/000651/1m/tech.json](data/reports/000651/1m/tech.json) `SZ.000651 1m` 已真实落盘 `pre_breakdown`，当前仍属 pending/watch。
-6. [build/scan_real_1m_prebreakout_samples.json](build/scan_real_1m_prebreakout_samples.json) `002555 1m` 在历史回放 `2026-08-05 11:07` 已出现真实 `pre_breakout`，且仍保留 pending/watch。
+6. [build/scan_real_1m_prebreakout_samples.json](build/scan_real_1m_prebreakout_samples.json) `002555 1m` 在历史回放 `2026-08-04 13:35` 已出现真实 `pre_breakout`，且仍保留 pending/watch。
 7. [data/reports/601328/1m/tech.json](data/reports/601328/1m/tech.json) `SH.601328 1m` 顶背驰迹象已出现，但仍停留在等待离开中枢的预警前态。
 
 当前 `1m` 接线规则：真实 `SZ.000651 1m pre_breakdown` 与真实 replay `002555 1m pre_breakout` 已经接入第 92 课的双向主预警锚点，`SH.601328 1m` 退回“预警前态代理”角色；`1m confirmed 3S` 当前则只保留为 regression reference，对应消费输出的 confirmed 对照。
@@ -351,13 +377,13 @@ flowchart LR
 
 ### 4.4 真实案例 D: 002555 1m 向上预警已通过历史回放锁定，但确认链尚未闭合
 
-- 标的/级别/时间窗：002555 / 1m / 2026-08-05 09:37 ~ 2026-08-05 11:07
+- 标的/级别/时间窗：002555 / 1m / 2026-08-04 13:05 ~ 2026-08-04 13:35
 - 样本来源：`build/scan_real_1m_prebreakout_samples.json` + replay gate
-- 当前中枢数量：`1`
-- 最新中枢区间：`19.97 - 20.24`
-- 当前进行结构：`range`
+- 当前中枢数量：`0`（该窗口尚未形成确认中枢，预警由监视带压上沿触发）
+- 最新中枢区间：无确认中枢区间
+- 当前进行结构：`range`（监视带压上沿）
 - 当前信号结论：`出现向上预警，但当前不构成确认三买。`
-- 关键信号说明：`价格贴近最新中枢上沿 20.24，中枢中线 20.10，节奏偏强；同级别消费仍是待确认。`
+- 关键信号说明：`价格贴近监视带上沿，中枢中线 20.09，节奏偏强；同级别消费仍是待确认。`
 
 ```mermaid
 flowchart LR
@@ -422,6 +448,28 @@ flowchart LR
 - 现在双向正式 `1m pre_break*` 锚点已建立，这张卡片不应继续占据 `1m` 主预警位置，而应稳定退回“字段未落盘前的前态代理/过渡说明”角色。
 - 它和 `4.1`、`4.2`、`4.3` 共同构成一条更完整的链：预警前态 -> 预警未确认 -> 确认链闭合。
 - 最终文案可固定为：`已有风险迹象，但仍需等待离开中枢后的预警或确认链，不提前升级。`
+
+### 4.7 主辅冲突案例：标准中枢未确认但类中枢已给预警（ZS6.2）
+
+场景目标：演示“辅助口径更激进”时，主结论如何保持克制，不被类中枢预警带跑。
+
+```mermaid
+flowchart LR
+  A[类中枢 lei_zhongshus 给出更激进预警] --> B{标准中枢 zhongshus 是否已确认?}
+  B -- 否 pending --> C[主结论维持 pending/watch]
+  B -- 是 confirmed --> D[以主口径为准]
+  C --> E[类中枢仅作辅助提示, 不得升格主预警]
+```
+
+图注模板（消费红线）：
+
+- 主口径 `same_level_consumption_level=pending` 时，无论类中枢多激进，都只能输出 `类中枢提示，未触发主预警`。
+- `lei_zhongshus` 只能产出 `auxiliary_signal`，不得单独提升为 `confirmed_signal`。
+- 主辅冲突固定输出“中枢主口径优先”，且不得用类中枢预警覆盖主口径的 `zs_monitor_alert`。
+- 主口径 `zs_monitor_alert=none` 而类中枢出现预警时，只记录辅助预警，不升格主风险。
+
+对应契约：[zhongshu-dual-track-spec.md](zhongshu-dual-track-spec.md) 第 9、10 节；
+消费对照：[zhongshu-consumer-display-examples.md](zhongshu-consumer-display-examples.md) 第 4、7 节。
 
 ## 5. 发布层最小图文检查清单
 

@@ -43,7 +43,7 @@
 1. [data/reports/02357/1m/tech.json](data/reports/02357/1m/tech.json)：单中枢 `range ongoing`
 2. [data/reports/01339/1m/tech.json](data/reports/01339/1m/tech.json)：`completed_then_new_type`
 3. [data/reports/000651/1m/tech.json](data/reports/000651/1m/tech.json)：真实 `pre_breakdown`，当前仍属 pending/watch
-4. [build/scan_real_1m_prebreakout_samples.json](build/scan_real_1m_prebreakout_samples.json)：真实 replay `002555 1m pre_breakout`，cutoff=`2026-08-05 11:07`，当前仍属 pending/watch
+4. [build/scan_real_1m_prebreakout_samples.json](build/scan_real_1m_prebreakout_samples.json)：真实 replay `002555 1m pre_breakout`，cutoff=`2026-08-04 13:35`，当前仍属 pending/watch
 5. [data/reports/01024/1m/tech.json](data/reports/01024/1m/tech.json)：真实 live `confirmed 3S`，当前已确认消费
 6. [data/reports/601328/1m/tech.json](data/reports/601328/1m/tech.json)：顶背驰迹象已出现，但仍未进入正式 `pre_breakdown` 字段链
 7. `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_confirmed_3s_reference_anchor`：`1m confirmed 3S` regression reference gate

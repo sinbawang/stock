@@ -740,9 +740,9 @@ def _resolve_same_level_consumption_level(signals: dict[str, object]) -> str | N
 
 
 def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, object]) -> str:
-    current_zs = signals["current_zs"]
-    latest_up = signals["latest_confirmed_up"]
-    latest_down = signals["latest_down"]
+    current_zs = signals.get("current_zs")
+    latest_up = signals.get("latest_confirmed_up")
+    latest_down = signals.get("latest_down")
     buy_points = signals["buy_points"]
     sell_points = signals["sell_points"]
     top_divergence = signals["top_divergence"]
@@ -852,23 +852,25 @@ def build_advice(name: str, timeframe_label: str, raw_bars, signals: dict[str, o
                 f"建议：已有仓位可继续持有，回踩不破 {current_zs.zs_high:.2f} 再考虑加仓。",
             ]
         )
-    elif current_zs and zs_monitor_alert == "pre_breakout":
+    elif zs_monitor_alert == "pre_breakout":
         bias_text = {"strong": "节奏偏强", "weak": "节奏偏弱", "neutral": "节奏中性"}.get(str(zs_monitor_bias), "节奏中性")
         midline_text = f"，中枢中线 {float(zs_monitor_midline):.2f}" if zs_monitor_midline is not None else ""
+        price_anchor = f"{current_zs.zs_high:.2f}" if current_zs else "最新中枢上沿"
         lines.extend(
             [
                 "结论：出现向上预警，但当前不构成确认三买。",
-                f"理由：价格贴近最新中枢上沿 {current_zs.zs_high:.2f}{midline_text}，{bias_text}。",
+                f"理由：价格贴近{price_anchor}{midline_text}，{bias_text}。",
                 "建议：继续观察首次回试是否回中枢，未完成离开-回试确认链前不升级为三买。",
             ]
         )
-    elif current_zs and zs_monitor_alert == "pre_breakdown":
+    elif zs_monitor_alert == "pre_breakdown":
         bias_text = {"strong": "节奏偏强", "weak": "节奏偏弱", "neutral": "节奏中性"}.get(str(zs_monitor_bias), "节奏中性")
         midline_text = f"，中枢中线 {float(zs_monitor_midline):.2f}" if zs_monitor_midline is not None else ""
+        price_anchor = f"{current_zs.zs_low:.2f}" if current_zs else "最新中枢下沿"
         lines.extend(
             [
                 "结论：出现向下预警，但当前不构成确认三卖。",
-                f"理由：价格贴近最新中枢下沿 {current_zs.zs_low:.2f}{midline_text}，{bias_text}。",
+                f"理由：价格贴近{price_anchor}{midline_text}，{bias_text}。",
                 "建议：继续观察首次回抽是否回中枢，未完成离开-回抽确认链前不升级为三卖。",
             ]
         )
