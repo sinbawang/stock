@@ -529,6 +529,41 @@ def test_gap_false_outcome_has_priority_over_late_true_candidate() -> None:
     assert result[0].is_confirmed is True
 
 
+def test_theory_mode_confirms_down_gap_fractal_without_weak_down_deferral() -> None:
+    """06088 5m S8 案例（合成复现）：down 段缺口底分型再分辨通过，不应被弱 down 笔延迟。
+
+    场景：down 段的 up 笔特征序列在 bi3 出现缺口，bi5 包含 bi3，bi7 向上越过 bi5
+    （再分辨通过），但 bi6 是同向弱 down 笔（未破前低）。严格理论此时应确认 down 段；
+    `should_defer_down_weak_gap` 是防过早终结的工程启发式，只应在 practical 生效。
+    """
+    bis = [
+        _bi(0, BiDirection.DOWN, 6.330, 5.890),
+        _bi(1, BiDirection.UP, 6.065, 5.890),
+        _bi(2, BiDirection.DOWN, 6.065, 5.795),
+        _bi(3, BiDirection.UP, 5.870, 5.795),   # 缺口：整体跳到 bi1 下方
+        _bi(4, BiDirection.DOWN, 5.870, 5.760),
+        _bi(5, BiDirection.UP, 6.060, 5.760),   # 包含 bi3
+        _bi(6, BiDirection.DOWN, 6.060, 5.910),  # 弱 down 笔：未破 5.760
+        _bi(7, BiDirection.UP, 6.065, 5.915),    # 向上越过 bi5 -> 再分辨通过
+        _bi(8, BiDirection.DOWN, 6.065, 5.900),
+        _bi(9, BiDirection.UP, 6.105, 5.900),
+        _bi(10, BiDirection.DOWN, 6.105, 5.960),
+        _bi(11, BiDirection.UP, 6.155, 5.960),
+        _bi(12, BiDirection.DOWN, 6.155, 5.800),
+        _bi(13, BiDirection.UP, 6.000, 5.800),
+    ]
+
+    theory = identify_segments(bis, termination_mode="theory")
+    assert theory[0].direction == BiDirection.DOWN
+    assert theory[0].is_confirmed is True
+    assert theory[0].stop_reason == "feature_sequence_gap_fractal"
+
+    practical = identify_segments(bis, termination_mode="practical")
+    assert practical[0].direction == BiDirection.DOWN
+    assert practical[0].is_confirmed is True
+    assert practical[0].stop_reason == "reverse_break"
+
+
 def test_reverse_break_after_gap_documented_scenario_pins_current_resolution() -> None:
     """锁住文档 `reverse_break_after_gap` 场景的当前实现解析。
 

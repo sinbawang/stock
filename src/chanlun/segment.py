@@ -1222,8 +1222,11 @@ def _extend_segment(
                     )
                 )
                 if gap_state == GapCandidateState.CONFIRMED:
+                    # theory 模式下不延迟：缺口分型再分辨通过即确认；
+                    # practical 下延迟给 weak_down_rebound -> reverse_break 兑现。
                     should_defer_down_weak_gap = (
-                        direction == BiDirection.DOWN
+                        enable_fallback_reverse_break
+                        and direction == BiDirection.DOWN
                         and pending_gap_break_idx == cursor
                         and same_dir_bi.low >= last_same_extreme
                     )
@@ -1495,7 +1498,8 @@ def _extend_segment(
                             )
                             if gap_state == GapCandidateState.CONFIRMED:
                                 should_defer_down_weak_gap = (
-                                    direction == BiDirection.DOWN
+                                    enable_fallback_reverse_break
+                                    and direction == BiDirection.DOWN
                                     and pending_gap_break_idx == cursor
                                     and same_dir_bi.low >= last_same_extreme
                                 )
