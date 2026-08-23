@@ -529,6 +529,38 @@ def test_gap_false_outcome_has_priority_over_late_true_candidate() -> None:
     assert result[0].is_confirmed is True
 
 
+def test_reverse_break_after_gap_documented_scenario_pins_current_resolution() -> None:
+    """锁住文档 `reverse_break_after_gap` 场景的当前实现解析。
+
+    文档语义（segment-implementation-guide.md）：首根反向笔尚未破坏最近关键低点，
+    后续同向恢复失败，并由再次反向扩张完成确认破坏。
+
+    当前实现把该场景解析为普通 `reverse_break`（第二根反向笔直接破最近反向极值）；
+    `reverse_break_after_gap` 仍是契约中声明但实现当前不产出的保留码。
+    若未来实现改为产出 `reverse_break_after_gap`，本测试会失败并显式提示行为变更，
+    避免契约与实现静默脱节。
+    """
+    bis = [
+        _bi(0, BiDirection.UP, 120, 100),
+        _bi(1, BiDirection.DOWN, 108, 104),
+        _bi(2, BiDirection.UP, 125, 106),
+        _bi(3, BiDirection.DOWN, 112, 109),  # 首根反向笔：未破最近关键低点
+        _bi(4, BiDirection.UP, 113, 110),    # 同向恢复失败：未创新高
+        _bi(5, BiDirection.DOWN, 111, 103),  # 再次反向扩张：破最近关键低点 → 终结确认
+        _bi(6, BiDirection.UP, 114, 108),
+    ]
+
+    result = identify_segments(bis)
+
+    assert len(result) >= 1
+    assert result[0].direction == BiDirection.UP
+    assert result[0].start_bi_id == 0
+    assert result[0].end_bi_id == 4
+    assert result[0].stop_reason == "reverse_break"
+    assert result[0].is_confirmed is True
+    assert result[0].break_bi_id == 5
+
+
 def test_describe_stop_reason_covers_known_codes_and_fallback() -> None:
     for code, label in STOP_REASON_LABELS.items():
         assert describe_stop_reason(code) == label

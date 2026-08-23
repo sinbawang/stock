@@ -67,7 +67,11 @@ def test_300124_30m_segments_keep_tail_and_no_followup_state() -> None:
     assert_landmarks_equal(expected, landmarks)
 
 
-def test_300124_15m_segments_keep_reverse_break_after_gap_landmark() -> None:
+def test_300124_15m_segments_keep_gap_and_reverse_break_landmarks() -> None:
+    # 注：旧名 `..._keep_reverse_break_after_gap_landmark` 已过时——该窗口实际产出的
+    # stop_reason 是 `feature_sequence_gap_fractal` + `reverse_break`，并不产出
+    # `reverse_break_after_gap`（后者是契约中保留但实现当前不产出的码，见
+    # tests/test_segment_rediscrimination_matrix.py 中对应 synthetic 引脚）。
     segments = identify_segments_from_csv(SAMPLE_15M_CSV)
 
     landmarks = [
