@@ -17,7 +17,7 @@
 | ID | 任务 | 状态 | 依赖 | 完成定义 |
 | --- | --- | --- | --- | --- |
 | BS1 | 当前实现 vs 严格理论差异表 | 完成 | `analysis.py` 现状梳理 | 每条 buy / sell 规则都能标出“严格一致 / 工程近似 / 待实现” |
-| BS2 | 一类买卖点严格确认 | 待完成 | `zhongshu`, `trend-divergence` 稳定 | 最近中枢、离开段、背驰绑定关系明确且可自动判定 |
+| BS2 | 一类买卖点严格确认 | 进行中 | `zhongshu`, `trend-divergence` 稳定 | 最近中枢、离开段、背驰绑定关系明确且可自动判定 |
 | BS3 | 二类买卖点严格确认 | 待完成 | BS2 | 能严格绑定 1 类点后的首次确认性回抽 |
 | BS4 | 三类买卖点严格确认 | 待完成 | BS2 | 能严格绑定最近中枢后的首次回抽与级别边界 |
 | BS5 | 多级别联立与消费降级规则 | 进行中 | BS2-BS4 | 高一级方向、操作级别、执行级别和 pending / auxiliary 降级文案一致 |
@@ -60,7 +60,7 @@
 | --- | --- | --- | --- | --- | --- |
 | C1 | BS1 差异表对应到实现入口 | 高 | 把 `analysis.py` 中各类买卖点规则逐条映射出来 | 完成 | 六条 buy/sell 规则已逐条映射到 `analyze_chanlun_signals` 行号（L882-925），差异分类可溯源。 |
 | C3 | BS5 多级别联立与消费降级 | 高 | 统一高一级方向、操作级别、执行级别与降级文案 | 进行中 | 这是当前消费层主要的实现收口点。 |
-| C2 | BS2-BS4 一二三类点严格确认 | 中 | 先一类点，再二类点，再三类点逐级收口 | 待完成 | 当前仍明显受最近中枢与背驰链稳定度制约。 |
+| C2 | BS2-BS4 一二三类点严格确认 | 中 | 先一类点，再二类点，再三类点逐级收口 | 进行中 | BS1 差异表已闭合，BS2 严格确认链（应然）已写入并钉住两个契约缺口（双边不对称、无转折确认），下一步做双边对称与转折确认代码收口。 |
 
 ## 任务拆分
 
@@ -101,6 +101,26 @@
 - 绑定最近标准中枢，而不是模糊使用辅助结构。
 - 绑定离开段与背驰确认，明确何时只是预警、何时可确认。
 - 为买点与卖点分别补对称样例，避免只实现单边。
+
+严格确认链（应然，见 [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) 2.2）：
+
+1. 最近中枢绑定：`reference_zs_id` 必须指向最近标准中枢（非类中枢 / 辅助结构）。
+2. 离开段确认：离开笔必须已确认（`is_confirmed=True`），且方向与中枢方向相反（向下离开 -> 一买，向上离开 -> 一卖）。
+3. 背驰确认：离开段相对进入段力度衰减（严格力度比较口径，非 macd_sum_abs 近似）。
+4. 转折确认：背驰后出现反向转折笔（一买需向上笔、一卖需向下笔）。
+5. 证据字段：`departure_bi_id`、`reference_zs_id`、`divergence_decayed`、`turn_bi_id` 可回溯。
+
+预警 vs 确认边界（当前实然）：
+
+- `zs_monitor_alert=pre_breakout/pre_breakdown` 是预警层，不等价于 buy_1/sell_1 确认（已有 replay gate 锁定）。
+- 当前 `buy_1` 在「未确认离开笔 + 无转折笔」时仍会触发（契约缺口，见 `test_analyze_chanlun_signals_flags_buy1_without_up_turn_confirmation`）。
+- 当前 `buy_1` 用 `latest_down`（未确认）、`sell_1` 用 `latest_confirmed_up`（已确认），双边不对称（契约缺口，见 `test_analyze_chanlun_signals_buy1_and_sell1_use_asymmetric_confirmation_requirement`）。
+
+待收口（按优先级）：
+
+1. 双边对称：统一 buy_1/sell_1 的离开笔确认要求（都要求已确认）。
+2. 转折确认：补离开段背驰后的反向转折笔判定。
+3. 力度口径：离开段 vs 进入段严格比较（当前为 macd_sum_abs 衰减近似）。
 
 验收：
 

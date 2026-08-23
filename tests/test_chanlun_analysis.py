@@ -955,6 +955,106 @@ def test_analyze_chanlun_signals_flags_first_sell_on_top_divergence_above_zs_hig
     assert signals["top_divergence"] is True
 
 
+def test_analyze_chanlun_signals_buy1_and_sell1_use_asymmetric_confirmation_requirement() -> None:
+    """BS2 契约缺口钉：buy_1 与 sell_1 的确认要求不对称。
+
+    当前 buy_1 用 `latest_down`（可为未确认），sell_1 用 `latest_confirmed_up`（必须已确认）。
+    在对称的「离开笔是唯一越界笔且未确认」场景下，buy_1 触发而 sell_1 不触发。
+    严格口径两者都应要求离开笔已确认（并补转折确认），本用例钉住现状，待 BS2 收口时修正。
+    """
+    # 买方：唯一跌破下沿的 down 离开笔未确认 -> 仍触发 buy_1
+    buy_zs = _zhongshu(11, zs_low=10.0, zs_high=10.8, day=1)
+    buy_bis = [
+        _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(2, BiDirection.UP, high=10.9, low=10.4, day=2),
+        _bi(3, BiDirection.DOWN, high=11.0, low=10.2, day=3),
+        _bi(4, BiDirection.UP, high=11.3, low=10.3, day=4),
+        Bi(
+            bi_id=5,
+            direction=BiDirection.DOWN,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 5, 10, 30),
+            end_ts=datetime(2026, 5, 5, 14, 30),
+            high=11.0,
+            low=9.8,
+            norm_bar_range=(5, 6),
+            is_confirmed=False,
+        ),
+    ]
+    buy_macd = [
+        SimpleNamespace(ts=buy_bis[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=buy_bis[2].end_ts, macd=-2.5, dif=-0.6),
+        SimpleNamespace(ts=buy_bis[4].end_ts, macd=-1.0, dif=-0.4),
+    ]
+    buy_signals = analyze_chanlun_signals([], buy_bis, [buy_zs], buy_macd)
+    assert buy_signals["buy_points"] == ["buy_1"]
+
+    # 卖方：唯一越上沿的 up 离开笔未确认 -> 不触发 sell_1（因只看已确认 up）
+    sell_zs = _zhongshu(12, zs_low=10.0, zs_high=10.8, day=1)
+    sell_bis = [
+        _bi(1, BiDirection.UP, high=10.5, low=10.1, day=1),
+        _bi(2, BiDirection.DOWN, high=10.6, low=10.0, day=2),
+        _bi(3, BiDirection.UP, high=10.7, low=10.2, day=3),
+        _bi(4, BiDirection.DOWN, high=10.5, low=10.0, day=4),
+        Bi(
+            bi_id=5,
+            direction=BiDirection.UP,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 5, 10, 30),
+            end_ts=datetime(2026, 5, 5, 14, 30),
+            high=11.2,
+            low=10.4,
+            norm_bar_range=(5, 6),
+            is_confirmed=False,
+        ),
+    ]
+    sell_macd = [
+        SimpleNamespace(ts=sell_bis[0].end_ts, macd=5.0, dif=1.0),
+        SimpleNamespace(ts=sell_bis[2].end_ts, macd=3.0, dif=0.8),
+        SimpleNamespace(ts=sell_bis[4].end_ts, macd=2.0, dif=0.6),
+    ]
+    sell_signals = analyze_chanlun_signals([], sell_bis, [sell_zs], sell_macd)
+    assert sell_signals["top_divergence"] is True
+    assert sell_signals["sell_points"] == []
+
+
+def test_analyze_chanlun_signals_flags_buy1_without_up_turn_confirmation() -> None:
+    """BS2 契约缺口钉：当前 buy_1 不要求背驰后的向上转折笔。
+
+    严格口径「背驰导致的转折」要求在离开段背驰后出现向上转折笔；
+    当前实现只要「底背驰 + 跌破下沿」即报 buy_1，无需转折确认，钉住现状待收口。
+    """
+    current_zs = _zhongshu(13, zs_low=10.0, zs_high=10.8, day=1)
+    bis = [
+        _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(2, BiDirection.UP, high=10.9, low=10.4, day=2),
+        Bi(
+            bi_id=3,
+            direction=BiDirection.DOWN,
+            start_fx_id=3,
+            end_fx_id=4,
+            start_ts=datetime(2026, 5, 3, 10, 30),
+            end_ts=datetime(2026, 5, 3, 14, 30),
+            high=11.0,
+            low=9.8,
+            norm_bar_range=(3, 4),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-1.0, dif=-0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    # 离开段背驰后没有任何向上转折笔，当前仍报 buy_1（无转折确认）
+    assert signals["bottom_divergence"] is True
+    assert signals["buy_points"] == ["buy_1"]
+
+
 def test_analyze_chanlun_signals_flags_third_buy_after_leave_zs_and_pullback_holds_upper_edge() -> None:
     """BS4 三买正例：向上离开中枢 + 首次回抽不重回中枢上沿之下 -> buy_3。"""
     current_zs = _zhongshu(3, zs_low=10.0, zs_high=10.8, day=20)
