@@ -16,7 +16,7 @@
 
 | ID | 任务 | 状态 | 依赖 | 完成定义 |
 | --- | --- | --- | --- | --- |
-| BS1 | 当前实现 vs 严格理论差异表 | 待完成 | `analysis.py` 现状梳理 | 每条 buy / sell 规则都能标出“严格一致 / 工程近似 / 待实现” |
+| BS1 | 当前实现 vs 严格理论差异表 | 完成 | `analysis.py` 现状梳理 | 每条 buy / sell 规则都能标出“严格一致 / 工程近似 / 待实现” |
 | BS2 | 一类买卖点严格确认 | 待完成 | `zhongshu`, `trend-divergence` 稳定 | 最近中枢、离开段、背驰绑定关系明确且可自动判定 |
 | BS3 | 二类买卖点严格确认 | 待完成 | BS2 | 能严格绑定 1 类点后的首次确认性回抽 |
 | BS4 | 三类买卖点严格确认 | 待完成 | BS2 | 能严格绑定最近中枢后的首次回抽与级别边界 |
@@ -34,7 +34,7 @@
 
 当前重点：
 
-1. 文档 / 代码前置：先把当前实现 vs 严格理论差异表补齐，并映射到 `analysis.py` 入口。
+1. 文档 / 代码前置：当前实现 vs 严格理论差异表已补齐（BS1 完成），下一步按一类点 -> 二类点 -> 三类点顺序替换工程近似。
 2. 测试：继续锁多级别联立与降级核验，避免高一级未确认却越级显示强确认。
 3. 代码：在上游中枢和背驰更稳定后，再按一类点 -> 二类点 -> 三类点顺序收口。
 
@@ -42,7 +42,7 @@
 
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
-| D1 | 当前实现 vs 严格理论差异表 | 高 | 逐条把 `buy_1/2/3`、`sell_1/2/3` 的现状与目标拆开 | 待完成 | 这是后续替换工程规则前必须先补齐的说明层。 |
+| D1 | 当前实现 vs 严格理论差异表 | 高 | 逐条把 `buy_1/2/3`、`sell_1/2/3` 的现状与目标拆开 | 完成 | 差异表已落在 BS1 节，逐条绑定 `analysis.py::analyze_chanlun_signals` 行号，六条规则均标为「工程近似」并写出已严格绑定项与主要缺口。 |
 | D2 | 标准案例包与 review 模板 | 中 | 补一二三类点正反例、区间套、小转大与多级别共振样例 | 进行中 | 已有骨架，但还不足以让 reviewer 快速判断每类点的严格程度。 |
 | D3 | 消费降级规范 | 中 | 统一 pending / auxiliary / confirmed 的文案分层 | 进行中 | 需要跟中枢、背驰两条上游链一起收口。 |
 
@@ -58,7 +58,7 @@
 
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
-| C1 | BS1 差异表对应到实现入口 | 高 | 把 `analysis.py` 中各类买卖点规则逐条映射出来 | 待完成 | 是后续严格替换工程规则的前置工作。 |
+| C1 | BS1 差异表对应到实现入口 | 高 | 把 `analysis.py` 中各类买卖点规则逐条映射出来 | 完成 | 六条 buy/sell 规则已逐条映射到 `analyze_chanlun_signals` 行号（L882-925），差异分类可溯源。 |
 | C3 | BS5 多级别联立与消费降级 | 高 | 统一高一级方向、操作级别、执行级别与降级文案 | 进行中 | 这是当前消费层主要的实现收口点。 |
 | C2 | BS2-BS4 一二三类点严格确认 | 中 | 先一类点，再二类点，再三类点逐级收口 | 待完成 | 当前仍明显受最近中枢与背驰链稳定度制约。 |
 
@@ -67,9 +67,28 @@
 <a id="bs1-diff-map"></a>
 ### BS1 当前实现 vs 严格理论差异表
 
-- 逐条标出当前 `buy_1 / buy_2 / buy_3 / sell_1 / sell_2 / sell_3` 的判定条件。
-- 标出哪些条件是严格理论要求，哪些只是工程近似或消费兜底。
-- 把差异表绑定到 `src/chanlun/analysis.py` 的具体逻辑入口，避免只写概念层描述。
+所有规则入口都在 `src/chanlun/analysis.py::analyze_chanlun_signals`。差异三档口径：
+
+- 严格一致：判定条件与 [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) 的应然语义逐条对齐。
+- 工程近似：绑定方向正确，但力度 / 首次回试 / 转折确认口径仍是工程近似。
+- 待实现：理论要求尚未进入判定链。
+
+| 规则 | 实现入口（analysis.py） | 当前判定条件（工程口径） | 已严格绑定 | 主要工程近似 / 缺口 | 分类 |
+| --- | --- | --- | --- | --- | --- |
+| `buy_1` | L882-883 | `current_zs and latest_down and bottom_divergence and latest_down.low <= zs_low` | 最近中枢 `current_zs` + 离开段 `latest_down` + 背驰 `bottom_divergence`（macd_sum_abs 衰减）三元组 | ① 力度比较用最近两根 down bi 的 `macd_sum_abs` 衰减（`_has_bottom_divergence`），非严格的「离开段 vs 进入段」同级别比较；② 「中枢附近」用 `latest_down.low <= zs_low` 跌破下沿近似；③ 未显式确认向上转折笔 | 工程近似 |
+| `sell_1` | L884-885 | `current_zs and latest_confirmed_up and top_divergence and latest_confirmed_up.high >= zs_high` | 最近中枢 + 离开段 + 顶背驰三元组 | 与 buy_1 对称，但 sell_1 用 `latest_confirmed_up`（已确认），buy_1 用 `latest_down`（可为未确认），双边口径不对称；其余近似同 buy_1 | 工程近似 |
+| `buy_2` | L886-903 | `previous_buy1_active`（回溯一买：previous/earlier down 底背驰 + 跌破下沿）且 `latest_down.low > previous_confirmed_down.low`（不破前低）且 `latest_down.low >= zs_low` 且 `latest_confirmed_up.high > previous_confirmed_down.high` | 绑定一买（`previous_buy1_active` 回溯）+ 不破前低 | ① 「首次」未锁定（无回抽计数，第二次回抽满足条件也会被标 buy_2）；② 额外约束 `latest_down.low >= zs_low` 非理论要求；③ 「恢复向上」用 `latest_confirmed_up.high > previous_confirmed_down.high` 近似 | 工程近似 |
+| `buy_3` | L904-905 | `latest_confirmed_up.high > zs_high`（离开）且 `latest_down.low >= zs_high`（回抽不跌回上沿） | 离开中枢 + 首次不回归硬约束 | ① 「再度走强」缺失（无回抽后向上笔确认）；② 「首次」未锁定（第二次回抽满足条件也可能回写成同一中枢三买，违反红线） | 工程近似 |
+| `sell_2` | L906-924 | `previous_sell1_active`（回溯一卖：latest/previous up 顶背驰 + 越上沿）且 `latest_up.high < latest_confirmed_up.high`（不破前高）且 `latest_down.low < latest_confirmed_up.low` 且 `latest_up.high <= zs_high` | 绑定一卖 + 不破前高 | 与 buy_2 对称：① 「首次」未锁定；② 额外约束 `latest_up.high <= zs_high`；③ 「恢复向下」用 `latest_down.low < latest_confirmed_up.low` 近似 | 工程近似 |
+| `sell_3` | L925-926 | `latest_down.low < zs_low`（向下离开）且 `latest_confirmed_up.high <= zs_low`（反抽不站回下沿） | 离开中枢 + 首次不回归硬约束 | 与 buy_3 对称：① 「再度走弱」缺失；② 「首次」未锁定 | 工程近似 |
+
+口径汇总：
+
+- 一二三类点的「最近中枢绑定」与「离开段 / 回抽方向」已严格对齐。
+- 三类点（buy_3/sell_3）的「离开 + 不回归」硬约束已严格，缺「再度走强 / 走弱」与「首次回试锁定」。
+- 二类点（buy_2/sell_2）已绑定一买 / 一卖前置与「不破前低 / 前高」，缺「首次回抽锁定」。
+- 一类点（buy_1/sell_1）背驰三元组已绑定，力度比较口径仍是 macd_sum_abs 工程近似，且 sell_1/buy_1 双边不对称。
+- 工程近似集中在三处：力度比较口径、首次回试计数、转折 / 走强再确认笔。
 
 验收：
 
