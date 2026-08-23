@@ -117,7 +117,21 @@ flowchart TD
 - 执行级别：
 - 当前状态：观察 | 候选 | 已确认
 
-## 7. 配套文档跳转
+## 7. 案例 -> 回归锚点映射表
+
+| 案例 | 回归测试 | 绑定说明 |
+| --- | --- | --- |
+| 一买正例（最近中枢 + 向下离开段跌破下沿 + 底背驰） | `test_analyze_chanlun_signals_flags_first_buy_on_bottom_divergence_below_zs_low` | 背驰导致的转折，非单纯触边 |
+| 一卖正例（对称样例） | `test_analyze_chanlun_signals_flags_first_sell_on_top_divergence_above_zs_high` | 顶背驰越过中枢上沿 |
+| 一买反例：仅触边不背驰 | `test_analyze_chanlun_signals_does_not_flag_buy1_on_boundary_touch_without_divergence` | 红线：创新低但力度未衰减 -> 不确认 |
+| 二买正例（一买后首次确认性回抽） | `test_analyze_chanlun_signals_flags_second_buy_after_buy1_rebound` | `buy1_pullback_confirmation` |
+| 二卖正例（对称样例） | `test_analyze_chanlun_signals_flags_second_sell_after_sell1_rebound` | `sell1_rebound_confirmation` |
+| 二买易混淆例：中继震荡回抽破前低 | `test_analyze_chanlun_signals_does_not_flag_buy2_on_continuation_pullback_breaking_prior_low` | 破一买前低 -> 二买不成立 |
+| 三买正例（离开后首次回抽不回中枢上沿） | `test_analyze_chanlun_signals_flags_third_buy_after_leave_zs_and_pullback_holds_upper_edge` | `leave_zs_then_pullback_holds_upper_edge` |
+| 三卖正例（对称样例） | `test_analyze_chanlun_signals_flags_third_sell_after_leave_zs_and_rebound_fails_lower_edge` | `leave_zs_then_rebound_fails_lower_edge` |
+| 三买反例：首次回抽重入中枢 | `test_analyze_chanlun_signals_does_not_flag_buy3_when_first_pullback_reenters_zs` | 回抽回到中枢区间 -> 不成立 |
+
+## 8. 配套文档跳转
 
 - 理论规格：`buy-sell-multi-level-spec.md`
 - 原文复核矩阵：`buy-sell-multi-level-original-review-matrix.md`

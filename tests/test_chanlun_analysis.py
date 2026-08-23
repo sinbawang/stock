@@ -896,6 +896,206 @@ def test_analyze_chanlun_signals_flags_second_sell_after_sell1_rebound() -> None
     assert signals["signal_catalog"][4]["basis"] == "sell1_rebound_confirmation"
 
 
+def test_analyze_chanlun_signals_flags_first_buy_on_bottom_divergence_below_zs_low() -> None:
+    """BS2 一买正例：最近中枢 + 向下离开段跌破中枢下沿 + 底背驰 -> buy_1。
+
+    一买核心是「背驰导致的转折」，不是单纯触边；本用例锁定背驰三元组
+    （最近中枢 + 离开段 + 力度衰减）下的 buy_1 判定。
+    """
+    current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)
+    bis = [
+        _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(2, BiDirection.UP, high=10.9, low=10.4, day=2),
+        _bi(3, BiDirection.DOWN, high=11.0, low=10.0, day=3),
+        _bi(4, BiDirection.UP, high=11.3, low=10.2, day=4),
+        Bi(
+            bi_id=5,
+            direction=BiDirection.DOWN,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 5, 10, 30),
+            end_ts=datetime(2026, 5, 5, 14, 30),
+            high=11.0,
+            low=9.8,
+            norm_bar_range=(5, 6),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-2.5, dif=-0.6),
+        SimpleNamespace(ts=bis[4].end_ts, macd=-1.0, dif=-0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["buy_points"] == ["buy_1"]
+    assert signals["sell_points"] == []
+    assert signals["bottom_divergence"] is True
+
+
+def test_analyze_chanlun_signals_flags_first_sell_on_top_divergence_above_zs_high() -> None:
+    """BS2 一卖正例（对称样例）：最近中枢 + 向上离开段越过中枢上沿 + 顶背驰 -> sell_1。"""
+    current_zs = _zhongshu(2, zs_low=10.0, zs_high=10.8, day=10)
+    bis = [
+        _bi(1, BiDirection.UP, high=10.6, low=10.1, day=10),
+        _bi(2, BiDirection.DOWN, high=10.5, low=10.0, day=11),
+        _bi(3, BiDirection.UP, high=11.2, low=10.3, day=12),
+        _bi(4, BiDirection.DOWN, high=11.0, low=10.4, day=13),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=5.0, dif=1.2),
+        SimpleNamespace(ts=bis[2].end_ts, macd=3.0, dif=0.8),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["sell_points"] == ["sell_1"]
+    assert signals["buy_points"] == []
+    assert signals["top_divergence"] is True
+
+
+def test_analyze_chanlun_signals_flags_third_buy_after_leave_zs_and_pullback_holds_upper_edge() -> None:
+    """BS4 三买正例：向上离开中枢 + 首次回抽不重回中枢上沿之下 -> buy_3。"""
+    current_zs = _zhongshu(3, zs_low=10.0, zs_high=10.8, day=20)
+    bis = [
+        _bi(1, BiDirection.UP, high=10.7, low=10.2, day=20),
+        _bi(2, BiDirection.DOWN, high=10.6, low=10.1, day=21),
+        _bi(3, BiDirection.UP, high=11.5, low=10.9, day=22),
+        _bi(4, BiDirection.DOWN, high=11.2, low=11.0, day=23),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=3.0, dif=1.0),
+        SimpleNamespace(ts=bis[1].end_ts, macd=-1.0, dif=-0.5),
+        SimpleNamespace(ts=bis[2].end_ts, macd=3.0, dif=1.0),
+        SimpleNamespace(ts=bis[3].end_ts, macd=-1.0, dif=-0.5),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["buy_points"] == ["buy_3"]
+    assert signals["sell_points"] == []
+    assert signals["signal_catalog"][2]["basis"] == "leave_zs_then_pullback_holds_upper_edge"
+
+
+def test_analyze_chanlun_signals_flags_third_sell_after_leave_zs_and_rebound_fails_lower_edge() -> None:
+    """BS4 三卖正例（对称样例）：向下离开中枢 + 首次反抽不重回中枢下沿之上 -> sell_3。"""
+    current_zs = _zhongshu(4, zs_low=10.0, zs_high=10.8, day=1)
+    bis = [
+        _bi(1, BiDirection.DOWN, high=10.5, low=10.1, day=1),
+        _bi(2, BiDirection.UP, high=10.6, low=10.0, day=2),
+        _bi(3, BiDirection.DOWN, high=10.4, low=9.5, day=3),
+        _bi(4, BiDirection.UP, high=9.8, low=9.4, day=4),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-3.0, dif=-1.0),
+        SimpleNamespace(ts=bis[1].end_ts, macd=1.0, dif=0.5),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-3.0, dif=-1.0),
+        SimpleNamespace(ts=bis[3].end_ts, macd=1.0, dif=0.5),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["sell_points"] == ["sell_3"]
+    assert signals["buy_points"] == []
+    assert signals["signal_catalog"][5]["basis"] == "leave_zs_then_rebound_fails_lower_edge"
+
+
+def test_analyze_chanlun_signals_does_not_flag_buy1_on_boundary_touch_without_divergence() -> None:
+    """BS2 一买反例（红线）：仅触边不背驰 -> 不得确认 buy_1。
+
+    离开段创新低但力度未衰减（macd 反而更强），不构成背驰导致的转折，
+    即使低点已跌破中枢下沿也不得标记为一买。
+    """
+    current_zs = _zhongshu(5, zs_low=10.0, zs_high=10.8, day=5)
+    bis = [
+        _bi(1, BiDirection.DOWN, high=11.2, low=9.8, day=5),
+        _bi(2, BiDirection.UP, high=10.9, low=9.9, day=6),
+        Bi(
+            bi_id=3,
+            direction=BiDirection.DOWN,
+            start_fx_id=3,
+            end_fx_id=4,
+            start_ts=datetime(2026, 5, 7, 10, 30),
+            end_ts=datetime(2026, 5, 7, 14, 30),
+            high=11.0,
+            low=9.7,
+            norm_bar_range=(3, 4),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-2.0, dif=-0.6),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-5.0, dif=-1.2),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["bottom_divergence"] is False
+    assert signals["buy_points"] == []
+    assert signals["sell_points"] == []
+
+
+def test_analyze_chanlun_signals_does_not_flag_buy3_when_first_pullback_reenters_zs() -> None:
+    """BS4 三买反例：首次回抽重新跌回中枢上沿之下 -> buy_3 不成立。"""
+    current_zs = _zhongshu(6, zs_low=10.0, zs_high=10.8, day=10)
+    bis = [
+        _bi(1, BiDirection.UP, high=10.7, low=10.2, day=10),
+        _bi(2, BiDirection.DOWN, high=10.6, low=10.1, day=11),
+        _bi(3, BiDirection.UP, high=11.5, low=10.9, day=12),
+        _bi(4, BiDirection.DOWN, high=11.2, low=10.7, day=13),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=3.0, dif=1.0),
+        SimpleNamespace(ts=bis[1].end_ts, macd=-1.0, dif=-0.5),
+        SimpleNamespace(ts=bis[2].end_ts, macd=3.0, dif=1.0),
+        SimpleNamespace(ts=bis[3].end_ts, macd=-1.0, dif=-0.5),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["buy_points"] == []
+    assert signals["sell_points"] == []
+
+
+def test_analyze_chanlun_signals_does_not_flag_buy2_on_continuation_pullback_breaking_prior_low() -> None:
+    """BS3 二买易混淆例：中继震荡回抽跌破一买前低 -> 二买不成立。
+
+    即便此前出现过一买结构，若首次确认性回抽跌破前低且力度未衰减，
+    既不能确认二买，也不因单纯创新低而误报新一买（需背驰）。
+    """
+    current_zs = _zhongshu(7, zs_low=10.0, zs_high=10.8, day=15)
+    bis = [
+        _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=15),
+        _bi(2, BiDirection.UP, high=10.9, low=10.4, day=16),
+        _bi(3, BiDirection.DOWN, high=11.0, low=9.9, day=17),
+        _bi(4, BiDirection.UP, high=11.3, low=10.2, day=18),
+        Bi(
+            bi_id=5,
+            direction=BiDirection.DOWN,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 19, 10, 30),
+            end_ts=datetime(2026, 5, 19, 14, 30),
+            high=11.0,
+            low=9.8,
+            norm_bar_range=(5, 6),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-2.0, dif=-0.6),
+        SimpleNamespace(ts=bis[4].end_ts, macd=-5.0, dif=-1.2),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert "buy_2" not in signals["buy_points"]
+    assert signals["buy_points"] == []
+    assert signals["sell_points"] == []
+
+
 def test_analyze_chanlun_signals_exports_current_zhongshu_exit_time() -> None:
     current_zs = _zhongshu(6, zs_low=10.2, zs_high=10.8, day=20)
     current_zs.exit_bi_id = 42
