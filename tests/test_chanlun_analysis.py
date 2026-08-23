@@ -179,6 +179,48 @@ def test_build_structure_state_type_chain_single_and_empty() -> None:
     ]
 
 
+def test_build_structure_state_type_chain_folds_multiple_completed_runs() -> None:
+    """TD1 复杂前缀链：多个已完成的同级别 run 折叠为 completed，当前 ongoing 尾段保留。
+
+    构造三个 run：up（zs1->zs2 终结）→ down（zs4->zs5 终结）→ range（zs7 ongoing），
+    中间用被更大扩张吸收的中枢分隔。验证 type_chain 把两个历史 run 按 run 粒度折叠为
+    completed，并保留当前 ongoing，且 last_completed 指向最近的 completed run（down）。
+    """
+    # run1: up（zs1 -> zs2 向上推进，zs2 终结）
+    up1 = _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1)
+    up2 = _zhongshu(2, zs_low=11.5, zs_high=12.0, day=4)
+    up2.is_terminated = True
+    # 分隔：被更大扩张吸收，打断 run1
+    sep1 = _zhongshu(3, zs_low=12.5, zs_high=13.0, day=7)
+    sep1.superseded_by_zs_id = 4
+    sep1.is_reabsorbed_by_larger_expansion = True
+    # run2: down（zs4 -> zs5 向下推进，zs5 终结）
+    down1 = _zhongshu(4, zs_low=9.0, zs_high=9.4, day=10)
+    down2 = _zhongshu(5, zs_low=8.6, zs_high=8.9, day=13)
+    down2.is_terminated = True
+    # 分隔：打断 run2（不重叠，不影响当前 rng 判断）
+    sep2 = _zhongshu(6, zs_low=8.2, zs_high=8.6, day=16)
+    sep2.superseded_by_zs_id = 7
+    sep2.is_reabsorbed_by_larger_expansion = True
+    # run3: range ongoing
+    rng = _zhongshu(7, zs_low=10.0, zs_high=10.5, day=19)
+
+    state = build_structure_state([], [up1, up2, sep1, down1, down2, sep2, rng])
+
+    assert state["type_chain"] == [
+        {"type": "up", "status": "completed", "zs_count": 2, "start_zs_id": 1, "end_zs_id": 2},
+        {"type": "down", "status": "completed", "zs_count": 2, "start_zs_id": 4, "end_zs_id": 5},
+        {"type": "range", "status": "ongoing", "zs_count": 1, "start_zs_id": 7, "end_zs_id": 7},
+    ]
+    assert state["last_completed"]["type"] == "down"
+    assert state["last_completed"]["zs_count"] == 2
+    assert state["last_completed"]["status"] == "completed"
+    assert state["current_ongoing"]["type"] == "range"
+    assert state["current_ongoing"]["confirmation_basis"] == "single_active_zhongshu"
+    assert state["relationship"]["kind"] == "completed_then_new_type_ongoing"
+    assert state["relationship"]["transition_state"] == "candidate_new_type"
+
+
 def test_analyze_chanlun_signals_marks_single_zhongshu_as_dual_interpretation_pending() -> None:
     raw_bars = [SimpleNamespace(ts=datetime(2026, 5, 2, 14, 30), close=10.2)]
 
