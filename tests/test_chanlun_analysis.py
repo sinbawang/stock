@@ -673,6 +673,29 @@ def test_real_1m_pre_breakdown_replay_sample_preserves_independent_gate() -> Non
     assert "确认三卖" in payload["advice_text"]
 
 
+def test_real_1m_pre_breakdown_replay_sample_03690_preserves_independent_gate() -> None:
+    # 第二个真实 1m pre_breakdown 锚点（非 000651），港股 03690 美团 2026-08-05 09:46。
+    # 与既有 03690 2026-08-05 09:56 pre_breakout 构成「同日同标的下破→上破」对照，
+    # 降低单标偏置并覆盖向下预警链的第二个真实样本。
+    rows = probe_module._load_rows("03690", "1m")
+    payload = probe_module._replay("03690", "美团", "2026-08-05 09:46", rows)
+
+    assert payload["cutoff"] == "2026-08-05 09:46"
+    assert payload["zs_monitor_alert"] == "pre_breakdown"
+    assert payload["zs_monitor_midline"] == 92.25
+    assert payload["zs_monitor_bias"] == "weak"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["buy_points"] == []
+    assert payload["sell_points"] == []
+    assert payload["conclusion"] == "出现向下预警，但当前不构成确认三卖。"
+    assert payload["latest_zs_low"] is None
+    assert payload["latest_zs_high"] is None
+    assert "结论：出现向下预警，但当前不构成确认三卖。" in payload["advice_text"]
+    assert "监视器：中枢中线 92.25，当前偏弱，预警状态 向下预警。" in payload["advice_text"]
+    assert "节奏监视：节奏待判定" in payload["advice_text"]
+    assert "确认三卖" in payload["advice_text"]
+
+
 def test_build_signal_summary_fields_preserves_catalog_slots() -> None:
     payload = build_signal_summary_fields(
         {

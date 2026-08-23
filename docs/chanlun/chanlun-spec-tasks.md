@@ -102,8 +102,8 @@
 | 任务 | 优先级 | 当前重点 | 当前状态 | 完成度 | 执行入口 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `1m pre_breakout` 对称 gate 链 | 高 | 找到真实样本并补齐 `tech.json` + publish gate | 完成 | 100% | [样本任务](zhongshu-tasks.md#zs53c-pre-breakout-sample) / [发布核验](zhongshu-tasks.md#zs53d-pre-breakout-publish) | 真实 replay 三锚点已落地：`002555 2026-08-04 13:35` + `03690 2026-08-05 09:56` + `600900 2026-08-04 13:18`，analysis 与 publish 双真实 gate 均已固化，并移除 `_replay` 内 synthetic fallback。 |
-| `1m pre_break*` 历史回放工具 | 高 | 用自动扫描缩短真实样本发现路径 | 进行中 | 85% | [探测链路](zhongshu-tasks.md#zs53c-pre-breakout-sample) | `build/probe_intraday_prebreak_sample.py` 已支持手工 cutoff 与 `--auto-find` 扫描；`build/scan_real_1m_prebreakout_samples.py` 已确认 16/16 个 `1m` 标的均存在真实 `pre_breakout` 历史 cutoff，`002555` / `03690` / `600900` 已固化为真实 gate。 |
-| `1m pre_breakdown` 真实 gate 链 | 中 | 保持 `tech.json` / 文案 / publish 三层真实样本回归 | 进行中 | 86% | [中枢样本](zhongshu-tasks.md#zs53c-pre-breakout-sample) / [发布链](zhongshu-tasks.md#zs53d-pre-breakout-publish) | 真实 `000651 1m` 已补齐独立 `tech.json` gate、文案回归与 publish regression。 |
+| `1m pre_break*` 历史回放工具 | 高 | 用自动扫描缩短真实样本发现路径 | 完成 | 100% | [探测链路](zhongshu-tasks.md#zs53c-pre-breakout-sample) | `build/probe_intraday_prebreak_sample.py` 已支持手工 cutoff 与 `--auto-find` 扫描；`build/scan_real_1m_prebreakout_samples.py` 与对称的 `build/scan_real_1m_prebreakdown_samples.py` 已分别确认 16/16 个 `1m` 标的均存在真实 `pre_breakout` / `pre_breakdown` 历史 cutoff，上/下双向探测工具已闭环。 |
+| `1m pre_breakdown` 真实 gate 链 | 中 | 保持 `tech.json` / 文案 / publish 三层真实样本回归 | 完成 | 100% | [中枢样本](zhongshu-tasks.md#zs53c-pre-breakout-sample) / [发布链](zhongshu-tasks.md#zs53d-pre-breakout-publish) | 真实 `000651 1m` 已补齐独立 `tech.json` gate、文案回归与 publish regression；`2026-08-23` 又补第二个真实锚点 `03690 2026-08-05 09:46`（analysis + publish 双 gate），与 `03690 09:56 pre_breakout` 构成同日同标对照。 |
 | 主辅冲突与重写回归集 | 中 | 补复杂 reclaim / gap / rewrite focused regressions | 进行中 | 70% | [线段回归](segment-tasks.md#s4-regression-gates) / [中枢回归](zhongshu-tasks.md#zs3-rewrite-gap) | 现有多组 focused regression 已落地；`2026-08-23` 补了首选级别（1m/5m）多中枢真实窗口 gate（`600900 1m`、`09988 1m`、`03690 5m`、`00700 1m`），并确认真实 `reabsorbed lineage` 为确定性数据缺口（全量 558 窗口 + 09988 1334 瞬态 MATCHED 0）。 |
 
 #### 代码任务
