@@ -69,6 +69,8 @@ tests: tests/test_segment.py, tests/test_segment_rediscrimination_matrix.py, tes
 - 若后续反向笔**先破第一笔起点**，则视为旧线段延续，撤销该候选分界点；
 - 若先经历至少一轮「弱同向未突破」，再由更晚一轮同向强推进确认终结，则记为 `feature_sequence_gap_fractal_delayed_true`。
 
+> 78 课补充：第二种情况的**第二特征序列**分型判断必须严格按包含关系处理（与第一种情况中「假设分界点两边不做包含处理」不同）。当前实现以 71 课「先破终点/先破起点」为再分辨主路径，该捷径在判定上蕴含 67 课「第二特征序列分型」（分型左元素条件即捷径条件），因此 78 课的包含处理要求被隐含满足；`feature_sequence_gap_fractal_delayed_true` 的「弱同向轮次」为工程扩展，非原文定义。
+
 ### 5.3 反向笔破坏关键点
 
 - **直接破坏**：反向下/上笔跌破/突破当前线段最近关键低/高点，线段立即终结（`reverse_break`）。
@@ -106,7 +108,7 @@ tests: tests/test_segment.py, tests/test_segment_rediscrimination_matrix.py, tes
 ## 10. 关联文档
 
 - [segment-implementation-guide.md](segment-implementation-guide.md)：当前实现口径（实然）
-- [segment-original-review-matrix.md](segment-original-review-matrix.md)：67/71 课原文逐课复核
+- [segment-original-review-matrix.md](segment-original-review-matrix.md)：67/71/78 课原文逐课复核
 - [segment-stop-reason-contract.md](segment-stop-reason-contract.md)：`stop_reason` 消费契约
 - [segment-visual-example-library.md](segment-visual-example-library.md)：图文化示例库
 - [segment-doc-map.md](segment-doc-map.md)：线段文档导航

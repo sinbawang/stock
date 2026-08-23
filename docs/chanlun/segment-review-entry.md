@@ -25,6 +25,7 @@
 4. `books/chanzhongshuochan_lessons/articles_md/lesson_063_教你炒股票63：替代与确认的边界.md`
 5. `books/chanzhongshuochan_lessons/articles_md/lesson_067_教你炒股票67：线段划分标准的再研究.md`
 6. `books/chanzhongshuochan_lessons/articles_md/lesson_071_教你炒股票71：线段划分标准的再分辨.md`
+7. `books/chanzhongshuochan_lessons/articles_md/lesson_078_教你炒股票78：继续说线段的划分.md`
 
 当前 review 时应优先回答三件事：
 
