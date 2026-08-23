@@ -609,6 +609,50 @@ def test_real_1m_pre_breakout_replay_sample_preserves_independent_gate() -> None
     assert "确认三买" in payload["advice_text"]
 
 
+def test_real_1m_pre_breakout_replay_sample_03690_preserves_independent_gate() -> None:
+    # 第二个真实 1m pre_breakout 锚点（非 002555），港股 03690 美团，
+    # 用于降低单标偏置。与 002555 同为「无中枢 fallback 监视带 + dual_interpretation_pending」。
+    rows = probe_module._load_rows("03690", "1m")
+    payload = probe_module._replay("03690", "美团", "2026-08-05 09:56", rows)
+
+    assert payload["cutoff"] == "2026-08-05 09:56"
+    assert payload["zs_monitor_alert"] == "pre_breakout"
+    assert payload["zs_monitor_midline"] == 92.03
+    assert payload["zs_monitor_bias"] == "strong"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["buy_points"] == []
+    assert payload["sell_points"] == []
+    assert payload["conclusion"] == "出现向上预警，但当前不构成确认三买。"
+    assert payload["latest_zs_low"] is None
+    assert payload["latest_zs_high"] is None
+    assert "结论：出现向上预警，但当前不构成确认三买。" in payload["advice_text"]
+    assert "监视器：中枢中线 92.03，当前偏强，预警状态 向上预警。" in payload["advice_text"]
+    assert "节奏监视：节奏待判定" in payload["advice_text"]
+    assert "确认三买" in payload["advice_text"]
+
+
+def test_real_1m_pre_breakout_replay_sample_600900_preserves_independent_gate() -> None:
+    # 第三个真实 1m pre_breakout 锚点（非 002555），CN 600900 长江电力（防御/电力标的），
+    # 与 002555（CN 游戏）、03690（HK 互联网）形成市场/行业多样性，继续降低单标偏置。
+    rows = probe_module._load_rows("600900", "1m")
+    payload = probe_module._replay("600900", "长江电力", "2026-08-04 13:18", rows)
+
+    assert payload["cutoff"] == "2026-08-04 13:18"
+    assert payload["zs_monitor_alert"] == "pre_breakout"
+    assert payload["zs_monitor_midline"] == 28.28
+    assert payload["zs_monitor_bias"] == "strong"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["buy_points"] == []
+    assert payload["sell_points"] == []
+    assert payload["conclusion"] == "出现向上预警，但当前不构成确认三买。"
+    assert payload["latest_zs_low"] is None
+    assert payload["latest_zs_high"] is None
+    assert "结论：出现向上预警，但当前不构成确认三买。" in payload["advice_text"]
+    assert "监视器：中枢中线 28.28，当前偏强，预警状态 向上预警。" in payload["advice_text"]
+    assert "节奏监视：节奏待判定" in payload["advice_text"]
+    assert "确认三买" in payload["advice_text"]
+
+
 def test_real_1m_pre_breakdown_replay_sample_preserves_independent_gate() -> None:
     rows = probe_module._load_rows("000651", "1m")
     payload = probe_module._replay("000651", "格力电器", "2026-07-30 10:21", rows)

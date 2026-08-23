@@ -57,10 +57,10 @@
 
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
-| T2 | `1m pre_breakout` 真实样本链 | 高 | 把真实历史 cutoff 样本固化成正式 `tech.json` / publish gate | 完成 | synthetic gate 已有，真实历史窗口已找到并通过 replay 校验，且已移除 `_replay` 内的 synthetic fallback；`002555 三七互娱 2026-08-04 13:35` 已固化成 analysis + publish 双真实 replay gate。 |
+| T2 | `1m pre_breakout` 真实样本链 | 高 | 把真实历史 cutoff 样本固化成正式 `tech.json` / publish gate | 完成 | synthetic gate 已有，真实历史窗口已找到并通过 replay 校验，且已移除 `_replay` 内的 synthetic fallback；`002555 三七互娱 2026-08-04 13:35` 已固化成 analysis + publish 双真实 replay gate。`2026-08-23` 补充第二个真实锚点 `03690 美团 2026-08-05 09:56`（港股、66 行窗口）与第三个 `600900 长江电力 2026-08-04 13:18`（CN 防御/电力、16 行窗口），三个锚点 analysis 与 publish 双真实 replay gate 均已落地，覆盖 CN 游戏 / HK 互联网 / CN 电力三种行业与双市场，进一步降低单标偏置。 |
 | T4 | `1m pre_break*` 探测工具 | 高 | 用 `--auto-find` 扫描缩短真实样本发现路径 | 进行中 | `build/probe_intraday_prebreak_sample.py` 已支持自动扫描；`build/scan_real_1m_prebreakout_samples.py` 已确认 16 个 `1m` 标的全部存在真实 `pre_breakout` 历史 cutoff。 |
 | T1 | `1m pre_breakdown` 真实样本链 | 中 | 维持 `tech.json` / 文案 / publish 三层真实回归 | 进行中 | 独立真实 `tech.json` gate、文案回归、publish regression 都已落地。 |
-| T3 | reclaim / gap / rewrite focused regressions | 中 | 继续锁复杂交界，不让旧中枢幽灵回归 | 进行中 | bootstrap / gap / reclaim / reverse_break 已有多组真实 fixture regression，复杂交界仍待补强。 |
+| T3 | reclaim / gap / rewrite focused regressions | 中 | 继续锁复杂交界，不让旧中枢幽灵回归 | 进行中 | bootstrap / gap / reclaim / reverse_break 已有多组真实 fixture regression；`2026-08-23` 又补了首选级别（1m/5m）多中枢真实窗口 gate（`600900 1m`、`09988 1m`、`03690 5m`、`00700 1m`），并确认真实 `reabsorbed lineage` 样本为确定性数据缺口（全量 558 窗口 + 09988 1334 瞬态均 MATCHED 0），复杂交界缺口已进一步收窄。 |
 
 ### 代码任务
 
@@ -349,6 +349,8 @@
 - 已新增 `tests/test_zhongshu_regression_real_fixtures.py` 真实窗口 regression：`300124 60m` 在 mixed overlap/restart chain（`up 4->8 break@11`、`down 9->11 break@12`、`up 12->16 break@17`）后仍保持 `segment-level zhongshu == []`，锁住“多次 reverse_break 与 overlap reuse 交替后不残留旧中心”的空集真值。
 - 已补 `build/find_segment_reabsorbed_zhongshu_cases.py` 作为真实样本探针；当前对既有具名 fixture 与若干常用 `data/reports` 窗口的扫描结果仍未发现带 `reabsorbed lineage` 的真实 cutoff，说明这部分真实样本仍是当前缺口，而不是单纯缺测试入口。
 - 已补 `tests/test_zhongshu_regression_real_fixtures.py::test_repeated_rebuild_produces_identical_segments_zhongshus_and_structure_state`，对 `00700 30m`、`03690 30m`、`000591 60m long`、`300124 60m` 四个真实窗口各重复重算 3 次，锁住 `segments landmarks / zhongshus snapshot / structure_state` 逐次完全一致，把“repeated rebuild / publish 必须同结果”纳入最小回归集，不再只在单次本地运行正确。
+- `2026-08-23` 补充：对全量 `data/reports` 语料做了确定性扫描——`build/find_segment_reabsorbed_zhongshu_cases.py` 全量 `SCANNED 558 / MATCHED 0`，且新增 `build/scan_zhongshu_multicenter_landscape.py` 确认 558 个最终窗口里 `empty=367 / single=163 / multi=28`，其中 `09988 1m` 是唯一 4 中枢窗口；`build/probe_reabsorbed_cutoff.py` 对 `09988 1m` 按 cutoff 回放 1334 个瞬态点仍 `matched=0`。结论：**真实 `reabsorbed lineage` 样本在本语料中确认不存在**（原因：最终窗口状态中中枢几乎不终结 `exit=None`，而终结后的下一中枢区间又几乎不相交），该缺口已从“疑似数据缺口”升级为“确定性数据缺口”，T3 收口改为“合成单测（已有）+ 首选级别多中枢真实窗口（新增）”双轨。
+- `2026-08-23` 新增首选级别（1m/5m）多中枢真实窗口 regression（`tests/test_zhongshu_regression_real_fixtures.py`）：`600900 1m`、`09988 1m`（4 中枢，zs0/zs2 区间实际重叠但 zs0 未终结，锁“未终结前中枢不得被后续中心误标 reabsorbed”）、`03690 5m`、`00700 1m`，逐项锁定每个标准中枢的精确身份/区间并断言 `superseded_by_zs_id=None` 且 `is_reabsorbed_by_larger_expansion=False`；这四个窗口也一并加入 `REAL_REBUILD_WINDOWS` 的 repeated-rebuild 确定性参数化。
 
 验收：
 
@@ -836,6 +838,19 @@
 
 - 若只能找到解释文本而没有正式字段落盘，不算正式样本补齐。
 
+当前进展补充（2026-08-23）：
+
+- 已固化三个真实 `1m pre_breakout` 锚点：`002555 三七互娱 2026-08-04 13:35`（CN 游戏）、`03690 美团 2026-08-05 09:56`（HK 互联网）、`600900 长江电力 2026-08-04 13:18`（CN 防御/电力），覆盖双市场与三类行业，降低单标偏置。
+- analysis 层 gate：
+  - `tests/test_chanlun_analysis.py::test_real_1m_pre_breakout_replay_sample_preserves_independent_gate`（002555）
+  - `tests/test_chanlun_analysis.py::test_real_1m_pre_breakout_replay_sample_03690_preserves_independent_gate`（03690）
+  - `tests/test_chanlun_analysis.py::test_real_1m_pre_breakout_replay_sample_600900_preserves_independent_gate`（600900）
+- publish 层 gate：
+  - `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample`（002555）
+  - `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_03690_1m_pre_breakout_sample`（03690）
+  - `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_600900_1m_pre_breakout_sample`（600900）
+- 三个样本同为「无中枢 fallback 监视带 + `dual_interpretation_pending`」，继续锁“向上预警未确认、不升格三买”的口径。
+
 <a id="zs53d-pre-breakout-publish"></a>
 #### ZS5.3.d 补发布产物与消费核验链
 
@@ -915,11 +930,11 @@
 
 | 核验层 | 必须看到什么 | 当前状态 |
 | --- | --- | --- |
-| 本地 `data/reports/<symbol>/1m/tech.json` | 正式 `zs_monitor_alert=pre_breakout|pre_breakdown`；对应 pending 文案；主口径字段仍保留 | `pre_breakdown` 已有真实样本；`pre_breakout` 待补 |
-| 发布 `summary/detail` | `watch/pending` 级预警展示，不误升为 confirmed | `30m` 已有；`1m pre_breakdown` 已有真实回归；`1m pre_breakout` 待补 |
-| 小程序卡片 / 图表 | `1m` 预警卡片能显示“未确认”，且和 confirmed `3S` 明确分层 | `1m pre_breakdown` 已接线；`1m pre_breakout` 待补 |
-| review 文档 | 正式 `1m pre_break*` 卡片与 confirmed 对照卡片能同页审阅 | `pre_breakdown` 已接线；`pre_breakout` 与 confirmed live 卡片仍待补 |
-| 自动化回归 | 至少一上/一下两条 `1m pre_break*` 锚点 | `pre_breakdown` 真实回归已落地；`pre_breakout` 仍缺真实锚点 |
+| 本地 `data/reports/<symbol>/1m/tech.json` | 正式 `zs_monitor_alert=pre_breakout|pre_breakdown`；对应 pending 文案；主口径字段仍保留 | `pre_breakdown` 已有真实样本；`pre_breakout` 已由 `002555`、`03690`、`600900` 三个真实 replay 样本承担 |
+| 发布 `summary/detail` | `watch/pending` 级预警展示，不误升为 confirmed | `30m` 已有；`1m pre_breakdown` 已有真实回归；`1m pre_breakout` 已补 `002555` + `03690` + `600900` 三真实 publish replay gate |
+| 小程序卡片 / 图表 | `1m` 预警卡片能显示“未确认”，且和 confirmed `3S` 明确分层 | `1m pre_breakdown` 已接线；`1m pre_breakout` 已接线（`002555` + `03690` + `600900`） |
+| review 文档 | 正式 `1m pre_break*` 卡片与 confirmed 对照卡片能同页审阅 | `pre_breakdown` 已接线；`pre_breakout` 与 confirmed live 卡片已由 `002555` / `03690` / `600900` / `01024` 真实样本承担 |
+| 自动化回归 | 至少一上/一下两条 `1m pre_break*` 锚点 | `pre_breakdown` 真实回归已落地；`pre_breakout` 已落地 `002555` + `03690` + `600900` 三真实 analysis / publish 锚点 |
 
 发布 / regression gate 占位表（首版）：
 
@@ -1008,7 +1023,7 @@ gate 收口规则：
 | 状态 / 场景 | review 主入口 | 页内样例 / 消费入口 | regression / publish gate | 绑定目标 | 当前状态 |
 | --- | --- | --- | --- | --- | --- |
 | `1m pre_breakdown` 正式预警未确认 | `zhongshu-review-entry.md` 第 92 课 | `zhongshu-visual-example-library.md` 第 4 节；`zhongshu-consumer-display-examples.md` 第 4 节 | `1m-pre-breakdown-tech-json-gate`；`1m-pre-breakdown-publish-gate` | review、消费页、发布层对“向下预警未确认”口径一致 | tech-json gate 与 publish gate 均已落地真实样本 pytest |
-| `1m pre_breakout` 正式预警未确认 | `zhongshu-review-entry.md` 第 92 课 | `zhongshu-visual-example-library.md` 第 4 节；`zhongshu-consumer-display-examples.md` 第 4 节 | `1m-pre-breakout-tech-json-gate`；`1m-pre-breakout-publish-gate` | review、消费页、发布层对“向上预警未确认”口径一致 | tech-json / publish gate 已落地 synthetic pytest；真实 replay sample gate 已开始接入 |
+| `1m pre_breakout` 正式预警未确认 | `zhongshu-review-entry.md` 第 92 课 | `zhongshu-visual-example-library.md` 第 4 节；`zhongshu-consumer-display-examples.md` 第 4 节 | `1m-pre-breakout-tech-json-gate`；`1m-pre-breakout-publish-gate` | review、消费页、发布层对“向上预警未确认”口径一致 | tech-json / publish gate 已落地 synthetic pytest；真实 replay sample gate 已接入 `002555 2026-08-04 13:35` + `03690 2026-08-05 09:56` + `600900 2026-08-04 13:18` 三锚点 |
 | `1m confirmed 3S` 确认链闭合 | `zhongshu-review-entry.md` 第 92 课 | `zhongshu-visual-example-library.md` `4.5`；`zhongshu-consumer-display-examples.md` 第 7 节 | `tests/test_zhongshu_structure_text.py::test_real_01024_1m_confirmed_3s_live_sample_keeps_confirmed_advice_and_analysis`；`tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_01024_1m_confirmed_3s_sample`；`1m-confirmed-3s-reference-gate` | 作为 `1m pre_break*` 的 confirmed 对照锚点，不与 pending/watch 混写 | 真实 live 样本与 reference gate 均已落地 |
 | `1m pre-warning proxy` 过渡态 | `zhongshu-review-entry.md` 第 92 课补充说明位 | `zhongshu-visual-example-library.md` `4.4`；`zhongshu-consumer-display-examples.md` `7.6` | `1m-proxy-negative-transition-gate` -> `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_keep_1m_proxy_as_transition_not_pre_breakdown_or_confirmed` | 约束消费端不得把风险前态升级成正式 `pre_break*` 或 confirmed | 已落地具名 pytest |
 | `30m pre_breakout` 回中枢未确认 | `zhongshu-review-entry.md` 第 92 课 | `zhongshu-visual-example-library.md` `4.2`；`zhongshu-consumer-display-examples.md` 第 4 节 | `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_30m_pre_breakout_publish_anchor` | 作为 `1m` 正式预警链接入前的上级别已落地参考样本 | 已具名 |
@@ -1032,9 +1047,9 @@ gate 收口规则：
 | `1m-pre-breakdown-publish-gate` 已落地 | `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_pre_breakdown_publish_gate` | 当前已用 synthetic `1m tech.json` 锁住 publish 层“向下预警未确认”口径。 |
 | `1m-pre-breakdown-publish-gate` 真实样本入口 | `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakdown_sample` | 当前已改为 replay 驱动（`000651 2026-07-30 10:21`），不再直接读取过期 `data/reports/000651/1m/tech.json`，锁住 `replay -> summary/detail` 的 pending/watch 语义。 |
 | `1m-pre-breakout-tech-json-gate` 建议落点 | `tests/test_chanlun_analysis.py` + `tests/test_zhongshu_structure_text.py` | 与 `pre_breakdown` 对称，先锁字段，再锁消费降级。 |
-| `1m-pre-breakout-tech-json-gate` 已落地 | `tests/test_chanlun_analysis.py::test_analyze_chanlun_signals_emits_pre_breakout_when_close_presses_upper_zs_edge` + `tests/test_chanlun_analysis.py::test_build_signal_summary_fields_preserves_pre_breakout_pending_gate` + `tests/test_chanlun_analysis.py::test_real_1m_pre_breakout_replay_sample_preserves_independent_gate` | 当前已同时用 synthetic 字段断言和真实 replay `002555 2026-08-04 13:35` 样本锁住 `pre_breakout` 进入独立 gate 时仍保持 pending/watch 语义。 |
+| `1m-pre-breakout-tech-json-gate` 已落地 | `tests/test_chanlun_analysis.py::test_analyze_chanlun_signals_emits_pre_breakout_when_close_presses_upper_zs_edge` + `tests/test_chanlun_analysis.py::test_build_signal_summary_fields_preserves_pre_breakout_pending_gate` + `tests/test_chanlun_analysis.py::test_real_1m_pre_breakout_replay_sample_preserves_independent_gate` + `tests/test_chanlun_analysis.py::test_real_1m_pre_breakout_replay_sample_03690_preserves_independent_gate` + `tests/test_chanlun_analysis.py::test_real_1m_pre_breakout_replay_sample_600900_preserves_independent_gate` | 当前已同时用 synthetic 字段断言和真实 replay `002555 2026-08-04 13:35` / `03690 2026-08-05 09:56` / `600900 2026-08-04 13:18` 三样本锁住 `pre_breakout` 进入独立 gate 时仍保持 pending/watch 语义。 |
 | `1m-pre-breakout-publish-gate` 建议落点 | `tests/test_build_miniapp_publish_bundle.py` | 未来应仿照现有 `30m` publish anchor，加一条 `1m` 未确认向上预警链。 |
-| `1m-pre-breakout-publish-gate` 已落地 | `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_pre_breakout_publish_gate` + `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample` | 当前已同时用 synthetic `1m tech.json` 与真实 replay `002555 2026-08-04 13:35` 样本锁住 publish 层“向上预警未确认”口径。 |
+| `1m-pre-breakout-publish-gate` 已落地 | `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_pre_breakout_publish_gate` + `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample` + `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_03690_1m_pre_breakout_sample` + `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_600900_1m_pre_breakout_sample` | 当前已同时用 synthetic `1m tech.json` 与真实 replay `002555 2026-08-04 13:35` / `03690 2026-08-05 09:56` / `600900 2026-08-04 13:18` 三样本锁住 publish 层“向上预警未确认”口径。 |
 | `1m-pre-breakout` 样本探测工具 | `build/probe_intraday_prebreak_sample.py` | 现已支持手工 cutoff 回放与 `--auto-find` 全窗口扫描，可对现有 `1m raw_csv` 直接验证某个时间点是否真的生成 `zs_monitor_alert=pre_breakout/pre_breakdown`。 |
 | `1m-pre-breakout` 首轮回放结论 | `build/probe_00981_1m.json`、`build/probe_00728_1m.json`、`build/probe_06088_1m.json` | 当前已回放否定 `00981 / 00728 / 06088` 的首轮高优先窗口；这些窗口分别落在 `buy_3 + pending` 或“尚未形成中枢”状态，没有产生真实 `pre_breakout`。 |
 | confirmed live gates 已落地 | `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_confirmed_3s_reference_anchor` + `tests/test_build_summary_and_detail_payload_preserve_real_01024_1m_confirmed_3s_sample` + `tests/test_build_summary_and_detail_payload_preserve_real_002555_1m_confirmed_3s_sample` + `tests/test_build_summary_and_detail_payload_preserve_real_600900_1m_confirmed_3b_sample` | 已同时锁定兜底 reference、真实 `01024/002555 1m confirmed 3S` 与真实 `600900 1m confirmed 3B` live 样本，不会被 pending/watch 文案吞掉。 |
@@ -1074,6 +1089,7 @@ gate 收口规则：
 - 标准中枢完成态若不先稳定，后续买卖点绑定会继续漂移。
 - 真实 `1m` 预警样本仍偏少，消费侧 review 容易只看到稳态、不看到过渡态。
 - 当前 `data/reports` 中仍缺真实 `candidate_new_type` 样本；这已确认是样本缺口，不是单纯缺一条回归包装。当前真实 successor-chain 主锚点 `HK.01339 1m` 已由 publish regression 锁定为 `ongoing_new_type`。
+- 真实 `reabsorbed lineage` cutoff 样本已确认为**确定性数据缺口**（`2026-08-23` 全量 558 窗口 + `09988 1m` 1334 个 cutoff 瞬态均 MATCHED 0）。成因：最终窗口状态中中枢几乎不终结（`exit=None`），终结后的下一中枢区间又几乎不相交。T3 已用「合成单测（`tests/test_zhongshu.py` 四例）+ 首选级别多中枢真实窗口（`600900 1m` / `09988 1m` / `03690 5m` / `00700 1m`）」双轨覆盖该交界；后续若想补真实 reabsorbed 样本，需先造出「中枢终结 + 后续区间重叠」的真实数据窗口，而不是继续扩大既有语料扫描。
 
 ## 推荐执行顺序
 

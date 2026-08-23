@@ -13,6 +13,12 @@ SAMPLE_03690_30M_CSV = ROOT / "data" / "reports" / "03690" / "30m" / "analyze" /
 SAMPLE_000591_60M_LONG_CSV = ROOT / "data" / "reports" / "000591" / "60m" / "analyze" / "000591_60m_20251210_to_20260618.csv"
 SAMPLE_300124_60M_CSV = ROOT / "data" / "reports" / "300124" / "60m" / "analyze" / "300124_60m_20260213_to_20260618.csv"
 
+# 首选级别（1m / 5m）多中枢真实窗口：作为 T3 "多中枢不残留旧中枢幽灵 / 不相交不误标 reabsorbed" 的正面真实窗口 gate。
+SAMPLE_600900_1M_CSV = ROOT / "data" / "reports" / "600900" / "1m" / "analyze" / "600900_1m_20260804_to_20260820.csv"
+SAMPLE_09988_1M_CSV = ROOT / "data" / "reports" / "09988" / "1m" / "analyze" / "09988_1m_20260804_to_20260820.csv"
+SAMPLE_03690_5M_CSV = ROOT / "data" / "reports" / "03690" / "5m" / "analyze" / "03690_5m_20260722_to_20260820.csv"
+SAMPLE_00700_1M_CSV = ROOT / "data" / "reports" / "00700" / "1m" / "analyze" / "00700_1m_20260804_to_20260820.csv"
+
 
 def test_00700_30m_segment_zhongshu_keeps_single_active_center_after_multiple_rewrites() -> None:
     segments = identify_segments_from_csv(SAMPLE_00700_30M_CSV)
@@ -104,6 +110,86 @@ def test_300124_60m_mixed_overlap_restart_chain_does_not_leave_segment_level_gho
     assert structure_state["consumption_level"] == "auxiliary"
 
 
+def _assert_centers_no_reabsorbed(zhongshus, expected):
+    """锁定 segment 级标准中枢的精确身份 + 区间，并断言不残留 reabsorbed/superseded 幽灵。"""
+    assert len(zhongshus) == len(expected)
+    for zs, (enter, start, end, low, high, exit_bi) in zip(zhongshus, expected):
+        assert zs.structure_level == "segment"
+        assert zs.entering_bi_id == enter
+        assert zs.start_bi_id == start
+        assert zs.end_bi_id == end
+        assert zs.exit_bi_id == exit_bi
+        assert round(zs.zs_low, 6) == low
+        assert round(zs.zs_high, 6) == high
+        assert zs.is_terminated is (exit_bi is not None)
+        # T3 关键断言：真实多中枢窗口不允许旧中枢幽灵 / 误标 reabsorbed。
+        assert zs.superseded_by_zs_id is None
+        assert zs.is_reabsorbed_by_larger_expansion is False
+
+
+def test_600900_1m_segment_zhongshu_keeps_two_disjoint_centers_without_false_reabsorption() -> None:
+    """600900 1m（首选级别）：两个区间不相交的标准中枢，不得误标 reabsorbed。"""
+    segments = identify_segments_from_csv(SAMPLE_600900_1M_CSV)
+
+    zhongshus = identify_zhongshu(segments, structure_level="segment")
+
+    _assert_centers_no_reabsorbed(
+        zhongshus,
+        [
+            (1, 2, 6, 27.65, 27.82, None),
+            (7, 8, 13, 27.91, 28.0, None),
+        ],
+    )
+
+
+def test_09988_1m_segment_zhongshu_keeps_four_centers_without_false_reabsorption() -> None:
+    """09988 1m（首选级别）：四个标准中枢（zs0/zs2 区间实际重叠但 zs0 未终结），
+    不得因区间重叠而误标 reabsorbed —— 锁住"未终结前中枢不得被后续中心重吸收"的真实窗口。"""
+    segments = identify_segments_from_csv(SAMPLE_09988_1M_CSV)
+
+    zhongshus = identify_zhongshu(segments, structure_level="segment")
+
+    _assert_centers_no_reabsorbed(
+        zhongshus,
+        [
+            (0, 1, 3, 127.0, 128.7, None),
+            (4, 5, 8, 123.7, 124.7, None),
+            (9, 10, 13, 125.9, 127.5, None),
+            (15, 16, 18, 119.1, 120.1, None),
+        ],
+    )
+
+
+def test_03690_5m_segment_zhongshu_keeps_two_disjoint_centers_without_false_reabsorption() -> None:
+    """03690 5m（首选级别）：两个区间不相交的标准中枢，不得误标 reabsorbed。"""
+    segments = identify_segments_from_csv(SAMPLE_03690_5M_CSV)
+
+    zhongshus = identify_zhongshu(segments, structure_level="segment")
+
+    _assert_centers_no_reabsorbed(
+        zhongshus,
+        [
+            (0, 1, 6, 89.0, 91.95, None),
+            (7, 8, 11, 92.05, 92.2, None),
+        ],
+    )
+
+
+def test_00700_1m_segment_zhongshu_keeps_two_disjoint_centers_without_false_reabsorption() -> None:
+    """00700 1m（首选级别）：两个区间不相交的标准中枢，不得误标 reabsorbed。"""
+    segments = identify_segments_from_csv(SAMPLE_00700_1M_CSV)
+
+    zhongshus = identify_zhongshu(segments, structure_level="segment")
+
+    _assert_centers_no_reabsorbed(
+        zhongshus,
+        [
+            (0, 1, 3, 488.0, 497.8, None),
+            (4, 5, 9, 476.4, 480.6, None),
+        ],
+    )
+
+
 def _segment_landmarks(segments):
     return [
         (segment.direction.value, segment.start_bi_id, segment.end_bi_id, segment.break_bi_id, segment.stop_reason)
@@ -132,6 +218,10 @@ REAL_REBUILD_WINDOWS = [
     SAMPLE_03690_30M_CSV,
     SAMPLE_000591_60M_LONG_CSV,
     SAMPLE_300124_60M_CSV,
+    SAMPLE_600900_1M_CSV,
+    SAMPLE_09988_1M_CSV,
+    SAMPLE_03690_5M_CSV,
+    SAMPLE_00700_1M_CSV,
 ]
 
 

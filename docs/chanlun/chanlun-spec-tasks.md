@@ -92,8 +92,8 @@
 
 | 任务 | 优先级 | 当前重点 | 当前状态 | 完成度 | 执行入口 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 理论/实现/消费三层总差异表 | 高 | 继续压缩 `1m pre_breakout` 与 confirmed live 卡片缺口 | 进行中 | 92% | [中枢映射](zhongshu-tasks.md#zs53e-review-gate-map) / [背驰字段](trend-divergence-tasks.md#td4-output-fields) / [买卖点差异](buy-sell-multi-level-tasks.md#bs1-diff-map) | `1m pre_breakdown` 的真实样本、`tech.json` gate、文案、发布链和 review 主锚点已收口。 |
-| 中枢严格定义图示库 | 高 | 补真实 `1m pre_breakout` 卡片与 confirmed live 卡片 | 进行中 | 82% | [样例卡片](zhongshu-tasks.md#zs62-review-cases) | 当前真实 `SZ.000651 1m pre_breakdown` 已接管 `1m` 向下预警主位。 |
+| 理论/实现/消费三层总差异表 | 高 | 继续压缩 `1m pre_breakout` 与 confirmed live 卡片缺口 | 进行中 | 95% | [中枢映射](zhongshu-tasks.md#zs53e-review-gate-map) / [背驰字段](trend-divergence-tasks.md#td4-output-fields) / [买卖点差异](buy-sell-multi-level-tasks.md#bs1-diff-map) | `1m pre_breakdown` 的真实样本、`tech.json` gate、文案、发布链和 review 主锚点已收口；`1m pre_breakout` 已补 `002555` + `03690` + `600900` 三真实 analysis/publish gate。 |
+| 中枢严格定义图示库 | 高 | 补真实 `1m pre_breakout` 卡片与 confirmed live 卡片 | 进行中 | 87% | [样例卡片](zhongshu-tasks.md#zs62-review-cases) | 真实 `SZ.000651 1m pre_breakdown` 已接管 `1m` 向下预警主位；`1m pre_breakout` 已有 `002555` + `03690` + `600900` 三真实 replay 样本可作卡片主锚点。 |
 | `chanlun-rule-spec` 与严格版差异标注 | 中 | 把“现状 vs 目标”继续拆干净 | 进行中 | 55% | [线段主链](segment-tasks.md#s1-segment-bootstrap) / [走势主链](trend-divergence-tasks.md#td1-route-chain) / [买卖点差异](buy-sell-multi-level-tasks.md#bs1-diff-map) | 当前仍有部分段落把现状与目标写在一起；这是总规格文档继续收口的主入口。 |
 | 线段 / 背驰 / 买卖点案例库 | 中 | 继续补原文正反例与映射 | 进行中 | 45%-58% | [线段回归](segment-tasks.md#s4-regression-gates) / [背驰案例](trend-divergence-tasks.md#td5-case-gates) / [买卖点案例](buy-sell-multi-level-tasks.md#bs6-case-gates) | 这三块 review 资料已起骨架，但距离“拿来即审”还有明显缺口。 |
 
@@ -101,10 +101,10 @@
 
 | 任务 | 优先级 | 当前重点 | 当前状态 | 完成度 | 执行入口 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `1m pre_breakout` 对称 gate 链 | 高 | 找到真实样本并补齐 `tech.json` + publish gate | 待完成 | 35% | [样本任务](zhongshu-tasks.md#zs53c-pre-breakout-sample) / [发布核验](zhongshu-tasks.md#zs53d-pre-breakout-publish) | 当前只有 synthetic gate，缺真实落盘样本。 |
-| `1m pre_break*` 历史回放工具 | 高 | 用自动扫描缩短真实样本发现路径 | 进行中 | 65% | [探测链路](zhongshu-tasks.md#zs53c-pre-breakout-sample) | `build/probe_intraday_prebreak_sample.py` 已支持手工 cutoff 与 `--auto-find` 扫描。 |
+| `1m pre_breakout` 对称 gate 链 | 高 | 找到真实样本并补齐 `tech.json` + publish gate | 完成 | 100% | [样本任务](zhongshu-tasks.md#zs53c-pre-breakout-sample) / [发布核验](zhongshu-tasks.md#zs53d-pre-breakout-publish) | 真实 replay 三锚点已落地：`002555 2026-08-04 13:35` + `03690 2026-08-05 09:56` + `600900 2026-08-04 13:18`，analysis 与 publish 双真实 gate 均已固化，并移除 `_replay` 内 synthetic fallback。 |
+| `1m pre_break*` 历史回放工具 | 高 | 用自动扫描缩短真实样本发现路径 | 进行中 | 85% | [探测链路](zhongshu-tasks.md#zs53c-pre-breakout-sample) | `build/probe_intraday_prebreak_sample.py` 已支持手工 cutoff 与 `--auto-find` 扫描；`build/scan_real_1m_prebreakout_samples.py` 已确认 16/16 个 `1m` 标的均存在真实 `pre_breakout` 历史 cutoff，`002555` / `03690` / `600900` 已固化为真实 gate。 |
 | `1m pre_breakdown` 真实 gate 链 | 中 | 保持 `tech.json` / 文案 / publish 三层真实样本回归 | 进行中 | 86% | [中枢样本](zhongshu-tasks.md#zs53c-pre-breakout-sample) / [发布链](zhongshu-tasks.md#zs53d-pre-breakout-publish) | 真实 `000651 1m` 已补齐独立 `tech.json` gate、文案回归与 publish regression。 |
-| 主辅冲突与重写回归集 | 中 | 补复杂 reclaim / gap / rewrite focused regressions | 进行中 | 58% | [线段回归](segment-tasks.md#s4-regression-gates) / [中枢回归](zhongshu-tasks.md#zs3-rewrite-gap) | 现有多组 focused regression 已落地，但复杂交界仍未完全锁死。 |
+| 主辅冲突与重写回归集 | 中 | 补复杂 reclaim / gap / rewrite focused regressions | 进行中 | 70% | [线段回归](segment-tasks.md#s4-regression-gates) / [中枢回归](zhongshu-tasks.md#zs3-rewrite-gap) | 现有多组 focused regression 已落地；`2026-08-23` 补了首选级别（1m/5m）多中枢真实窗口 gate（`600900 1m`、`09988 1m`、`03690 5m`、`00700 1m`），并确认真实 `reabsorbed lineage` 为确定性数据缺口（全量 558 窗口 + 09988 1334 瞬态 MATCHED 0）。 |
 
 #### 代码任务
 
@@ -133,7 +133,7 @@
 | 任务 | 当前状态 | 完成度 | 说明 |
 | --- | --- | --- | --- |
 | `chanlun-rule-spec` 与严格版差异标注 | 进行中 | 55% | 当前仍有部分段落把“现状”和“目标”写在一起；后续需按模块任务页逐项回写。 |
-| 理论/实现/消费三层总差异表 | 进行中 | 92% | 字段级矩阵已大体成型；`1m pre_breakdown` 的真实样本、`tech.json` gate、文案、发布链和 review 主锚点已收口，剩余主要是真实 `1m pre_breakout`、真实 confirmed 页内卡片、工程近似阈值和少量未落主产物字段，详见 [zhongshu-tasks.md](zhongshu-tasks.md) 与 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
+| 理论/实现/消费三层总差异表 | 进行中 | 95% | 字段级矩阵已大体成型；`1m pre_breakdown` 与 `1m pre_breakout` 的真实样本、`tech.json` gate、文案、发布链和 review 主锚点均已收口（`pre_breakout` 已补 `002555` + `03690` + `600900` 三真实锚点），剩余主要是 confirmed 页内卡片广度、工程近似阈值和少量未落主产物字段，详见 [zhongshu-tasks.md](zhongshu-tasks.md) 与 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | `src/chanlun/analysis.py` 买卖点逻辑差异表 | 待完成 | 15% | 需要逐条标记当前 buy/sell 条件与严格理论的偏差；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
 | 类中枢与标准中枢字段完全拆分 | 进行中 | 45% | 文档已拆，输出字段与消费端仍需继续收敛；执行拆解见 [zhongshu-tasks.md](zhongshu-tasks.md)。 |
 | 主辅冲突样例库 | 进行中 | 50% | 已有框架，还缺足量正反例；优先围绕中枢主辅冲突和买卖点降级补样例。 |
