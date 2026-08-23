@@ -155,6 +155,7 @@ tests: tests/test_segment.py, tests/test_zhongshu.py, tests/test_chanlun_analysi
 
 对应专题：
 
+- [segment-spec.md](segment-spec.md): 线段严格理论规格（应然）。
 - [segment-implementation-guide.md](segment-implementation-guide.md): 当前线段实现专题。
 - [segment-doc-map.md](segment-doc-map.md): 线段文档导航。
 - [segment-stop-reason-contract.md](segment-stop-reason-contract.md): `stop_reason` 稳定接口契约。

@@ -4,6 +4,10 @@
 
 ## 文档分层
 
+0. 理论规格（应然）
+- [segment-spec.md](segment-spec.md)
+- 用途：定义线段严格理论口径（起段 / 扩展 / 终结 / 尾段 / 双模式），是线段的应然事实源，与其他模块 `*-spec.md` 对齐。
+
 1. 现行实现口径（主文档）
 - [segment-implementation-guide.md](segment-implementation-guide.md)
 - 用途：说明当前工程实现如何识别线段，供人工核图、调试、回归使用。

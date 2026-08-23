@@ -38,6 +38,7 @@
 
 ## 4. 现有文档职责分工
 
+- 理论规格（应然）：[segment-spec.md](segment-spec.md)
 - 理论/原文复核：本页 [segment-original-review-matrix.md](segment-original-review-matrix.md)
 - 当前实现主口径：[segment-implementation-guide.md](segment-implementation-guide.md)
 - 契约与消费层：[segment-stop-reason-contract.md](segment-stop-reason-contract.md)

@@ -10,6 +10,7 @@ tests: tests/test_segment.py, tests/test_segment_regression_suite.py
 
 文档入口：
 
+- 理论规格（应然）： [segment-spec.md](segment-spec.md)
 - 总导航： [segment-doc-map.md](segment-doc-map.md)
 - 稳定接口契约： [segment-stop-reason-contract.md](segment-stop-reason-contract.md)
 - 变更快照： [segment-implementation-changelog.md](segment-implementation-changelog.md)

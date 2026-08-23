@@ -1615,7 +1615,7 @@ def identify_segments(
     """
     识别线段。
 
-    spec_id: SPEC.SEGMENT.IMPLEMENTATION（见 docs/chanlun/segment-implementation-guide.md）。
+    spec_id: SPEC.SEGMENT.CORE / SPEC.SEGMENT.IMPLEMENTATION（见 docs/chanlun/segment-spec.md 与 segment-implementation-guide.md）。
     第一阶段规则对应 docs/chanlun/chanlun-rule-spec.md 6.1-6.5：
     - 输入可传入全量笔序列，但实现内部只使用已确认笔
     - 至少 3 笔，方向交替，首尾笔同向

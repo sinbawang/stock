@@ -26,6 +26,7 @@
 - [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md): 买卖点与多级别联立规格
 - [buy-sell-multi-level-original-review-matrix.md](buy-sell-multi-level-original-review-matrix.md): 买卖点与多级别联立原文复核矩阵
 - [buy-sell-multi-level-visual-example-library.md](buy-sell-multi-level-visual-example-library.md): 买卖点与多级别联立图文化示例库
+- [segment-spec.md](segment-spec.md): 线段严格理论规格（应然）
 - [segment-implementation-guide.md](segment-implementation-guide.md): 线段实现短说明
 - [segment-doc-map.md](segment-doc-map.md): 线段文档总导航（实现/分析/契约分层）
 - [segment-original-review-matrix.md](segment-original-review-matrix.md): 线段原文复核矩阵
