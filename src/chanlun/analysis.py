@@ -466,6 +466,7 @@ def _build_post_divergence_route(
     top_divergence: bool,
     bottom_divergence: bool,
 ) -> str | None:
+    # spec_id: SPEC.TREND_DIVERGENCE.CORE（见 docs/chanlun/trend-divergence-spec.md）
     ongoing = structure_state.get("current_ongoing") or {}
     confirmation_basis = str(ongoing.get("confirmation_basis") or "").strip()
     trend = divergence.get("trend") or {}
@@ -512,6 +513,7 @@ def _build_oscillation_rhythm_state(
 
 
 def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dict[str, object]:
+    # spec_id: SPEC.TREND_DIVERGENCE.CORE（见 docs/chanlun/trend-divergence-spec.md）
     latest_bar_ts = raw_bars[-1].ts if raw_bars else None
     live_runs = _split_live_zhongshu_runs(zhongshus)
 
@@ -1069,6 +1071,7 @@ def build_signal_point_payloads(
 
 
 def build_signal_summary_fields(signals: dict[str, object]) -> dict[str, object]:
+    # spec_id: SPEC.BUY_SELL.CORE（见 docs/chanlun/buy-sell-multi-level-spec.md）
     same_level_consumption_level = signals.get("same_level_consumption_level")
     return {
         "buy_points": [_format_signal_point_name(str(point)) for point in signals.get("buy_points", [])],

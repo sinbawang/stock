@@ -1,3 +1,11 @@
+---
+spec_id: SPEC.BASE_STRUCTURE.CORE
+status: stable
+owner: chanlun
+applyTo: src/chanlun/normalize.py, src/chanlun/fractal.py, src/chanlun/bi.py
+tests: tests/test_normalize.py, tests/test_fractal.py, tests/test_bi.py
+---
+
 # 基础结构规格
 
 本文件定义缠论底层结构口径，覆盖：

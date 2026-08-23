@@ -1,5 +1,5 @@
 """
-包含关系处理单元测试。
+包含关系处理单元测试。spec_id: SPEC.BASE_STRUCTURE.CORE。
 """
 
 import pytest

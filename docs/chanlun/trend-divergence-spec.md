@@ -1,3 +1,11 @@
+---
+spec_id: SPEC.TREND_DIVERGENCE.CORE
+status: stable
+owner: chanlun
+applyTo: src/chanlun/analysis.py
+tests: tests/test_chanlun_analysis.py
+---
+
 # 走势类型与背驰规格
 
 本文件定义高层结构模块，覆盖：

@@ -1,5 +1,5 @@
 """
-分型识别单元测试。
+分型识别单元测试。spec_id: SPEC.BASE_STRUCTURE.CORE。
 """
 
 import pytest

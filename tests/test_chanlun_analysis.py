@@ -1,4 +1,4 @@
-"""缠论分析层综合测试。spec_id: SPEC.CHANLUN.THEORY / SPEC.CHANLUN.RULE。"""
+"""缠论分析层综合测试。spec_id: SPEC.CHANLUN.THEORY / SPEC.CHANLUN.RULE / SPEC.TREND_DIVERGENCE.CORE / SPEC.BUY_SELL.CORE。"""
 
 from __future__ import annotations
 

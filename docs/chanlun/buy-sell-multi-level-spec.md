@@ -1,3 +1,11 @@
+---
+spec_id: SPEC.BUY_SELL.CORE
+status: stable
+owner: chanlun
+applyTo: src/chanlun/analysis.py
+tests: tests/test_chanlun_analysis.py
+---
+
 # 买卖点与多级别联立规格
 
 本文件定义以下高层消费与执行模块：

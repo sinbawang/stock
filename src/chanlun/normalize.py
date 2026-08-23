@@ -138,7 +138,9 @@ def _resolve_pending_chain(pending_bars: List[Bar], direction: Optional[str]) ->
 def normalize_bars(bars: List[Bar]) -> List[NormalizedBar]:
     """
     去包含处理，生成标准化 K 线序列。
-    
+
+    spec_id: SPEC.BASE_STRUCTURE.CORE（见 docs/chanlun/base-structure-spec.md）。
+
     规则（规格文档 3.2）：
     1. 初始化方向判断
     2. 检测包含关系，按方向合并
