@@ -12,11 +12,12 @@
 
 ## 1. 当前定位
 
-- 理论成熟度：高
-- 当前实现完成度：高
-- 当前文档完整度：高
+> 实然状态（完成度 / 收敛进度）见 [chanlun-spec-tasks.md](chanlun-spec-tasks.md) 与
+> [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md)；
+> 本文件只保留理论口径（应然）。
 
-当前仓库里，这部分已经是相对稳定、最适合先冻结口径的模块。
+- 理论成熟度：高
+- 当前文档完整度：高
 
 ## 2. 原始 K 线约束
 

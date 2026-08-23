@@ -12,11 +12,12 @@
 
 ## 1. 当前定位
 
-- 理论成熟度：中高
-- 当前实现完成度：低到中
-- 当前文档完整度：中低
+> 实然状态（完成度 / 收敛进度）见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md) 与
+> [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md)；
+> 本文件只保留理论口径（应然）。
 
-当前仓库里这部分最需要明确“严格定义”和“当前只到观察提示”的边界。
+- 理论成熟度：中高
+- 当前文档完整度：中低
 
 ## 2. 一二三类买卖点
 
@@ -89,15 +90,17 @@
 - 操作级别：一二三类买卖点、风险位、观察位。
 - 执行级别：区间套确认、入场节奏、再确认窗口。
 
-## 6. 当前实现状态
+## 6. 实然指引（不承担规格职责）
 
-当前仓库更接近：
+> 本文件只定义“应然”。当前工程实现状态（已落地部分与未闭环缺口）见
+> [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md) 与
+> [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md)。
 
-- 已有部分 buy/sell 工程规则。
-- 已有部分低级别精确执行字段。
-- 但严格“最近中枢 -> 背驰 -> 1/2/3 类点 -> 多级别确认/降级”的主链路仍未完全闭环。
+历史实然摘要（保留作背景，不再更新）：
 
-因此这部分不应被表述为“已经严格按原文完整实现”。
+- 曾有部分 buy/sell 工程规则。
+- 曾有部分低级别精确执行字段。
+- 严格“最近中枢 -> 背驰 -> 1/2/3 类点 -> 多级别确认/降级”主链路曾未完全闭环。
 
 ## 7. 维护建议
 

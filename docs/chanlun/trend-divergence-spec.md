@@ -13,11 +13,12 @@
 
 ## 1. 当前定位
 
-- 理论成熟度：中高
-- 当前实现完成度：中低
-- 当前文档完整度：中
+> 实然状态（完成度 / 收敛进度）见 [trend-divergence-tasks.md](trend-divergence-tasks.md) 与
+> [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md)；
+> 本文件只保留理论口径（应然）。
 
-当前仓库已有部分文档定义和部分工程输出，但严格自动判定链路仍未完全闭环。
+- 理论成熟度：中高
+- 当前文档完整度：中
 
 ## 2. 走势类型
 
@@ -83,15 +84,16 @@
 - 指标不能脱离走势分解，独立定义背驰。
 - 指标与结构冲突时，以结构主结论为准。
 
-## 9. 当前实现状态
+## 9. 实然指引（不承担规格职责）
 
-当前仓库的实际状态更接近：
+> 本文件只定义“应然”。当前工程实现状态见 [trend-divergence-tasks.md](trend-divergence-tasks.md) 与
+> [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md)。
 
-- 已有 `structure_state` 和 `divergence` 输出框架。
-- 已有背驰相关工程语义。
-- 但尚未形成“严格走势类型分解 -> 严格背驰确认 -> 严格结构去向”的完整自动链路。
+历史实然摘要（保留作背景，不再更新）：
 
-因此这部分仍应视为重点 review 和重点收敛对象。
+- 曾有 `structure_state` 和 `divergence` 输出框架。
+- 曾有背驰相关工程语义。
+- 严格“走势类型分解 -> 背驰确认 -> 结构去向”完整自动链路曾未完全闭环。
 
 ## 10. 维护建议
 

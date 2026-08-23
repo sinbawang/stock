@@ -82,13 +82,15 @@ tests: tests/test_segment_rediscrimination_matrix.py, tests/test_segment.py
 
 ### 待整理清单（后续分批执行）
 
-`2026-08-23` 已示范整理 `zhongshu-core-spec.md`（当前定位 + 主链口径实然标记）与 `chanlun-rule-spec.md`（工程化线段口径实然标记）。剩余实然混入应然待后续整理：
+`2026-08-23` 已全部完成应然/实然分离整理：
 
-- `buy-sell-multi-level-spec.md`：`## 6. 当前实现状态` 整节 + 开篇「当前实现完成度：低到中」
-- `trend-divergence-spec.md`：`## 9. 当前实现状态` 整节 + 开篇「当前实现完成度：中低」
-- `base-structure-spec.md`：开篇「当前实现完成度：高」
+- `zhongshu-core-spec.md`：当前定位加实然指引 + 主链口径标「实然」。
+- `chanlun-rule-spec.md`：工程化线段口径标「实然」+ diff-matrix 指引。
+- `buy-sell-multi-level-spec.md`：`## 当前实现状态` 改为「实然指引」，移除开篇完成度行。
+- `trend-divergence-spec.md`：`## 当前实现状态` 改为「实然指引」，移除开篇完成度行。
+- `base-structure-spec.md`：移除开篇完成度行，加实然指引。
 
-以上「完成度」行与「当前实现状态」节应逐步收敛到各自 `*-diff-matrix.md` / `*-tasks.md`。
+以上各 spec 的「当前实现完成度」行与「当前实现状态」节已收敛为「实然指引」+ diff-matrix / tasks 跳转；后续新增 spec 一律按此规则，不在应然正文写现状。
 
 ## 回写规则
 
