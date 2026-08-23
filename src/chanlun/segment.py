@@ -1368,6 +1368,13 @@ def _extend_segment(
                             reverse_indices + [cursor + 2],
                             direction,
                         )
+                        # 弱同向笔时向后多看一根反向笔，让缺口分型有机会补全
+                        if gap_candidate_idx is None and cursor + 4 < len(bis):
+                            gap_candidate_idx = _gap_feature_sequence_candidate(
+                                bis,
+                                reverse_indices + [cursor + 2, cursor + 4],
+                                direction,
+                            )
                         pending_gap_break_idx = _replace_gap_candidate(
                             pending_gap_break_idx,
                             gap_candidate_idx,
@@ -1484,6 +1491,13 @@ def _extend_segment(
                             reverse_indices + [cursor + 2],
                             direction,
                         )
+                        # 弱同向笔时向后多看一根反向笔，让缺口分型有机会补全
+                        if gap_candidate_idx is None and cursor + 4 < len(bis):
+                            gap_candidate_idx = _gap_feature_sequence_candidate(
+                                bis,
+                                reverse_indices + [cursor + 2, cursor + 4],
+                                direction,
+                            )
                         pending_gap_break_idx = _replace_gap_candidate(
                             pending_gap_break_idx,
                             gap_candidate_idx,

@@ -564,6 +564,45 @@ def test_theory_mode_confirms_down_gap_fractal_without_weak_down_deferral() -> N
     assert practical[0].stop_reason == "reverse_break"
 
 
+def test_theory_mode_looks_ahead_two_reverse_bis_for_stalled_down_gap_fractal() -> None:
+    """06088 5m S10 案例（合成复现）：down 段停扫后缺口底分型需前视两根反向笔。
+
+    场景：down 段在 bi8 创新低后，同向 bi10/bi12 均为弱 down 笔（未破前低），
+    触发「弱同向笔」停扫分支。缺口底分型的右元素 bi13 在停扫点之后第二根反向笔，
+    弱同向笔分支需向前多看一根反向笔才能补全分型并确认。
+    """
+    bis = [
+        _bi(0, BiDirection.DOWN, 6.155, 5.800),
+        _bi(1, BiDirection.UP, 6.000, 5.800),
+        _bi(2, BiDirection.DOWN, 6.000, 5.820),
+        _bi(3, BiDirection.UP, 6.000, 5.820),
+        _bi(4, BiDirection.DOWN, 6.000, 5.140),
+        _bi(5, BiDirection.UP, 5.200, 5.140),   # 左元素
+        _bi(6, BiDirection.DOWN, 5.200, 5.105),
+        _bi(7, BiDirection.UP, 5.150, 5.105),   # 中间开始
+        _bi(8, BiDirection.DOWN, 5.150, 4.955),  # 新低
+        _bi(9, BiDirection.UP, 5.160, 4.955),    # 包含 bi7
+        _bi(10, BiDirection.DOWN, 5.160, 5.105),  # 弱 down
+        _bi(11, BiDirection.UP, 5.135, 5.105),    # 被 bi9 包含
+        _bi(12, BiDirection.DOWN, 5.135, 5.070),  # 弱 down
+        _bi(13, BiDirection.UP, 5.210, 5.070),    # 右元素（停扫后第二根反向笔）
+        _bi(14, BiDirection.DOWN, 5.210, 5.160),
+        _bi(15, BiDirection.UP, 5.400, 5.160),
+        _bi(16, BiDirection.DOWN, 5.400, 5.280),
+        _bi(17, BiDirection.UP, 5.435, 5.280),
+    ]
+
+    theory = identify_segments(bis, termination_mode="theory")
+    assert theory[0].direction == BiDirection.DOWN
+    assert theory[0].is_confirmed is True
+    assert theory[0].stop_reason == "feature_sequence_gap_fractal_delayed_true"
+
+    practical = identify_segments(bis, termination_mode="practical")
+    assert practical[0].direction == BiDirection.DOWN
+    assert practical[0].is_confirmed is True
+    assert practical[0].stop_reason == "reverse_break"
+
+
 def test_reverse_break_after_gap_documented_scenario_pins_current_resolution() -> None:
     """锁住文档 `reverse_break_after_gap` 场景的当前实现解析。
 
