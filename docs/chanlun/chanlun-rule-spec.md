@@ -1,3 +1,11 @@
+---
+spec_id: SPEC.CHANLUN.RULE
+status: stable
+owner: chanlun
+applyTo: src/chanlun/**
+tests: tests/test_segment.py, tests/test_zhongshu.py, tests/test_chanlun_analysis.py
+---
+
 # 缠论规则规格
 
 这份文档现在作为缠论规格主入口，负责定义文档结构、模块边界、阅读顺序和总原则。
@@ -155,7 +163,7 @@
 本节仅保留以下历史摘要：
 
 - 线段基于已确认笔，不直接从 K 线生成。
-- 当前实现采用工程化简化线段口径，已形成稳定图表和测试闭环。
+- 当前实现采用工程化简化线段口径，已形成稳定图表和测试闭环。（实然，差异见 [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md)）
 - 严格理论层仍有进一步收敛空间，但不应再把实现细节堆回主入口。
 - 线段层的 `termination_mode`、`stop_reason` 和中枢传递语义应由专题文档维护。
 

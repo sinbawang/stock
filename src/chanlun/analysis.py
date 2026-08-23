@@ -4,70 +4,25 @@ from datetime import datetime
 from typing import Any
 
 from .models import Bar, Bi, Zhongshu
+from .zhongshu_contract import (
+    CONSUMPTION_LEVEL_LABELS,
+    CONSUMPTION_LEVEL_NOTES,
+    TRANSITION_STATE_LABELS,
+    TRANSITION_STATE_NOTES,
+)
+from .analysis_contract import (
+    SIGNAL_BASIS_LABELS,
+    SIGNAL_POINT_LABELS,
+    STRUCTURE_STATUS_LABELS,
+    STRUCTURE_STATUS_NOTES,
+)
 
 
-SIGNAL_POINT_LABELS = {
-    "buy_1": "一买",
-    "buy_2": "二买",
-    "buy_3": "三买",
-    "sell_1": "一卖",
-    "sell_2": "二卖",
-    "sell_3": "三卖",
-}
-
-
-SIGNAL_BASIS_LABELS = {
-    "bottom_divergence_near_zs_low": "中枢下沿附近出现底背驰",
-    "buy1_pullback_confirmation": "一买后回抽确认，低点未再跌破前低",
-    "leave_zs_then_pullback_holds_upper_edge": "离开中枢后回踩上沿未失守",
-    "top_divergence_near_zs_high": "中枢上沿附近出现顶背驰",
-    "sell1_rebound_confirmation": "一卖后反抽确认，高点未再突破前高",
-    "leave_zs_then_rebound_fails_lower_edge": "跌破中枢后反抽下沿失败",
-}
-
-
-STRUCTURE_STATUS_LABELS = {
-    "ongoing_same_type": "同类延伸中",
-    "candidate_completed_waiting_stability": "候选完成待确认",
-    "completed_then_new_type": "已切入新走势",
-}
-
-
-STRUCTURE_STATUS_NOTES = {
-    "ongoing_same_type": "当前仍优先按同一走势类型内部延伸处理，不抢先切分。",
-    "candidate_completed_waiting_stability": "前段走势已具备完成候选，但边界仍待右侧结构确认稳定。",
-    "completed_then_new_type": "前段走势完成边界已相对稳定，当前按新的同级别走势类型处理。",
-}
-
-
-TRANSITION_STATE_LABELS = {
-    "none": "无转场",
-    "same_type_extension": "同型延伸",
-    "candidate_new_type": "新走势候选",
-    "ongoing_new_type": "新走势进行中",
-}
-
-
-TRANSITION_STATE_NOTES = {
-    "none": "当前还不能从已完成前段稳定推出新的同级别走势转场。",
-    "same_type_extension": "当前仍按前一走势类型的同类延伸处理。",
-    "candidate_new_type": "前段走势已完成，但当前新走势仍处候选待确认阶段。",
-    "ongoing_new_type": "前段走势已完成，当前新的同级别走势类型正在运行中。",
-}
-
-
-CONSUMPTION_LEVEL_LABELS = {
-    "auxiliary": "仅辅助观察",
-    "pending": "待确认消费",
-    "confirmed": "已确认消费",
-}
-
-
-CONSUMPTION_LEVEL_NOTES = {
-    "auxiliary": "当前还没有稳定的同级别中枢主结构，只能按辅助观察信号消费。",
-    "pending": "当前已有结构线索，但还不能直接升级为同级别强确认结论。",
-    "confirmed": "当前同级别结构已具备稳定消费基础，可直接按主结构结论解释。",
-}
+# 注：transition_state / consumption_level 的 label/note 字典已迁移到
+# `zhongshu_contract.py`；signal_point / signal_basis / structure_status 的
+# label/note 字典已迁移到 `analysis_contract.py`。两者都是 SDD 唯一事实源，
+# 本模块从契约模块导入，不再维护第二份拷贝。见 tests/test_zhongshu_contract.py
+# 与 tests/test_analysis_contract.py。
 
 
 def compute_bi_strengths(bis: list[Bi], macd_points: list[Any]) -> dict[int, dict[str, float]]:

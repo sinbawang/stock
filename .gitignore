@@ -7,6 +7,7 @@ data/*
 wechat_*.png
 tmp/
 _tmp_*
+.tmp_*
 build/
 *.egg-info/
 dist/

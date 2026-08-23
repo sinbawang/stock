@@ -1,3 +1,11 @@
+---
+spec_id: SPEC.ZHONGSHU.CORE
+status: stable
+owner: chanlun
+applyTo: src/chanlun/zhongshu.py
+tests: tests/test_zhongshu.py, tests/test_zhongshu_regression_real_fixtures.py
+---
+
 # 中枢核心理论规格
 
 本文件定义中枢模块的核心理论口径，只回答“中枢严格上应该怎么定义、识别、表达”。
@@ -19,11 +27,12 @@
 
 ## 1. 当前定位
 
-- 理论成熟度：高
-- 当前实现完成度：中
-- 当前文档完整度：中高
+> 实然状态（完成度 / 收敛进度）见 [zhongshu-tasks.md](zhongshu-tasks.md) 与
+> [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md)；
+> 本文件只保留理论口径（应然）。
 
-当前仓库里，中枢的理论定义已经相对清楚，但“标准中枢主实现”和“类中枢辅助实现”的收敛还没有完全结束。
+- 理论成熟度：高
+- 当前文档完整度：中高
 
 ## 2. 中枢在整体结构中的位置
 
@@ -154,7 +163,7 @@
 
 两种口径对比结论已定，不再二选一：
 
-- **主链口径（当前实现）**：只吃已确认线段 + 固定前三段重叠区间 + 输入至少 5 段。
+- **主链口径（当前实现，实然）**：只吃已确认线段 + 固定前三段重叠区间 + 输入至少 5 段。
   - 优点：重复重算零漂移，`confirmed / pending / auxiliary` 三态清晰，买卖点绑定最近中枢不漂。
   - 代价：滞后于理论最小中枢；4 段最小中枢需等离开候选出现才成立。
 - **严格理论口径（未落地）**：3 段重叠即形成最小中枢，区间可随段推进动态更新。

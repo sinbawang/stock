@@ -1,3 +1,11 @@
+---
+spec_id: SPEC.CHANLUN.THEORY
+status: stable
+owner: chanlun
+applyTo: src/chanlun/**
+tests: tests/test_segment.py, tests/test_zhongshu.py, tests/test_chanlun_analysis.py
+---
+
 # 缠论严格理论规格
 
 本文件现在只保留“严格理论总纲”，用于统一 review、后续实现和人工核图标准。

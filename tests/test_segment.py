@@ -1,4 +1,4 @@
-"""线段识别与映射测试。"""
+"""线段识别与映射测试。spec_id: SPEC.SEGMENT.IMPLEMENTATION。"""
 
 from datetime import datetime, timedelta
 from pathlib import Path

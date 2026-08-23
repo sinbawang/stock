@@ -24,10 +24,10 @@ python scripts/run_segment_safety_gates.py --only core consumer
 
 下列命令保留为明细拆分入口：
 
-1. 核心规则与回归样本
+1. 核心规则、契约一致性与回归样本
 
 ```powershell
-python -m pytest -q tests/test_segment.py tests/test_segment_rediscrimination_matrix.py tests/test_segment_regression_000591.py tests/test_segment_regression_00700.py tests/test_segment_regression_03690.py tests/test_segment_regression_300124.py
+python -m pytest -q tests/test_segment.py tests/test_segment_rediscrimination_matrix.py tests/test_zhongshu_contract.py tests/test_analysis_contract.py tests/test_segment_regression_000591.py tests/test_segment_regression_00700.py tests/test_segment_regression_03690.py tests/test_segment_regression_300124.py
 ```
 
 2. 起点锚定与跨周期一致性

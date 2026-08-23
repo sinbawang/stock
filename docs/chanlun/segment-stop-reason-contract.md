@@ -1,3 +1,11 @@
+---
+spec_id: SPEC.SEGMENT.STOP_REASON
+status: stable
+owner: chanlun
+applyTo: src/chanlun/segment.py
+tests: tests/test_segment_rediscrimination_matrix.py, tests/test_segment.py
+---
+
 # 线段 stop_reason 接口契约
 
 本页是线段 `stop_reason` 与 `stop_category` 的统一对外口径。

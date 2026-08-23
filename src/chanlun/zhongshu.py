@@ -74,6 +74,8 @@ def identify_zhongshu(items: List[Bi | Segment], *, structure_level: str = "bi")
     """
     识别中枢。
 
+    spec_id: SPEC.ZHONGSHU.CORE（见 docs/chanlun/zhongshu-core-spec.md）。
+
     规格文档 7.2-7.3:
     - 必须存在进入笔；走出笔用于确认中枢终结
     - 中枢本体位于进入与走出之间，至少由 3 笔构成

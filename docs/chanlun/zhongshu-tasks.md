@@ -240,6 +240,8 @@
 
 字段契约（首版冻结）：
 
+> `2026-08-23` 起，`transition_state` / `consumption_level` / `zs_monitor_alert` / `zs_monitor_bias` 四个字段族的枚举、label / note 投影已代码化为单一事实源 `src/chanlun/zhongshu_contract.py`（`get_zhongshu_contract()`），`analysis.py` 从该契约模块导入展示字典；`tests/test_zhongshu_contract.py` 锁定枚举完整性与投影一致性。本表是它的 Markdown 投影。
+
 | 字段 | 当前来源 | 允许值 / 结构 | 当前语义 | 消费红线 |
 | --- | --- | --- | --- | --- |
 | `structure_state.relationship.transition_state` | `build_structure_state(raw_bars, zhongshus)` | `none` / `same_type_extension` / `candidate_new_type` / `ongoing_new_type` | 标准中枢主链上的“前段已完成后，当前同级别走势处于什么转场阶段” | 这是 `ZS2` 当前唯一稳定 machine-readable 转场字段；下游不得再从自由文本反推同类语义。 |

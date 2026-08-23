@@ -360,7 +360,10 @@ def classify_stop_reason(stop_reason: Optional[str]) -> StopOutcomeCategory:
 
 
 def get_stop_reason_contract() -> dict[str, tuple[str, ...]]:
-    """Return the stable stop-reason contract grouped by outcome category."""
+    """Return the stable stop-reason contract grouped by outcome category.
+
+    spec_id: SPEC.SEGMENT.STOP_REASON（见 docs/chanlun/segment-stop-reason-contract.md）。
+    """
     return {
         category.value: STOP_REASONS_BY_CATEGORY[category]
         for category in StopOutcomeCategory
@@ -1612,6 +1615,7 @@ def identify_segments(
     """
     识别线段。
 
+    spec_id: SPEC.SEGMENT.IMPLEMENTATION（见 docs/chanlun/segment-implementation-guide.md）。
     第一阶段规则对应 docs/chanlun/chanlun-rule-spec.md 6.1-6.5：
     - 输入可传入全量笔序列，但实现内部只使用已确认笔
     - 至少 3 笔，方向交替，首尾笔同向

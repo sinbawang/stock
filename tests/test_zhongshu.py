@@ -1,4 +1,4 @@
-"""中枢识别单元测试。"""
+"""中枢识别单元测试。spec_id: SPEC.ZHONGSHU.CORE。"""
 
 from datetime import datetime
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu

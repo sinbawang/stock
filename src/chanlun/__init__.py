@@ -1,6 +1,8 @@
 """
 Chanlun (缠论) stock analysis framework.
 
+spec_id: SPEC.CHANLUN.THEORY / SPEC.CHANLUN.RULE。
+
 Core modules for Chan theory structure identification:
 - models: Data structures
 - normalize: Bar inclusion handling

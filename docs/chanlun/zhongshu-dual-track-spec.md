@@ -1,3 +1,11 @@
+---
+spec_id: SPEC.ZHONGSHU.DUAL_TRACK
+status: stable
+owner: chanlun
+applyTo: src/chanlun/zhongshu.py, src/chanlun/analysis.py
+tests: tests/test_zhongshu_contract.py, tests/test_zhongshu.py
+---
+
 # 中枢/类中枢双轨规范
 
 本页用于给实现、图表、报告三方提供统一术语和主辅消费规则。

@@ -22,6 +22,8 @@ SEGMENT_SAFETY_GATES = [
             "-q",
             "tests/test_segment.py",
             "tests/test_segment_rediscrimination_matrix.py",
+            "tests/test_zhongshu_contract.py",
+            "tests/test_analysis_contract.py",
         ],
     ),
     SafetyGate(

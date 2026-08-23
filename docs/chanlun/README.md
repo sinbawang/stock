@@ -31,6 +31,7 @@
 - [segment-original-review-matrix.md](segment-original-review-matrix.md): 线段原文复核矩阵
 - [segment-visual-example-library.md](segment-visual-example-library.md): 线段图文化示例库
 - [segment-safety-checklist.md](segment-safety-checklist.md): 线段改动安全清单（提交前/发布前闸门）
+- [spec-change-protocol.md](spec-change-protocol.md): 规格变更五步协议（git hook / PR 模板 / CI 闸门）
 - [zhongshu-core-spec.md](zhongshu-core-spec.md): 中枢核心理论规格
 - [zhongshu-review-entry.md](zhongshu-review-entry.md): 中枢 review 单页入口
 - [segment-stop-reason-contract.md](segment-stop-reason-contract.md): 线段 stop_reason 稳定接口契约

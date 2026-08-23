@@ -1,0 +1,49 @@
+name: spec-gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "src/chanlun/**"
+      - "tests/**"
+      - "scripts/run_segment_safety_gates.py"
+      - "docs/chanlun/**"
+
+permissions:
+  contents: read
+
+jobs:
+  chanlun-spec-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install minimal test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy pydantic pytest
+
+      # 说明：本 CI 只跑「纯 synthetic + 契约一致性 + 闸门逻辑」测试。
+      # 依赖 data/reports/** 真实 CSV 快照的 regression（如 test_segment_regression_*.py、
+      # test_zhongshu_regression_real_fixtures.py、test_chanlun_analysis.py 等）不在 CI 跑，
+      # 因为 data/ 目录被 .gitignore 排除，checkout 后不存在；这些留在本地/发布前手动闸门执行。
+      - name: Run contract + synthetic spec gates
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m pytest -q \
+            tests/test_bi.py \
+            tests/test_fractal.py \
+            tests/test_normalize.py \
+            tests/test_default_ranges.py \
+            tests/test_zhongshu.py \
+            tests/test_zhongshu_contract.py \
+            tests/test_analysis_contract.py \
+            tests/test_segment_rediscrimination_matrix.py \
+            tests/test_run_segment_safety_gates.py

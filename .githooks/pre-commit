@@ -1,0 +1,16 @@
+#!/bin/sh
+# SDD pre-commit hook：spec/contract 变更必须伴随 tests/ 变更。
+#
+# 安装（仓库根目录执行一次）：
+#   git config core.hooksPath .githooks
+#
+# 本地已安装的旧 hook 不受影响；用 --allow-docs-only 环境变量可跳过（typo 勘误）：
+#   SPEC_CHANGE_CHECK_ALLOW_DOCS_ONLY=1 git commit ...
+set -e
+
+# 定位仓库根目录（无论从哪个子目录提交）
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")"
+
+if [ -f "$ROOT_DIR/scripts/check_spec_change.py" ]; then
+    python "$ROOT_DIR/scripts/check_spec_change.py"
+fi

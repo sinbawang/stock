@@ -1,3 +1,5 @@
+"""缠论分析层综合测试。spec_id: SPEC.CHANLUN.THEORY / SPEC.CHANLUN.RULE。"""
+
 from __future__ import annotations
 
 from datetime import datetime

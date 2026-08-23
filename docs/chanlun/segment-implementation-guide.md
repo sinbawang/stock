@@ -1,3 +1,11 @@
+---
+spec_id: SPEC.SEGMENT.IMPLEMENTATION
+status: stable
+owner: chanlun
+applyTo: src/chanlun/segment.py
+tests: tests/test_segment.py, tests/test_segment_regression_suite.py
+---
+
 # 线段实现专题
 
 文档入口：

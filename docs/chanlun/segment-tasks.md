@@ -44,7 +44,7 @@
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
 | T2 | 真实窗口 regressions | 高 | 维护 `000591`、`300124`、`00700`、`03690` 的 focused regressions | 进行中 | 这是当前线段层最直接的稳定性护栏；`2026-08-23` 在 `test_segment_regression_suite.py` 补齐首选级别（1m/5m）真实窗口场景（`000591/00700/03690/300124` 各 1m+5m，共 8 个），并新增两个 1m 聚焦测试锁定 `00700 1m` 的 overlap-reuse 边界与 `300124 1m` 的「中间 pending 段保留在交替链」口径。 |
-| T3 | 发布前安全闸门 | 高 | 保证线段改动不会把未解释漂移传到中枢层 | 进行中 | `2026-08-23` 修复 `scripts/run_segment_safety_gates.py` 的 `regression` 闸门缺口：补入 `tests/test_segment_regression_300124.py`（文档 T2 明确把 `300124` 列为四个维护回归标的之一，但闸门此前漏掉它），并同步更新 [segment-safety-checklist.md](segment-safety-checklist.md) 明细拆分入口命令；`core/regression/consumer` 三闸门 dry-run 与实际运行均通过。 |
+| T3 | 发布前安全闸门 | 高 | 保证线段改动不会把未解释漂移传到中枢层 | 进行中 | `2026-08-23` 修复 `scripts/run_segment_safety_gates.py` 的 `regression` 闸门缺口：补入 `tests/test_segment_regression_300124.py`（文档 T2 明确把 `300124` 列为四个维护回归标的之一，但闸门此前漏掉它），并同步更新 [segment-safety-checklist.md](segment-safety-checklist.md) 明细拆分入口命令；`core/regression/consumer` 三闸门 dry-run 与实际运行均通过。同日又把 `tests/test_zhongshu_contract.py`、`tests/test_analysis_contract.py` 两个契约一致性测试并入 `core` 闸门，发布前闸门现覆盖「核心规则 + 契约漂移 + 回归样本 + 消费冒烟」四类护栏。 |
 | T1 | synthetic coverage | 中 | 继续锁 gap / reclaim / reverse_break / preprocess-tail 交界 | 进行中 | 已有多组基础 synthetic 闸门，复杂组合交界仍待继续扩充；`2026-08-23` 新增的 1m/5m 真实窗口已覆盖 `same_direction_not_extending` / `feature_sequence_gap_fractal` / overlap-reuse 等组合交界。同日确认 `reverse_break_after_gap` 是契约中声明但实现当前不产出的保留码（文档所述"首根反向笔未破关键点 → 同向恢复失败 → 再次反向扩张确认"场景当前解析为普通 `reverse_break`），已新增 synthetic 引脚 `test_reverse_break_after_gap_documented_scenario_pins_current_resolution` 锁住现状并显式提示未来行为变更；若需真正产出该码，属于 S3 输出口径代码任务而非纯测试补齐。 |
 
 ### 代码任务
