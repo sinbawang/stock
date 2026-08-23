@@ -603,6 +603,44 @@ def test_theory_mode_looks_ahead_two_reverse_bis_for_stalled_down_gap_fractal() 
     assert practical[0].stop_reason == "reverse_break"
 
 
+def test_theory_mode_looks_ahead_three_reverse_bis_for_stalled_down_gap_fractal() -> None:
+    """06088 5m S5（对称 down 版）：停扫后缺口底分型右元素在第三根反向笔。
+
+    相比 S10 案例，中间元素再多包含一根反向笔（bi13），使分型右元素推迟到
+    停扫点之后的第三根反向笔（bi15），验证弱同向笔分支的有界前视深度 >= 3。
+    """
+    bis = [
+        _bi(0, BiDirection.DOWN, 6.155, 5.800),
+        _bi(1, BiDirection.UP, 6.000, 5.800),
+        _bi(2, BiDirection.DOWN, 6.000, 5.820),
+        _bi(3, BiDirection.UP, 6.000, 5.820),
+        _bi(4, BiDirection.DOWN, 6.000, 5.140),
+        _bi(5, BiDirection.UP, 5.200, 5.140),   # 左元素
+        _bi(6, BiDirection.DOWN, 5.200, 5.105),
+        _bi(7, BiDirection.UP, 5.150, 5.105),   # 中间开始
+        _bi(8, BiDirection.DOWN, 5.150, 4.955),  # 新低
+        _bi(9, BiDirection.UP, 5.160, 4.955),    # 包含 bi7
+        _bi(10, BiDirection.DOWN, 5.160, 5.105),  # 弱 down
+        _bi(11, BiDirection.UP, 5.135, 5.105),    # 被 bi9 包含
+        _bi(12, BiDirection.DOWN, 5.135, 5.070),  # 弱 down
+        _bi(13, BiDirection.UP, 5.160, 4.950),    # 继续包含中间
+        _bi(14, BiDirection.DOWN, 5.160, 5.060),  # 弱 down
+        _bi(15, BiDirection.UP, 5.210, 5.060),    # 右元素（第三根反向笔）
+        _bi(16, BiDirection.DOWN, 5.210, 5.160),
+        _bi(17, BiDirection.UP, 5.400, 5.160),
+    ]
+
+    theory = identify_segments(bis, termination_mode="theory")
+    assert theory[0].direction == BiDirection.DOWN
+    assert theory[0].is_confirmed is True
+    assert theory[0].stop_reason == "feature_sequence_gap_fractal"
+
+    practical = identify_segments(bis, termination_mode="practical")
+    assert practical[0].direction == BiDirection.DOWN
+    assert practical[0].is_confirmed is True
+    assert practical[0].stop_reason == "reverse_break"
+
+
 def test_reverse_break_after_gap_documented_scenario_pins_current_resolution() -> None:
     """锁住文档 `reverse_break_after_gap` 场景的当前实现解析。
 

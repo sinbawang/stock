@@ -1363,18 +1363,17 @@ def _extend_segment(
                         break_bi_id = bis[break_idx].bi_id
                         break
                     if not gap_false_locked:
-                        gap_candidate_idx = _gap_feature_sequence_candidate(
-                            bis,
-                            reverse_indices + [cursor + 2],
-                            direction,
-                        )
-                        # 弱同向笔时向后多看一根反向笔，让缺口分型有机会补全
-                        if gap_candidate_idx is None and cursor + 4 < len(bis):
-                            gap_candidate_idx = _gap_feature_sequence_candidate(
-                                bis,
-                                reverse_indices + [cursor + 2, cursor + 4],
-                                direction,
-                            )
+                        # 弱同向笔时向后有界多看几根反向笔，让缺口分型有机会补全
+                        gap_candidate_idx = None
+                        lookahead_rev = reverse_indices + [cursor + 2]
+                        for _ in range(3):
+                            gap_candidate_idx = _gap_feature_sequence_candidate(bis, lookahead_rev, direction)
+                            if gap_candidate_idx is not None:
+                                break
+                            next_idx = lookahead_rev[-1] + 2
+                            if next_idx >= len(bis):
+                                break
+                            lookahead_rev = lookahead_rev + [next_idx]
                         pending_gap_break_idx = _replace_gap_candidate(
                             pending_gap_break_idx,
                             gap_candidate_idx,
@@ -1486,18 +1485,17 @@ def _extend_segment(
                             break_bi_id = bis[break_idx].bi_id
                             break
                     if not gap_false_locked:
-                        gap_candidate_idx = _gap_feature_sequence_candidate(
-                            bis,
-                            reverse_indices + [cursor + 2],
-                            direction,
-                        )
-                        # 弱同向笔时向后多看一根反向笔，让缺口分型有机会补全
-                        if gap_candidate_idx is None and cursor + 4 < len(bis):
-                            gap_candidate_idx = _gap_feature_sequence_candidate(
-                                bis,
-                                reverse_indices + [cursor + 2, cursor + 4],
-                                direction,
-                            )
+                        # 弱同向笔时向后有界多看几根反向笔，让缺口分型有机会补全
+                        gap_candidate_idx = None
+                        lookahead_rev = reverse_indices + [cursor + 2]
+                        for _ in range(3):
+                            gap_candidate_idx = _gap_feature_sequence_candidate(bis, lookahead_rev, direction)
+                            if gap_candidate_idx is not None:
+                                break
+                            next_idx = lookahead_rev[-1] + 2
+                            if next_idx >= len(bis):
+                                break
+                            lookahead_rev = lookahead_rev + [next_idx]
                         pending_gap_break_idx = _replace_gap_candidate(
                             pending_gap_break_idx,
                             gap_candidate_idx,
