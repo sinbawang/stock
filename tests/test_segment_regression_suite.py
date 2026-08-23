@@ -17,6 +17,22 @@ SCENARIOS = [
         "min_preprocessing": 0,
     },
     {
+        "name": "000591-1m",
+        "csv_path": ROOT / "data" / "reports" / "000591" / "1m" / "analyze" / "000591_1m_20260730_to_20260820.csv",
+        "expected_stop_reasons": {"feature_sequence_fractal", "reverse_break", "same_direction_not_extending"},
+        "min_segments": 3,
+        "min_confirmed": 2,
+        "min_preprocessing": 0,
+    },
+    {
+        "name": "000591-5m",
+        "csv_path": ROOT / "data" / "reports" / "000591" / "5m" / "analyze" / "000591_5m_20260717_to_20260820.csv",
+        "expected_stop_reasons": {"reverse_break"},
+        "min_segments": 2,
+        "min_confirmed": 2,
+        "min_preprocessing": 0,
+    },
+    {
         "name": "000591-60m",
         "csv_path": ROOT / "data" / "reports" / "000591" / "60m" / "analyze" / "000591_60m_20260213_to_20260618.csv",
         "expected_stop_reasons": {"reverse_break"},
@@ -31,6 +47,22 @@ SCENARIOS = [
         "min_segments": 6,
         "min_confirmed": 5,
         "min_preprocessing": 0,
+    },
+    {
+        "name": "00700-1m",
+        "csv_path": ROOT / "data" / "reports" / "00700" / "1m" / "analyze" / "00700_1m_20260804_to_20260820.csv",
+        "expected_stop_reasons": {"feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break", "same_direction_not_extending"},
+        "min_segments": 10,
+        "min_confirmed": 9,
+        "min_preprocessing": 1,
+    },
+    {
+        "name": "00700-5m",
+        "csv_path": ROOT / "data" / "reports" / "00700" / "5m" / "analyze" / "00700_5m_20260722_to_20260820.csv",
+        "expected_stop_reasons": {"exhausted_confirmed_bis", "feature_sequence_fractal", "reverse_break", "same_direction_not_extending"},
+        "min_segments": 8,
+        "min_confirmed": 6,
+        "min_preprocessing": 1,
     },
     {
         "name": "00700-60m",
@@ -49,6 +81,22 @@ SCENARIOS = [
         "min_preprocessing": 1,
     },
     {
+        "name": "03690-1m",
+        "csv_path": ROOT / "data" / "reports" / "03690" / "1m" / "analyze" / "03690_1m_20260804_to_20260820.csv",
+        "expected_stop_reasons": {"exhausted_confirmed_bis", "feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break", "same_direction_not_extending"},
+        "min_segments": 12,
+        "min_confirmed": 10,
+        "min_preprocessing": 1,
+    },
+    {
+        "name": "03690-5m",
+        "csv_path": ROOT / "data" / "reports" / "03690" / "5m" / "analyze" / "03690_5m_20260722_to_20260820.csv",
+        "expected_stop_reasons": {"feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break"},
+        "min_segments": 10,
+        "min_confirmed": 10,
+        "min_preprocessing": 0,
+    },
+    {
         "name": "03690-60m",
         "csv_path": ROOT / "data" / "reports" / "03690" / "60m" / "analyze" / "03690_60m_20260223_to_20260626.csv",
         "expected_stop_reasons": {"same_direction_not_extending", "reverse_break"},
@@ -65,6 +113,22 @@ SCENARIOS = [
         "min_preprocessing": 1,
     },
     {
+        "name": "300124-1m",
+        "csv_path": ROOT / "data" / "reports" / "300124" / "1m" / "analyze" / "300124_1m_20260730_to_20260820.csv",
+        "expected_stop_reasons": {"exhausted_confirmed_bis", "feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break", "same_direction_not_extending"},
+        "min_segments": 20,
+        "min_confirmed": 18,
+        "min_preprocessing": 1,
+    },
+    {
+        "name": "300124-5m",
+        "csv_path": ROOT / "data" / "reports" / "300124" / "5m" / "analyze" / "300124_5m_20260717_to_20260820.csv",
+        "expected_stop_reasons": {"exhausted_confirmed_bis", "feature_sequence_fractal", "reverse_break", "same_direction_not_extending"},
+        "min_segments": 6,
+        "min_confirmed": 5,
+        "min_preprocessing": 1,
+    },
+    {
         "name": "300124-60m",
         "csv_path": ROOT / "data" / "reports" / "300124" / "60m" / "analyze" / "300124_60m_20260213_to_20260618.csv",
         "expected_stop_reasons": {"feature_sequence_fractal", "reverse_break"},
@@ -76,10 +140,10 @@ SCENARIOS = [
 
 
 CROSS_CYCLE_GROUPS = {
-    "000591": ["000591-day", "000591-60m"],
-    "00700": ["00700-30m", "00700-60m"],
-    "03690": ["03690-30m", "03690-60m"],
-    "300124": ["300124-15m", "300124-60m"],
+    "000591": ["000591-day", "000591-1m", "000591-5m", "000591-60m"],
+    "00700": ["00700-30m", "00700-1m", "00700-5m", "00700-60m"],
+    "03690": ["03690-30m", "03690-1m", "03690-5m", "03690-60m"],
+    "300124": ["300124-15m", "300124-1m", "300124-5m", "300124-60m"],
 }
 
 
@@ -194,6 +258,9 @@ def test_regression_suite_dual_mode_has_no_unknown_stop_category(scenario: dict[
 KEY_LANDMARK_SCENARIOS = [
     "00700-60m",
     "300124-60m",
+    "00700-1m",
+    "300124-1m",
+    "03690-1m",
 ]
 
 
@@ -291,3 +358,81 @@ def test_300124_60m_keeps_mixed_overlap_and_restart_anchors() -> None:
     assert fifth.start_bi_id == fourth.break_bi_id
     assert fifth.start_bi_id == 17
     assert fifth.break_bi_id == 20
+
+
+def test_00700_1m_practical_keeps_mixed_stop_reasons_with_overlap_reuse_anchors() -> None:
+    """00700 1m（首选级别）：锁住混合 stop_reason 链与 overlap-reuse 边界。
+
+    段 3 `down 19-31 break=34` 后段 4 `up 32-34` 起点 32 < break 34，
+    段 6 `up 40-44 break=47` 后段 7 `down 45-49` 起点 45 < break 47：
+    这两处都是「下一段在上一段 break 之前复用重叠区域」的 overlap-reuse 锚点，
+    对应 S3 重写/吸收/复用输出口径不得漂移。
+    """
+    scenario = next(item for item in SCENARIOS if item["name"] == "00700-1m")
+    csv_path = scenario["csv_path"]
+    assert isinstance(csv_path, Path)
+    assert csv_path.exists(), f"missing fixture csv: {csv_path}"
+
+    practical_segments = identify_segments_from_csv(csv_path, termination_mode="practical")
+
+    assert len(practical_segments) >= 8
+    seg3 = practical_segments[3]
+    seg4 = practical_segments[4]
+    seg6 = practical_segments[6]
+    seg7 = practical_segments[7]
+
+    # overlap-reuse #1: down 19-31 reverse_break break=34, next up 32-34 起点在 break 之前
+    assert seg3.direction.value == "down"
+    assert seg3.start_bi_id == 19
+    assert seg3.end_bi_id == 31
+    assert seg3.break_bi_id == 34
+    assert seg3.stop_reason == "reverse_break"
+    assert seg4.direction.value == "up"
+    assert seg4.start_bi_id == 32
+    assert seg4.start_bi_id == seg3.break_bi_id - 2
+    assert seg4.stop_reason == "feature_sequence_fractal"
+
+    # overlap-reuse #2: up 40-44 reverse_break break=47, next down 45-49 起点在 break 之前
+    assert seg6.direction.value == "up"
+    assert seg6.start_bi_id == 40
+    assert seg6.end_bi_id == 44
+    assert seg6.break_bi_id == 47
+    assert seg6.stop_reason == "reverse_break"
+    assert seg7.direction.value == "down"
+    assert seg7.start_bi_id == 45
+    assert seg7.start_bi_id == seg6.break_bi_id - 2
+    assert seg7.break_bi_id == 50
+    assert seg7.stop_reason == "reverse_break"
+
+
+def test_300124_1m_practical_keeps_mixed_stop_reasons_with_pending_middle_tail() -> None:
+    """300124 1m（首选级别）：锁住混合 stop_reason 链与「历史中间段仍带 pending 停靠标签」。
+
+    段 5 `down 53-55 same_direction_not_extending is_confirmed=False` 之后仍有
+    已确认段 6/7（up 58-72、down 73-79），锁住「中间 pending 段在后续段存在时
+    必须留在交替链中、不能被裁掉」的口径（否则该窗口会塌缩出错误的段集合）。
+    """
+    scenario = next(item for item in SCENARIOS if item["name"] == "300124-1m")
+    csv_path = scenario["csv_path"]
+    assert isinstance(csv_path, Path)
+    assert csv_path.exists(), f"missing fixture csv: {csv_path}"
+
+    practical_segments = identify_segments_from_csv(csv_path, termination_mode="practical")
+
+    assert len(practical_segments) >= 8
+    expected_head = [
+        ("up", 2, 6, "reverse_break", True),
+        ("down", 7, 13, "reverse_break", True),
+        ("up", 14, 26, "feature_sequence_fractal", True),
+        ("down", 27, 31, "reverse_break", True),
+        ("up", 32, 52, "reverse_break", True),
+        ("down", 53, 55, "same_direction_not_extending", False),
+        ("up", 58, 72, "reverse_break", True),
+        ("down", 73, 79, "feature_sequence_fractal", True),
+    ]
+    for segment, (direction, start, end, reason, confirmed) in zip(practical_segments, expected_head):
+        assert segment.direction.value == direction
+        assert segment.start_bi_id == start
+        assert segment.end_bi_id == end
+        assert segment.stop_reason == reason
+        assert segment.is_confirmed is confirmed

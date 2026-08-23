@@ -36,6 +36,7 @@ SEGMENT_SAFETY_GATES = [
             "tests/test_segment_regression_000591.py",
             "tests/test_segment_regression_00700.py",
             "tests/test_segment_regression_03690.py",
+            "tests/test_segment_regression_300124.py",
             "tests/test_segment_lesson_boundary_fixtures.py",
         ],
     ),
