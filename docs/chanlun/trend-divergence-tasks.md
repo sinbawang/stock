@@ -47,7 +47,7 @@
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
 | T1 | 走势类型主链 regressions | 高 | 锁 repeated rebuild 下的类型链不漂移 | 进行中 | TD1 主链已成型，已有 `type_chain` 单例、空集与复杂前缀链回归（`2026-08-23` 补 `test_build_structure_state_type_chain_folds_multiple_completed_runs`，锁 up->down->range 三 run 折叠）。 |
-| T2 | 趋势背驰 / 盘整背驰回归 | 中 | 为正例、反例、易混淆例建立最小自动化锚点 | 进行中 | 当前已能做局部字段断言，但严格回归链仍未闭合。 |
+| T2 | 趋势背驰 / 盘整背驰回归 | 中 | 为正例、反例、易混淆例建立最小自动化锚点 | 进行中 | 趋势/盘整背驰正例 + 反例（离开段未突破 / 未试探边界）均已落地；`2026-08-23` 补「趋势 vs 盘整分轨互斥」回归（`test_analyze_chanlun_signals_trend_and_range_divergence_tracks_are_mutually_exclusive`），锁同一结构不会同时 active 两条背驰轨。 |
 | T3 | 字段与消费核验 | 中 | 核验 `post_divergence_route`、`oscillation_rhythm_state` 不被误升为 confirmed | 完成 | `post_divergence_route` 已按 `strict` 输出，非严格背驰回落到 `last_zs_extension`。 |
 
 ### 代码任务

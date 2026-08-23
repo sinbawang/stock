@@ -479,6 +479,46 @@ def test_analyze_chanlun_signals_trend_divergence_without_departure_confirmation
     assert signals["post_divergence_route"] == "last_zs_extension"
 
 
+def test_analyze_chanlun_signals_trend_and_range_divergence_tracks_are_mutually_exclusive() -> None:
+    """趋势 vs 盘整分轨互斥：同一次信号不会同时 active trend 与 range。
+
+    TD2/TD3 通过 `ongoing_type` 分轨（up/down -> trend 轨，range -> range 轨），
+    不允许同一结构同时落入两条背驰判定轨（TD5 第五条「趋势 vs 盘整分轨」案例）。
+    """
+    # 趋势轨：ongoing_type=up + top_divergence
+    trend_zhongshus = [
+        _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1),
+        _zhongshu(2, zs_low=11.5, zs_high=12.2, day=4),
+    ]
+    trend_bis = [
+        _bi(10, BiDirection.UP, high=12.0, low=11.3, day=4),
+        _bi(11, BiDirection.DOWN, high=11.8, low=11.4, day=5),
+        _bi(12, BiDirection.UP, high=12.6, low=11.6, day=6),
+    ]
+    trend_macd = [
+        SimpleNamespace(ts=trend_bis[0].end_ts, macd=5.0, dif=1.2),
+        SimpleNamespace(ts=trend_bis[2].end_ts, macd=3.0, dif=0.9),
+    ]
+    trend_signals = analyze_chanlun_signals([], trend_bis, trend_zhongshus, trend_macd)
+    assert trend_signals["divergence"]["trend"]["active"] is True
+    assert trend_signals["divergence"]["range"]["active"] is False
+
+    # 盘整轨：ongoing_type=range + top_divergence
+    range_zs = _zhongshu(10, zs_low=10.0, zs_high=10.8, day=10)
+    range_bis = [
+        _bi(1, BiDirection.UP, high=10.7, low=10.2, day=10),
+        _bi(2, BiDirection.DOWN, high=10.6, low=10.1, day=11),
+        _bi(3, BiDirection.UP, high=11.0, low=10.3, day=12),
+    ]
+    range_macd = [
+        SimpleNamespace(ts=range_bis[0].end_ts, macd=4.0, dif=1.0),
+        SimpleNamespace(ts=range_bis[2].end_ts, macd=2.0, dif=0.8),
+    ]
+    range_signals = analyze_chanlun_signals([], range_bis, [range_zs], range_macd)
+    assert range_signals["divergence"]["range"]["active"] is True
+    assert range_signals["divergence"]["trend"]["active"] is False
+
+
 def test_analyze_chanlun_signals_emits_pre_breakdown_when_close_presses_lower_zs_edge() -> None:
     raw_bars = [
         SimpleNamespace(ts=datetime(2026, 5, 1, 10, 30), close=10.55),
