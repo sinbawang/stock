@@ -157,3 +157,43 @@ flowchart TD
 
 真实过渡态样本绑定：暂被上游 `1m pre_breakdown` 锚点漂移阻塞（见 [zhongshu-tasks.md](zhongshu-tasks.md) ZS5.3.b），待重新选锚点后回填。
 
+## 9. 正例 / 反例 / 易混淆例（数值化卡片）
+
+下面用「结构语义 + 关键数值 + 字段结论」把正例、反例、易混淆例写成可直接 review 的卡片。
+
+### 9.1 趋势背驰正例
+
+- 结构语义：`ongoing_type=up`，最近中枢 `ZG=100`，离开段向上突破 `ZG`。
+- 关键数值：离开段 `bi.high=110 > 100`；`strength_comparison.decayed=True`。
+- 字段结论：`divergence.trend.active=True`、`strict=True`、`departure_confirmed=True`。
+- 去向：`post_divergence_route=higher_level_reverse_trend`。
+
+### 9.2 趋势背驰反例（力度衰减但离开段未突破）
+
+- 结构语义：`ongoing_type=up`，最近中枢 `ZG=100`，离开段未突破 `ZG`。
+- 关键数值：离开段 `bi.high=98 < 100`；`strength_comparison.decayed=True`。
+- 字段结论：`divergence.trend.active=True` 但 `strict=False`、`departure_confirmed=False`。
+- 去向：`post_divergence_route=last_zs_extension`。
+- 消费红线：这是「力度衰减迹象」，不得写成严格趋势背驰。
+
+### 9.3 盘整背驰正例
+
+- 结构语义：`ongoing_type=range`，同一中枢语义下两次同方向试探，后一次触及边界。
+- 关键数值：试探 `bi.high >= ZG=100`；`strength_comparison.decayed=True`。
+- 字段结论：`divergence.range.active=True`、`strict=True`、`touches_boundary=True`。
+- 去向：`post_divergence_route=higher_level_range`。
+
+### 9.4 盘整背驰反例（力度衰减但未试探到边界）
+
+- 结构语义：`ongoing_type=range`，同方向试探未触及中枢边界。
+- 关键数值：试探 `bi.high=98 < ZG=100`；`strength_comparison.decayed=True`。
+- 字段结论：`divergence.range.active=True` 但 `strict=False`、`touches_boundary=False`。
+- 去向：`post_divergence_route=last_zs_extension`。
+- 消费红线：只是普通震荡力度衰减，不是严格盘整背驰。
+
+### 9.5 易混淆例（趋势 vs 盘整分轨）
+
+- 结构语义：同一结构只落入一条判定轨——`ongoing_type=up/down` 走 `trend` 轨，`ongoing_type=range` 走 `range` 轨。
+- 字段结论：`divergence.trend.active` 与 `divergence.range.active` 互斥，不会同时为真。
+- 消费红线：不得把「盘整内同向试探力度衰减」误写成趋势背驰。
+

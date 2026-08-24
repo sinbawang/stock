@@ -112,6 +112,28 @@ tests: tests/test_chanlun_analysis.py
 - 若只是补充中枢主辅消费约束，优先改 [zhongshu-dual-track-spec.md](zhongshu-dual-track-spec.md)。
 - 若只是补充图文化案例，不要把案例堆进本文件，转去样例库或案例包。
 
+## 11. 应然 ↔ 实然 逐条对应（machine-readable 字段映射）
+
+本节把前文应然口径逐条对应到 `src/chanlun/analysis.py` 当前产出的 machine-readable 字段，
+并标注每类属于「严格结论 / 工程近似 / 监视提示」三层中的哪一层。
+
+| 应然条文 | 实然字段 | 层次 | 消费红线 |
+| --- | --- | --- | --- |
+| §2 走势类型 | `structure_state.type_chain` / `last_completed` / `current_ongoing` | 严格结论（工程唯一分解） | `range/up/down` 来自 live-run 切分，非严格递归分解 |
+| §2 同级别分解唯一性 | `same_level_decomposition_mode`（`single_confirmed` / `dual_interpretation_pending`） | 严格结论 gate | `dual_interpretation_pending` 时统一降级 |
+| §2 消费等级 | `same_level_consumption_level`（`auxiliary` / `pending` / `confirmed`） | 严格结论 gate | 三态不得混用 |
+| §2 转场 | `relationship.transition_state`（`none` / `same_type_extension` / `candidate_new_type` / `ongoing_new_type`） | 严格结论 gate | 只表达「是否切到新走势」，不单独确认背驰 |
+| §3 背驰比较对象 | `divergence.top` / `divergence.bottom`（`signal_bi_id` / `time` / `price`） | 工程近似（MACD 力度代理） | 只表达「力度衰减迹象」 |
+| §4 趋势背驰 | `divergence.trend.strict`（+ `reference_zs_id` / `departure_confirmed` / `strength_comparison`） | 严格结论 | `strict=True` 才可作严格趋势背驰 |
+| §5 盘整背驰 | `divergence.range.strict`（+ `reference_zs_id` / `touches_boundary` / `strength_comparison`） | 严格结论 | `strict=True` 才可作严格盘整背驰 |
+| §6 类背驰 | `divergence.trend.active=True` 但 `strict=False`（或 `range` 同构） | 工程近似 | 不得升级为严格背驰 |
+| §7 背驰后去向 | `post_divergence_route`（`higher_level_reverse_trend` / `higher_level_range` / `last_zs_extension`） | 严格结论（有限分支） | 非严格背驰回落 `last_zs_extension` |
+| §8 指标地位 | `strength_comparison`（MACD `macd_sum_abs` 力度代理） | 监视提示 | 指标只作力度代理，不与结构主结论冲突 |
+| 第39课 震荡节奏 | `oscillation_rhythm_state`（`pending` / `up_bias` / `down_bias` / `balanced`） | 监视提示 | 不得越级确认买卖点 |
+
+字段消费语义的完整口径见 [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md) 与
+[zhongshu-dual-track-spec.md](zhongshu-dual-track-spec.md)。
+
 ## 11. 关联文档
 
 - [chanlun-rule-spec.md](chanlun-rule-spec.md)
