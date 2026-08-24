@@ -714,6 +714,7 @@ def test_stop_reason_category_buckets_match_expected_semantics() -> None:
         "feature_sequence_fractal",
         "feature_sequence_gap_fractal",
         "feature_sequence_gap_fractal_delayed_true",
+        "first_bi_break_then_third_extends",
     )
     assert contract[StopOutcomeCategory.FALLBACK_CONFIRMED.value] == (
         "reverse_break",

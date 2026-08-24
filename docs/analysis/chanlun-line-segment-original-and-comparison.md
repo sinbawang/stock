@@ -107,7 +107,7 @@
 
 并且明确记录这一次是“严格理论确认”还是“工程兜底确认”。
 
-### 3.3 当前实现没有把“转折点起始第一笔破坏前线段”的边界情况正式建模
+### 3.3 “转折点起始第一笔破坏前线段”的边界情况已部分正式建模
 
 原文特别强调了一个很关键的边界条件：
 
@@ -115,9 +115,9 @@
 
 而如果第三笔完全落在第一笔的范围内，则需要继续看是先破结束位置还是先破起始位置，才能决定是新线段成立还是旧线段继续延续。
 
-当前代码中虽然有 `_reclaims_transition_back_to_prior_segment()`，但它主要是通过“反向笔是否重新回到原段方向/破坏起点”来做回收判断，属于经验式处理，并没有把原文那个“中间地带”的待定状态完整表达出来。
+当前实现已把「第一笔破坏前线段 + 第三笔破第一笔结束位置」这条主路径正式建模为理论确认：`_first_bi_breaks_prior_segment_and_third_extends()` 在首个转折轮次检测该条件，满足时以 `first_bi_break_then_third_extends`（`theory_confirmed`）确认前线段结束。
 
-建议：增加一个明确的“待定过渡态”（例如 `transition_pending`），在这类边界案例中不急着给出最终结论，而是等后续再看是否出现三笔成立的新线段。
+仍待补充的是「第三笔完全落在第一笔范围内」的中间地带：当前 `_reclaims_transition_back_to_prior_segment()` 主要通过“反向笔是否重新回到原段方向/破坏起点”来做回收判断，属于经验式处理；`transition_pending` 已作为待定过渡态存在，但该分支尚未完整覆盖原文的先破终点/先破起点两种后续分叉的严格几何判据。
 
 ### 3.4 当前实现对“线段前三笔必须有重叠”的约束是做了，但后续扩展/过渡阶段没有保留原文那种“同一特征序列内的包含关系”语义
 
@@ -208,7 +208,7 @@
 | --- | --- | --- | --- |
 | 无缺口特征序列分型成立，旧段终结 | `_evaluate_theory_stop()` -> `_feature_sequence_break()` | `feature_sequence_fractal` / `theory_confirmed` | 可直接作为理论终结信号使用 |
 | 缺口分型后经再分辨确认终结 | `_evaluate_gap_candidate_state()` | `feature_sequence_gap_fractal` 或 `feature_sequence_gap_fractal_delayed_true` / `theory_confirmed` | 若为 delayed_true，建议在 UI 或报告中标注“延迟确认” |
-| 转折第一笔破坏旧段后，第三笔先破第一笔终点 | `_evaluate_transition_state()` | `TransitionState.NONE`（新段路径继续） | 后续按新段方向继续观察，不回收旧段 |
+| 转折第一笔破坏旧段后，第三笔先破第一笔终点 | `_first_bi_breaks_prior_segment_and_third_extends()` | `first_bi_break_then_third_extends` / `theory_confirmed` | 前线段确认结束，下一段从该转折第一笔开始 |
 | 转折第一笔破坏旧段后，第三笔先破第一笔起点 | `_evaluate_transition_state()` | `TransitionState.RECLAIMED`（回收旧段） | 视为旧段延续，前一次“新段尝试”失效 |
 | 证据不足但已出现初始破坏，等待后续确认 | `_extend_segment()` 过渡态分支 | `transition_pending` / `pending` | 作为“待确认结构”，不应当作已确认终结 |
 | 工程兜底终结（非理论主路径） | `_extend_segment()` fallback 分支 | `reverse_break` / `fallback_confirmed` | 建议与 theory_confirmed 分开展示，避免混淆 |
