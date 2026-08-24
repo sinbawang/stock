@@ -158,13 +158,13 @@
 
 - 已新增 [trend-divergence-visual-example-library.md](trend-divergence-visual-example-library.md) 第 8 节「案例 → 回归映射表」：趋势背驰正例/反例、盘整背驰正例/反例、趋势 vs 盘整分轨五条案例均绑定具名 pytest（`test_chanlun_analysis.py`）。
 - 真实样本锚点依赖 `zhongshu` 模块的 `1m` 预警锚点；原 `000651 1m pre_breakdown` 锚点已漂移（见 [zhongshu-tasks.md](zhongshu-tasks.md) ZS5.3.b），当前数据+代码下已变成「三买 confirmed」。
-- 背驰模块自身尚无独立的真实 `1m/5m` 过渡态样本锚点；`test_zhongshu_structure_text.py::test_real_1m_pre_breakdown_sample_...` 目前暂按过期 fixture 内容维持，非长期正确态。
-- 因此 TD5 的「绑定真实过渡态样本」仍需先解决上游锚点漂移，再补背驰自身案例。
+- 已补背驰模块自身的真实 `1m` 过渡态样本锚点（replay 驱动，见 `build/probe_intraday_prebreak_sample.py` 已暴露 `divergence_*` / `post_divergence_route` / `oscillation_rhythm_state` 字段）：`000651 2026-08-12 10:38`（盘整背驰迹象、非严格、`dual_interpretation_pending`）与 `000651 2026-08-14 10:57`（严格盘整背驰、`higher_level_range`），由 `tests/test_chanlun_analysis.py` 两个 replay gate 锁住。
+- 趋势背驰真实样本仍缺：当前 `000651 1m` 窗口以盘整（`range`）为主，暂未找到 `ongoing_type=up/down` 的真实趋势背驰 cutoff，需在其它标的/级别继续扫描。
 
 ## 当前 blocker
 
-- TD1-TD4 已闭环；剩余 TD5 被「真实样本锚点漂移」卡住：原 `1m pre_breakdown` 锚点已漂成三买，需重新选锚点或重新生成 fixture。
-- 背驰案例库与图示库仍缺正例/反例/易混淆例的系统化绑定。
+- TD1-TD4 已闭环；TD5 的「盘整背驰真实过渡态 / 严格样本」已补（replay 驱动，`000651` 双锚点）。
+- 剩余：趋势背驰真实样本（当前 `1m` 数据以盘整为主，需在其它标的/级别扫描）；背驰案例库与图示库正例/反例/易混淆例的进一步系统化绑定。
 
 ## 推荐执行顺序
 

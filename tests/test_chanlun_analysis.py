@@ -780,6 +780,42 @@ def test_real_1m_pre_breakdown_replay_sample_03690_preserves_independent_gate() 
     assert "确认三卖" in payload["advice_text"]
 
 
+def test_real_1m_range_divergence_replay_sample_000651_transition_pending() -> None:
+    # 背驰模块首个真实 1m 过渡态样本（盘整背驰迹象、非严格）：
+    # ongoing_type=range + 同向下探力度衰减，但未试探到中枢边界 ->
+    # strict=False，route 回落 last_zs_extension，分解仍 dual_interpretation_pending。
+    rows = probe_module._load_rows("000651", "1m")
+    payload = probe_module._replay("000651", "格力电器", "2026-08-12 10:38", rows)
+
+    assert payload["cutoff"] == "2026-08-12 10:38"
+    assert payload["ongoing_type"] == "range"
+    assert payload["divergence_trend_active"] is False
+    assert payload["divergence_range_active"] is True
+    assert payload["divergence_range_strict"] is False
+    assert payload["divergence_range_touches_boundary"] is False
+    assert payload["post_divergence_route"] == "last_zs_extension"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["same_level_consumption_level"] == "pending"
+
+
+def test_real_1m_range_divergence_replay_sample_000651_strict() -> None:
+    # 背驰模块首个真实 1m 严格盘整背驰正例：
+    # ongoing_type=range + 同向下探试探到中枢边界 + 力度衰减 ->
+    # strict=True，route=higher_level_range，分解 single_confirmed。
+    rows = probe_module._load_rows("000651", "1m")
+    payload = probe_module._replay("000651", "格力电器", "2026-08-14 10:57", rows)
+
+    assert payload["cutoff"] == "2026-08-14 10:57"
+    assert payload["ongoing_type"] == "range"
+    assert payload["divergence_trend_active"] is False
+    assert payload["divergence_range_active"] is True
+    assert payload["divergence_range_strict"] is True
+    assert payload["divergence_range_touches_boundary"] is True
+    assert payload["post_divergence_route"] == "higher_level_range"
+    assert payload["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["same_level_consumption_level"] == "confirmed"
+
+
 def test_build_signal_summary_fields_preserves_catalog_slots() -> None:
     payload = build_signal_summary_fields(
         {
