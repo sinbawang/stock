@@ -110,6 +110,12 @@ tests: tests/test_segment.py, tests/test_segment_regression_suite.py
 
 这对应 67 课的第二种情况，目前状态码记为 `feature_sequence_gap_fractal`。
 
+### 第一笔破坏前线段（71课第一种情况）
+
+- 从转折点开始，若第一笔反向笔就破坏了前线段，且该笔延伸出三笔后第三笔破第一笔的结束位置，则新线段一定形成、前线段一定结束
+- 当前实现把这条主路径正式建模为理论确认：`_first_bi_breaks_prior_segment_and_third_extends()` 在首个转折轮次检测该条件，满足时以 `first_bi_break_then_third_extends`（`theory_confirmed`）确认前线段结束，下一段从该转折第一笔开始
+- 仅在 theory 模式触发；practical 模式下同一形态由 `reverse_break` 兜底覆盖
+
 ### 向上线段
 
 - 若反向下笔低点已经跌破当前线段最近一个关键低点，则视为“直接破坏”，向上线段在该下笔结束时立即终结
@@ -152,6 +158,7 @@ tests: tests/test_segment.py, tests/test_segment_regression_suite.py
 - `feature_sequence_fractal`：反向特征序列已经形成可直接确认的顶/底分型，旧线段在该分型对应极值处终结
 - `feature_sequence_gap_fractal`：反向特征序列分型的第一二元素存在缺口，需等待其后的反向序列再长出分型，随后回头确认旧线段终结
 - `feature_sequence_gap_fractal_delayed_true`：缺口分型进入再分辨后，先经历至少一轮“弱同向未突破”，随后由更晚一轮同向强推进确认旧线段终结
+- `first_bi_break_then_third_extends`：转折点第一笔破坏前线段，且第三笔破第一笔结束位置，前线段确认终结（71课第一种情况）
 - `reverse_break`：反向笔直接破坏最近关键低点或关键高点，前一线段立即确认终结
 - `reverse_break_after_gap`：首根反向笔尚未破坏最近关键低点/高点，但后续同向恢复失败，并由再次反向扩张完成确认破坏
 - `no_followup_same_direction`：出现反向回撤后，没有等到后续同向推进笔
@@ -248,7 +255,7 @@ tests: tests/test_segment.py, tests/test_segment_regression_suite.py
 - 段越长，分越高：`segment_len * 3`
 - 若首段已经被确认终结，额外加分：`+80`
 - 若终结原因属于较强确认类型，额外加分：`+40`
-- 对应状态码：`feature_sequence_fractal`、`feature_sequence_gap_fractal`、`feature_sequence_gap_fractal_delayed_true`、`reverse_break`、`reverse_break_after_gap`
+- 对应状态码：`feature_sequence_fractal`、`feature_sequence_gap_fractal`、`feature_sequence_gap_fractal_delayed_true`、`first_bi_break_then_third_extends`、`reverse_break`、`reverse_break_after_gap`
 - 若终结或停驻原因偏弱，扣分：`-20`
 - 对应状态码：`unexpected_same_direction`、`same_direction_slot_not_filled`、`same_direction_not_extending`、`no_followup_same_direction`
 - 若只是因为确认笔用尽而停住，重扣：`-120`

@@ -92,6 +92,7 @@ python -m pytest -q tests/test_segment_lesson_boundary_fixtures.py
 | --- | --- | --- | --- |
 | `feature_sequence_fractal` | terminal（theory_confirmed） | terminal（theory_confirmed） | 理论主路径确认 |
 | `feature_sequence_gap_fractal_delayed_true` | terminal（theory_confirmed） | terminal（theory_confirmed） | 缺口分型延迟确认 |
+| `first_bi_break_then_third_extends` | terminal（theory_confirmed） | 不出现（practical 走 `reverse_break` 兜底） | 71课第一笔破坏前线段，theory 确认 |
 | `reverse_break` | pending（theory-mode-pending） | terminal（fallback_confirmed） | 实盘兜底确认，theory 不直接终结 |
 | `same_direction_not_extending` | pending | pending | 同向推进不足，保持待确认 |
 | `transition_pending` | pending | pending | 过渡态待定，不应当作终结 |
