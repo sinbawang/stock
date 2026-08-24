@@ -44,6 +44,9 @@ tests: tests/test_chanlun_analysis.py
 - 不允许脱离中枢单独定义趋势或盘整。
 - 价格新高新低本身，不足以单独定义趋势。
 
+> 同级别分解的多义性与连接结合律（如何在多义下选择最适合当下的中枢）见
+> [trend-ambiguity-combination-law.md](trend-ambiguity-combination-law.md)。
+
 ## 3. 背驰总定义
 
 背驰是同级别结构完成某一离开动作后，价格创新而力度不能同步创新的结构性现象。

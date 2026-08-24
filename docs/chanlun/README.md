@@ -21,6 +21,7 @@
 - [base-structure-original-review-matrix.md](base-structure-original-review-matrix.md): 基础结构原文复核矩阵
 - [base-structure-visual-example-library.md](base-structure-visual-example-library.md): 基础结构图文化示例库
 - [trend-divergence-spec.md](trend-divergence-spec.md): 走势类型与背驰规格
+- [trend-ambiguity-combination-law.md](trend-ambiguity-combination-law.md): 走势多义性与结合律
 - [trend-divergence-original-review-matrix.md](trend-divergence-original-review-matrix.md): 走势类型与背驰原文复核矩阵
 - [trend-divergence-visual-example-library.md](trend-divergence-visual-example-library.md): 走势类型与背驰图文化示例库
 - [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md): 买卖点与多级别联立规格

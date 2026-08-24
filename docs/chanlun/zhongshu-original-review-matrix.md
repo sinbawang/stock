@@ -41,8 +41,8 @@
 | 21 | 三类买卖点完备性；买卖点与“最近中枢”的对应关系；2买与3买可能重合。 | `chanlun-rule-spec` 已补关系表、重合互斥规则与主辅消费约束。 | 基本一致 | 后续补“2买与3买重合”的标准样例和解释模板。 |
 | 25 | 均线/MACD是辅助，不得与中枢主定义混用；中枢主语义优先。 | `chanlun-rule-spec` 背驰章节已有辅助定位表述；`combined-analysis-output-spec` 已要求主辅区分。 | 基本一致 | 在报告规范中单列“指标辅助不得改写中枢结论”的红线条款。 |
 | 29 | 背驰-转折定理：趋势背驰后只会落在“最后中枢扩展 / 更大级别盘整 / 更高级别反趋势”；强调转折有级别。 | `chanlun-rule-spec` 已补“背驰后三级去向”并加入负例模板；`combined-analysis-output-spec` 与协议文档已同步字段语义。 | 基本一致 | 后续补发布层样例图，验证跨级别边界可读性。 |
-| 36 | 走势连接结合律在当下重组中的使用；同一走势可多义但不含糊；围绕中枢震荡可重组判读。 | `chanlun-rule-spec` 已补“允许重组/禁止重组”边界，协议与输出规格已同步消费降级要求。 | 基本一致 | 后续补复杂重组场景图库，便于人工核图。 |
-| 38 | 同级别分解的唯一性；操作中可按固定级别分解；强调级别规则清晰优先于混搭。 | `chanlun-rule-spec` 已补唯一性与连接结合律边界；`combined-analysis-output-spec` 已同步 `same_level_decomposition_mode` 字段。 | 基本一致 | 后续补“双解释待确认”的样例模板与消费端降级示例。 |
+| 36 | 走势连接结合律在当下重组中的使用；同一走势可多义但不含糊；围绕中枢震荡可重组判读。 | [trend-ambiguity-combination-law.md](trend-ambiguity-combination-law.md) 已补系统性章节；消费降级由 `same_level_decomposition_mode` 表达。 | 基本一致 | 后续补复杂重组场景图库，便于人工核图。 |
+| 38 | 同级别分解的唯一性；操作中可按固定级别分解；强调级别规则清晰优先于混搭。 | [trend-ambiguity-combination-law.md](trend-ambiguity-combination-law.md) 已补唯一性与结合律边界；`combined-analysis-output-spec` 已同步 `same_level_decomposition_mode` 字段。 | 基本一致 | 后续补“双解释待确认”的样例模板与消费端降级示例。 |
 | 39 | 同级别分解再研究：中枢震荡中的机械节奏与迭代比较（Ai 与 Ai+2 等）。 | `chanlun-rule-spec` 已补 `A_i/A_{i+2}` 量化阈值与状态映射；协议和输出规格已同步 `oscillation_rhythm_state`。 | 基本一致 | 后续补实盘案例库，验证阈值鲁棒性。 |
 | 53 | 强调中枢递归定义与级别显微镜原则；2买用于补足小转大；3买对应中枢结束判别。 | `chanlun-rule-spec` 已补级别切换规程、2买补位说明与 3类点首次回抽硬约束。 | 基本一致 | 后续补跨级别执行模板，减少实盘歧义。 |
 | 83 | 笔级最小中枢稳定性差，线段级更稳；心理结构上支持线段作为更高稳定输入。 | `zhongshu-dual-track-spec` 已设中枢主（线段）/类中枢辅（笔级）。 | 基本一致 | 在规则文档增加“为何中枢主输入选线段”的理论注释，引用第83课。 |

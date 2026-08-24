@@ -25,8 +25,8 @@
 | 17 | 走势终完美；完成与未完成必须并存描述。 | [trend-divergence-spec.md](trend-divergence-spec.md) 已明确走势类型依赖同级别分解。 | 基本一致 | 补“完成边界 vs 当前进行结构”标准案例。 |
 | 18 | 趋势、盘整定义必须依附中枢和同级别分解。 | [trend-divergence-spec.md](trend-divergence-spec.md) 已强调脱离中枢定义不完整。 | 基本一致 | 补“只有一个中枢，不得提前确认为趋势”的反例模板。 |
 | 29 | 趋势背驰后去向只允许三级分流。 | [trend-divergence-spec.md](trend-divergence-spec.md) 已明确三级去向。 | 基本一致 | 补“不得发明第四类去向”的案例卡片。 |
-| 36 | 允许重组，但不能改写已确认结构事实。 | [trend-divergence-spec.md](trend-divergence-spec.md) 已保留连接结合律边界。 | 基本一致 | 补“允许重组/禁止重组”对照图。 |
-| 38 | 同级别分解应唯一；多义不等于任意。 | [trend-divergence-spec.md](trend-divergence-spec.md) 已强调不能无限随意解释。 | 基本一致 | 补“双解释待确认”降级模板。 |
+| 36 | 允许重组，但不能改写已确认结构事实。 | [trend-ambiguity-combination-law.md](trend-ambiguity-combination-law.md) 已补系统性章节（结合律、允许/禁止重组判据、中枢选择规则）。 | 基本一致 | 补“允许重组/禁止重组”对照图。 |
+| 38 | 同级别分解应唯一；多义不等于任意。 | [trend-ambiguity-combination-law.md](trend-ambiguity-combination-law.md) 已补唯一性与多义降级映射（`dual_interpretation_pending`）。 | 基本一致 | 补“双解释待确认”降级模板。 |
 | 39 | 震荡节奏比较只应服务监视，不应越级确认买卖点。 | [trend-divergence-spec.md](trend-divergence-spec.md) 已保留节奏与监视定位。 | 基本一致 | 补阈值示例和降级说明。 |
 
 ## 3. 当前偏差与边界
