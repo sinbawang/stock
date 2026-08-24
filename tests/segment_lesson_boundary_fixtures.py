@@ -15,6 +15,7 @@ class LessonBoundaryCase:
     expected_first_confirmed: bool
     expected_min_segments_theory: int
     expected_min_segments_practical: int
+    expected_first_stop_reason_practical: str | None = None
 
 
 def _bi(bi_id: int, direction: BiDirection, high: float, low: float) -> Bi:
@@ -96,8 +97,11 @@ def get_lesson_boundary_cases() -> list[LessonBoundaryCase]:
                 _bi(7, BiDirection.DOWN, 110.0, 108.6),
                 _bi(8, BiDirection.UP, 116.0, 109.0),
             ],
-            expected_first_stop_reason="feature_sequence_gap_fractal_delayed_true",
-            expected_first_confirmed=True,
+            # 71课：第一笔 bi3.low=109 未跌破左元素 bi1 高点 108，缺口未封闭，
+            # 缺口顶为假顶，不再按捷径确认；两模式首段均未确认。
+            expected_first_stop_reason="exhausted_confirmed_bis",
+            expected_first_stop_reason_practical="same_direction_not_extending",
+            expected_first_confirmed=False,
             expected_min_segments_theory=2,
             expected_min_segments_practical=2,
         ),

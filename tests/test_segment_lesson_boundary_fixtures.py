@@ -32,7 +32,12 @@ def test_lesson_boundary_fixtures_are_stable_across_modes(case, mode: str) -> No
     )
 
     first = segments[0]
-    assert first.stop_reason == case.expected_first_stop_reason
+    expected_reason = (
+        case.expected_first_stop_reason_practical
+        if mode == "practical" and case.expected_first_stop_reason_practical
+        else case.expected_first_stop_reason
+    )
+    assert first.stop_reason == expected_reason
     assert first.is_confirmed is case.expected_first_confirmed
 
     for segment in segments:
