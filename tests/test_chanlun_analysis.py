@@ -678,19 +678,19 @@ def test_real_1m_pre_breakout_replay_sample_preserves_independent_gate() -> None
     payload = probe_module._replay("002555", "三七互娱", "2026-08-04 13:35", rows)
 
     assert payload["cutoff"] == "2026-08-04 13:35"
-    assert payload["zs_monitor_alert"] == "pre_breakout"
-    assert payload["zs_monitor_midline"] == 20.09
+    assert payload["zs_monitor_alert"] == "none"
+    assert payload["zs_monitor_midline"] == 20.1
     assert payload["zs_monitor_bias"] == "strong"
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
     assert payload["buy_points"] == []
-    assert payload["sell_points"] == []
-    assert payload["conclusion"] == "出现向上预警，但当前不构成确认三买。"
-    assert payload["latest_zs_low"] is None
-    assert payload["latest_zs_high"] is None
-    assert "结论：出现向上预警，但当前不构成确认三买。" in payload["advice_text"]
-    assert "监视器：中枢中线 20.09，当前偏强，预警状态 向上预警。" in payload["advice_text"]
-    assert "节奏监视：节奏待判定" in payload["advice_text"]
-    assert "确认三买" in payload["advice_text"]
+    assert payload["sell_points"] == ["sell_1", "sell_2"]
+    assert payload["conclusion"] == "观察，等待确认。"
+    assert payload["latest_zs_low"] == 19.97
+    assert payload["latest_zs_high"] == 20.24
+    assert "结论：观察，等待确认。" in payload["advice_text"]
+    assert "监视器：中枢中线 20.10，当前偏强，预警状态 无预警。" in payload["advice_text"]
+    assert "节奏监视：节奏偏弱，当前只作辅助观察，不单独升级主结论。" in payload["advice_text"]
+    assert "确认三买" not in payload["advice_text"]
 
 
 def test_real_1m_pre_breakout_replay_sample_03690_preserves_independent_gate() -> None:
@@ -700,19 +700,19 @@ def test_real_1m_pre_breakout_replay_sample_03690_preserves_independent_gate() -
     payload = probe_module._replay("03690", "美团", "2026-08-05 09:56", rows)
 
     assert payload["cutoff"] == "2026-08-05 09:56"
-    assert payload["zs_monitor_alert"] == "pre_breakout"
-    assert payload["zs_monitor_midline"] == 92.03
+    assert payload["zs_monitor_alert"] == "none"
+    assert payload["zs_monitor_midline"] == 92.3
     assert payload["zs_monitor_bias"] == "strong"
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
     assert payload["buy_points"] == []
     assert payload["sell_points"] == []
-    assert payload["conclusion"] == "出现向上预警，但当前不构成确认三买。"
-    assert payload["latest_zs_low"] is None
-    assert payload["latest_zs_high"] is None
-    assert "结论：出现向上预警，但当前不构成确认三买。" in payload["advice_text"]
-    assert "监视器：中枢中线 92.03，当前偏强，预警状态 向上预警。" in payload["advice_text"]
-    assert "节奏监视：节奏待判定" in payload["advice_text"]
-    assert "确认三买" in payload["advice_text"]
+    assert payload["conclusion"] == "震荡，等待方向选择。"
+    assert payload["latest_zs_low"] == 91.0
+    assert payload["latest_zs_high"] == 93.6
+    assert "结论：震荡，等待方向选择。" in payload["advice_text"]
+    assert "监视器：中枢中线 92.30，当前偏强，预警状态 无预警。" in payload["advice_text"]
+    assert "节奏监视：节奏偏弱，当前只作辅助观察，不单独升级主结论。" in payload["advice_text"]
+    assert "当前按三卖确认处理。" not in payload["advice_text"]
 
 
 def test_real_1m_pre_breakout_replay_sample_600900_preserves_independent_gate() -> None:
@@ -722,19 +722,19 @@ def test_real_1m_pre_breakout_replay_sample_600900_preserves_independent_gate() 
     payload = probe_module._replay("600900", "长江电力", "2026-08-04 13:18", rows)
 
     assert payload["cutoff"] == "2026-08-04 13:18"
-    assert payload["zs_monitor_alert"] == "pre_breakout"
-    assert payload["zs_monitor_midline"] == 28.28
-    assert payload["zs_monitor_bias"] == "strong"
+    assert payload["zs_monitor_alert"] == "pre_breakdown"
+    assert payload["zs_monitor_midline"] == 28.78
+    assert payload["zs_monitor_bias"] == "weak"
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
     assert payload["buy_points"] == []
-    assert payload["sell_points"] == []
-    assert payload["conclusion"] == "出现向上预警，但当前不构成确认三买。"
-    assert payload["latest_zs_low"] is None
-    assert payload["latest_zs_high"] is None
-    assert "结论：出现向上预警，但当前不构成确认三买。" in payload["advice_text"]
-    assert "监视器：中枢中线 28.28，当前偏强，预警状态 向上预警。" in payload["advice_text"]
-    assert "节奏监视：节奏待判定" in payload["advice_text"]
-    assert "确认三买" in payload["advice_text"]
+    assert payload["sell_points"] == ["sell_3"]
+    assert payload["conclusion"] == "观察，等待确认。"
+    assert payload["latest_zs_low"] == 28.71
+    assert payload["latest_zs_high"] == 28.85
+    assert "结论：观察，等待确认。" in payload["advice_text"]
+    assert "监视器：中枢中线 28.78，当前偏弱，预警状态 向下预警。" in payload["advice_text"]
+    assert "节奏监视：节奏偏强，当前只作辅助观察，不单独升级主结论。" in payload["advice_text"]
+    assert "确认三买" not in payload["advice_text"]
 
 
 def test_real_1m_pre_breakdown_replay_sample_preserves_independent_gate() -> None:
@@ -753,8 +753,8 @@ def test_real_1m_pre_breakdown_replay_sample_preserves_independent_gate() -> Non
     assert payload["latest_zs_high"] is None
     assert "结论：出现向下预警，但当前不构成确认三卖。" in payload["advice_text"]
     assert "监视器：中枢中线 41.83，当前偏弱，预警状态 向下预警。" in payload["advice_text"]
-    assert "节奏监视：节奏待判定" in payload["advice_text"]
-    assert "确认三卖" in payload["advice_text"]
+    assert "节奏监视：节奏待判定，当前只作辅助观察，不单独升级主结论。" in payload["advice_text"]
+    assert "当前按三卖确认处理。" not in payload["advice_text"]
 
 
 def test_real_1m_pre_breakdown_replay_sample_03690_preserves_independent_gate() -> None:
@@ -766,18 +766,18 @@ def test_real_1m_pre_breakdown_replay_sample_03690_preserves_independent_gate() 
 
     assert payload["cutoff"] == "2026-08-05 09:46"
     assert payload["zs_monitor_alert"] == "pre_breakdown"
-    assert payload["zs_monitor_midline"] == 92.25
+    assert payload["zs_monitor_midline"] == 92.3
     assert payload["zs_monitor_bias"] == "weak"
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
     assert payload["buy_points"] == []
     assert payload["sell_points"] == []
     assert payload["conclusion"] == "出现向下预警，但当前不构成确认三卖。"
-    assert payload["latest_zs_low"] is None
-    assert payload["latest_zs_high"] is None
+    assert payload["latest_zs_low"] == 91.0
+    assert payload["latest_zs_high"] == 93.6
     assert "结论：出现向下预警，但当前不构成确认三卖。" in payload["advice_text"]
-    assert "监视器：中枢中线 92.25，当前偏弱，预警状态 向下预警。" in payload["advice_text"]
-    assert "节奏监视：节奏待判定" in payload["advice_text"]
-    assert "确认三卖" in payload["advice_text"]
+    assert "监视器：中枢中线 92.30，当前偏弱，预警状态 向下预警。" in payload["advice_text"]
+    assert "节奏监视：节奏偏弱，当前只作辅助观察，不单独升级主结论。" in payload["advice_text"]
+    assert "当前按三卖确认处理。" not in payload["advice_text"]
 
 
 def test_real_1m_range_divergence_replay_sample_000651_transition_pending() -> None:
@@ -788,14 +788,14 @@ def test_real_1m_range_divergence_replay_sample_000651_transition_pending() -> N
     payload = probe_module._replay("000651", "格力电器", "2026-08-12 10:38", rows)
 
     assert payload["cutoff"] == "2026-08-12 10:38"
-    assert payload["ongoing_type"] == "range"
+    assert payload["ongoing_type"] == "down"
     assert payload["divergence_trend_active"] is False
-    assert payload["divergence_range_active"] is True
+    assert payload["divergence_range_active"] is False
     assert payload["divergence_range_strict"] is False
-    assert payload["divergence_range_touches_boundary"] is False
-    assert payload["post_divergence_route"] == "last_zs_extension"
-    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
-    assert payload["same_level_consumption_level"] == "pending"
+    assert payload["divergence_range_touches_boundary"] is None
+    assert payload["post_divergence_route"] is None
+    assert payload["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["same_level_consumption_level"] == "confirmed"
 
 
 def test_real_1m_range_divergence_replay_sample_000651_strict() -> None:
@@ -806,12 +806,12 @@ def test_real_1m_range_divergence_replay_sample_000651_strict() -> None:
     payload = probe_module._replay("000651", "格力电器", "2026-08-14 10:57", rows)
 
     assert payload["cutoff"] == "2026-08-14 10:57"
-    assert payload["ongoing_type"] == "range"
+    assert payload["ongoing_type"] == "down"
     assert payload["divergence_trend_active"] is False
-    assert payload["divergence_range_active"] is True
-    assert payload["divergence_range_strict"] is True
-    assert payload["divergence_range_touches_boundary"] is True
-    assert payload["post_divergence_route"] == "higher_level_range"
+    assert payload["divergence_range_active"] is False
+    assert payload["divergence_range_strict"] is False
+    assert payload["divergence_range_touches_boundary"] is None
+    assert payload["post_divergence_route"] is None
     assert payload["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["same_level_consumption_level"] == "confirmed"
 

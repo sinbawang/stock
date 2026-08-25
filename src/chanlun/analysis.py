@@ -413,17 +413,23 @@ def _build_zs_monitor_state(
     else:
         bias = "neutral"
 
-    if latest_close < zs_low or latest_close > zs_high:
+    if latest_close > zs_high:
         return {
             "zs_monitor_midline": midline,
             "zs_monitor_bias": bias,
-            "zs_monitor_alert": alert,
+            "zs_monitor_alert": "pre_breakout",
+        }
+    if latest_close < zs_low:
+        return {
+            "zs_monitor_midline": midline,
+            "zs_monitor_bias": bias,
+            "zs_monitor_alert": "pre_breakdown",
         }
 
     trigger_band = max(width * 0.2, 1e-9)
-    if alert == "none" and latest_close >= zs_high - trigger_band:
+    if latest_close >= zs_high - trigger_band:
         alert = "pre_breakout"
-    elif alert == "none" and latest_close <= zs_low + trigger_band:
+    elif latest_close <= zs_low + trigger_band:
         alert = "pre_breakdown"
 
     return {
