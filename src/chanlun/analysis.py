@@ -183,6 +183,20 @@ def _has_bottom_divergence(candidate: Bi | None, previous: Bi | None, strengths:
     )
 
 
+def _has_reverse_turn_after(signal_bi: Bi | None, *, direction: str, bis: list[Bi]) -> bool:
+    if signal_bi is None:
+        return False
+    signal_id = signal_bi.bi_id
+    for candidate in bis:
+        if candidate.bi_id <= signal_id or not candidate.is_confirmed:
+            continue
+        if direction == "down" and candidate.is_up() and candidate.low >= signal_bi.low:
+            return True
+        if direction == "up" and candidate.is_down() and candidate.high <= signal_bi.high:
+            return True
+    return False
+
+
 def _build_signal_point_detail(
     point: str,
     signal_bi: Bi | None,
@@ -868,42 +882,73 @@ def analyze_chanlun_signals(
     earlier_confirmed_up = recent_confirmed_ups[2] if len(recent_confirmed_ups) >= 3 else None
 
     recent_confirmed_downs = _find_recent_confirmed_bis_by_direction(confirmed_bis, direction="down", limit=3)
-    previous_confirmed_down = recent_confirmed_downs[0] if len(recent_confirmed_downs) >= 1 else None
-    earlier_confirmed_down = recent_confirmed_downs[1] if len(recent_confirmed_downs) >= 2 else None
+    latest_confirmed_down = recent_confirmed_downs[0] if len(recent_confirmed_downs) >= 1 else None
+    previous_confirmed_down = recent_confirmed_downs[1] if len(recent_confirmed_downs) >= 2 else None
+    earlier_confirmed_down = recent_confirmed_downs[2] if len(recent_confirmed_downs) >= 3 else None
 
     latest_up = next((bi for bi in reversed(bis) if bi.is_up()), None)
     latest_down = next((bi for bi in reversed(bis) if bi.is_down()), None)
-    top_divergence = _has_top_divergence(latest_confirmed_up, previous_confirmed_up, strengths)
 
-    bottom_divergence = False
-    if latest_down and previous_confirmed_down and latest_down.bi_id != previous_confirmed_down.bi_id:
-        bottom_divergence = _has_bottom_divergence(latest_down, previous_confirmed_down, strengths)
+    top_reference_bi = previous_confirmed_up if previous_confirmed_up is not None else latest_confirmed_up
+    bottom_reference_bi = previous_confirmed_down if previous_confirmed_down is not None else latest_confirmed_down
 
     current_zs = zhongshus[-1] if zhongshus else None
+    structure_state = build_structure_state(raw_bars, zhongshus)
+
+    top_divergence = False
+    if (
+        current_zs
+        and latest_confirmed_up
+        and top_reference_bi
+        and latest_confirmed_up.bi_id != top_reference_bi.bi_id
+    ):
+        top_divergence = _has_top_divergence(latest_confirmed_up, top_reference_bi, strengths)
+
+    bottom_divergence = False
+    if latest_down and bottom_reference_bi and latest_down.bi_id != bottom_reference_bi.bi_id:
+        bottom_divergence = _has_bottom_divergence(latest_down, bottom_reference_bi, strengths)
+    elif latest_confirmed_down and bottom_reference_bi and latest_confirmed_down.bi_id != bottom_reference_bi.bi_id:
+        bottom_divergence = _has_bottom_divergence(latest_confirmed_down, bottom_reference_bi, strengths)
     current_zs_exit_bi = None
     if current_zs and current_zs.exit_bi_id is not None:
         current_zs_exit_bi = next((bi for bi in bis if bi.bi_id == current_zs.exit_bi_id), None)
     buy_points: list[str] = []
     sell_points: list[str] = []
-    if current_zs and latest_down and bottom_divergence and latest_down.low <= current_zs.zs_low:
+    if (
+        current_zs
+        and latest_down
+        and latest_down.is_confirmed
+        and bottom_divergence
+        and latest_down.low <= current_zs.zs_low
+        and _has_reverse_turn_after(latest_down, direction="down", bis=bis)
+    ):
         buy_points.append("buy_1")
-    if current_zs and latest_confirmed_up and top_divergence and latest_confirmed_up.high >= current_zs.zs_high:
+    if (
+        current_zs
+        and latest_confirmed_up
+        and latest_confirmed_up.is_confirmed
+        and top_divergence
+        and latest_confirmed_up.high >= current_zs.zs_high
+        and _has_reverse_turn_after(latest_confirmed_up, direction="up", bis=bis)
+    ):
         sell_points.append("sell_1")
     previous_buy1_active = (
         current_zs is not None
+        and latest_confirmed_down is not None
         and previous_confirmed_down is not None
-        and earlier_confirmed_down is not None
-        and _has_bottom_divergence(previous_confirmed_down, earlier_confirmed_down, strengths)
-        and previous_confirmed_down.low <= current_zs.zs_low
+        and latest_confirmed_down.bi_id != previous_confirmed_down.bi_id
+        and _has_bottom_divergence(latest_confirmed_down, previous_confirmed_down, strengths)
+        and latest_confirmed_down.low <= current_zs.zs_low
     )
     if (
         current_zs
         and previous_buy1_active
         and latest_confirmed_up
         and latest_down
-        and latest_down.bi_id != previous_confirmed_down.bi_id
-        and latest_confirmed_up.high > previous_confirmed_down.high
-        and latest_down.low > previous_confirmed_down.low
+        and latest_confirmed_down is not None
+        and latest_down.bi_id != latest_confirmed_down.bi_id
+        and latest_confirmed_up.high > latest_confirmed_down.high
+        and latest_down.low > latest_confirmed_down.low
         and latest_down.low >= current_zs.zs_low
     ):
         buy_points.append("buy_2")
@@ -923,15 +968,14 @@ def analyze_chanlun_signals(
         and latest_down
         and latest_confirmed_up
         and latest_up.bi_id != latest_confirmed_up.bi_id
-        and latest_down.low < latest_confirmed_up.low
         and latest_up.high < latest_confirmed_up.high
+        and latest_down.low < latest_confirmed_up.low
         and latest_up.high <= current_zs.zs_high
     ):
         sell_points.append("sell_2")
     if current_zs and latest_down and latest_down.low < current_zs.zs_low and latest_confirmed_up and latest_confirmed_up.high <= current_zs.zs_low:
         sell_points.append("sell_3")
 
-    structure_state = build_structure_state(raw_bars, zhongshus)
     same_level_decomposition_mode = _build_same_level_decomposition_mode(structure_state)
     same_level_consumption_level = _build_same_level_consumption_level(structure_state)
     divergence = build_divergence_state(

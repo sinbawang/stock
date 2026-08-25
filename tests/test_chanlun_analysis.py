@@ -780,38 +780,40 @@ def test_real_1m_pre_breakdown_replay_sample_03690_preserves_independent_gate() 
     assert "当前按三卖确认处理。" not in payload["advice_text"]
 
 
-def test_real_1m_range_divergence_replay_sample_000651_transition_pending() -> None:
-    # 背驰模块首个真实 1m 过渡态样本（盘整背驰迹象、非严格）：
-    # ongoing_type=range + 同向下探力度衰减，但未试探到中枢边界 ->
-    # strict=False，route 回落 last_zs_extension，分解仍 dual_interpretation_pending。
+def test_real_1m_trend_divergence_replay_sample_000651_down_non_strict() -> None:
+    # 背驰模块首个真实 1m 下跌趋势底背驰（非严格）样本：
+    # 两个不重叠中枢（zs0 [41.75,41.92]、zs1 [40.04,40.51]）构成下跌趋势，
+    # 同向下探力度衰减但离开段未跌破 zs1 下沿 -> trend_active=True、strict=False，
+    # route 回落 last_zs_extension（TD2 趋势轨）。
     rows = probe_module._load_rows("000651", "1m")
     payload = probe_module._replay("000651", "格力电器", "2026-08-12 10:38", rows)
 
     assert payload["cutoff"] == "2026-08-12 10:38"
     assert payload["ongoing_type"] == "down"
-    assert payload["divergence_trend_active"] is False
+    assert payload["divergence_trend_active"] is True
+    assert payload["divergence_trend_strict"] is False
     assert payload["divergence_range_active"] is False
     assert payload["divergence_range_strict"] is False
     assert payload["divergence_range_touches_boundary"] is None
-    assert payload["post_divergence_route"] is None
+    assert payload["post_divergence_route"] == "last_zs_extension"
     assert payload["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["same_level_consumption_level"] == "confirmed"
 
 
-def test_real_1m_range_divergence_replay_sample_000651_strict() -> None:
-    # 背驰模块首个真实 1m 严格盘整背驰正例：
-    # ongoing_type=range + 同向下探试探到中枢边界 + 力度衰减 ->
-    # strict=True，route=higher_level_range，分解 single_confirmed。
+def test_real_1m_trend_divergence_replay_sample_000651_down_second_anchor() -> None:
+    # 第二个 cutoff 锚点：与 08-12 同一下跌趋势底背驰（非严格），锁追加更多 bar 后
+    # 结构分类与背驰结论不漂移（trend_active=True、strict=False、route=last_zs_extension）。
     rows = probe_module._load_rows("000651", "1m")
     payload = probe_module._replay("000651", "格力电器", "2026-08-14 10:57", rows)
 
     assert payload["cutoff"] == "2026-08-14 10:57"
     assert payload["ongoing_type"] == "down"
-    assert payload["divergence_trend_active"] is False
+    assert payload["divergence_trend_active"] is True
+    assert payload["divergence_trend_strict"] is False
     assert payload["divergence_range_active"] is False
     assert payload["divergence_range_strict"] is False
     assert payload["divergence_range_touches_boundary"] is None
-    assert payload["post_divergence_route"] is None
+    assert payload["post_divergence_route"] == "last_zs_extension"
     assert payload["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["same_level_consumption_level"] == "confirmed"
 
@@ -954,13 +956,26 @@ def test_analyze_chanlun_signals_flags_first_buy_on_bottom_divergence_below_zs_l
             high=11.0,
             low=9.8,
             norm_bar_range=(5, 6),
-            is_confirmed=False,
+            is_confirmed=True,
+        ),
+        Bi(
+            bi_id=6,
+            direction=BiDirection.UP,
+            start_fx_id=7,
+            end_fx_id=8,
+            start_ts=datetime(2026, 5, 6, 10, 30),
+            end_ts=datetime(2026, 5, 6, 14, 30),
+            high=11.5,
+            low=10.3,
+            norm_bar_range=(7, 8),
+            is_confirmed=True,
         ),
     ]
     macd_points = [
         SimpleNamespace(ts=bis[0].end_ts, macd=-5.0, dif=-1.0),
         SimpleNamespace(ts=bis[2].end_ts, macd=-2.5, dif=-0.6),
         SimpleNamespace(ts=bis[4].end_ts, macd=-1.0, dif=-0.4),
+        SimpleNamespace(ts=bis[5].end_ts, macd=-0.6, dif=0.3),
     ]
 
     signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
@@ -978,10 +993,23 @@ def test_analyze_chanlun_signals_flags_first_sell_on_top_divergence_above_zs_hig
         _bi(2, BiDirection.DOWN, high=10.5, low=10.0, day=11),
         _bi(3, BiDirection.UP, high=11.2, low=10.3, day=12),
         _bi(4, BiDirection.DOWN, high=11.0, low=10.4, day=13),
+        Bi(
+            bi_id=5,
+            direction=BiDirection.DOWN,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 14, 10, 30),
+            end_ts=datetime(2026, 5, 14, 14, 30),
+            high=10.9,
+            low=9.8,
+            norm_bar_range=(5, 6),
+            is_confirmed=True,
+        ),
     ]
     macd_points = [
         SimpleNamespace(ts=bis[0].end_ts, macd=5.0, dif=1.2),
         SimpleNamespace(ts=bis[2].end_ts, macd=3.0, dif=0.8),
+        SimpleNamespace(ts=bis[4].end_ts, macd=2.2, dif=0.6),
     ]
 
     signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
@@ -991,14 +1019,13 @@ def test_analyze_chanlun_signals_flags_first_sell_on_top_divergence_above_zs_hig
     assert signals["top_divergence"] is True
 
 
-def test_analyze_chanlun_signals_buy1_and_sell1_use_asymmetric_confirmation_requirement() -> None:
-    """BS2 契约缺口钉：buy_1 与 sell_1 的确认要求不对称。
+def test_analyze_chanlun_signals_buy1_and_sell1_require_confirmed_departure_and_turn() -> None:
+    """BS2 严格口径：一类点必须同时满足：离开笔已确认 + 背驰 + 反向转折确认。
 
-    当前 buy_1 用 `latest_down`（可为未确认），sell_1 用 `latest_confirmed_up`（必须已确认）。
-    在对称的「离开笔是唯一越界笔且未确认」场景下，buy_1 触发而 sell_1 不触发。
-    严格口径两者都应要求离开笔已确认（并补转折确认），本用例钉住现状，待 BS2 收口时修正。
+    只有在出离段后出现反向确认笔，才允许形成 buy_1 / sell_1；
+    若离开笔未确认，或未出现转折确认，则不得报一类点。
     """
-    # 买方：唯一跌破下沿的 down 离开笔未确认 -> 仍触发 buy_1
+    # 买方：唯一跌破下沿的 down 离开笔未确认，且无后续向上确认笔 -> 不触发 buy_1
     buy_zs = _zhongshu(11, zs_low=10.0, zs_high=10.8, day=1)
     buy_bis = [
         _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=1),
@@ -1024,9 +1051,9 @@ def test_analyze_chanlun_signals_buy1_and_sell1_use_asymmetric_confirmation_requ
         SimpleNamespace(ts=buy_bis[4].end_ts, macd=-1.0, dif=-0.4),
     ]
     buy_signals = analyze_chanlun_signals([], buy_bis, [buy_zs], buy_macd)
-    assert buy_signals["buy_points"] == ["buy_1"]
+    assert buy_signals["buy_points"] == []
 
-    # 卖方：唯一越上沿的 up 离开笔未确认 -> 不触发 sell_1（因只看已确认 up）
+    # 卖方：唯一越上沿的 up 离开笔未确认，且无后续向下确认笔 -> 不触发 sell_1
     sell_zs = _zhongshu(12, zs_low=10.0, zs_high=10.8, day=1)
     sell_bis = [
         _bi(1, BiDirection.UP, high=10.5, low=10.1, day=1),
@@ -1056,12 +1083,8 @@ def test_analyze_chanlun_signals_buy1_and_sell1_use_asymmetric_confirmation_requ
     assert sell_signals["sell_points"] == []
 
 
-def test_analyze_chanlun_signals_flags_buy1_without_up_turn_confirmation() -> None:
-    """BS2 契约缺口钉：当前 buy_1 不要求背驰后的向上转折笔。
-
-    严格口径「背驰导致的转折」要求在离开段背驰后出现向上转折笔；
-    当前实现只要「底背驰 + 跌破下沿」即报 buy_1，无需转折确认，钉住现状待收口。
-    """
+def test_analyze_chanlun_signals_requires_up_turn_confirmation_before_buy1() -> None:
+    """BS2 严格口径：底背驰但未出现向上转折确认，不得确认 buy_1。"""
     current_zs = _zhongshu(13, zs_low=10.0, zs_high=10.8, day=1)
     bis = [
         _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=1),
@@ -1086,9 +1109,8 @@ def test_analyze_chanlun_signals_flags_buy1_without_up_turn_confirmation() -> No
 
     signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
 
-    # 离开段背驰后没有任何向上转折笔，当前仍报 buy_1（无转折确认）
     assert signals["bottom_divergence"] is True
-    assert signals["buy_points"] == ["buy_1"]
+    assert signals["buy_points"] == []
 
 
 def test_analyze_chanlun_signals_flags_third_buy_after_leave_zs_and_pullback_holds_upper_edge() -> None:
