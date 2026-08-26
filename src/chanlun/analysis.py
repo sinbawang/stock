@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from .models import Bar, Bi, Zhongshu
+from .models import Bar, Bi, Segment, Zhongshu
 from .zhongshu_contract import (
     CONSUMPTION_LEVEL_LABELS,
     CONSUMPTION_LEVEL_NOTES,
@@ -35,6 +35,26 @@ def compute_bi_strengths(bis: list[Bi], macd_points: list[Any]) -> dict[int, dic
             "macd_sum_abs": sum(abs(point.macd) for point in segment),
             "dif_max": max(point.dif for point in segment),
             "dif_min": min(point.dif for point in segment),
+        }
+    return strengths
+
+
+def compute_segment_strengths(
+    segments: list[Segment],
+    macd_points: list[Any],
+) -> dict[int, dict[str, float]]:
+    """按线段时间窗聚合 MACD 面积，得到线段级力度表（key=segment_id）。
+
+    与 `compute_bi_strengths` 同构：线段力度 = 其 `start_ts..end_ts` 窗内
+    `abs(macd)` 之和，作为一类点「离开段 vs 进入段」比较的力度口径。
+    """
+    strengths: dict[int, dict[str, float]] = {}
+    for segment in segments:
+        window = [point for point in macd_points if segment.start_ts <= point.ts <= segment.end_ts]
+        if not window:
+            continue
+        strengths[segment.segment_id] = {
+            "macd_sum_abs": sum(abs(point.macd) for point in window),
         }
     return strengths
 
@@ -181,6 +201,42 @@ def _has_bottom_divergence(candidate: Bi | None, previous: Bi | None, strengths:
     return candidate.low < previous.low and candidate_strength.get("macd_sum_abs", 0.0) < previous_strength.get(
         "macd_sum_abs", 0.0
     )
+
+
+def _segment_by_id(segment_id: int | None, segments: list[Segment]) -> Segment | None:
+    if segment_id is None:
+        return None
+    return next((segment for segment in segments if segment.segment_id == segment_id), None)
+
+
+def _has_segment_bottom_divergence(
+    exit_segment: Segment | None,
+    entering_segment: Segment | None,
+    segment_strengths: dict[int, dict[str, float]],
+) -> bool:
+    """线段级底背驰：离开段与进入段同向下行，离开段创新低且力度衰减。"""
+    if exit_segment is None or entering_segment is None:
+        return False
+    if not (exit_segment.is_down() and entering_segment.is_down()):
+        return False
+    exit_strength = segment_strengths.get(exit_segment.segment_id, {}).get("macd_sum_abs", 0.0)
+    entering_strength = segment_strengths.get(entering_segment.segment_id, {}).get("macd_sum_abs", 0.0)
+    return exit_segment.low < entering_segment.low and exit_strength < entering_strength
+
+
+def _has_segment_top_divergence(
+    exit_segment: Segment | None,
+    entering_segment: Segment | None,
+    segment_strengths: dict[int, dict[str, float]],
+) -> bool:
+    """线段级顶背驰：离开段与进入段同向上行，离开段创新高且力度衰减。"""
+    if exit_segment is None or entering_segment is None:
+        return False
+    if not (exit_segment.is_up() and entering_segment.is_up()):
+        return False
+    exit_strength = segment_strengths.get(exit_segment.segment_id, {}).get("macd_sum_abs", 0.0)
+    entering_strength = segment_strengths.get(entering_segment.segment_id, {}).get("macd_sum_abs", 0.0)
+    return exit_segment.high > entering_segment.high and exit_strength < entering_strength
 
 
 def _has_reverse_turn_after(signal_bi: Bi | None, *, direction: str, bis: list[Bi]) -> bool:
@@ -925,6 +981,7 @@ def analyze_chanlun_signals(
     bis: list[Bi],
     zhongshus: list[Zhongshu],
     macd_points: list[Any],
+    segments: list[Segment] | None = None,
 ) -> dict[str, object]:
     confirmed_bis = [bi for bi in bis if bi.is_confirmed]
     strengths = compute_bi_strengths(bis, macd_points)
@@ -947,6 +1004,21 @@ def analyze_chanlun_signals(
     current_zs = zhongshus[-1] if zhongshus else None
     structure_state = build_structure_state(raw_bars, zhongshus)
 
+    # 线段级中枢：一类点背驰用「离开段 vs 进入段」严格力度口径；笔级中枢保持笔级口径。
+    segment_bottom_divergence = False
+    segment_top_divergence = False
+    if current_zs is not None and current_zs.structure_level == "segment" and segments:
+        entering_segment = _segment_by_id(current_zs.entering_bi_id, segments)
+        exit_segment = _segment_by_id(current_zs.exit_bi_id, segments)
+        if entering_segment is not None and exit_segment is not None:
+            segment_strengths = compute_segment_strengths(segments, macd_points)
+            segment_bottom_divergence = _has_segment_bottom_divergence(
+                exit_segment, entering_segment, segment_strengths
+            )
+            segment_top_divergence = _has_segment_top_divergence(
+                exit_segment, entering_segment, segment_strengths
+            )
+
     top_divergence = False
     if (
         current_zs
@@ -966,11 +1038,14 @@ def analyze_chanlun_signals(
         current_zs_exit_bi = next((bi for bi in bis if bi.bi_id == current_zs.exit_bi_id), None)
     buy_points: list[str] = []
     sell_points: list[str] = []
+    use_segment_divergence = current_zs is not None and current_zs.structure_level == "segment" and bool(segments)
+    buy_divergence = segment_bottom_divergence if use_segment_divergence else bottom_divergence
+    sell_divergence = segment_top_divergence if use_segment_divergence else top_divergence
     if (
         current_zs
         and latest_down
         and latest_down.is_confirmed
-        and bottom_divergence
+        and buy_divergence
         and latest_down.low <= current_zs.zs_low
         and _has_reverse_turn_after(latest_down, direction="down", bis=bis)
     ):
@@ -979,7 +1054,7 @@ def analyze_chanlun_signals(
         current_zs
         and latest_confirmed_up
         and latest_confirmed_up.is_confirmed
-        and top_divergence
+        and sell_divergence
         and latest_confirmed_up.high >= current_zs.zs_high
         and _has_reverse_turn_after(latest_confirmed_up, direction="up", bis=bis)
     ):

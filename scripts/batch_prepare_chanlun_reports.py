@@ -519,8 +519,8 @@ def _fetch_with_optional_local_store(
     return analysis_rows, payload
 
 
-def extract_signals(bis, zhongshus, macd_points, *, raw_bars=None) -> dict[str, object]:
-    return analyze_chanlun_signals(raw_bars or [], bis, zhongshus, macd_points)
+def extract_signals(bis, zhongshus, macd_points, *, raw_bars=None, segments=None) -> dict[str, object]:
+    return analyze_chanlun_signals(raw_bars or [], bis, zhongshus, macd_points, segments=segments)
 
 
 def _clamp_score(value: int | float) -> int:
@@ -1017,7 +1017,7 @@ def export_case(
     timeframe_label = timeframe_display_label(timeframe)
     if timeframe != "60m":
         analysis_text = analysis_text.replace("60M", timeframe_label)
-    signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
+    signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars, segments=segments)
     advice_text = build_advice(security.name, timeframe_label, raw_bars, signals)
     summary_payload = build_technical_summary(
         timeframe_label,

@@ -153,8 +153,9 @@ def analyze_current_state(
     bis: list[Bi],
     zhongshus: list[Zhongshu],
     macd_points: list[Any],
+    segments: list[Any] | None = None,
 ) -> str:
-    signals = analyze_chanlun_signals(raw_bars, bis, zhongshus, macd_points)
+    signals = analyze_chanlun_signals(raw_bars, bis, zhongshus, macd_points, segments=segments)
     current_zs = signals["current_zs"]
     latest_confirmed_up = signals["latest_confirmed_up"]
     latest_down = signals["latest_down"]
@@ -438,8 +439,8 @@ def main() -> None:
         bootstrap_skip_confirmed_bis=args.bootstrap_skip_confirmed_bis,
         strict_segment_rules=args.strict_segment_rules,
     )
-    analysis_text = analyze_current_state(args.name, raw_bars, bis, zhongshus, macd_points)
-    signals = analyze_chanlun_signals(raw_bars, bis, zhongshus, macd_points)
+    analysis_text = analyze_current_state(args.name, raw_bars, bis, zhongshus, macd_points, segments=segments)
+    signals = analyze_chanlun_signals(raw_bars, bis, zhongshus, macd_points, segments=segments)
     advice_text = ""
     summary_payload = {
         "conclusion": _extract_prefixed_value(advice_text, "结论："),
