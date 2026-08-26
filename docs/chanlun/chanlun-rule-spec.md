@@ -31,30 +31,33 @@ tests: tests/test_segment.py, tests/test_zhongshu.py, tests/test_chanlun_analysi
 
 ## 2. 推荐文档结构
 
+六层总索引以 [README.md](README.md) 为准：**原文 → 规格(specs) → 设计(designs) → 任务(tasks) → 复核(review) → 支撑**。
+
+本文件是「规格层」的主入口，只维护规格层与总原则；设计与任务、复核层各有独立入口。
+
 ### 2.1 总入口
 
-- [chanlun-rule-spec.md](chanlun-rule-spec.md): 主入口、总原则、模块边界、阅读顺序。
+- [README.md](README.md): 六层总入口与快速导航。
+- [chanlun-rule-spec.md](chanlun-rule-spec.md): 本文件，规格主入口、总原则、模块边界、修改原则。
 - [chanlun-strict-theory-spec.md](chanlun-strict-theory-spec.md): 严格理论总纲，只保留高层定义，不承接工程细节。
-- [chanlun-spec-tasks.md](chanlun-spec-tasks.md): 当前完成度、已完成任务、待完成任务。
+- [chanlun-spec-tasks.md](chanlun-spec-tasks.md): 跨模块总进度、优先级、epic 摘要。
 - [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md): 跨模块 review 用的三层差异总表。
+- [lesson-traceability-matrix.md](lesson-traceability-matrix.md): 课程可追溯矩阵（课次 → spec/design/tasks/tests/code 五层锚点）。
 
-### 2.2 基础结构模块
+### 2.2 规格层（specs）
 
 - [base-structure-spec.md](base-structure-spec.md): 原始 K 线、包含关系、标准化 K 线、分型、笔。
-- [segment-implementation-guide.md](segment-implementation-guide.md): 线段现行实现专题。
-- [segment-doc-map.md](segment-doc-map.md): 线段专题导航。
-
-### 2.3 中枢模块
-
+- [segment-spec.md](segment-spec.md): 线段严格理论（应然）。
 - [zhongshu-core-spec.md](zhongshu-core-spec.md): 中枢核心理论规格。
 - [zhongshu-dual-track-spec.md](zhongshu-dual-track-spec.md): 中枢/类中枢主辅规范。
-- [zhongshu-original-review-matrix.md](zhongshu-original-review-matrix.md): 原文复核矩阵。
-- [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md): 中枢图文化案例。
-
-### 2.4 高层结构模块
-
 - [trend-divergence-spec.md](trend-divergence-spec.md): 走势类型、类背驰、盘整背驰、趋势背驰、背驰后去向。
 - [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md): 一二三类买卖点、区间套、小转大、多级别联立。
+
+### 2.3 设计层（designs，总入口 [designs.md](designs.md)）
+
+### 2.4 任务层（tasks，总入口 [chanlun-spec-tasks.md](chanlun-spec-tasks.md)）
+
+### 2.5 复核层（review，总入口 [theory-implementation-consumer-diff-matrix.md](theory-implementation-consumer-diff-matrix.md) / [lesson-traceability-matrix.md](lesson-traceability-matrix.md)）
 
 ## 3. 当前模块完成度判断
 
@@ -78,6 +81,8 @@ tests: tests/test_segment.py, tests/test_zhongshu.py, tests/test_chanlun_analysi
 - 改中枢：优先改中枢专题文档。
 - 改走势类型/背驰：优先改 [trend-divergence-spec.md](trend-divergence-spec.md)。
 - 改买卖点/区间套/小转大/多级别联立：优先改 [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md)。
+- 改设计层（状态机 / 分解主链 / 协议）：优先改 [designs.md](designs.md) 所列设计文档。
+- 改课程追溯：优先改 [lesson-traceability-matrix.md](lesson-traceability-matrix.md)。
 - 改总体进度或待办：优先改 [chanlun-spec-tasks.md](chanlun-spec-tasks.md)。
 
 ## 5. 现状说明
@@ -181,6 +186,13 @@ tests: tests/test_segment.py, tests/test_zhongshu.py, tests/test_chanlun_analysi
 - [zhongshu-original-review-matrix.md](zhongshu-original-review-matrix.md): 原文复核矩阵与逐课对照。
 - [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md): 图文化样例与发布层表达。
 
+工程落地口径见 [designs.md](designs.md) 中枢小节：
+
+- [zhongshu-state-machine.md](zhongshu-state-machine.md): 完成 / 扩张 / 新中枢状态机。
+- [zhongshu-input-qualification.md](zhongshu-input-qualification.md): 标准中枢输入 segment 资格表。
+- [zhongshu-recompute-order.md](zhongshu-recompute-order.md): 中枢重算顺序与旧中心清理。
+- [segment-zhongshu-boundary.md](segment-zhongshu-boundary.md): 线段 → 中枢 进入段 / 本体 / 离开段边界。
+
 本节仅保留以下历史摘要：
 
 - 严格中枢必须区分进入段、中枢本体和离开段。
@@ -198,6 +210,8 @@ tests: tests/test_segment.py, tests/test_zhongshu.py, tests/test_chanlun_analysi
 对应专题：
 
 - [trend-divergence-spec.md](trend-divergence-spec.md): 走势类型、类背驰、盘整背驰、趋势背驰、背驰后去向。
+- [trend-type-decomposition.md](trend-type-decomposition.md): 同级别走势类型自动分解主链（TD1）。
+- [trend-ambiguity-combination-law.md](trend-ambiguity-combination-law.md): 走势多义性与结合律。
 - [zhongshu-core-spec.md](zhongshu-core-spec.md): 与中枢强绑定的理论前提。
 - [zhongshu-dual-track-spec.md](zhongshu-dual-track-spec.md): 主辅消费和降级边界。
 
