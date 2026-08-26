@@ -289,11 +289,13 @@ def write_technical_report_json(
     actual_bar_count: int,
     requested_min_rows: int | None,
     zhongshus: list[Zhongshu],
+    lei_zhongshus: list[Zhongshu] | None = None,
     structure_state: dict[str, object] | None = None,
     divergence: dict[str, object] | None = None,
     summary_payload: dict[str, object] | None = None,
 ) -> Path:
-    latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
+    latest_zhongshu = serialize_zhongshus(zhongshus[-1]) if zhongshus else None
+    latest_lei_zhongshu = serialize_zhongshus(lei_zhongshus[-1]) if lei_zhongshus else None
     return write_json(
         path,
         {
@@ -317,6 +319,8 @@ def write_technical_report_json(
             "structure": {
                 "latest_zhongshu": latest_zhongshu,
                 "zhongshus": serialize_zhongshus(zhongshus),
+                "latest_lei_zhongshu": latest_lei_zhongshu,
+                "lei_zhongshus": serialize_zhongshus(lei_zhongshus) if lei_zhongshus else [],
             },
             "structure_state": structure_state,
             "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
@@ -379,7 +383,8 @@ def main() -> None:
         strict_segment_rules=args.strict_segment_rules,
     )
     confirmed_bis = [bi for bi in bis if bi.is_confirmed]
-    zhongshus = identify_zhongshu(confirmed_bis)
+    zhongshus = identify_zhongshu(segments, structure_level="segment")
+    lei_zhongshus = identify_zhongshu(confirmed_bis, structure_level="bi")
     macd_points = calculate_macd(raw_bars)
 
     confirmed_fx_ids: set[int] = set()
@@ -394,6 +399,8 @@ def main() -> None:
     export_bis(paths["bis_csv"], bis)
     export_segments(paths["segments_csv"], segments)
     export_zhongshus(paths["zhongshu_csv"], zhongshus)
+    lei_zhongshu_csv = paths["zhongshu_csv"].with_name(f"{paths['zhongshu_csv'].stem}_lei.csv")
+    export_zhongshus(lei_zhongshu_csv, lei_zhongshus)
     export_macd(paths["macd_csv"], macd_points)
     save_structure_charts(
         bars=raw_bars,
@@ -401,6 +408,7 @@ def main() -> None:
         fractals=fractals,
         bis=bis,
         zhongshus=zhongshus,
+        lei_zhongshus=lei_zhongshus,
         svg_path=paths["svg"],
         png_path=paths["png"],
         jpg_path=paths["jpg"],
@@ -440,6 +448,7 @@ def main() -> None:
         actual_bar_count=len(raw_bars),
         requested_min_rows=None,
         zhongshus=zhongshus,
+        lei_zhongshus=lei_zhongshus,
         structure_state=signals["structure_state"],
         divergence=signals["divergence"],
         summary_payload=summary_payload,
