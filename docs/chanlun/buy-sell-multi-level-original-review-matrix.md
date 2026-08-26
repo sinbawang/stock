@@ -13,7 +13,9 @@
 
 - 第20课：第三类买卖点与首次回抽约束。
 - 第21课：三类买卖点的完备性与重合关系。
+- 第44课：小级别背驰引发大级别转折。
 - 第53课：三类买卖点再分辨、小转大与级别切换。
+- 第61课：区间套定位标准图解。
 
 ## 2. 逐课对照矩阵
 
@@ -21,7 +23,9 @@
 | --- | --- | --- | --- | --- |
 | 20 | 第三类买卖点强调离开中枢后的首次回抽/回试约束。 | [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) 已明确 3B/3S 核心语义。 | 基本一致 | 补“首次回试失败不得二次补写”为负例模板。 |
 | 21 | 三类买卖点完备性；2类与3类在特定条件下可能重合。 | [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) 已保留 2/3 类重合关系。 | 基本一致 | 补“2B/3B 重合”标准案例卡片。 |
+| 44 | 小背驰-大转折定理：小级别顶/底背驰引发大级别转折的必要条件是最后一个次级别中枢出现第三类卖/买点（只有必要条件、无充分条件）。 | [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) §4 小转大已要求“低级别先转折、高级别确认”。 | 基本一致（必要条件未显式） | 补“小背驰后未出现三卖则不判大级别转折”反例；补必要条件模板。 |
 | 53 | 2买用于补足小转大；级别切换必须明确高低级别关系。 | [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) 已保留小转大与多级别分工。 | 基本一致 | 补“低级别转折已出现，但高级别尚未确认”的降级模板。 |
+| 61 | 区间套定位：围绕同一中枢的任意两段都可比较力度；背驰段内逐级定位（多重背驰段）；第二类卖点可与某中枢第三类卖点重合。 | [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) §3 区间套 + `precision_entry.nested_from`。 | 基本一致 | 补“2/3 类重合”标准卡（与第21课呼应）；补多重背驰段定位图示。 |
 
 ## 3. 当前偏差与边界
 
@@ -41,3 +45,5 @@
 - `books/chanzhongshuochan_lessons/articles_md/lesson_020_教你炒股票20：缠中说禅走势中枢级别扩张及第三类买卖点.md`
 - `books/chanzhongshuochan_lessons/articles_md/lesson_021_教你炒股票21：缠中说禅买卖点分析的完备性.md`
 - `books/chanzhongshuochan_lessons/articles_md/lesson_053_教你炒股票53：三类买卖点的再分辨.md`
+- `books/chanzhongshuochan_lessons/articles_md/lesson_044_教你炒股票44：小级别背驰引发大级别转折.md`
+- `books/chanzhongshuochan_lessons/articles_md/lesson_061_教你炒股票61：区间套定位标准图解（分析示范六）.md`
