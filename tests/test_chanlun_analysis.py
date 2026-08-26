@@ -683,7 +683,8 @@ def test_real_1m_pre_breakout_replay_sample_preserves_independent_gate() -> None
     assert payload["zs_monitor_bias"] == "strong"
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
     assert payload["buy_points"] == []
-    assert payload["sell_points"] == ["sell_1", "sell_2"]
+    # 严格二卖需「反抽不破前高 + 反抽后再度走弱」；该 cutoff 反抽(58)尚未被向下笔跟随，故只报 sell_1。
+    assert payload["sell_points"] == ["sell_1"]
     assert payload["conclusion"] == "观察，等待确认。"
     assert payload["latest_zs_low"] == 19.97
     assert payload["latest_zs_high"] == 20.24
@@ -887,11 +888,24 @@ def test_analyze_chanlun_signals_flags_second_buy_after_buy1_rebound() -> None:
             norm_bar_range=(5, 6),
             is_confirmed=False,
         ),
+        Bi(
+            bi_id=6,
+            direction=BiDirection.UP,
+            start_fx_id=6,
+            end_fx_id=7,
+            start_ts=datetime(2026, 5, 15, 10, 30),
+            end_ts=datetime(2026, 5, 15, 14, 30),
+            high=11.2,
+            low=10.5,
+            norm_bar_range=(6, 7),
+            is_confirmed=False,
+        ),
     ]
     macd_points = [
         SimpleNamespace(ts=bis[0].end_ts, macd=-5.0, dif=-1.0),
         SimpleNamespace(ts=bis[2].end_ts, macd=-2.0, dif=-0.6),
         SimpleNamespace(ts=bis[4].end_ts, macd=-1.0, dif=-0.4),
+        SimpleNamespace(ts=bis[5].end_ts, macd=1.0, dif=0.2),
     ]
 
     signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
@@ -920,11 +934,24 @@ def test_analyze_chanlun_signals_flags_second_sell_after_sell1_rebound() -> None
             norm_bar_range=(15, 16),
             is_confirmed=False,
         ),
+        Bi(
+            bi_id=16,
+            direction=BiDirection.DOWN,
+            start_fx_id=16,
+            end_fx_id=17,
+            start_ts=datetime(2026, 5, 20, 10, 30),
+            end_ts=datetime(2026, 5, 20, 14, 30),
+            high=10.5,
+            low=9.9,
+            norm_bar_range=(16, 17),
+            is_confirmed=False,
+        ),
     ]
     macd_points = [
         SimpleNamespace(ts=bis[0].end_ts, macd=2.0, dif=0.4),
         SimpleNamespace(ts=bis[2].end_ts, macd=1.0, dif=0.2),
         SimpleNamespace(ts=bis[4].end_ts, macd=0.8, dif=0.1),
+        SimpleNamespace(ts=bis[5].end_ts, macd=-0.6, dif=-0.1),
     ]
 
     signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
@@ -1032,6 +1059,70 @@ def test_analyze_chanlun_signals_does_not_reflag_sell2_on_second_rebound() -> No
             high=10.65,
             low=10.0,
             norm_bar_range=(17, 18),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=2.0, dif=0.4),
+        SimpleNamespace(ts=bis[2].end_ts, macd=1.0, dif=0.2),
+        SimpleNamespace(ts=bis[4].end_ts, macd=0.8, dif=0.1),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert "sell_2" not in signals["sell_points"]
+
+
+def test_analyze_chanlun_signals_does_not_flag_buy2_without_renew_up_after_pullback() -> None:
+    """BS3 二买「再度走强」：一买后回抽不破前低，但尚未出现再度向上的笔 -> 二买不成立。"""
+    current_zs = _zhongshu(10, zs_low=10.2, zs_high=10.8, day=10)
+    bis = [
+        _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=10),
+        _bi(2, BiDirection.UP, high=10.9, low=10.4, day=11),
+        _bi(3, BiDirection.DOWN, high=11.0, low=10.0, day=12),
+        _bi(4, BiDirection.UP, high=11.3, low=10.3, day=13),
+        Bi(
+            bi_id=5,
+            direction=BiDirection.DOWN,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 14, 10, 30),
+            end_ts=datetime(2026, 5, 14, 14, 30),
+            high=11.1,
+            low=10.4,
+            norm_bar_range=(5, 6),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-2.0, dif=-0.6),
+        SimpleNamespace(ts=bis[4].end_ts, macd=-1.0, dif=-0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert "buy_2" not in signals["buy_points"]
+
+
+def test_analyze_chanlun_signals_does_not_flag_sell2_without_renew_down_after_rebound() -> None:
+    """BS3 二卖「再度走弱」：一卖后反抽不破前高，但尚未出现再度向下的笔 -> 二卖不成立。"""
+    current_zs = _zhongshu(12, zs_low=10.2, zs_high=10.8, day=15)
+    bis = [
+        _bi(11, BiDirection.UP, high=10.6, low=10.1, day=15),
+        _bi(12, BiDirection.DOWN, high=10.5, low=10.0, day=16),
+        _bi(13, BiDirection.UP, high=11.0, low=10.2, day=17),
+        _bi(14, BiDirection.DOWN, high=10.4, low=9.8, day=18),
+        Bi(
+            bi_id=15,
+            direction=BiDirection.UP,
+            start_fx_id=15,
+            end_fx_id=16,
+            start_ts=datetime(2026, 5, 19, 10, 30),
+            end_ts=datetime(2026, 5, 19, 14, 30),
+            high=10.7,
+            low=10.0,
+            norm_bar_range=(15, 16),
             is_confirmed=False,
         ),
     ]

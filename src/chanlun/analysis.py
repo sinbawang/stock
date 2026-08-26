@@ -963,13 +963,13 @@ def analyze_chanlun_signals(
     if (
         current_zs
         and previous_buy1_active
-        and latest_confirmed_up
+        and latest_up
         and latest_down
         and latest_confirmed_down is not None
         and latest_down.bi_id != latest_confirmed_down.bi_id
-        and latest_confirmed_up.high > latest_confirmed_down.high
         and latest_down.low > latest_confirmed_down.low
         and _is_first_reverse_hold(latest_confirmed_down, latest_down, bis)
+        and latest_up.bi_id > latest_down.bi_id
     ):
         buy_points.append("buy_2")
     if current_zs and latest_confirmed_up and latest_confirmed_up.high > current_zs.zs_high and latest_down and latest_down.low >= current_zs.zs_high:
@@ -989,8 +989,8 @@ def analyze_chanlun_signals(
         and latest_confirmed_up
         and latest_up.bi_id != latest_confirmed_up.bi_id
         and latest_up.high < latest_confirmed_up.high
-        and latest_down.low < latest_confirmed_up.low
         and _is_first_reverse_hold(latest_confirmed_up, latest_up, bis)
+        and latest_down.bi_id > latest_up.bi_id
     ):
         sell_points.append("sell_2")
     if current_zs and latest_down and latest_down.low < current_zs.zs_low and latest_confirmed_up and latest_confirmed_up.high <= current_zs.zs_low:
