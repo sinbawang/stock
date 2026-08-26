@@ -305,6 +305,21 @@ def _is_first_up_holding_below(anchor: Bi, candidate: Bi, bis: list[Bi], level: 
     return True
 
 
+def _renewed_beyond_previous(latest_bi: Bi, pullback_bi: Bi, bis: list[Bi]) -> bool:
+    """「再度走强 / 走弱」的力度口径：renewed bi 必须创新高 / 新低。
+
+    - 向上 renewed：latest_bi.high > 回抽前最近向上 bi 的 high（创新高）
+    - 向下 renewed：latest_bi.low < 反抽前最近向下 bi 的 low（创新低）
+    """
+    direction = "up" if latest_bi.is_up() else "down"
+    prior = _latest_bi_before(pullback_bi.bi_id, direction, bis)
+    if prior is None:
+        return False
+    if latest_bi.is_up():
+        return latest_bi.high > prior.high
+    return latest_bi.low < prior.low
+
+
 def _build_signal_point_detail(
     point: str,
     signal_bi: Bi | None,
@@ -1035,7 +1050,10 @@ def analyze_chanlun_signals(
         bottom_divergence = _has_bottom_divergence(latest_confirmed_down, bottom_reference_bi, strengths)
     current_zs_exit_bi = None
     if current_zs and current_zs.exit_bi_id is not None:
-        current_zs_exit_bi = next((bi for bi in bis if bi.bi_id == current_zs.exit_bi_id), None)
+        if current_zs.structure_level == "segment" and segments:
+            current_zs_exit_bi = _segment_by_id(current_zs.exit_bi_id, segments)
+        else:
+            current_zs_exit_bi = next((bi for bi in bis if bi.bi_id == current_zs.exit_bi_id), None)
     buy_points: list[str] = []
     sell_points: list[str] = []
     use_segment_divergence = current_zs is not None and current_zs.structure_level == "segment" and bool(segments)
@@ -1077,6 +1095,7 @@ def analyze_chanlun_signals(
         and latest_down.low > latest_confirmed_down.low
         and _is_first_reverse_hold(latest_confirmed_down, latest_down, bis)
         and latest_up.bi_id > latest_down.bi_id
+        and _renewed_beyond_previous(latest_up, latest_down, bis)
     ):
         buy_points.append("buy_2")
     if (
@@ -1091,6 +1110,7 @@ def analyze_chanlun_signals(
             leave_up is not None
             and leave_up.high > current_zs.zs_high
             and _is_first_down_holding_above(leave_up, latest_down, bis, current_zs.zs_high)
+            and latest_up.high > leave_up.high
         ):
             buy_points.append("buy_3")
     previous_sell1_active = (
@@ -1110,6 +1130,7 @@ def analyze_chanlun_signals(
         and latest_up.high < latest_confirmed_up.high
         and _is_first_reverse_hold(latest_confirmed_up, latest_up, bis)
         and latest_down.bi_id > latest_up.bi_id
+        and _renewed_beyond_previous(latest_down, latest_up, bis)
     ):
         sell_points.append("sell_2")
     if (
@@ -1124,6 +1145,7 @@ def analyze_chanlun_signals(
             leave_down is not None
             and leave_down.low < current_zs.zs_low
             and _is_first_up_holding_below(leave_down, latest_up, bis, current_zs.zs_low)
+            and latest_down.low < leave_down.low
         ):
             sell_points.append("sell_3")
 

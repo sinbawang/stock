@@ -937,7 +937,7 @@ def test_analyze_chanlun_signals_flags_second_buy_after_buy1_rebound() -> None:
             end_fx_id=7,
             start_ts=datetime(2026, 5, 15, 10, 30),
             end_ts=datetime(2026, 5, 15, 14, 30),
-            high=11.2,
+            high=11.4,
             low=10.5,
             norm_bar_range=(6, 7),
             is_confirmed=False,
@@ -984,7 +984,7 @@ def test_analyze_chanlun_signals_flags_second_sell_after_sell1_rebound() -> None
             start_ts=datetime(2026, 5, 20, 10, 30),
             end_ts=datetime(2026, 5, 20, 14, 30),
             high=10.5,
-            low=9.9,
+            low=9.7,
             norm_bar_range=(16, 17),
             is_confirmed=False,
         ),
@@ -1001,6 +1001,99 @@ def test_analyze_chanlun_signals_flags_second_sell_after_sell1_rebound() -> None
     assert "sell_2" in signals["sell_points"]
     assert signals["signal_catalog"][4]["active"] is True
     assert signals["signal_catalog"][4]["basis"] == "sell1_rebound_confirmation"
+
+
+def test_analyze_chanlun_signals_does_not_flag_buy2_when_renew_up_fails_new_high() -> None:
+    """BS3 二买「再度走强」力度：回抽后出现向上笔但未创新高 -> 二买不成立。"""
+    current_zs = _zhongshu(10, zs_low=10.2, zs_high=10.8, day=10)
+    bis = [
+        _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=10),
+        _bi(2, BiDirection.UP, high=10.9, low=10.4, day=11),
+        _bi(3, BiDirection.DOWN, high=11.0, low=10.0, day=12),
+        _bi(4, BiDirection.UP, high=11.3, low=10.3, day=13),
+        Bi(
+            bi_id=5,
+            direction=BiDirection.DOWN,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 14, 10, 30),
+            end_ts=datetime(2026, 5, 14, 14, 30),
+            high=11.1,
+            low=10.4,
+            norm_bar_range=(5, 6),
+            is_confirmed=False,
+        ),
+        Bi(
+            bi_id=6,
+            direction=BiDirection.UP,
+            start_fx_id=6,
+            end_fx_id=7,
+            start_ts=datetime(2026, 5, 15, 10, 30),
+            end_ts=datetime(2026, 5, 15, 14, 30),
+            high=11.2,
+            low=10.5,
+            norm_bar_range=(6, 7),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-2.0, dif=-0.6),
+        SimpleNamespace(ts=bis[4].end_ts, macd=-1.0, dif=-0.4),
+        SimpleNamespace(ts=bis[5].end_ts, macd=1.0, dif=0.2),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["buy_points"] == []
+    assert signals["sell_points"] == []
+
+
+def test_analyze_chanlun_signals_does_not_flag_sell2_when_renew_down_fails_new_low() -> None:
+    """BS3 二卖「再度走弱」力度：反抽后出现向下笔但未创新低 -> 二卖不成立。"""
+    current_zs = _zhongshu(11, zs_low=10.2, zs_high=10.8, day=15)
+    bis = [
+        _bi(11, BiDirection.UP, high=10.6, low=10.1, day=15),
+        _bi(12, BiDirection.DOWN, high=10.5, low=10.0, day=16),
+        _bi(13, BiDirection.UP, high=11.0, low=10.2, day=17),
+        _bi(14, BiDirection.DOWN, high=10.4, low=9.8, day=18),
+        Bi(
+            bi_id=15,
+            direction=BiDirection.UP,
+            start_fx_id=15,
+            end_fx_id=16,
+            start_ts=datetime(2026, 5, 19, 10, 30),
+            end_ts=datetime(2026, 5, 19, 14, 30),
+            high=10.7,
+            low=10.0,
+            norm_bar_range=(15, 16),
+            is_confirmed=False,
+        ),
+        Bi(
+            bi_id=16,
+            direction=BiDirection.DOWN,
+            start_fx_id=16,
+            end_fx_id=17,
+            start_ts=datetime(2026, 5, 20, 10, 30),
+            end_ts=datetime(2026, 5, 20, 14, 30),
+            high=10.5,
+            low=9.9,
+            norm_bar_range=(16, 17),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=2.0, dif=0.4),
+        SimpleNamespace(ts=bis[2].end_ts, macd=1.0, dif=0.2),
+        SimpleNamespace(ts=bis[4].end_ts, macd=0.8, dif=0.1),
+        SimpleNamespace(ts=bis[5].end_ts, macd=-0.6, dif=-0.1),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["buy_points"] == []
+    # 顶背驰仍构成 sell_1，但反抽后向下笔未创新低 -> 二卖不成立。
+    assert "sell_2" not in signals["sell_points"]
 
 
 def test_analyze_chanlun_signals_does_not_reflag_buy2_on_second_pullback() -> None:
@@ -1458,7 +1551,7 @@ def test_analyze_chanlun_signals_flags_third_buy_after_leave_zs_and_pullback_hol
             end_fx_id=6,
             start_ts=datetime(2026, 5, 24, 10, 30),
             end_ts=datetime(2026, 5, 24, 14, 30),
-            high=11.4,
+            high=11.6,
             low=11.1,
             norm_bar_range=(5, 6),
             is_confirmed=False,
@@ -1511,6 +1604,74 @@ def test_analyze_chanlun_signals_flags_third_sell_after_leave_zs_and_rebound_fai
     assert signals["sell_points"] == ["sell_3"]
     assert signals["buy_points"] == []
     assert signals["signal_catalog"][5]["basis"] == "leave_zs_then_rebound_fails_lower_edge"
+
+
+def test_analyze_chanlun_signals_does_not_flag_buy3_when_renew_up_fails_new_high() -> None:
+    """BS4 三买「再度走强」力度：回抽后出现向上笔但未创新高 -> 三买不成立。"""
+    current_zs = _zhongshu(17, zs_low=10.0, zs_high=10.8, day=20)
+    bis = [
+        _bi(1, BiDirection.UP, high=10.7, low=10.2, day=20),
+        _bi(2, BiDirection.DOWN, high=10.6, low=10.1, day=21),
+        _bi(3, BiDirection.UP, high=11.5, low=10.9, day=22),
+        _bi(4, BiDirection.DOWN, high=11.2, low=11.0, day=23),
+        Bi(
+            bi_id=5,
+            direction=BiDirection.UP,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 24, 10, 30),
+            end_ts=datetime(2026, 5, 24, 14, 30),
+            high=11.4,
+            low=11.1,
+            norm_bar_range=(5, 6),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=3.0, dif=1.0),
+        SimpleNamespace(ts=bis[1].end_ts, macd=-1.0, dif=-0.5),
+        SimpleNamespace(ts=bis[2].end_ts, macd=3.0, dif=1.0),
+        SimpleNamespace(ts=bis[3].end_ts, macd=-1.0, dif=-0.5),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["buy_points"] == []
+    assert signals["sell_points"] == []
+
+
+def test_analyze_chanlun_signals_does_not_flag_sell3_when_renew_down_fails_new_low() -> None:
+    """BS4 三卖「再度走弱」力度：反抽后出现向下笔但未创新低 -> 三卖不成立。"""
+    current_zs = _zhongshu(18, zs_low=10.0, zs_high=10.8, day=1)
+    bis = [
+        _bi(1, BiDirection.DOWN, high=10.5, low=10.1, day=1),
+        _bi(2, BiDirection.UP, high=10.6, low=10.0, day=2),
+        _bi(3, BiDirection.DOWN, high=10.4, low=9.5, day=3),
+        _bi(4, BiDirection.UP, high=9.8, low=9.4, day=4),
+        Bi(
+            bi_id=5,
+            direction=BiDirection.DOWN,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 5, 10, 30),
+            end_ts=datetime(2026, 5, 5, 14, 30),
+            high=9.7,
+            low=9.6,
+            norm_bar_range=(5, 6),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-3.0, dif=-1.0),
+        SimpleNamespace(ts=bis[1].end_ts, macd=1.0, dif=0.5),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-3.0, dif=-1.0),
+        SimpleNamespace(ts=bis[3].end_ts, macd=1.0, dif=0.5),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["buy_points"] == []
+    assert signals["sell_points"] == []
 
 
 def test_analyze_chanlun_signals_does_not_flag_buy1_on_boundary_touch_without_divergence() -> None:
@@ -1663,6 +1824,24 @@ def test_analyze_chanlun_signals_exports_current_zhongshu_exit_time() -> None:
 
     assert signals["current_zs_exit_bi"] is bis[1]
     assert signals["current_zs_exit_time"] == "2026-05-21T14:30:00"
+
+
+def test_analyze_chanlun_signals_exports_segment_level_zhongshu_exit_time() -> None:
+    """segment 级中枢的 exit_bi_id 存的是线段 id，须按 segments 解析出离开段结束时间。"""
+    zs = _segment_zhongshu(20, entering_segment_id=1, exit_segment_id=2, zs_low=10.0, zs_high=10.8)
+    zs.is_terminated = True
+    entering = _segment(1, BiDirection.UP, high=10.6, low=9.9, start_day=1)
+    exit_seg = _segment(2, BiDirection.UP, high=11.2, low=10.3, start_day=3)
+    bis = [
+        _bi(1, BiDirection.UP, high=10.6, low=9.9, day=1),
+        _bi(2, BiDirection.DOWN, high=10.5, low=10.0, day=2),
+        _bi(3, BiDirection.UP, high=11.2, low=10.3, day=3),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [zs], [], segments=[entering, exit_seg])
+
+    assert signals["current_zs_exit_bi"] is exit_seg
+    assert signals["current_zs_exit_time"] == "2026-05-04T14:30:00"
 
 
 def test_build_lower_timeframe_precision_entry_requires_higher_context_and_time_alignment() -> None:
