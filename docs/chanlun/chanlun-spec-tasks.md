@@ -123,7 +123,7 @@
 
 | 任务 | 当前状态 | 完成度 | 说明 |
 | --- | --- | --- | --- |
-| 标准线段级中枢主实现 | 进行中 | 84% | 当前已完成 `segment` 主口径锁定、仅已确认线段参与标准中枢、reclaim/吸收字段下沉、bootstrap / gap / reclaim / reverse_break 多条边界修正，以及多组真实 fixture regression 锁定；同时 `1m pre_breakdown` 已补到真实 `tech.json / advice_text / publish` 回归，review 主锚点也已切到真实样本，并新增 `build/probe_intraday_prebreak_sample.py` 作为 `1m pre_break*` 历史 cutoff 回放工具；本轮又补了 `relationship.transition_state` 首版 machine-readable 转场字段，并已接进同级别分解 summary/detail 消费层。`nested deferred -> invalidated` 交界已由参数化 regression 统一收口到 `1m/5m/30m/day` 首选级别并扩到 `600900/01024` 跨标的，同时增加了锚点健康检查。剩余主缺口集中在“真实 `1m pre_breakout` 样本”“真实 confirmed 页内卡片”“复杂 reclaim/重写 与 gap 再分辨交界统一”“中枢完成/扩张/新中枢切换”“标准中枢与后续买卖点绑定稳定化”。 |
+| 标准线段级中枢主实现 | 完成 | 92% | 当前已完成 `segment` 主口径锁定、仅已确认线段参与标准中枢、reclaim/吸收字段下沉、bootstrap / gap / reclaim / reverse_break 多条边界修正，以及多组真实 fixture regression 锁定；`1m pre_breakdown` / `1m pre_breakout`（002555/03690/600900）与 confirmed 3S/3B live 样本均已补真实回归；`transition_state` / `consumption_level` 转场字段已贯通消费层；复杂 reclaim/重写与 gap 交界、中枢完成/扩张/新中枢切换、标准中枢与后续买卖点绑定（买卖点段级化）均已收口。剩余为数据缺口：真实 `candidate_new_type` 与 `reabsorbed lineage` 样本（确定性数据缺口，见 [zhongshu-tasks.md](zhongshu-tasks.md) 当前 blocker）。 |
 | 严格同级别走势类型自动分解 | 进行中 | 45% | TD1 已落地 machine-readable `type_chain` 与过渡段转场字段；TD2/TD3 背驰严格判定仍待收口，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 趋势背驰严格自动判定 | 进行中 | 55% | TD2 已落地 `divergence.trend` 的 `strict / reference_zs_id / departure_confirmed / strength_comparison`；消费端按 `strict` 措辞归 TD4，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 盘整背驰严格自动判定 | 进行中 | 50% | TD3 已落地 `divergence.range` 的 `strict / reference_zs_id / touches_boundary / strength_comparison`；消费端措辞归 TD4，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
