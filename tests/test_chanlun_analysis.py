@@ -1574,6 +1574,69 @@ def test_analyze_chanlun_signals_buy1_anchors_on_exit_segment_end_bi() -> None:
     assert signals["sell_points"] == []
 
 
+def test_analyze_chanlun_signals_buy3_uses_exit_segment_as_leave() -> None:
+    """BS4 段级离开：三买以向上离开段末笔为离开锚点，而非任一越上沿笔。"""
+    zs = _segment_zhongshu(32, entering_segment_id=1, exit_segment_id=2, zs_low=10.0, zs_high=10.8)
+    entering = Segment(
+        segment_id=1,
+        direction=BiDirection.UP,
+        start_bi_id=10,
+        end_bi_id=11,
+        start_ts=datetime(2026, 5, 1, 10, 30),
+        end_ts=datetime(2026, 5, 2, 14, 30),
+        start_price=10.0,
+        end_price=10.6,
+        high=10.6,
+        low=9.9,
+        norm_bar_range=(10, 11),
+        bi_ids=[10, 11],
+        is_confirmed=True,
+    )
+    exit_seg = Segment(
+        segment_id=2,
+        direction=BiDirection.UP,
+        start_bi_id=12,
+        end_bi_id=13,
+        start_ts=datetime(2026, 5, 3, 10, 30),
+        end_ts=datetime(2026, 5, 4, 14, 30),
+        start_price=10.4,
+        end_price=11.2,
+        high=11.2,
+        low=10.3,
+        norm_bar_range=(12, 13),
+        bi_ids=[12, 13],
+        is_confirmed=True,
+    )
+    bis = [
+        _bi(10, BiDirection.DOWN, high=10.9, low=10.4, day=1),
+        _bi(11, BiDirection.UP, high=10.6, low=9.9, day=2),
+        _bi(12, BiDirection.DOWN, high=10.5, low=10.0, day=3),
+        _bi(13, BiDirection.UP, high=11.2, low=10.3, day=4),
+        _bi(14, BiDirection.DOWN, high=11.2, low=10.9, day=5),
+        Bi(
+            bi_id=15,
+            direction=BiDirection.UP,
+            start_fx_id=15,
+            end_fx_id=16,
+            start_ts=datetime(2026, 5, 6, 10, 30),
+            end_ts=datetime(2026, 5, 6, 14, 30),
+            high=11.4,
+            low=10.95,
+            norm_bar_range=(15, 16),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=entering.end_ts, macd=1.0, dif=0.4),
+        SimpleNamespace(ts=exit_seg.end_ts, macd=5.0, dif=1.0),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [zs], macd_points, segments=[entering, exit_seg])
+
+    assert signals["buy_points"] == ["buy_3"]
+    assert signals["sell_points"] == []
+
+
 def test_compute_segment_strengths_aggregates_macd_area_by_segment_window() -> None:
     """线段力度 = 线段时间窗内 abs(macd) 之和。"""
     seg_a = _segment(1, BiDirection.DOWN, high=11.0, low=10.0, start_day=1)

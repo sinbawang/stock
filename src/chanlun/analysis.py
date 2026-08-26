@@ -1071,6 +1071,7 @@ def analyze_chanlun_signals(
     # 一类点信号锚点：段级模式取离开段末笔（而非最新同向笔），边界/转折均以离开段末笔为基准。
     buy_signal_bi = latest_down
     sell_signal_bi = latest_confirmed_up
+    exit_end_bi: Bi | None = None
     if use_segment_divergence and exit_segment is not None:
         exit_end_bi = _bi_by_id(exit_segment.end_bi_id, bis)
         if exit_end_bi is not None:
@@ -1104,15 +1105,17 @@ def analyze_chanlun_signals(
         and _has_bottom_divergence(latest_confirmed_down, previous_confirmed_down, strengths)
         and latest_confirmed_down.low <= current_zs.zs_low
     )
+    buy2_precursor = segment_bottom_divergence if use_segment_divergence else previous_buy1_active
+    buy2_anchor = buy_signal_bi if use_segment_divergence else latest_confirmed_down
     if (
         current_zs
-        and previous_buy1_active
+        and buy2_precursor
         and latest_up
         and latest_down
-        and latest_confirmed_down is not None
-        and latest_down.bi_id != latest_confirmed_down.bi_id
-        and latest_down.low > latest_confirmed_down.low
-        and _is_first_reverse_hold(latest_confirmed_down, latest_down, bis)
+        and buy2_anchor is not None
+        and latest_down.bi_id != buy2_anchor.bi_id
+        and latest_down.low > buy2_anchor.low
+        and _is_first_reverse_hold(buy2_anchor, latest_down, bis)
         and latest_up.bi_id > latest_down.bi_id
         and _renewed_beyond_previous(latest_up, latest_down, bis)
     ):
@@ -1124,7 +1127,10 @@ def analyze_chanlun_signals(
         and latest_down.low >= current_zs.zs_high
         and latest_up.bi_id > latest_down.bi_id
     ):
-        leave_up = _latest_bi_before(latest_down.bi_id, "up", bis)
+        if use_segment_divergence and exit_segment is not None and exit_segment.is_up():
+            leave_up = exit_end_bi
+        else:
+            leave_up = _latest_bi_before(latest_down.bi_id, "up", bis)
         if (
             leave_up is not None
             and leave_up.high > current_zs.zs_high
@@ -1139,15 +1145,17 @@ def analyze_chanlun_signals(
         and _has_top_divergence(latest_confirmed_up, previous_confirmed_up, strengths)
         and latest_confirmed_up.high >= current_zs.zs_high
     )
+    sell2_precursor = segment_top_divergence if use_segment_divergence else previous_sell1_active
+    sell2_anchor = sell_signal_bi if use_segment_divergence else latest_confirmed_up
     if (
         current_zs
-        and previous_sell1_active
+        and sell2_precursor
         and latest_up
         and latest_down
-        and latest_confirmed_up
-        and latest_up.bi_id != latest_confirmed_up.bi_id
-        and latest_up.high < latest_confirmed_up.high
-        and _is_first_reverse_hold(latest_confirmed_up, latest_up, bis)
+        and sell2_anchor is not None
+        and latest_up.bi_id != sell2_anchor.bi_id
+        and latest_up.high < sell2_anchor.high
+        and _is_first_reverse_hold(sell2_anchor, latest_up, bis)
         and latest_down.bi_id > latest_up.bi_id
         and _renewed_beyond_previous(latest_down, latest_up, bis)
     ):
@@ -1159,7 +1167,10 @@ def analyze_chanlun_signals(
         and latest_up.high <= current_zs.zs_low
         and latest_down.bi_id > latest_up.bi_id
     ):
-        leave_down = _latest_bi_before(latest_up.bi_id, "down", bis)
+        if use_segment_divergence and exit_segment is not None and exit_segment.is_down():
+            leave_down = exit_end_bi
+        else:
+            leave_down = _latest_bi_before(latest_up.bi_id, "down", bis)
         if (
             leave_down is not None
             and leave_down.low < current_zs.zs_low
