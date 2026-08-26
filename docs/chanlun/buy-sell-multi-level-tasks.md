@@ -19,7 +19,7 @@
 | BS1 | 当前实现 vs 严格理论差异表 | 完成 | `analysis.py` 现状梳理 | 每条 buy / sell 规则都能标出“严格一致 / 工程近似 / 待实现” |
 | BS2 | 一类买卖点严格确认 | 进行中 | `zhongshu`, `trend-divergence` 稳定 | 最近中枢、离开段、背驰绑定关系明确且可自动判定 |
 | BS3 | 二类买卖点严格确认 | 进行中 | BS2 | 能严格绑定 1 类点后的首次确认性回抽 |
-| BS4 | 三类买卖点严格确认 | 待完成 | BS2 | 能严格绑定最近中枢后的首次回抽与级别边界 |
+| BS4 | 三类买卖点严格确认 | 进行中 | BS2 | 能严格绑定最近中枢后的首次回抽与级别边界 |
 | BS5 | 多级别联立与消费降级规则 | 进行中 | BS2-BS4 | 高一级方向、操作级别、执行级别和 pending / auxiliary 降级文案一致 |
 | BS6 | 标准案例包与回归闸门 | 进行中 | BS1-BS5 | 一二三类点与区间套样例可 review、可回归、可下游消费 |
 
@@ -78,17 +78,17 @@
 | `buy_1` | L882-883 | `current_zs and latest_down and bottom_divergence and latest_down.low <= zs_low` | 最近中枢 `current_zs` + 离开段 `latest_down` + 背驰 `bottom_divergence`（macd_sum_abs 衰减）三元组 | ① 力度比较用最近两根 down bi 的 `macd_sum_abs` 衰减（`_has_bottom_divergence`），非严格的「离开段 vs 进入段」同级别比较；② 「中枢附近」用 `latest_down.low <= zs_low` 跌破下沿近似；③ 未显式确认向上转折笔 | 工程近似 |
 | `sell_1` | L884-885 | `current_zs and latest_confirmed_up and top_divergence and latest_confirmed_up.high >= zs_high` | 最近中枢 + 离开段 + 顶背驰三元组 | 与 buy_1 对称，但 sell_1 用 `latest_confirmed_up`（已确认），buy_1 用 `latest_down`（可为未确认），双边口径不对称；其余近似同 buy_1 | 工程近似 |
 | `buy_2` | `analyze_chanlun_signals` buy_2 段 | `previous_buy1_active`（回溯一买：latest/previous down 底背驰 + 跌破下沿）且 `latest_down.low > latest_confirmed_down.low`（不破前低）且 `_is_first_reverse_hold`（首次回抽锁定）且 `latest_up.bi_id > latest_down.bi_id`（回抽后再度走强） | 绑定一买 + 不破前低 + 首次回抽锁定 + 再度走强 | 「再度走强」仅要求回抽后出现向上笔，力度不严格（未要求创新高） | 工程近似 |
-| `buy_3` | L904-905 | `latest_confirmed_up.high > zs_high`（离开）且 `latest_down.low >= zs_high`（回抽不跌回上沿） | 离开中枢 + 首次不回归硬约束 | ① 「再度走强」缺失（无回抽后向上笔确认）；② 「首次」未锁定（第二次回抽满足条件也可能回写成同一中枢三买，违反红线） | 工程近似 |
+| `buy_3` | `analyze_chanlun_signals` buy_3 段 | 离开笔（`_latest_bi_before` 越上沿）+ `latest_down.low >= zs_high`（回抽不跌回上沿）+ `_is_first_down_holding_above`（首次回试锁定）+ `latest_up.bi_id > latest_down.bi_id`（再度走强） | 离开中枢 + 首次不回归 + 首次回试锁定 + 再度走强 | 「再度走强」仅要求回抽后出现向上笔，力度不严格 | 工程近似 |
 | `sell_2` | `analyze_chanlun_signals` sell_2 段 | `previous_sell1_active`（回溯一卖：latest/previous up 顶背驰 + 越上沿）且 `latest_up.high < latest_confirmed_up.high`（不破前高）且 `_is_first_reverse_hold`（首次反抽锁定）且 `latest_down.bi_id > latest_up.bi_id`（反抽后再度走弱） | 绑定一卖 + 不破前高 + 首次反抽锁定 + 再度走弱 | 与 buy_2 对称：「再度走弱」仅要求反抽后出现向下笔，力度不严格 | 工程近似 |
-| `sell_3` | L925-926 | `latest_down.low < zs_low`（向下离开）且 `latest_confirmed_up.high <= zs_low`（反抽不站回下沿） | 离开中枢 + 首次不回归硬约束 | 与 buy_3 对称：① 「再度走弱」缺失；② 「首次」未锁定 | 工程近似 |
+| `sell_3` | `analyze_chanlun_signals` sell_3 段 | 离开笔（`_latest_bi_before` 破下沿）+ `latest_up.high <= zs_low`（反抽不站回下沿）+ `_is_first_up_holding_below`（首次回试锁定）+ `latest_down.bi_id > latest_up.bi_id`（再度走弱） | 离开中枢 + 首次不回归 + 首次回试锁定 + 再度走弱 | 与 buy_3 对称：「再度走弱」仅要求反抽后出现向下笔，力度不严格 | 工程近似 |
 
 口径汇总：
 
 - 一二三类点的「最近中枢绑定」与「离开段 / 回抽方向」已严格对齐。
-- 三类点（buy_3/sell_3）的「离开 + 不回归」硬约束已严格，缺「再度走强 / 走弱」与「首次回试锁定」。
+- 三类点（buy_3/sell_3）已绑定「离开 + 不回归」、「首次回试锁定」与「回抽后再度走强 / 走弱」，力度未严格要求创新高 / 新低。
 - 二类点（buy_2/sell_2）已绑定一买 / 一卖前置、「不破前低 / 前高」、「首次回抽锁定」与「回抽后再度走强 / 走弱」（`latest_up.bi_id > latest_down.bi_id` / `latest_down.bi_id > latest_up.bi_id`），力度未严格要求创新高 / 新低。
 - 一类点（buy_1/sell_1）背驰三元组已绑定，力度比较口径仍是 macd_sum_abs 工程近似，且 sell_1/buy_1 双边不对称。
-- 工程近似集中在两处：力度比较口径、回抽后的「再度走强 / 走弱」再确认笔。
+- 工程近似集中在两处：力度比较口径（含一类点「离开段 vs 进入段」严格比较）、各买卖点的「再度走强 / 走弱」力度。
 
 验收：
 

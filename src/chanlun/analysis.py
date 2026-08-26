@@ -217,6 +217,38 @@ def _is_first_reverse_hold(anchor: Bi, candidate: Bi, bis: list[Bi]) -> bool:
     return True
 
 
+def _latest_bi_before(anchor_id: int, direction: str, bis: list[Bi]) -> Bi | None:
+    """返回 anchor_id 之前（bi_id < anchor_id）最近的 direction 方向 bi。"""
+    for bi in reversed(bis):
+        if bi.bi_id >= anchor_id:
+            continue
+        if direction == "up" and bi.is_up():
+            return bi
+        if direction == "down" and bi.is_down():
+            return bi
+    return None
+
+
+def _is_first_down_holding_above(anchor: Bi, candidate: Bi, bis: list[Bi], level: float) -> bool:
+    """candidate 是否是 anchor 之后第一个 low >= level 的向下 bi（三类买点首次回试锁定）。"""
+    for other in bis:
+        if other.bi_id <= anchor.bi_id or other.bi_id >= candidate.bi_id:
+            continue
+        if other.is_down() and other.low >= level:
+            return False
+    return True
+
+
+def _is_first_up_holding_below(anchor: Bi, candidate: Bi, bis: list[Bi], level: float) -> bool:
+    """candidate 是否是 anchor 之后第一个 high <= level 的向上 bi（三类卖点首次回试锁定）。"""
+    for other in bis:
+        if other.bi_id <= anchor.bi_id or other.bi_id >= candidate.bi_id:
+            continue
+        if other.is_up() and other.high <= level:
+            return False
+    return True
+
+
 def _build_signal_point_detail(
     point: str,
     signal_bi: Bi | None,
@@ -972,8 +1004,20 @@ def analyze_chanlun_signals(
         and latest_up.bi_id > latest_down.bi_id
     ):
         buy_points.append("buy_2")
-    if current_zs and latest_confirmed_up and latest_confirmed_up.high > current_zs.zs_high and latest_down and latest_down.low >= current_zs.zs_high:
-        buy_points.append("buy_3")
+    if (
+        current_zs
+        and latest_down
+        and latest_up
+        and latest_down.low >= current_zs.zs_high
+        and latest_up.bi_id > latest_down.bi_id
+    ):
+        leave_up = _latest_bi_before(latest_down.bi_id, "up", bis)
+        if (
+            leave_up is not None
+            and leave_up.high > current_zs.zs_high
+            and _is_first_down_holding_above(leave_up, latest_down, bis, current_zs.zs_high)
+        ):
+            buy_points.append("buy_3")
     previous_sell1_active = (
         current_zs is not None
         and latest_confirmed_up is not None
@@ -993,8 +1037,20 @@ def analyze_chanlun_signals(
         and latest_down.bi_id > latest_up.bi_id
     ):
         sell_points.append("sell_2")
-    if current_zs and latest_down and latest_down.low < current_zs.zs_low and latest_confirmed_up and latest_confirmed_up.high <= current_zs.zs_low:
-        sell_points.append("sell_3")
+    if (
+        current_zs
+        and latest_up
+        and latest_down
+        and latest_up.high <= current_zs.zs_low
+        and latest_down.bi_id > latest_up.bi_id
+    ):
+        leave_down = _latest_bi_before(latest_up.bi_id, "down", bis)
+        if (
+            leave_down is not None
+            and leave_down.low < current_zs.zs_low
+            and _is_first_up_holding_below(leave_down, latest_up, bis, current_zs.zs_low)
+        ):
+            sell_points.append("sell_3")
 
     same_level_decomposition_mode = _build_same_level_decomposition_mode(structure_state)
     same_level_consumption_level = _build_same_level_consumption_level(structure_state)
