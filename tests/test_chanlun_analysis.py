@@ -861,6 +861,77 @@ def test_real_1m_trend_divergence_replay_sample_000651_down_second_anchor() -> N
     assert payload["same_level_consumption_level"] == "confirmed"
 
 
+def test_real_day_trend_divergence_replay_sample_000591_down_strict() -> None:
+    # 严格下跌趋势底背驰真实样本（day 级）：000591 太阳能 2026-08-03。
+    # 与既有 000651 1m 非严格样本互补，锁定 strict=True 趋势背驰轨道
+    # （route=higher_level_reverse_trend、single_confirmed/confirmed）。
+    rows = probe_module._load_rows("000591", "day")
+    payload = probe_module._replay("000591", "太阳能", "2026-08-03", rows)
+
+    assert payload["cutoff"] == "2026-08-03"
+    assert payload["ongoing_type"] == "down"
+    assert payload["divergence_trend_active"] is True
+    assert payload["divergence_trend_strict"] is True
+    assert payload["divergence_range_active"] is False
+    assert payload["divergence_range_strict"] is False
+    assert payload["post_divergence_route"] == "higher_level_reverse_trend"
+    assert payload["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["same_level_consumption_level"] == "confirmed"
+
+
+def test_real_day_trend_divergence_replay_sample_601328_up_strict() -> None:
+    # 严格上涨趋势顶背驰真实样本（day 级）：601328 交通银行 2025-06-24，
+    # 补上升趋势方向的严格背驰，与 000591 下跌严格样本对称。
+    rows = probe_module._load_rows("601328", "day")
+    payload = probe_module._replay("601328", "交通银行", "2025-06-24", rows)
+
+    assert payload["cutoff"] == "2025-06-24"
+    assert payload["ongoing_type"] == "up"
+    assert payload["divergence_trend_active"] is True
+    assert payload["divergence_trend_strict"] is True
+    assert payload["divergence_range_active"] is False
+    assert payload["divergence_range_strict"] is False
+    assert payload["post_divergence_route"] == "higher_level_reverse_trend"
+    assert payload["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["same_level_consumption_level"] == "confirmed"
+
+
+def test_real_1m_trend_divergence_replay_sample_300124_up_non_strict() -> None:
+    # 非严格上涨趋势顶背驰真实样本（1m 级）：300124 汇川技术 2026-08-05 10:29，
+    # 补上升趋势方向、非严格轨道（route=last_zs_extension），与 000651 下跌非严格对称。
+    rows = probe_module._load_rows("300124", "1m")
+    payload = probe_module._replay("300124", "汇川技术", "2026-08-05 10:29", rows)
+
+    assert payload["cutoff"] == "2026-08-05 10:29"
+    assert payload["ongoing_type"] == "up"
+    assert payload["divergence_trend_active"] is True
+    assert payload["divergence_trend_strict"] is False
+    assert payload["divergence_range_active"] is False
+    assert payload["divergence_range_strict"] is False
+    assert payload["post_divergence_route"] == "last_zs_extension"
+    assert payload["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["same_level_consumption_level"] == "confirmed"
+
+
+def test_real_1m_range_divergence_replay_sample_000651_strict() -> None:
+    # 严格盘整背驰真实样本（1m 级）：000651 格力电器 2026-08-03 13:47，
+    # 补 TD5 长期缺失的盘整背驰真实样本（range_active=True、strict=True、
+    # touches_boundary=True、route=higher_level_range、dual_interpretation_pending）。
+    rows = probe_module._load_rows("000651", "1m")
+    payload = probe_module._replay("000651", "格力电器", "2026-08-03 13:47", rows)
+
+    assert payload["cutoff"] == "2026-08-03 13:47"
+    assert payload["ongoing_type"] == "range"
+    assert payload["divergence_trend_active"] is False
+    assert payload["divergence_trend_strict"] is False
+    assert payload["divergence_range_active"] is True
+    assert payload["divergence_range_strict"] is True
+    assert payload["divergence_range_touches_boundary"] is True
+    assert payload["post_divergence_route"] == "higher_level_range"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["same_level_consumption_level"] == "pending"
+
+
 def test_build_signal_summary_fields_preserves_catalog_slots() -> None:
     payload = build_signal_summary_fields(
         {

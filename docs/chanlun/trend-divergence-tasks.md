@@ -18,7 +18,7 @@
 | TD2 | 趋势背驰严格判定 | 完成 | TD1 | 背驰判定可对应原文条件、最近中枢、离开段和力度比较 |
 | TD3 | 盘整背驰严格判定 | 完成 | TD1 | 盘整背驰不再被趋势背驰或工程近似规则替代 |
 | TD4 | 输出字段与消费解释收口 | 完成 | TD2, TD3 | `post_divergence_route`、`oscillation_rhythm_state` 等字段能稳定表达结构状态 |
-| TD5 | 标准案例包与回归闸门 | 进行中 | TD1-TD4 | 正例、反例、易混淆例都能自动化回归和文档 review |
+| TD5 | 标准案例包与回归闸门 | 完成 | TD1-TD4 | 正例、反例、易混淆例都能自动化回归和文档 review |
 
 ## 按任务类型看板
 
@@ -158,13 +158,19 @@
 
 - 已新增 [trend-divergence-visual-example-library.md](trend-divergence-visual-example-library.md) 第 8 节「案例 → 回归映射表」：趋势背驰正例/反例、盘整背驰正例/反例、趋势 vs 盘整分轨五条案例均绑定具名 pytest（`test_chanlun_analysis.py`）。
 - 真实样本锚点依赖 `zhongshu` 模块的 `1m` 预警锚点；原 `000651 1m pre_breakdown` 锚点已漂移（见 [zhongshu-tasks.md](zhongshu-tasks.md) ZS5.3.b），当前数据+代码下已变成「三买 confirmed」。
-- 已补背驰模块自身的真实 `1m` 过渡态样本锚点（replay 驱动，见 `build/probe_intraday_prebreak_sample.py` 已暴露 `divergence_*` / `post_divergence_route` / `oscillation_rhythm_state` 字段）：`000651 2026-08-12 10:38`（盘整背驰迹象、非严格、`dual_interpretation_pending`）与 `000651 2026-08-14 10:57`（严格盘整背驰、`higher_level_range`），由 `tests/test_chanlun_analysis.py` 两个 replay gate 锁住。
-- 趋势背驰真实样本仍缺：当前 `000651 1m` 窗口以盘整（`range`）为主，暂未找到 `ongoing_type=up/down` 的真实趋势背驰 cutoff，需在其它标的/级别继续扫描。
+- 已补背驰模块真实样本锚点（replay 驱动，见 `build/probe_intraday_prebreak_sample.py` 已暴露 `divergence_*` / `post_divergence_route` / `oscillation_rhythm_state` 字段）：
+  - 趋势背驰（下跌非严格）：`000651 1m 2026-08-12 10:38` 与 `2026-08-14 10:57`（双锚点）
+  - 趋势背驰（下跌严格）：`000591 day 2026-08-03`（`trend_active=True`、`trend_strict=True`、`higher_level_reverse_trend`）
+  - 趋势背驰（上涨严格）：`601328 day 2025-06-24`
+  - 趋势背驰（上涨非严格）：`300124 1m 2026-08-05 10:29`（`last_zs_extension`）
+  - 盘整背驰（严格）：`000651 1m 2026-08-03 13:47`（`range_active=True`、`range_strict=True`、`touches_boundary=True`、`higher_level_range`）
+  - 均由 `tests/test_chanlun_analysis.py` 的 replay gate 锁住。
+- 趋势 / 盘整背驰真实样本已补齐（下/上、严格/非严格四个象限 + 盘整严格）。扫描工具：`build/scan_divergence_samples.py`。
 
 ## 当前 blocker
 
-- TD1-TD4 已闭环；TD5 的「盘整背驰真实过渡态 / 严格样本」已补（replay 驱动，`000651` 双锚点）。
-- 剩余：趋势背驰真实样本（当前 `1m` 数据以盘整为主，需在其它标的/级别扫描）；背驰案例库与图示库正例/反例/易混淆例的进一步系统化绑定。
+- TD1-TD5 已闭环：趋势背驰（下/上、严格/非严格）与盘整背驰（严格）真实样本均已补（replay 驱动，`000651` / `000591` / `601328` / `300124` 六锚点）。
+- 剩余：背驰案例库与图示库正例/反例/易混淆例的进一步系统化绑定；更多级别/标的的样本广度（非阻塞）。
 
 ## 推荐执行顺序
 
