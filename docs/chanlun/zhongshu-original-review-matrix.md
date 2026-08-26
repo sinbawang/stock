@@ -35,18 +35,18 @@
 
 | 课次 | 原文关键点（摘要） | 当前文档映射 | 判定 | 后续动作 |
 | --- | --- | --- | --- | --- |
-| 17 | “走势终完美”总纲；中枢定义、盘整/趋势定义、走势分解定理1/2；一二类买卖点的逻辑基础。 | `chanlun-rule-spec` 已补第17课跨章节导读，并打通“总纲 -> 定理 -> 买卖点 -> 输出”路径。 | 基本一致 | 后续补新手版一页图示，进一步降低理解门槛。 |
-| 18 | 给出中枢定义、盘整/趋势定义、走势终完美、走势分解、中枢定理1/2/3与中枢破坏条件。 | `chanlun-rule-spec` 已覆盖定理组，并补入符号与字段映射约束。 | 基本一致 | 后续补定理级示意图模板，增强教学可读性。 |
-| 20 | 区分中枢延伸 vs 级别扩张；给出中心定理1/2；给出第三类买卖点判定（首次回抽/回试约束）。 | `chanlun-rule-spec` 已补中心定理符号映射与 3B/3S 首次回抽硬约束；双轨规范已同步主辅边界。 | 基本一致 | 后续补“首次回抽失败”的负例模板，防止回写误判。 |
-| 21 | 三类买卖点完备性；买卖点与“最近中枢”的对应关系；2买与3买可能重合。 | `chanlun-rule-spec` 已补关系表、重合互斥规则与主辅消费约束。 | 基本一致 | 后续补“2买与3买重合”的标准样例和解释模板。 |
-| 25 | 均线/MACD是辅助，不得与中枢主定义混用；中枢主语义优先。 | `chanlun-rule-spec` 背驰章节已有辅助定位表述；`combined-analysis-output-spec` 已要求主辅区分。 | 基本一致 | 在报告规范中单列“指标辅助不得改写中枢结论”的红线条款。 |
-| 29 | 背驰-转折定理：趋势背驰后只会落在“最后中枢扩展 / 更大级别盘整 / 更高级别反趋势”；强调转折有级别。 | `chanlun-rule-spec` 已补“背驰后三级去向”并加入负例模板；`combined-analysis-output-spec` 与协议文档已同步字段语义。 | 基本一致 | 后续补发布层样例图，验证跨级别边界可读性。 |
+| 17 | “走势终完美”总纲；中枢定义、盘整/趋势定义、走势分解定理1/2；一二类买卖点的逻辑基础。 | `trend-type-decomposition` 已承接走势必完美→同级别分解主链；`lesson-traceability-matrix` 第17课行打通课次追溯。 | 基本一致 | 后续补新手版一页图示，进一步降低理解门槛。 |
+| 18 | 给出中枢定义、盘整/趋势定义、走势终完美、走势分解、中枢定理1/2/3与中枢破坏条件。 | `zhongshu-core-spec` 已覆盖中枢定义与定理组；`zhongshu-visual-example-library` §1 提供第18/20课定理示例。 | 基本一致 | 后续补定理级示意图模板，增强教学可读性。 |
+| 20 | 区分中枢延伸 vs 级别扩张；给出中心定理1/2；给出第三类买卖点判定（首次回抽/回试约束）。 | `zhongshu-core-spec` 已覆盖中枢扩张/中心定理；`buy-sell-multi-level-spec` §2.4 已补 3B/3S 首次回抽硬约束；双轨规范已同步主辅边界。 | 基本一致 | 后续补“首次回抽失败”的负例模板，防止回写误判。 |
+| 21 | 三类买卖点完备性；买卖点与“最近中枢”的对应关系；2买与3买可能重合。 | `buy-sell-multi-level-spec` §2 已补三类买卖点、2/3 类重合与主辅消费约束。 | 基本一致 | 后续补“2买与3买重合”的标准样例和解释模板。 |
+| 25 | 均线/MACD是辅助，不得与中枢主定义混用；中枢主语义优先。 | `trend-divergence-spec` §8 指标地位 + `theory-implementation-consumer-diff-matrix` 指标辅助红线。 | 基本一致 | 在报告规范中单列“指标辅助不得改写中枢结论”的红线条款。 |
+| 29 | 背驰-转折定理：趋势背驰后只会落在“最后中枢扩展 / 更大级别盘整 / 更高级别反趋势”；强调转折有级别。 | `trend-divergence-spec` §7 已补“背驰后三级去向”；`post_divergence_route` 已同步字段语义。 | 基本一致 | 后续补发布层样例图，验证跨级别边界可读性。 |
 | 36 | 走势连接结合律在当下重组中的使用；同一走势可多义但不含糊；围绕中枢震荡可重组判读。 | [trend-ambiguity-combination-law.md](trend-ambiguity-combination-law.md) 已补系统性章节；消费降级由 `same_level_decomposition_mode` 表达。 | 基本一致 | 后续补复杂重组场景图库，便于人工核图。 |
 | 38 | 同级别分解的唯一性；操作中可按固定级别分解；强调级别规则清晰优先于混搭。 | [trend-ambiguity-combination-law.md](trend-ambiguity-combination-law.md) 已补唯一性与结合律边界；`combined-analysis-output-spec` 已同步 `same_level_decomposition_mode` 字段。 | 基本一致 | 后续补“双解释待确认”的样例模板与消费端降级示例。 |
-| 39 | 同级别分解再研究：中枢震荡中的机械节奏与迭代比较（Ai 与 Ai+2 等）。 | `chanlun-rule-spec` 已补 `A_i/A_{i+2}` 量化阈值与状态映射；协议和输出规格已同步 `oscillation_rhythm_state`。 | 基本一致 | 后续补实盘案例库，验证阈值鲁棒性。 |
-| 53 | 强调中枢递归定义与级别显微镜原则；2买用于补足小转大；3买对应中枢结束判别。 | `chanlun-rule-spec` 已补级别切换规程、2买补位说明与 3类点首次回抽硬约束。 | 基本一致 | 后续补跨级别执行模板，减少实盘歧义。 |
+| 39 | 同级别分解再研究：中枢震荡中的机械节奏与迭代比较（Ai 与 Ai+2 等）。 | `trend-divergence-spec` §11 已补 `oscillation_rhythm_state` 字段映射；`zhongshu-visual-example-library` §3 提供 `A_i/A_{i+2}` 节奏示例。 | 基本一致 | 后续补实盘案例库，验证阈值鲁棒性。 |
+| 53 | 强调中枢递归定义与级别显微镜原则；2买用于补足小转大；3买对应中枢结束判别。 | `buy-sell-multi-level-spec` §4/§5 已补级别切换、2买补位与 3 类点首次回抽硬约束。 | 基本一致 | 后续补跨级别执行模板，减少实盘歧义。 |
 | 83 | 笔级最小中枢稳定性差，线段级更稳；心理结构上支持线段作为更高稳定输入。 | `zhongshu-dual-track-spec` 已设中枢主（线段）/类中枢辅（笔级）。 | 基本一致 | 在规则文档增加“为何中枢主输入选线段”的理论注释，引用第83课。 |
-| 92 | 中枢震荡监视器（Z/ Zn）用于震荡强弱和变盘预警，不直接替代买卖点定义。 | `chanlun-rule-spec` 已补监视器附录与负例模板；`combined-analysis-output-spec` 与双轨/协议文档已同步 `zs_monitor_*` 字段语义。 | 基本一致 | 后续补图文对照样例，统一发布层解释口径。 |
+| 92 | 中枢震荡监视器（Z/ Zn）用于震荡强弱和变盘预警，不直接替代买卖点定义。 | `zhongshu-visual-example-library` §4 + `zhongshu-consumer-display-examples` 已补监视器预警与负例；`zs_monitor_*` 字段语义已同步。 | 基本一致 | 后续补图文对照样例，统一发布层解释口径。 |
 
 ## 3. 关键偏差清单（当前）
 
@@ -60,16 +60,18 @@
 
 ## 4. 下一轮文档任务（仅文档，不改代码）
 
-1. [x] 在 `chanlun-rule-spec` 增加“中枢定理对照”小节（第18/20课）。
-2. [x] 在 `chanlun-rule-spec` 增加“三类买卖点与中枢关系表”（第21/53课）。
-3. [x] 在 `chanlun-rule-spec` 增加“背驰后三级去向”（第29课）与“同级别分解唯一性”（第38课）条款。
-4. [x] 新增“中枢震荡监视器附录”（第92课）和“震荡节奏附录（简化版）”（第39课）。
+> 说明：`chanlun-rule-spec` 已收敛为「规格目录页 + 历史摘要」，下列原写入该文件的小节已下沉到模块 spec / 示例库，勾选项已更新为当前真实位置。
+
+1. [x] 中枢定理对照（第18/20课）→ `zhongshu-core-spec` 中枢定理 + `zhongshu-visual-example-library` §1。
+2. [x] 三类买卖点与中枢关系表（第21/53课）→ `buy-sell-multi-level-spec` §2。
+3. [x] 背驰后三级去向（第29课）+ 同级别分解唯一性（第38课）→ `trend-divergence-spec` §7 + `trend-ambiguity-combination-law` §2.2。
+4. [x] 中枢震荡监视器（第92课）+ 震荡节奏（第39课）→ `zhongshu-visual-example-library` §3/§4 + `trend-divergence-spec`。
 5. [x] 在 `combined-analysis-output-spec` 增加“中枢主结论优先、指标只辅助”的强约束条款（第25课）。
 6. [x] 在 `zhongshu-dual-track-spec` 增加附加字段契约与主辅冲突优先级表（第29/36/38/39/92课）。
-7. [x] 在 `chanlun-rule-spec` 增加 `A_i/A_{i+2}` 量化阈值与状态映射（第39课）。
-8. [x] 在 `chanlun-rule-spec` 与 `combined-analysis-output-spec` 增加“预警触发但未确认买卖点”负例模板（第29/92课）。
-9. [x] 在 `chanlun-rule-spec` 增加第17课跨章节导读（总纲 -> 定理 -> 买卖点 -> 输出）导航段。
-10. [x] 在 `chanlun-rule-spec` 增加第39课跨市场参数回放建议表。
+7. [x] `A_i/A_{i+2}` 量化阈值与状态映射（第39课）→ `trend-divergence-spec` §11 + `theory-implementation-consumer-diff-matrix`。
+8. [x] “预警触发但未确认买卖点”负例模板（第29/92课）→ `zhongshu-visual-example-library` pre_break* 卡片 + `zhongshu-consumer-display-examples`。
+9. [x] 第17课跨章节导读 → `chanlun-rule-spec` 收敛后无独立段；由 `trend-type-decomposition` + `lesson-traceability-matrix` 第17课行承接。
+10. [x] 第39课跨市场参数回放建议 → `rhythm-replay-log-template` + `rhythm-replay-log-2026-08-first/second-batch`。
 11. [x] 在 `combined-analysis-output-spec` 增加发布层统一文案片段库。
 12. [x] 新增中枢图文化示例库文档并接入索引。
 
