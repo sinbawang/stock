@@ -209,6 +209,12 @@ def _segment_by_id(segment_id: int | None, segments: list[Segment]) -> Segment |
     return next((segment for segment in segments if segment.segment_id == segment_id), None)
 
 
+def _bi_by_id(bi_id: int | None, bis: list[Bi]) -> Bi | None:
+    if bi_id is None:
+        return None
+    return next((bi for bi in bis if bi.bi_id == bi_id), None)
+
+
 def _has_segment_bottom_divergence(
     exit_segment: Segment | None,
     entering_segment: Segment | None,
@@ -1022,6 +1028,8 @@ def analyze_chanlun_signals(
     # 线段级中枢：一类点背驰用「离开段 vs 进入段」严格力度口径；笔级中枢保持笔级口径。
     segment_bottom_divergence = False
     segment_top_divergence = False
+    entering_segment: Segment | None = None
+    exit_segment: Segment | None = None
     if current_zs is not None and current_zs.structure_level == "segment" and segments:
         entering_segment = _segment_by_id(current_zs.entering_bi_id, segments)
         exit_segment = _segment_by_id(current_zs.exit_bi_id, segments)
@@ -1059,22 +1067,33 @@ def analyze_chanlun_signals(
     use_segment_divergence = current_zs is not None and current_zs.structure_level == "segment" and bool(segments)
     buy_divergence = segment_bottom_divergence if use_segment_divergence else bottom_divergence
     sell_divergence = segment_top_divergence if use_segment_divergence else top_divergence
+
+    # 一类点信号锚点：段级模式取离开段末笔（而非最新同向笔），边界/转折均以离开段末笔为基准。
+    buy_signal_bi = latest_down
+    sell_signal_bi = latest_confirmed_up
+    if use_segment_divergence and exit_segment is not None:
+        exit_end_bi = _bi_by_id(exit_segment.end_bi_id, bis)
+        if exit_end_bi is not None:
+            if exit_segment.is_down():
+                buy_signal_bi = exit_end_bi
+            else:
+                sell_signal_bi = exit_end_bi
     if (
         current_zs
-        and latest_down
-        and latest_down.is_confirmed
+        and buy_signal_bi
+        and buy_signal_bi.is_confirmed
         and buy_divergence
-        and latest_down.low <= current_zs.zs_low
-        and _has_reverse_turn_after(latest_down, direction="down", bis=bis)
+        and buy_signal_bi.low <= current_zs.zs_low
+        and _has_reverse_turn_after(buy_signal_bi, direction="down", bis=bis)
     ):
         buy_points.append("buy_1")
     if (
         current_zs
-        and latest_confirmed_up
-        and latest_confirmed_up.is_confirmed
+        and sell_signal_bi
+        and sell_signal_bi.is_confirmed
         and sell_divergence
-        and latest_confirmed_up.high >= current_zs.zs_high
-        and _has_reverse_turn_after(latest_confirmed_up, direction="up", bis=bis)
+        and sell_signal_bi.high >= current_zs.zs_high
+        and _has_reverse_turn_after(sell_signal_bi, direction="up", bis=bis)
     ):
         sell_points.append("sell_1")
     previous_buy1_active = (

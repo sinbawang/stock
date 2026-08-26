@@ -1521,6 +1521,59 @@ def test_analyze_chanlun_signals_sell1_uses_segment_divergence_strict_strength()
     assert signals["buy_points"] == []
 
 
+def test_analyze_chanlun_signals_buy1_anchors_on_exit_segment_end_bi() -> None:
+    """BS2 段级信号锚点：一买以离开段末笔为基准，而非更晚出现的最新向下笔。"""
+    zs = _segment_zhongshu(31, entering_segment_id=1, exit_segment_id=2, zs_low=10.0, zs_high=10.8)
+    entering = Segment(
+        segment_id=1,
+        direction=BiDirection.DOWN,
+        start_bi_id=10,
+        end_bi_id=11,
+        start_ts=datetime(2026, 5, 1, 10, 30),
+        end_ts=datetime(2026, 5, 2, 14, 30),
+        start_price=11.2,
+        end_price=10.6,
+        high=11.2,
+        low=10.6,
+        norm_bar_range=(10, 11),
+        bi_ids=[10, 11],
+        is_confirmed=True,
+    )
+    exit_seg = Segment(
+        segment_id=2,
+        direction=BiDirection.DOWN,
+        start_bi_id=13,
+        end_bi_id=14,
+        start_ts=datetime(2026, 5, 3, 10, 30),
+        end_ts=datetime(2026, 5, 4, 14, 30),
+        start_price=10.9,
+        end_price=9.8,
+        high=10.9,
+        low=9.8,
+        norm_bar_range=(13, 14),
+        bi_ids=[13, 14],
+        is_confirmed=True,
+    )
+    bis = [
+        _bi(10, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(11, BiDirection.UP, high=10.9, low=10.4, day=2),
+        _bi(12, BiDirection.DOWN, high=11.0, low=10.3, day=3),
+        _bi(13, BiDirection.UP, high=10.8, low=10.1, day=4),
+        _bi(14, BiDirection.DOWN, high=10.9, low=9.8, day=5),
+        _bi(15, BiDirection.UP, high=11.2, low=10.0, day=6),
+        _bi(16, BiDirection.DOWN, high=11.1, low=10.2, day=7),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=entering.end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=exit_seg.end_ts, macd=-1.0, dif=-0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [zs], macd_points, segments=[entering, exit_seg])
+
+    assert signals["buy_points"] == ["buy_1"]
+    assert signals["sell_points"] == []
+
+
 def test_compute_segment_strengths_aggregates_macd_area_by_segment_window() -> None:
     """线段力度 = 线段时间窗内 abs(macd) 之和。"""
     seg_a = _segment(1, BiDirection.DOWN, high=11.0, low=10.0, start_day=1)

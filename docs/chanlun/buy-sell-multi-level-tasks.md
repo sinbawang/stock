@@ -75,8 +75,8 @@
 
 | 规则 | 实现入口（analysis.py） | 当前判定条件（工程口径） | 已严格绑定 | 主要工程近似 / 缺口 | 分类 |
 | --- | --- | --- | --- | --- | --- |
-| `buy_1` | `analyze_chanlun_signals` buy_1 段 | 线段级中枢：`segment_bottom_divergence`（离开段 vs 进入段创新低 + 力度衰减）+ `latest_down.low <= zs_low` + `_has_reverse_turn_after` 反向转折；笔级中枢回退 `bottom_divergence` | 最近中枢 `current_zs` + 离开段 + 背驰三元组；力度口径已按「离开段 vs 进入段」严格比较（`_has_segment_bottom_divergence`） | ① 「中枢附近」仍用 `latest_down.low <= zs_low` 笔级跌破下沿近似；② 笔级中枢（类中枢辅助链路）仍为 macd_sum_abs 衰减 | 工程近似 |
-| `sell_1` | `analyze_chanlun_signals` sell_1 段 | 线段级中枢：`segment_top_divergence`（离开段 vs 进入段创新高 + 力度衰减）+ `latest_confirmed_up.high >= zs_high` + `_has_reverse_turn_after` 反向转折；笔级中枢回退 `top_divergence` | 最近中枢 + 离开段 + 顶背驰三元组；力度口径已按「离开段 vs 进入段」严格比较（`_has_segment_top_divergence`） | 与 buy_1 对称：① 「中枢附近」仍用笔级越上沿近似；② 笔级中枢链路仍为 macd_sum_abs 衰减 | 工程近似 |
+| `buy_1` | `analyze_chanlun_signals` buy_1 段 | 线段级中枢：`segment_bottom_divergence`（离开段 vs 进入段创新低 + 力度衰减）+ 离开段末笔跌破下沿 + `_has_reverse_turn_after` 反向转折（信号锚点=离开段末笔 `_bi_by_id(exit_segment.end_bi_id)`）；笔级中枢回退 `bottom_divergence` | 最近中枢 + 离开段 + 段级背驰；力度、边界、转折均以离开段末笔为基准 | 笔级中枢（类中枢辅助链路）仍为 macd_sum_abs 衰减 | 严格一致 |
+| `sell_1` | `analyze_chanlun_signals` sell_1 段 | 线段级中枢：`segment_top_divergence`（离开段 vs 进入段创新高 + 力度衰减）+ 离开段末笔越上沿 + `_has_reverse_turn_after` 反向转折（信号锚点=离开段末笔）；笔级中枢回退 `top_divergence` | 最近中枢 + 离开段 + 段级顶背驰；力度、边界、转折均以离开段末笔为基准 | 与 buy_1 对称：笔级中枢链路仍为 macd_sum_abs 衰减 | 严格一致 |
 | `buy_2` | `analyze_chanlun_signals` buy_2 段 | `previous_buy1_active`（回溯一买）+ `latest_down.low > latest_confirmed_down.low`（不破前低）+ `_is_first_reverse_hold`（首次回抽锁定）+ `latest_up.bi_id > latest_down.bi_id` + `_renewed_beyond_previous`（再度走强须创新高） | 绑定一买 + 不破前低 + 首次回抽锁定 + 再度走强（创新高） | 「绑定一买」回溯仍用笔级底背驰（非段级「离开段 vs 进入段」）；回抽 / 再度走强均为笔级 | 工程近似 |
 | `buy_3` | `analyze_chanlun_signals` buy_3 段 | 离开笔（`_latest_bi_before` 越上沿）+ `latest_down.low >= zs_high`（回抽不跌回上沿）+ `_is_first_down_holding_above`（首次回试锁定）+ `latest_up.bi_id > latest_down.bi_id` + `latest_up.high > leave_up.high`（再度走强须创新高） | 离开中枢 + 首次不回归 + 首次回试锁定 + 再度走强（创新高） | 「离开」与「再度走强」仍为笔级口径（非段级离开段） | 工程近似 |
 | `sell_2` | `analyze_chanlun_signals` sell_2 段 | `previous_sell1_active`（回溯一卖）+ `latest_up.high < latest_confirmed_up.high`（不破前高）+ `_is_first_reverse_hold`（首次反抽锁定）+ `latest_down.bi_id > latest_up.bi_id` + `_renewed_beyond_previous`（再度走弱须创新低） | 绑定一卖 + 不破前高 + 首次反抽锁定 + 再度走弱（创新低） | 与 buy_2 对称：一卖回溯与反抽 / 再度走弱均为笔级 | 工程近似 |
@@ -87,8 +87,8 @@
 - 一二三类点的「最近中枢绑定」与「离开段 / 回抽方向」已严格对齐。
 - 三类点（buy_3/sell_3）已绑定「离开 + 不回归 + 首次回试锁定 + 再度走强 / 走弱（创新高 / 新低）」。
 - 二类点（buy_2/sell_2）已绑定「一买 / 一卖前置 + 不破前低 / 前高 + 首次回抽锁定 + 再度走强 / 走弱（创新高 / 新低）」。
-- 一类点（buy_1/sell_1）背驰三元组已绑定，且在线段级中枢链路上力度口径已按「离开段 vs 进入段」严格比较（`_has_segment_bottom_divergence` / `_has_segment_top_divergence`）。
-- 工程近似集中在：「离开 / 回抽 / 前置」仍为笔级口径（非段级「离开段」）、「中枢附近」的笔级边界触碰口径，以及笔级中枢（类中枢辅助链路）的力度衰减。
+- 一类点（buy_1/sell_1）背驰三元组已绑定，线段级中枢链路上「离开段 vs 进入段」力度、边界、转折均已以离开段末笔为基准（`_bi_by_id(exit_segment.end_bi_id)`）。
+- 工程近似集中在：二类/三类点的「离开 / 回抽 / 前置」仍为笔级口径（非段级「离开段」），以及笔级中枢（类中枢辅助链路）的力度衰减。
 
 验收：
 

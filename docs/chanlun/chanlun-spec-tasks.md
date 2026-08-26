@@ -127,7 +127,7 @@
 | 严格同级别走势类型自动分解 | 进行中 | 45% | TD1 已落地 machine-readable `type_chain` 与过渡段转场字段；TD2/TD3 背驰严格判定仍待收口，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 趋势背驰严格自动判定 | 进行中 | 55% | TD2 已落地 `divergence.trend` 的 `strict / reference_zs_id / departure_confirmed / strength_comparison`；消费端按 `strict` 措辞归 TD4，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 盘整背驰严格自动判定 | 进行中 | 50% | TD3 已落地 `divergence.range` 的 `strict / reference_zs_id / touches_boundary / strength_comparison`；消费端措辞归 TD4，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
-| 一类买卖点严格确认 | 完成 | 85% | buy_1/sell_1 已落地“确认离开 + 反向转折确认 + 段级「离开段 vs 进入段」力度口径”（线段级中枢走 `_has_segment_bottom_divergence` / `_has_segment_top_divergence`，笔级中枢回退 macd_sum_abs 衰减）；剩余为「中枢附近」笔级边界触碰口径收口；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
+| 一类买卖点严格确认 | 完成 | 95% | buy_1/sell_1 已落地“确认离开 + 反向转折 + 段级「离开段 vs 进入段」力度、边界、转折均以离开段末笔为基准”（信号锚点 `_bi_by_id(exit_segment.end_bi_id)`）；笔级中枢回退 macd_sum_abs 衰减；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
 | 二类买卖点严格确认 | 完成 | 85% | 已落地「绑定一买/一卖 + 不破前低/前高 + 首次回抽锁定 + 再度走强/走弱（创新高/新低）」；剩余为「绑定一买/一卖」回溯仍用笔级底背驰（非段级离开段口径）；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
 | 三类买卖点严格确认 | 完成 | 85% | 已落地「离开 + 不回归 + 首次回试锁定 + 再度走强/走弱（创新高/新低）」；剩余为「离开/回抽」仍为笔级口径（非段级离开段）；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
 
