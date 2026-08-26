@@ -197,6 +197,26 @@ def _has_reverse_turn_after(signal_bi: Bi | None, *, direction: str, bis: list[B
     return False
 
 
+def _is_first_reverse_hold(anchor: Bi, candidate: Bi, bis: list[Bi]) -> bool:
+    """candidate 是否是 anchor 之后第一个「不破 anchor 极值」的反向 bi。
+
+    用于二类点「首次回抽锁定」：二类点只能建立在第一类点之后的第一次确认性回抽上，
+    后续再次回抽即使同样不破前低 / 前高，也不得重复标记为二类点。
+    """
+    for other in bis:
+        if other.bi_id <= anchor.bi_id or other.bi_id >= candidate.bi_id:
+            continue
+        if anchor.is_down():
+            # 一买锚点是向下的笔；反向 bi 是向下回抽，须不破前低
+            if other.is_down() and other.low > anchor.low:
+                return False
+        else:
+            # 一卖锚点是向上的笔；反向 bi 是向上反抽，须不破前高
+            if other.is_up() and other.high < anchor.high:
+                return False
+    return True
+
+
 def _build_signal_point_detail(
     point: str,
     signal_bi: Bi | None,
@@ -949,7 +969,7 @@ def analyze_chanlun_signals(
         and latest_down.bi_id != latest_confirmed_down.bi_id
         and latest_confirmed_up.high > latest_confirmed_down.high
         and latest_down.low > latest_confirmed_down.low
-        and latest_down.low >= current_zs.zs_low
+        and _is_first_reverse_hold(latest_confirmed_down, latest_down, bis)
     ):
         buy_points.append("buy_2")
     if current_zs and latest_confirmed_up and latest_confirmed_up.high > current_zs.zs_high and latest_down and latest_down.low >= current_zs.zs_high:
@@ -970,7 +990,7 @@ def analyze_chanlun_signals(
         and latest_up.bi_id != latest_confirmed_up.bi_id
         and latest_up.high < latest_confirmed_up.high
         and latest_down.low < latest_confirmed_up.low
-        and latest_up.high <= current_zs.zs_high
+        and _is_first_reverse_hold(latest_confirmed_up, latest_up, bis)
     ):
         sell_points.append("sell_2")
     if current_zs and latest_down and latest_down.low < current_zs.zs_low and latest_confirmed_up and latest_confirmed_up.high <= current_zs.zs_low:

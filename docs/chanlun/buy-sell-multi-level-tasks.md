@@ -18,7 +18,7 @@
 | --- | --- | --- | --- | --- |
 | BS1 | 当前实现 vs 严格理论差异表 | 完成 | `analysis.py` 现状梳理 | 每条 buy / sell 规则都能标出“严格一致 / 工程近似 / 待实现” |
 | BS2 | 一类买卖点严格确认 | 进行中 | `zhongshu`, `trend-divergence` 稳定 | 最近中枢、离开段、背驰绑定关系明确且可自动判定 |
-| BS3 | 二类买卖点严格确认 | 待完成 | BS2 | 能严格绑定 1 类点后的首次确认性回抽 |
+| BS3 | 二类买卖点严格确认 | 进行中 | BS2 | 能严格绑定 1 类点后的首次确认性回抽 |
 | BS4 | 三类买卖点严格确认 | 待完成 | BS2 | 能严格绑定最近中枢后的首次回抽与级别边界 |
 | BS5 | 多级别联立与消费降级规则 | 进行中 | BS2-BS4 | 高一级方向、操作级别、执行级别和 pending / auxiliary 降级文案一致 |
 | BS6 | 标准案例包与回归闸门 | 进行中 | BS1-BS5 | 一二三类点与区间套样例可 review、可回归、可下游消费 |
@@ -77,18 +77,18 @@
 | --- | --- | --- | --- | --- | --- |
 | `buy_1` | L882-883 | `current_zs and latest_down and bottom_divergence and latest_down.low <= zs_low` | 最近中枢 `current_zs` + 离开段 `latest_down` + 背驰 `bottom_divergence`（macd_sum_abs 衰减）三元组 | ① 力度比较用最近两根 down bi 的 `macd_sum_abs` 衰减（`_has_bottom_divergence`），非严格的「离开段 vs 进入段」同级别比较；② 「中枢附近」用 `latest_down.low <= zs_low` 跌破下沿近似；③ 未显式确认向上转折笔 | 工程近似 |
 | `sell_1` | L884-885 | `current_zs and latest_confirmed_up and top_divergence and latest_confirmed_up.high >= zs_high` | 最近中枢 + 离开段 + 顶背驰三元组 | 与 buy_1 对称，但 sell_1 用 `latest_confirmed_up`（已确认），buy_1 用 `latest_down`（可为未确认），双边口径不对称；其余近似同 buy_1 | 工程近似 |
-| `buy_2` | L886-903 | `previous_buy1_active`（回溯一买：previous/earlier down 底背驰 + 跌破下沿）且 `latest_down.low > previous_confirmed_down.low`（不破前低）且 `latest_down.low >= zs_low` 且 `latest_confirmed_up.high > previous_confirmed_down.high` | 绑定一买（`previous_buy1_active` 回溯）+ 不破前低 | ① 「首次」未锁定（无回抽计数，第二次回抽满足条件也会被标 buy_2）；② 额外约束 `latest_down.low >= zs_low` 非理论要求；③ 「恢复向上」用 `latest_confirmed_up.high > previous_confirmed_down.high` 近似 | 工程近似 |
+| `buy_2` | `analyze_chanlun_signals` buy_2 段 | `previous_buy1_active`（回溯一买：latest/previous down 底背驰 + 跌破下沿）且 `latest_down.low > latest_confirmed_down.low`（不破前低）且 `_is_first_reverse_hold`（首次回抽锁定）且 `latest_confirmed_up.high > latest_confirmed_down.high` | 绑定一买（`previous_buy1_active` 回溯）+ 不破前低 + 首次回抽锁定 | 「恢复向上」用 `latest_confirmed_up.high > latest_confirmed_down.high` 近似（非严格的回抽后再度走强确认） | 工程近似 |
 | `buy_3` | L904-905 | `latest_confirmed_up.high > zs_high`（离开）且 `latest_down.low >= zs_high`（回抽不跌回上沿） | 离开中枢 + 首次不回归硬约束 | ① 「再度走强」缺失（无回抽后向上笔确认）；② 「首次」未锁定（第二次回抽满足条件也可能回写成同一中枢三买，违反红线） | 工程近似 |
-| `sell_2` | L906-924 | `previous_sell1_active`（回溯一卖：latest/previous up 顶背驰 + 越上沿）且 `latest_up.high < latest_confirmed_up.high`（不破前高）且 `latest_down.low < latest_confirmed_up.low` 且 `latest_up.high <= zs_high` | 绑定一卖 + 不破前高 | 与 buy_2 对称：① 「首次」未锁定；② 额外约束 `latest_up.high <= zs_high`；③ 「恢复向下」用 `latest_down.low < latest_confirmed_up.low` 近似 | 工程近似 |
+| `sell_2` | `analyze_chanlun_signals` sell_2 段 | `previous_sell1_active`（回溯一卖：latest/previous up 顶背驰 + 越上沿）且 `latest_up.high < latest_confirmed_up.high`（不破前高）且 `_is_first_reverse_hold`（首次反抽锁定）且 `latest_down.low < latest_confirmed_up.low` | 绑定一卖 + 不破前高 + 首次反抽锁定 | 与 buy_2 对称：「恢复向下」用 `latest_down.low < latest_confirmed_up.low` 近似 | 工程近似 |
 | `sell_3` | L925-926 | `latest_down.low < zs_low`（向下离开）且 `latest_confirmed_up.high <= zs_low`（反抽不站回下沿） | 离开中枢 + 首次不回归硬约束 | 与 buy_3 对称：① 「再度走弱」缺失；② 「首次」未锁定 | 工程近似 |
 
 口径汇总：
 
 - 一二三类点的「最近中枢绑定」与「离开段 / 回抽方向」已严格对齐。
 - 三类点（buy_3/sell_3）的「离开 + 不回归」硬约束已严格，缺「再度走强 / 走弱」与「首次回试锁定」。
-- 二类点（buy_2/sell_2）已绑定一买 / 一卖前置与「不破前低 / 前高」，缺「首次回抽锁定」。
+- 二类点（buy_2/sell_2）已绑定一买 / 一卖前置、「不破前低 / 前高」与「首次回抽锁定」（`_is_first_reverse_hold`），仍缺回抽后的严格「再度走强 / 走弱」确认。
 - 一类点（buy_1/sell_1）背驰三元组已绑定，力度比较口径仍是 macd_sum_abs 工程近似，且 sell_1/buy_1 双边不对称。
-- 工程近似集中在三处：力度比较口径、首次回试计数、转折 / 走强再确认笔。
+- 工程近似集中在两处：力度比较口径、回抽后的「再度走强 / 走弱」再确认笔。
 
 验收：
 
@@ -113,14 +113,13 @@
 预警 vs 确认边界（当前实然）：
 
 - `zs_monitor_alert=pre_breakout/pre_breakdown` 是预警层，不等价于 buy_1/sell_1 确认（已有 replay gate 锁定）。
-- 当前 `buy_1` 在「未确认离开笔 + 无转折笔」时仍会触发（契约缺口，见 `test_analyze_chanlun_signals_flags_buy1_without_up_turn_confirmation`）。
-- 当前 `buy_1` 用 `latest_down`（未确认）、`sell_1` 用 `latest_confirmed_up`（已确认），双边不对称（契约缺口，见 `test_analyze_chanlun_signals_buy1_and_sell1_use_asymmetric_confirmation_requirement`）。
+- buy_1/sell_1 已要求「已确认离开笔 + `_has_reverse_turn_after` 反向转折确认」，未确认离开或无转折笔时不再触发一类点。
+- 双边已对称：buy_1 用 `latest_down.is_confirmed`、sell_1 用 `latest_confirmed_up`（均已确认）。
 
 待收口（按优先级）：
 
-1. 双边对称：统一 buy_1/sell_1 的离开笔确认要求（都要求已确认）。
-2. 转折确认：补离开段背驰后的反向转折笔判定。
-3. 力度口径：离开段 vs 进入段严格比较（当前为 macd_sum_abs 衰减近似）。
+1. 力度口径：离开段 vs 进入段严格比较（当前为 macd_sum_abs 衰减近似）。
+   （「双边对称」与「转折确认」已落地，见上方当前实然。）
 
 验收：
 
