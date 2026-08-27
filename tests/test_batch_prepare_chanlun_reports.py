@@ -421,6 +421,7 @@ def test_fetch_with_optional_local_store_uses_incremental_start_and_tail(monkeyp
     security = module.Security("00700", "腾讯", "HK")
     local_rows = [
         {"ts": "2026-07-01 09:30", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+        {"ts": "2026-07-01 09:45", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
         {"ts": "2026-07-01 10:00", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
     ]
     remote_rows = [
@@ -466,3 +467,45 @@ def test_fetch_with_optional_local_store_uses_incremental_start_and_tail(monkeyp
     assert payload["local_store"]["merged_total_rows"] == 4
     assert payload["local_store"]["analysis_rows"] == 3
     assert payload["actual_bar_count"] == 3
+
+
+def test_fetch_with_optional_local_store_backfills_when_local_short(monkeypatch, tmp_path: Path) -> None:
+    """本地仓库未覆盖目标根数时应从完整窗口全量抓取，而非只补最近增量。"""
+    security = module.Security("00700", "腾讯", "HK")
+    local_rows = [
+        {"ts": "2026-07-01 09:30", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+        {"ts": "2026-07-01 10:00", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+    ]
+    captured = {}
+
+    def fake_remote_fetcher(start: str):
+        captured["start"] = start
+        return [
+            {"ts": "2026-07-01 09:55", "open": 1.1, "high": 1.2, "low": 1.0, "close": 1.1, "volume": 2},
+        ], {"source": "xueqiu", "actual_bar_count": 1}
+
+    monkeypatch.setattr(module, "load_local_rows", lambda *args, **kwargs: local_rows)
+    monkeypatch.setattr(
+        module,
+        "upsert_local_rows",
+        lambda *args, **kwargs: (
+            local_rows,
+            SimpleNamespace(added=0, updated=0, total=2),
+            tmp_path / "kline.csv",
+        ),
+    )
+
+    module._fetch_with_optional_local_store(
+        security,
+        timeframe="5m",
+        requested_start="2026-06-20 09:30",
+        bar_count=3,
+        overlap_bars=2,
+        use_local_store=True,
+        local_store_read_only=False,
+        local_store_root=tmp_path,
+        remote_fetcher=fake_remote_fetcher,
+    )
+
+    # 本地仅 2 根 < 目标 3 根 → 不从 last_ts 增量，而是从 requested_start 全量抓取
+    assert captured["start"] == "2026-06-20 09:30"

@@ -371,7 +371,8 @@ def fetch_intraday_rows(
             source_attempts=list(fetch_meta.get("source_attempts") or []),
         )
     fetch_source, _ = resolve_a_share_intraday_source_label()
-    rows = fetch_kline(security.symbol, start=start, interval=interval, limit=bar_count, min_rows=bar_count)
+    probe_min_rows = bar_count if source_probe_min_rows is None else source_probe_min_rows
+    rows = fetch_kline(security.symbol, start=start, interval=interval, limit=bar_count, min_rows=probe_min_rows)
     fetch_meta = get_last_fetch_metadata()
     return rows, _data_fetch_payload(
         fetch_source,
@@ -447,10 +448,14 @@ def _fetch_with_optional_local_store(
 ) -> tuple[list[dict], dict[str, object]]:
     effective_start = requested_start
     local_before = 0
+    local_covers_target = False
     if use_local_store:
         local_rows = load_local_rows(security.symbol, security.market, timeframe, root=local_store_root)
         local_before = len(local_rows)
-        if local_rows:
+        local_covers_target = local_before >= bar_count
+        if local_rows and local_covers_target:
+            # 本地仓库已覆盖目标根数时才走增量（只补最近 delta）；否则从完整窗口
+            # requested_start 全量抓取补齐缺口（例如目标根数被调高、或首次回填）。
             effective_start = infer_incremental_start(local_rows[-1]["ts"], timeframe, overlap_bars=overlap_bars)
 
     if use_local_store and local_store_read_only and local_before > 0:
@@ -480,7 +485,7 @@ def _fetch_with_optional_local_store(
         }
 
     remote_probe_min_rows = bar_count
-    if use_local_store and local_before > 0 and timeframe != "day":
+    if use_local_store and local_covers_target and timeframe != "day":
         # Incremental mode only needs recent deltas. Avoid forcing full-count
         # remote rows, which can trigger costly fallback probing for HK minute data.
         remote_probe_min_rows = 1
