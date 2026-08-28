@@ -780,12 +780,22 @@ def command_backup(args: argparse.Namespace) -> int:
         write_manifest(manifest_path, manifest_payload)
         print(f"manifest={manifest_path}")
 
+        _, manifest_file_id = upload_manifest_file(
+            session,
+            env_id=args.env_id,
+            region=args.region,
+            api_key=api_key,
+            cloud_prefix=args.cloud_prefix,
+            manifest_path=manifest_path,
+        )
+
         pointer_payload = {
             "env_id": args.env_id,
             "region": args.region,
             "cloud_prefix": args.cloud_prefix,
             "snapshot_cloud_path": cloud_path,
             "snapshot_file_id": metadata.get("fileId"),
+            "manifest_file_id": manifest_file_id,
             "manifest_path": str(manifest_path),
         }
         write_pointer(pointer_path, pointer_payload)
