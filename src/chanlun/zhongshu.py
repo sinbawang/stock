@@ -71,16 +71,19 @@ def _mark_reabsorbed_lineage(zhongshus: List[Zhongshu]) -> None:
 
 
 def is_zhongshu_expansion(previous: Zhongshu, current: Zhongshu) -> bool:
-    """第20课：相邻同级别中枢区间不重叠，但当前中枢的波动回探进前一中枢区间。
+    """第20课中枢中心定理二：相邻同级别中枢是否构成更高级别中枢（扩张）。
 
-    - 向上候选（current.zs_low > previous.zs_high）：当前波动下沿回探到前中枢上沿之下。
-    - 向下候选（current.zs_high < previous.zs_low）：当前波动上沿回探到前中枢下沿之上。
+    仅区间不重叠、且波动区间（GG/DD）回探重叠时构成扩张：
+    - 向上：后ZD>前ZG，后DD<=前GG → 扩张；后DD>前GG → 上涨延续（趋势）。
+    - 向下：后ZG<前ZD，后GG>=前DD → 扩张；后GG<前DD → 下跌延续（趋势）。
     - 区间重叠 → 同级别盘整/延伸，不算扩张。
+
+    注意：这是「纯粹按中枢」视角；同级别分解（第38/39课）不处理扩张。
     """
     if current.zs_low > previous.zs_high:
-        return current.peak_low < previous.zs_high
+        return current.peak_low <= previous.peak_high
     if current.zs_high < previous.zs_low:
-        return current.peak_high > previous.zs_low
+        return current.peak_high >= previous.peak_low
     return False
 
 

@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import Any
 
 from .models import Bar, Bi, Segment, Zhongshu
-from .zhongshu import is_zhongshu_expansion
 from .zhongshu_contract import (
     CONSUMPTION_LEVEL_LABELS,
     CONSUMPTION_LEVEL_NOTES,
@@ -352,10 +351,15 @@ def _build_signal_point_detail(
 
 
 def _relation_kind(previous: Zhongshu, current: Zhongshu) -> str:
+    """同级别分解（第38/39课）：只按中枢区间重叠与否判定，不处理中枢扩张。
+
+    区间不重叠 → 趋势（up/down）；区间重叠 → 盘整/延伸（range）。
+    中枢扩张/更高级别中枢属于「纯粹按中枢」的非同级别分解视角，不在此判定。
+    """
     if current.zs_low > previous.zs_high:
-        return "range" if is_zhongshu_expansion(previous, current) else "up"
+        return "up"
     if current.zs_high < previous.zs_low:
-        return "range" if is_zhongshu_expansion(previous, current) else "down"
+        return "down"
     return "range"
 
 

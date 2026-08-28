@@ -118,13 +118,13 @@ def test_is_zhongshu_expansion_up_dip_back() -> None:
 
 
 def test_is_zhongshu_expansion_clean_trends() -> None:
-    # 向上干净趋势：波动下沿（11.0）未回探到前中枢上沿（11.0）之下
+    # 向上干净趋势：后DD（11.6）> 前GG（11.5），波动不重叠 → 非扩张
     up_prev = _zhongshu_with_peaks(0, zone_low=10.0, zone_high=11.0, peak_low=9.5, peak_high=11.5)
-    up_curr = _zhongshu_with_peaks(1, zone_low=11.5, zone_high=12.0, peak_low=11.0, peak_high=12.5)
+    up_curr = _zhongshu_with_peaks(1, zone_low=12.0, zone_high=13.0, peak_low=11.6, peak_high=13.5)
     assert is_zhongshu_expansion(up_prev, up_curr) is False
-    # 向下干净趋势：波动上沿（19.5）未回探到前中枢下沿（20.0）之上
+    # 向下干净趋势：后GG（19.4）< 前DD（19.5），波动不重叠 → 非扩张
     dn_prev = _zhongshu_with_peaks(2, zone_low=20.0, zone_high=21.0, peak_low=19.5, peak_high=21.5)
-    dn_curr = _zhongshu_with_peaks(3, zone_low=18.0, zone_high=19.0, peak_low=17.5, peak_high=19.5)
+    dn_curr = _zhongshu_with_peaks(3, zone_low=17.0, zone_high=18.0, peak_low=16.5, peak_high=19.4)
     assert is_zhongshu_expansion(dn_prev, dn_curr) is False
 
 
@@ -166,13 +166,14 @@ def test_identify_expanded_zhongshus_skips_overlapping_zones() -> None:
     assert identify_expanded_zhongshus(zs) == []
 
 
-def test_relation_kind_treats_peak_overlap_as_range() -> None:
+def test_relation_kind_zone_disjoint_stays_trend_despite_peak_overlap() -> None:
+    # 同级别分解不处理扩张：区间不重叠即趋势，即使波动（GG/DD）回探重叠也判 up
     prev = _zhongshu_with_peaks(0, zone_low=89.0, zone_high=91.35, peak_low=88.7, peak_high=94.5)
     curr = _zhongshu_with_peaks(1, zone_low=92.05, zone_high=92.2, peak_low=85.7, peak_high=96.45)
-    assert _relation_kind(prev, curr) == "range"
+    assert _relation_kind(prev, curr) == "up"
 
 
-def test_relation_kind_keeps_trend_when_peaks_disjoint() -> None:
+def test_relation_kind_zone_disjoint_directions() -> None:
     prev = _zhongshu_with_peaks(0, zone_low=80.0, zone_high=82.0, peak_low=79.0, peak_high=83.0)
     curr_up = _zhongshu_with_peaks(1, zone_low=90.0, zone_high=92.0, peak_low=89.0, peak_high=93.0)
     assert _relation_kind(prev, curr_up) == "up"
@@ -205,8 +206,12 @@ def _load_segments_from_normalized_csv(path: Path) -> list[Segment]:
     return segments
 
 
-def test_03690_5m_expansion_reclassifies_up_to_range() -> None:
-    """第20课真实锚点：ZS0/ZS1 区间不重叠但波动回探 → 扩张，走势类型从 up 改判 range。"""
+def test_03690_5m_same_level_decomp_keeps_up_and_expansion_detected_separately() -> None:
+    """第20课真实锚点：ZS0/ZS1 区间不重叠但波动回探。
+
+    同级别分解不处理扩张 → 走势类型保持 up；扩张由独立的「按中枢」层
+    identify_expanded_zhongshus 单独检出，不改变同级别分解的类型。
+    """
     path = (
         Path(__file__).resolve().parents[1]
         / "data" / "reports" / "03690" / "5m" / "analyze"
@@ -223,7 +228,7 @@ def test_03690_5m_expansion_reclassifies_up_to_range() -> None:
     assert expanded[0].sub_zs_ids == [0, 1]
     assert expanded[0].expanded_low == 88.7
     assert expanded[0].expanded_high == 94.5
-    assert state["current_ongoing"]["type"] == "range"
+    assert state["current_ongoing"]["type"] == "up"
 
 
 class TestIdentifyZhongshu:
