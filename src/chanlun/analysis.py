@@ -1616,6 +1616,16 @@ def build_lower_timeframe_precision_entry(
     elif range_divergence_active:
         note = f"{lower_timeframe_label} 已出现盘整背驰，等待回抽确认后再作为区间套精确点。{window_basis_note}"
 
+    higher_consumption_level = str(higher_signals.get("same_level_consumption_level") or "").strip()
+    higher_consumption_level_label = format_consumption_level_label(higher_consumption_level)
+    if higher_consumption_level in {"auxiliary", "pending"} and status == "actionable":
+        status = "watch"
+        note = (
+            f"{note} 上级别同级别结构尚未确认为稳定标准中枢"
+            f"（{higher_consumption_level_label or higher_consumption_level}），"
+            f"次级别买卖点仅作观察提示，不按严格区间套执行。"
+        )
+
     return {
         "timeframe": lower_timeframe,
         "operation_level": lower_timeframe_label,
@@ -1630,6 +1640,8 @@ def build_lower_timeframe_precision_entry(
         "signal_descriptions": signal_descriptions,
         "structure_state": structure_state,
         "divergence": divergence,
+        "higher_consumption_level": higher_consumption_level or None,
+        "higher_consumption_level_label": higher_consumption_level_label,
         "window_basis_label": window_basis_label,
         "window_basis_description": window_basis_note,
         "nested_from": {

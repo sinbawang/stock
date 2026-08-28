@@ -2113,6 +2113,107 @@ def test_build_lower_timeframe_precision_entry_stays_standby_without_higher_cont
     assert entry["nested_from"] is None
 
 
+def test_build_lower_timeframe_precision_entry_downgrades_auxiliary_higher_level() -> None:
+    """上级别同级别结构为辅助（无稳定标准中枢）时，次级别买卖点不得升格为 actionable。"""
+    higher_signals = {
+        "buy_points": ["buy_1"],
+        "current_zs": SimpleNamespace(end_ts=datetime(2026, 5, 10, 14, 0), zs_id=9, exit_bi_id=33, is_terminated=False),
+        "signal_points": [
+            {"point": "buy1", "active": True, "time": "2026-05-10T14:30:00", "price": 10.2, "basis": "bottom_divergence_near_zs_low"}
+        ],
+        "divergence": {"trend": {"active": False}, "range": {"active": False}},
+        "same_level_consumption_level": "auxiliary",
+    }
+    lower_signals = {
+        "buy_points": ["buy_2"],
+        "sell_points": [],
+        "signal_points": [{"point": "buy2", "active": True, "time": "2026-05-10T14:25:00", "price": 10.25, "basis": "buy1_pullback_confirmation"}],
+        "signal_catalog": [{"point": "buy2", "active": True, "time": "2026-05-10T14:25:00", "price": 10.25, "basis": "buy1_pullback_confirmation"}],
+        "structure_state": {"current_ongoing": {"type": "down"}},
+        "divergence": {"trend": {"active": False}, "range": {"active": False}},
+    }
+
+    entry = build_lower_timeframe_precision_entry(
+        higher_signals,
+        lower_signals,
+        lower_timeframe="5m",
+        lower_timeframe_label="5M",
+        pending_reverse_mode="effective_only",
+    )
+
+    assert entry["status"] == "watch"
+    assert entry["higher_consumption_level"] == "auxiliary"
+    assert entry["higher_consumption_level_label"] == "仅辅助观察"
+    assert "不按严格区间套执行" in entry["note"]
+
+
+def test_build_lower_timeframe_precision_entry_downgrades_pending_higher_level() -> None:
+    """上级别同级别结构仍待确认（pending）时，次级别买卖点不得升格为 actionable。"""
+    higher_signals = {
+        "buy_points": ["buy_1"],
+        "current_zs": SimpleNamespace(end_ts=datetime(2026, 5, 10, 14, 0), zs_id=9, exit_bi_id=33, is_terminated=False),
+        "signal_points": [
+            {"point": "buy1", "active": True, "time": "2026-05-10T14:30:00", "price": 10.2, "basis": "bottom_divergence_near_zs_low"}
+        ],
+        "divergence": {"trend": {"active": False}, "range": {"active": False}},
+        "same_level_consumption_level": "pending",
+    }
+    lower_signals = {
+        "buy_points": ["buy_2"],
+        "sell_points": [],
+        "signal_points": [{"point": "buy2", "active": True, "time": "2026-05-10T14:25:00", "price": 10.25, "basis": "buy1_pullback_confirmation"}],
+        "signal_catalog": [{"point": "buy2", "active": True, "time": "2026-05-10T14:25:00", "price": 10.25, "basis": "buy1_pullback_confirmation"}],
+        "structure_state": {"current_ongoing": {"type": "down"}},
+        "divergence": {"trend": {"active": False}, "range": {"active": False}},
+    }
+
+    entry = build_lower_timeframe_precision_entry(
+        higher_signals,
+        lower_signals,
+        lower_timeframe="5m",
+        lower_timeframe_label="5M",
+        pending_reverse_mode="effective_only",
+    )
+
+    assert entry["status"] == "watch"
+    assert entry["higher_consumption_level"] == "pending"
+    assert entry["higher_consumption_level_label"] == "待确认消费"
+    assert "不按严格区间套执行" in entry["note"]
+
+
+def test_build_lower_timeframe_precision_entry_keeps_actionable_when_higher_confirmed() -> None:
+    """上级别同级别结构已确认（confirmed）时，次级别买卖点保持 actionable。"""
+    higher_signals = {
+        "buy_points": ["buy_1"],
+        "current_zs": SimpleNamespace(end_ts=datetime(2026, 5, 10, 14, 0), zs_id=9, exit_bi_id=33, is_terminated=False),
+        "signal_points": [
+            {"point": "buy1", "active": True, "time": "2026-05-10T14:30:00", "price": 10.2, "basis": "bottom_divergence_near_zs_low"}
+        ],
+        "divergence": {"trend": {"active": False}, "range": {"active": False}},
+        "same_level_consumption_level": "confirmed",
+    }
+    lower_signals = {
+        "buy_points": ["buy_2"],
+        "sell_points": [],
+        "signal_points": [{"point": "buy2", "active": True, "time": "2026-05-10T14:25:00", "price": 10.25, "basis": "buy1_pullback_confirmation"}],
+        "signal_catalog": [{"point": "buy2", "active": True, "time": "2026-05-10T14:25:00", "price": 10.25, "basis": "buy1_pullback_confirmation"}],
+        "structure_state": {"current_ongoing": {"type": "down"}},
+        "divergence": {"trend": {"active": False}, "range": {"active": False}},
+    }
+
+    entry = build_lower_timeframe_precision_entry(
+        higher_signals,
+        lower_signals,
+        lower_timeframe="5m",
+        lower_timeframe_label="5M",
+        pending_reverse_mode="effective_only",
+    )
+
+    assert entry["status"] == "actionable"
+    assert entry["higher_consumption_level"] == "confirmed"
+    assert entry["higher_consumption_level_label"] == "已确认消费"
+
+
 def test_build_lower_timeframe_precision_entry_ignores_divergence_outside_higher_window() -> None:
     entry = build_lower_timeframe_precision_entry(
         {
