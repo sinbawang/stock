@@ -205,3 +205,19 @@ class Zhongshu:
     def width(self) -> float:
         """中枢宽度"""
         return self.zs_high - self.zs_low
+
+
+@dataclass
+class ExpandedZhongshu:
+    """更大级别中枢（相邻同级别中枢区间不重叠、但波动区间重叠时合并而来，第20课）。"""
+
+    expanded_id: int
+    expanded_low: float
+    expanded_high: float
+    peak_low: float
+    peak_high: float
+    start_ts: datetime
+    end_ts: datetime
+    sub_zs_ids: List[int] = field(default_factory=list)
+    structure_level: str = "segment"
+    recognition_mode: str = "peak_overlap_expansion"

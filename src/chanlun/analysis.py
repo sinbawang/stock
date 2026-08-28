@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from .models import Bar, Bi, Segment, Zhongshu
+from .zhongshu import is_zhongshu_expansion
 from .zhongshu_contract import (
     CONSUMPTION_LEVEL_LABELS,
     CONSUMPTION_LEVEL_NOTES,
@@ -352,9 +353,9 @@ def _build_signal_point_detail(
 
 def _relation_kind(previous: Zhongshu, current: Zhongshu) -> str:
     if current.zs_low > previous.zs_high:
-        return "up"
+        return "range" if is_zhongshu_expansion(previous, current) else "up"
     if current.zs_high < previous.zs_low:
-        return "down"
+        return "range" if is_zhongshu_expansion(previous, current) else "down"
     return "range"
 
 

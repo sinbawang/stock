@@ -1,9 +1,13 @@
 """中枢识别单元测试。spec_id: SPEC.ZHONGSHU.CORE。"""
 
+import csv
 from datetime import datetime
+from pathlib import Path
+
+from chanlun.analysis import _relation_kind, build_structure_state
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu
 from chanlun.segment import identify_segments
-from chanlun.zhongshu import _mark_reabsorbed_lineage, identify_zhongshu
+from chanlun.zhongshu import _mark_reabsorbed_lineage, identify_expanded_zhongshus, identify_zhongshu, is_zhongshu_expansion
 
 
 def _bi(bi_id: int, direction: BiDirection, high: float, low: float) -> Bi:
@@ -74,6 +78,152 @@ def _zhongshu(
         exit_bi_id=exit_bi_id,
         structure_level=structure_level,
     )
+
+
+def _zhongshu_with_peaks(
+    zs_id: int,
+    *,
+    zone_low: float,
+    zone_high: float,
+    peak_low: float,
+    peak_high: float,
+    structure_level: str = "bi",
+) -> Zhongshu:
+    start = datetime(2024, 4, 1 + zs_id)
+    end = datetime(2024, 4, 1 + zs_id, 1)
+    return Zhongshu(
+        zs_id=zs_id,
+        start_bi_id=zs_id * 10,
+        end_bi_id=zs_id * 10 + 2,
+        zs_low=zone_low,
+        zs_high=zone_high,
+        peak_low=peak_low,
+        peak_high=peak_high,
+        start_ts=start,
+        end_ts=end,
+        bi_ids=[zs_id * 10, zs_id * 10 + 1, zs_id * 10 + 2],
+        is_terminated=False,
+        entering_bi_id=zs_id * 10 - 1,
+        core_bi_ids=[zs_id * 10, zs_id * 10 + 1, zs_id * 10 + 2],
+        exit_bi_id=None,
+        structure_level=structure_level,
+    )
+
+
+def test_is_zhongshu_expansion_up_dip_back() -> None:
+    # 向上候选：当前中枢波动下沿（85.7）回探到前中枢上沿（91.35）之下 → 扩张
+    a = _zhongshu_with_peaks(0, zone_low=89.0, zone_high=91.35, peak_low=88.7, peak_high=94.5)
+    b = _zhongshu_with_peaks(1, zone_low=92.05, zone_high=92.2, peak_low=85.7, peak_high=96.45)
+    assert is_zhongshu_expansion(a, b) is True
+
+
+def test_is_zhongshu_expansion_clean_trends() -> None:
+    # 向上干净趋势：波动下沿（11.0）未回探到前中枢上沿（11.0）之下
+    up_prev = _zhongshu_with_peaks(0, zone_low=10.0, zone_high=11.0, peak_low=9.5, peak_high=11.5)
+    up_curr = _zhongshu_with_peaks(1, zone_low=11.5, zone_high=12.0, peak_low=11.0, peak_high=12.5)
+    assert is_zhongshu_expansion(up_prev, up_curr) is False
+    # 向下干净趋势：波动上沿（19.5）未回探到前中枢下沿（20.0）之上
+    dn_prev = _zhongshu_with_peaks(2, zone_low=20.0, zone_high=21.0, peak_low=19.5, peak_high=21.5)
+    dn_curr = _zhongshu_with_peaks(3, zone_low=18.0, zone_high=19.0, peak_low=17.5, peak_high=19.5)
+    assert is_zhongshu_expansion(dn_prev, dn_curr) is False
+
+
+def test_is_zhongshu_expansion_overlapping_zones() -> None:
+    a = _zhongshu_with_peaks(0, zone_low=80.0, zone_high=85.0, peak_low=79.0, peak_high=86.0)
+    b = _zhongshu_with_peaks(1, zone_low=84.0, zone_high=88.0, peak_low=83.0, peak_high=89.0)
+    assert is_zhongshu_expansion(a, b) is False
+
+
+def test_identify_expanded_zhongshus_merges_disjoint_zones_with_overlapping_peaks() -> None:
+    zs = [
+        _zhongshu_with_peaks(0, zone_low=89.0, zone_high=91.35, peak_low=88.7, peak_high=94.5),
+        _zhongshu_with_peaks(1, zone_low=92.05, zone_high=92.2, peak_low=85.7, peak_high=96.45),
+    ]
+    result = identify_expanded_zhongshus(zs)
+    assert len(result) == 1
+    exp = result[0]
+    assert exp.sub_zs_ids == [0, 1]
+    assert exp.expanded_low == 88.7
+    assert exp.expanded_high == 94.5
+    assert exp.peak_low == 85.7
+    assert exp.peak_high == 96.45
+    assert exp.recognition_mode == "peak_overlap_expansion"
+
+
+def test_identify_expanded_zhongshus_skips_trend() -> None:
+    zs = [
+        _zhongshu_with_peaks(0, zone_low=80.0, zone_high=82.0, peak_low=79.0, peak_high=83.0),
+        _zhongshu_with_peaks(1, zone_low=90.0, zone_high=92.0, peak_low=89.0, peak_high=93.0),
+    ]
+    assert identify_expanded_zhongshus(zs) == []
+
+
+def test_identify_expanded_zhongshus_skips_overlapping_zones() -> None:
+    zs = [
+        _zhongshu_with_peaks(0, zone_low=80.0, zone_high=85.0, peak_low=79.0, peak_high=86.0),
+        _zhongshu_with_peaks(1, zone_low=84.0, zone_high=88.0, peak_low=83.0, peak_high=89.0),
+    ]
+    assert identify_expanded_zhongshus(zs) == []
+
+
+def test_relation_kind_treats_peak_overlap_as_range() -> None:
+    prev = _zhongshu_with_peaks(0, zone_low=89.0, zone_high=91.35, peak_low=88.7, peak_high=94.5)
+    curr = _zhongshu_with_peaks(1, zone_low=92.05, zone_high=92.2, peak_low=85.7, peak_high=96.45)
+    assert _relation_kind(prev, curr) == "range"
+
+
+def test_relation_kind_keeps_trend_when_peaks_disjoint() -> None:
+    prev = _zhongshu_with_peaks(0, zone_low=80.0, zone_high=82.0, peak_low=79.0, peak_high=83.0)
+    curr_up = _zhongshu_with_peaks(1, zone_low=90.0, zone_high=92.0, peak_low=89.0, peak_high=93.0)
+    assert _relation_kind(prev, curr_up) == "up"
+    curr_down = _zhongshu_with_peaks(1, zone_low=70.0, zone_high=72.0, peak_low=69.0, peak_high=73.0)
+    assert _relation_kind(prev, curr_down) == "down"
+
+
+def _load_segments_from_normalized_csv(path: Path) -> list[Segment]:
+    segments = []
+    with open(path, encoding="utf-8-sig") as fh:
+        for r in csv.DictReader(fh):
+            segments.append(
+                Segment(
+                    segment_id=int(r["segment_id"]),
+                    direction=BiDirection(r["direction"]),
+                    start_bi_id=int(r["start_bi_id"]),
+                    end_bi_id=int(r["end_bi_id"]),
+                    start_ts=datetime.fromisoformat(r["start_ts"]),
+                    end_ts=datetime.fromisoformat(r["end_ts"]),
+                    start_price=float(r["start_price"]),
+                    end_price=float(r["end_price"]),
+                    high=float(r["high"]),
+                    low=float(r["low"]),
+                    norm_bar_range=(int(r["start_norm_idx"]), int(r["end_norm_idx"])),
+                    bi_ids=[int(x) for x in r["bi_ids"].split(",")],
+                    is_confirmed=r["is_confirmed"] == "True",
+                    stop_reason=r["stop_reason"],
+                )
+            )
+    return segments
+
+
+def test_03690_5m_expansion_reclassifies_up_to_range() -> None:
+    """第20课真实锚点：ZS0/ZS1 区间不重叠但波动回探 → 扩张，走势类型从 up 改判 range。"""
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "data" / "reports" / "03690" / "5m" / "analyze"
+        / "03690_5m_20260722_to_20260828_normalized_segments.csv"
+    )
+    segments = _load_segments_from_normalized_csv(path)
+
+    zhongshus = identify_zhongshu(segments, structure_level="segment")
+    expanded = identify_expanded_zhongshus(zhongshus)
+    state = build_structure_state([], zhongshus)
+
+    assert [(z.zs_id, z.zs_low, z.zs_high) for z in zhongshus] == [(0, 89.0, 91.35), (1, 92.05, 92.2)]
+    assert len(expanded) == 1
+    assert expanded[0].sub_zs_ids == [0, 1]
+    assert expanded[0].expanded_low == 88.7
+    assert expanded[0].expanded_high == 94.5
+    assert state["current_ongoing"]["type"] == "range"
 
 
 class TestIdentifyZhongshu:

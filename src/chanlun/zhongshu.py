@@ -2,7 +2,7 @@
 
 from typing import List
 
-from .models import Bi, BiDirection, Segment, Zhongshu
+from .models import Bi, BiDirection, ExpandedZhongshu, Segment, Zhongshu
 
 
 def _item_id(item: Bi | Segment) -> int:
@@ -68,6 +68,54 @@ def _mark_reabsorbed_lineage(zhongshus: List[Zhongshu]) -> None:
                 current.superseded_by_zs_id = final_successor.zs_id
                 current.is_reabsorbed_by_larger_expansion = True
                 changed = True
+
+
+def is_zhongshu_expansion(previous: Zhongshu, current: Zhongshu) -> bool:
+    """第20课：相邻同级别中枢区间不重叠，但当前中枢的波动回探进前一中枢区间。
+
+    - 向上候选（current.zs_low > previous.zs_high）：当前波动下沿回探到前中枢上沿之下。
+    - 向下候选（current.zs_high < previous.zs_low）：当前波动上沿回探到前中枢下沿之上。
+    - 区间重叠 → 同级别盘整/延伸，不算扩张。
+    """
+    if current.zs_low > previous.zs_high:
+        return current.peak_low < previous.zs_high
+    if current.zs_high < previous.zs_low:
+        return current.peak_high > previous.zs_low
+    return False
+
+
+def identify_expanded_zhongshus(zhongshus: List[Zhongshu]) -> List[ExpandedZhongshu]:
+    """第20课：相邻同级别中枢区间不重叠、但当前中枢波动回探进前中枢区间 → 合并为更大级别中枢。
+
+    - 区间重叠 → 已是同级别盘整/延伸，不算扩张。
+    - 区间不重叠 + 波动不回探 → 趋势（up/down），不算扩张。
+    - 区间不重叠 + 波动回探 → 扩张：产出更大级别中枢，区间=两段波动区间重叠。
+    """
+    expanded: List[ExpandedZhongshu] = []
+    eid = 0
+    i = 0
+    while i < len(zhongshus) - 1:
+        previous = zhongshus[i]
+        current = zhongshus[i + 1]
+        if is_zhongshu_expansion(previous, current):
+            low = max(previous.peak_low, current.peak_low)
+            high = min(previous.peak_high, current.peak_high)
+            expanded.append(
+                ExpandedZhongshu(
+                    expanded_id=eid,
+                    sub_zs_ids=[previous.zs_id, current.zs_id],
+                    expanded_low=low,
+                    expanded_high=high,
+                    peak_low=min(previous.peak_low, current.peak_low),
+                    peak_high=max(previous.peak_high, current.peak_high),
+                    start_ts=previous.start_ts,
+                    end_ts=current.end_ts,
+                    structure_level=previous.structure_level,
+                )
+            )
+            eid += 1
+        i += 1
+    return expanded
 
 
 def identify_zhongshu(items: List[Bi | Segment], *, structure_level: str = "bi") -> List[Zhongshu]:
