@@ -19,6 +19,7 @@
 - [zhongshu-state-machine.md](zhongshu-state-machine.md)：中枢完成 / 扩张 / 新中枢状态机（ZS2 交付说明）。
 - [zhongshu-input-qualification.md](zhongshu-input-qualification.md)：标准中枢输入 segment 资格表（ZS1.1 交付说明）。
 - [zhongshu-recompute-order.md](zhongshu-recompute-order.md)：中枢重算顺序与旧中心清理规则（ZS3.1 交付说明）。
+- [zhongshu-expansion-design.md](zhongshu-expansion-design.md)：中枢扩张与更大级别中枢判定（草案，锚点 03690 5m）。
 
 ### 走势类型 / 背驰
 
