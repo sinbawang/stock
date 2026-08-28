@@ -273,6 +273,8 @@ def _compact_technical_payload(payload: dict) -> list[str]:
         lines.append(f"{lower_level}区间套: {note}")
         if precision_window_display and precision_window_display.get("label"):
             lines.append(f"{lower_level}窗口: {precision_window_display['label']}")
+        if precision_entry.get("dynamic_grade_label"):
+            lines.append(f"{lower_level}判级: {precision_entry['dynamic_grade_label']}")
     return lines
 
 

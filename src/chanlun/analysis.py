@@ -1391,13 +1391,19 @@ def build_precision_window_display(precision_entry: dict[str, object] | None) ->
     nested_from = precision_entry.get("nested_from") or {}
     label = precision_entry.get("window_basis_label") or nested_from.get("window_basis_label")
     description = precision_entry.get("window_basis_description") or nested_from.get("window_basis_description")
-    if not label and not description:
+    dynamic_grade = precision_entry.get("dynamic_grade")
+    dynamic_grade_label = precision_entry.get("dynamic_grade_label")
+    if not label and not description and not dynamic_grade_label:
         return None
     lines = [line for line in [f"{operation_level}窗口：{label}" if label else None, description] if line]
+    if dynamic_grade_label:
+        lines.append(f"{operation_level}判级：{dynamic_grade_label}")
     return {
         "title": f"{operation_level}区间套窗口",
         "label": label,
         "description": description,
+        "dynamic_grade": dynamic_grade,
+        "dynamic_grade_label": dynamic_grade_label,
         "lines": lines,
     }
 

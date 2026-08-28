@@ -345,6 +345,9 @@ def _save_technical_report(
         window_basis_label = precision_window_display.get("label") if precision_window_display else None
         if window_basis_label:
             advice_text += f"\n区间套窗口：{window_basis_label}"
+        dynamic_grade_label = precision_entry.get("dynamic_grade_label")
+        if dynamic_grade_label:
+            advice_text += f"\n区间套判级：{dynamic_grade_label}"
     summary_payload = build_technical_summary(
         PRIMARY_TECHNICAL_LABEL,
         signals,

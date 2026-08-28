@@ -167,7 +167,7 @@
 - 执行级别（区间套）已绑定上级别同级别结构消费等级：`build_lower_timeframe_precision_entry` 读取上级别 `same_level_consumption_level`，当上级别为 `auxiliary`（类中枢辅助）或 `pending`（待确认）时，次级别买卖点状态从 `actionable` 降级为 `watch`，并在 note 中标注「不按严格区间套执行」，避免低级别买卖点越级显示强确认；同时新增 `higher_consumption_level` / `higher_consumption_level_label` 两个字段，把上级别消费等级暴露到区间套 payload。
 - 回归：`tests/test_chanlun_analysis.py` 新增 `test_build_lower_timeframe_precision_entry_downgrades_auxiliary_higher_level` / `test_build_lower_timeframe_precision_entry_downgrades_pending_higher_level` / `test_build_lower_timeframe_precision_entry_keeps_actionable_when_higher_confirmed` 三用例，锁住 auxiliary / pending 降级与 confirmed 保持 actionable 的三档语义。
 - 86课动态判级已落地：`build_lower_timeframe_precision_entry` 新增 `dynamic_grade` / `dynamic_grade_label` 字段，按上级别中枢漂移方向（`structure_state.current_ongoing.type` 的 up / down / range）对次级别买卖点分级——震荡=「震荡机会」、上移中的卖点 / 下移中的买点=「警戒」、上移中的买点 / 下移中的卖点=「无操作价值」。契约枚举 `PrecisionDynamicGrade` 落在 `analysis_contract.py`，回归见 `test_analysis_contract.py::test_precision_dynamic_grade_enum_is_stable_and_complete` 与 `test_chanlun_analysis.py::test_build_lower_timeframe_precision_entry_dynamic_grade`（六象限 parametrize）。
-- 待办：把 `dynamic_grade` / `dynamic_grade_label` 接入报告与小程序文案（字段已产出，消费展示待接）。
+- 消费展示已接入：`build_precision_window_display` 的 `lines` 增加「判级」行并透出 `dynamic_grade` / `dynamic_grade_label`；A/H mixed report 的 `advice_text` 与 HK compact 文案新增「区间套判级」行；miniapp bundle 经 `precision_window_display` 自动透出。回归见 `test_chanlun_analysis.py::test_build_precision_window_display_includes_dynamic_grade` / `test_build_precision_window_display_omits_grade_when_absent`。
 
 <a id="bs6-case-gates"></a>
 ### BS6 标准案例包与回归闸门

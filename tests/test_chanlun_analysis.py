@@ -17,7 +17,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from chanlun.analysis import _build_zs_monitor_state, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths
+from chanlun.analysis import _build_zs_monitor_state, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
 
@@ -2269,6 +2269,36 @@ def test_build_lower_timeframe_precision_entry_dynamic_grade(
 
     assert entry["dynamic_grade"] == expected_grade
     assert entry["dynamic_grade_label"] == expected_label
+
+
+def test_build_precision_window_display_includes_dynamic_grade() -> None:
+    display = build_precision_window_display(
+        {
+            "operation_level": "5M",
+            "window_basis_label": "中枢到锚点窗口",
+            "window_basis_description": "窗口依据：上级别离开笔尚未单独解析。",
+            "dynamic_grade": "warning",
+            "dynamic_grade_label": "警戒",
+        }
+    )
+
+    assert display["dynamic_grade"] == "warning"
+    assert display["dynamic_grade_label"] == "警戒"
+    assert "5M判级：警戒" in display["lines"]
+
+
+def test_build_precision_window_display_omits_grade_when_absent() -> None:
+    display = build_precision_window_display(
+        {
+            "operation_level": "5M",
+            "window_basis_label": "中枢到锚点窗口",
+            "window_basis_description": "窗口依据：上级别离开笔尚未单独解析。",
+        }
+    )
+
+    assert display["dynamic_grade"] is None
+    assert display["dynamic_grade_label"] is None
+    assert all("判级" not in line for line in display["lines"])
 
 
 def test_build_lower_timeframe_precision_entry_ignores_divergence_outside_higher_window() -> None:
