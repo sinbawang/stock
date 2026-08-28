@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from chanlun import analysis
 from chanlun.analysis_contract import (
+    PRECISION_DYNAMIC_GRADE_LABELS,
+    PRECISION_DYNAMIC_GRADE_NOTES,
     SIGNAL_BASIS_LABELS,
     SIGNAL_POINT_LABELS,
     STRUCTURE_STATUS_LABELS,
     STRUCTURE_STATUS_NOTES,
+    PrecisionDynamicGrade,
     SignalBasis,
     SignalPoint,
     StructureStatus,
@@ -49,6 +52,14 @@ def test_structure_status_enum_is_stable_and_complete() -> None:
     }
 
 
+def test_precision_dynamic_grade_enum_is_stable_and_complete() -> None:
+    assert {member.value for member in PrecisionDynamicGrade} == {
+        "oscillation_opportunity",
+        "warning",
+        "no_operational_value",
+    }
+
+
 def test_analysis_consumes_the_same_label_and_note_objects() -> None:
     """analysis.py 的展示字典必须直接来自契约模块，不得维护第二份拷贝。"""
     assert analysis.SIGNAL_POINT_LABELS is SIGNAL_POINT_LABELS
@@ -60,15 +71,15 @@ def test_analysis_consumes_the_same_label_and_note_objects() -> None:
 def test_contract_projection_covers_all_codes_with_non_empty_labels() -> None:
     contract = get_analysis_contract()
 
-    assert set(contract) == {"signal_point", "signal_basis", "structure_status"}
+    assert set(contract) == {"signal_point", "signal_basis", "structure_status", "precision_dynamic_grade"}
 
     for family, entries in contract.items():
         assert entries, f"{family} 契约为空"
         for code, (label, note) in entries.items():
             assert code, f"{family} 存在空 code"
             assert label, f"{family}.{code} label 为空"
-            # structure_status 必须带 note；signal_point / signal_basis 暂允许 note 为空。
-            if family == "structure_status":
+            # structure_status / precision_dynamic_grade 必须带 note；signal_point / signal_basis 暂允许 note 为空。
+            if family in {"structure_status", "precision_dynamic_grade"}:
                 assert note, f"{family}.{code} note 为空"
 
 

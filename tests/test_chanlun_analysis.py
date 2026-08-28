@@ -2214,6 +2214,63 @@ def test_build_lower_timeframe_precision_entry_keeps_actionable_when_higher_conf
     assert entry["higher_consumption_level_label"] == "已确认消费"
 
 
+def _precision_higher_signals_with_drift(side: str, drift: str) -> dict[str, object]:
+    point = f"{side}1"
+    return {
+        "buy_points": [point] if side == "buy" else [],
+        "sell_points": [point] if side == "sell" else [],
+        "current_zs": SimpleNamespace(end_ts=datetime(2026, 5, 10, 14, 0), zs_id=9, exit_bi_id=33, is_terminated=False),
+        "signal_points": [
+            {"point": point, "active": True, "time": "2026-05-10T14:30:00", "price": 10.2, "basis": "bottom_divergence_near_zs_low"}
+        ],
+        "divergence": {"trend": {"active": False}, "range": {"active": False}},
+        "same_level_consumption_level": "confirmed",
+        "structure_state": {"current_ongoing": {"type": drift}},
+    }
+
+
+def _precision_lower_signals(side: str) -> dict[str, object]:
+    point = f"{side}2"
+    return {
+        "buy_points": [point] if side == "buy" else [],
+        "sell_points": [point] if side == "sell" else [],
+        "signal_points": [{"point": point, "active": True, "time": "2026-05-10T14:25:00", "price": 10.25, "basis": "buy1_pullback_confirmation"}],
+        "signal_catalog": [{"point": point, "active": True, "time": "2026-05-10T14:25:00", "price": 10.25, "basis": "buy1_pullback_confirmation"}],
+        "structure_state": {"current_ongoing": {"type": "down"}},
+        "divergence": {"trend": {"active": False}, "range": {"active": False}},
+    }
+
+
+@pytest.mark.parametrize(
+    ("side", "drift", "expected_grade", "expected_label"),
+    [
+        ("buy", "range", "oscillation_opportunity", "震荡机会"),
+        ("buy", "up", "no_operational_value", "无操作价值"),
+        ("buy", "down", "warning", "警戒"),
+        ("sell", "range", "oscillation_opportunity", "震荡机会"),
+        ("sell", "up", "warning", "警戒"),
+        ("sell", "down", "no_operational_value", "无操作价值"),
+    ],
+)
+def test_build_lower_timeframe_precision_entry_dynamic_grade(
+    side: str,
+    drift: str,
+    expected_grade: str,
+    expected_label: str,
+) -> None:
+    """86课：次级别买卖点的操作意义随大级别中枢漂移方向动态判级。"""
+    entry = build_lower_timeframe_precision_entry(
+        _precision_higher_signals_with_drift(side, drift),
+        _precision_lower_signals(side),
+        lower_timeframe="5m",
+        lower_timeframe_label="5M",
+        pending_reverse_mode="effective_only",
+    )
+
+    assert entry["dynamic_grade"] == expected_grade
+    assert entry["dynamic_grade_label"] == expected_label
+
+
 def test_build_lower_timeframe_precision_entry_ignores_divergence_outside_higher_window() -> None:
     entry = build_lower_timeframe_precision_entry(
         {

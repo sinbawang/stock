@@ -11,10 +11,12 @@ from .zhongshu_contract import (
     TRANSITION_STATE_NOTES,
 )
 from .analysis_contract import (
+    PRECISION_DYNAMIC_GRADE_LABELS,
     SIGNAL_BASIS_LABELS,
     SIGNAL_POINT_LABELS,
     STRUCTURE_STATUS_LABELS,
     STRUCTURE_STATUS_NOTES,
+    PrecisionDynamicGrade,
 )
 
 
@@ -1506,6 +1508,30 @@ def _active_higher_level_precision_context(higher_signals: dict[str, object]) ->
     return None
 
 
+def _higher_level_drift(higher_signals: dict[str, object]) -> str | None:
+    """上级别中枢漂移方向（86课动态判级输入）：up / down / range / None。"""
+    structure_state = higher_signals.get("structure_state") or {}
+    current_ongoing = structure_state.get("current_ongoing") or {}
+    drift = str(current_ongoing.get("type") or "").strip()
+    return drift if drift in {"up", "down", "range"} else None
+
+
+def _grade_by_higher_drift(drift: str | None, side: str) -> str | None:
+    """86课：次级别买卖点随大级别中枢漂移方向的操作意义分级。
+
+    - 震荡（range）：买卖点都只是震荡机会。
+    - 上移（up）：卖点逆势=警戒，买点顺势但滞后=无操作价值。
+    - 下移（down）：卖点顺势但滞后=无操作价值，买点逆势=警戒。
+    """
+    if drift == "range":
+        return PrecisionDynamicGrade.OSCILLATION_OPPORTUNITY.value
+    if drift == "up":
+        return PrecisionDynamicGrade.WARNING.value if side == "sell" else PrecisionDynamicGrade.NO_OPERATIONAL_VALUE.value
+    if drift == "down":
+        return PrecisionDynamicGrade.NO_OPERATIONAL_VALUE.value if side == "sell" else PrecisionDynamicGrade.WARNING.value
+    return None
+
+
 def build_lower_timeframe_precision_entry(
     higher_signals: dict[str, object],
     lower_signals: dict[str, object],
@@ -1626,6 +1652,10 @@ def build_lower_timeframe_precision_entry(
             f"次级别买卖点仅作观察提示，不按严格区间套执行。"
         )
 
+    higher_drift = _higher_level_drift(higher_signals)
+    dynamic_grade = _grade_by_higher_drift(higher_drift, side)
+    dynamic_grade_label = PRECISION_DYNAMIC_GRADE_LABELS.get(dynamic_grade) if dynamic_grade else None
+
     return {
         "timeframe": lower_timeframe,
         "operation_level": lower_timeframe_label,
@@ -1642,6 +1672,8 @@ def build_lower_timeframe_precision_entry(
         "divergence": divergence,
         "higher_consumption_level": higher_consumption_level or None,
         "higher_consumption_level_label": higher_consumption_level_label,
+        "dynamic_grade": dynamic_grade,
+        "dynamic_grade_label": dynamic_grade_label,
         "window_basis_label": window_basis_label,
         "window_basis_description": window_basis_note,
         "nested_from": {

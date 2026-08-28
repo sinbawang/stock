@@ -44,6 +44,14 @@ class StructureStatus(str, Enum):
     COMPLETED_THEN_NEW_TYPE = "completed_then_new_type"
 
 
+class PrecisionDynamicGrade(str, Enum):
+    """86课：次级别买卖点相对大级别中枢漂移方向的操作意义分级。"""
+
+    OSCILLATION_OPPORTUNITY = "oscillation_opportunity"
+    WARNING = "warning"
+    NO_OPERATIONAL_VALUE = "no_operational_value"
+
+
 SIGNAL_POINT_LABELS = {
     SignalPoint.BUY_1.value: "一买",
     SignalPoint.BUY_2.value: "二买",
@@ -78,6 +86,20 @@ STRUCTURE_STATUS_NOTES = {
 }
 
 
+PRECISION_DYNAMIC_GRADE_LABELS = {
+    PrecisionDynamicGrade.OSCILLATION_OPPORTUNITY.value: "震荡机会",
+    PrecisionDynamicGrade.WARNING.value: "警戒",
+    PrecisionDynamicGrade.NO_OPERATIONAL_VALUE.value: "无操作价值",
+}
+
+
+PRECISION_DYNAMIC_GRADE_NOTES = {
+    PrecisionDynamicGrade.OSCILLATION_OPPORTUNITY.value: "大级别中枢震荡，次级别买卖点仅构成震荡机会。",
+    PrecisionDynamicGrade.WARNING.value: "次级别买卖点与大级别中枢漂移方向相反，仅作警戒，不急于执行。",
+    PrecisionDynamicGrade.NO_OPERATIONAL_VALUE.value: "次级别买卖点与大级别中枢漂移方向相同但已滞后，基本无新增操作价值。",
+}
+
+
 def get_analysis_contract() -> dict[str, dict[str, tuple[str, str]]]:
     """返回机器可读的 analysis 契约投影。
 
@@ -95,5 +117,9 @@ def get_analysis_contract() -> dict[str, dict[str, tuple[str, str]]]:
         "structure_status": {
             member.value: (STRUCTURE_STATUS_LABELS[member.value], STRUCTURE_STATUS_NOTES[member.value])
             for member in StructureStatus
+        },
+        "precision_dynamic_grade": {
+            member.value: (PRECISION_DYNAMIC_GRADE_LABELS[member.value], PRECISION_DYNAMIC_GRADE_NOTES[member.value])
+            for member in PrecisionDynamicGrade
         },
     }
