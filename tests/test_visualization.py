@@ -209,3 +209,55 @@ def test_plot_structure_draws_same_level_boundary_dashed_lines():
     assert any(line.get_xdata()[0] == 4 for line in price_verticals)
     assert any(line.get_xdata()[0] == 1 for line in macd_verticals)
     assert any(line.get_xdata()[0] == 4 for line in macd_verticals)
+
+
+def test_plot_structure_draws_type_chain_boundaries_with_labels():
+    """Stage 1：完整 type_chain 的每个走势类型起点画虚竖线，并标注 range/up/down。"""
+    bars = _bars()
+    normalized_bars = _normalized(bars)
+    structure_state = {
+        "type_chain": [
+            {
+                "type": "up",
+                "status": "completed",
+                "start_ts": bars[1].ts.isoformat(timespec="seconds"),
+                "end_ts": bars[2].ts.isoformat(timespec="seconds"),
+            },
+            {
+                "type": "down",
+                "status": "completed",
+                "start_ts": bars[3].ts.isoformat(timespec="seconds"),
+                "end_ts": bars[4].ts.isoformat(timespec="seconds"),
+            },
+            {
+                "type": "range",
+                "status": "ongoing",
+                "start_ts": bars[4].ts.isoformat(timespec="seconds"),
+                "end_ts": None,
+            },
+        ],
+    }
+
+    fig = Plotter().plot_structure(
+        bars,
+        [],
+        [],
+        [],
+        [],
+        normalized_bars=normalized_bars,
+        structure_state=structure_state,
+    )
+
+    price_verticals = [
+        line
+        for line in fig.axes[0].lines
+        if line.get_linestyle() == '--' and len(set(line.get_xdata())) == 1
+    ]
+    labels = [text.get_text() for text in fig.axes[0].texts]
+
+    assert any(line.get_xdata()[0] == 1 for line in price_verticals)
+    assert any(line.get_xdata()[0] == 3 for line in price_verticals)
+    assert any(line.get_xdata()[0] == 4 for line in price_verticals)
+    assert "up" in labels
+    assert "down" in labels
+    assert "range" in labels

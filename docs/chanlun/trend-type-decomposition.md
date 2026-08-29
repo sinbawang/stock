@@ -36,11 +36,14 @@
 
 ### 3.1 类型链 `type_chain`
 
-- 结构：`[{type, status, zs_count, start_zs_id, end_zs_id}, ...]`
+- 结构：`[{type, status, zs_count, start_zs_id, end_zs_id, start_ts, end_ts}, ...]`
 - 语义：把 live runs 拆成 `completed` 段（历史已终结类型）+ 最后一段 `ongoing`。
 - 与 `last_completed` / `current_ongoing` 严格一致：completed 段来自 `last_completed`，
   ongoing 段来自 `current_ongoing`，早于 `last_completed` 的 run 按 run 粒度折叠为 completed。
 - `type` 取值：`range` / `up` / `down`；`status` 取值：`completed` / `ongoing`。
+- `start_ts` / `end_ts`：该类型段的起止时间（`end_ts` 对 `ongoing` 为 `null`），供结构图在
+  每个类型段起点画走势类型分界虚竖线并标注 `range/up/down`（见
+  `chanlun.visualization.Plotter._draw_structure_boundaries`）。
 
 ### 3.2 转场与消费等级
 

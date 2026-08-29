@@ -199,30 +199,59 @@ class Plotter:
         if not structure_state:
             return
 
-        boundary_specs: list[tuple[int | None, str, str, float]] = []
-        last_completed = structure_state.get("last_completed") or {}
-        current_ongoing = structure_state.get("current_ongoing") or {}
-
-        boundary_specs.append((
-            self._state_ts_to_bar_index(bars, last_completed.get("start_ts")),
-            "last_completed_start",
-            "#9aa5b1",
-            0.45,
-        ))
-        boundary_specs.append((
-            self._state_ts_to_bar_index(bars, current_ongoing.get("start_ts")),
-            "current_ongoing_start",
-            "#ffd166",
-            0.85,
-        ))
-
         seen_positions: set[int] = set()
-        for x_pos, _, color, alpha in boundary_specs:
-            if x_pos is None or x_pos in seen_positions:
-                continue
+
+        def draw_boundary(x_pos: int | None, color: str, alpha: float, label: str | None = None) -> None:
+            if x_pos is None or x_pos <= 0 or x_pos in seen_positions:
+                return
             seen_positions.add(x_pos)
             price_ax.axvline(x=x_pos, color=color, linestyle='--', linewidth=1.0, alpha=alpha, zorder=1)
             macd_ax.axvline(x=x_pos, color=color, linestyle='--', linewidth=0.9, alpha=alpha, zorder=1)
+            if label:
+                self._draw_trend_type_label(price_ax, x_pos, label, color)
+
+        type_chain = structure_state.get("type_chain") or []
+        if type_chain:
+            # 完整类型链：每个走势类型条目的起点画虚竖线，标注其类型。
+            for entry in type_chain:
+                is_ongoing = entry.get("status") == "ongoing"
+                draw_boundary(
+                    self._state_ts_to_bar_index(bars, entry.get("start_ts")),
+                    "#ffd166" if is_ongoing else "#9aa5b1",
+                    0.85 if is_ongoing else 0.45,
+                    label=str(entry.get("type") or "unknown"),
+                )
+            return
+
+        # 无 type_chain 时回退到旧的 last_completed / current_ongoing 两根边界。
+        last_completed = structure_state.get("last_completed") or {}
+        current_ongoing = structure_state.get("current_ongoing") or {}
+        draw_boundary(
+            self._state_ts_to_bar_index(bars, last_completed.get("start_ts")),
+            "#9aa5b1",
+            0.45,
+        )
+        draw_boundary(
+            self._state_ts_to_bar_index(bars, current_ongoing.get("start_ts")),
+            "#ffd166",
+            0.85,
+        )
+
+    def _draw_trend_type_label(self, ax, x_pos: int, type_label: str, color: str) -> None:
+        """在走势类型分界虚竖线顶端标注类型（range/up/down）。"""
+        ax.text(
+            x_pos,
+            1.02,
+            type_label,
+            transform=ax.get_xaxis_transform(),
+            color=color,
+            fontsize=7,
+            ha='center',
+            va='bottom',
+            alpha=0.9,
+            clip_on=False,
+            zorder=6,
+        )
 
     def _draw_bars(self, ax, bars: List[Bar]) -> None:
         for i, bar in enumerate(bars):

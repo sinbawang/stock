@@ -2421,6 +2421,52 @@ def test_build_chart_data_payload_uses_precision_entry_pending_reverse_mode(tmp_
     assert payload["pending_reverse_mode"] == "strict"
 
 
+def test_build_chart_data_payload_emits_trend_type_boundaries(tmp_path: Path) -> None:
+    """chart-data-v1 输出 trend_type_boundaries，供小程序 canvas 模式画走势类型分界。"""
+    analyze_dir = tmp_path / "30m" / "analyze"
+    analyze_dir.mkdir(parents=True, exist_ok=True)
+
+    bars_csv = analyze_dir / "000651_30m_20260101_to_20260131.csv"
+    bars_csv.write_text(
+        "ts,open,high,low,close,volume\n"
+        "2026-01-02 10:30,10.0,10.5,9.8,10.2,1000\n"
+        "2026-01-02 11:30,10.2,10.6,10.0,10.4,1000\n"
+        "2026-01-02 12:30,10.4,10.7,10.1,10.5,1000\n"
+        "2026-01-02 13:30,10.5,10.8,10.2,10.6,1000\n"
+        "2026-01-02 14:30,10.6,10.9,10.3,10.7,1000\n"
+        "2026-01-02 15:30,10.7,11.0,10.4,10.8,1000\n",
+        encoding="utf-8",
+    )
+
+    (tmp_path / "30m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "structure_state": {
+                    "type_chain": [
+                        {"type": "up", "status": "completed", "start_ts": "2026-01-02T10:30:00", "end_ts": "2026-01-02T11:30:00"},
+                        {"type": "down", "status": "completed", "start_ts": "2026-01-02T12:30:00", "end_ts": "2026-01-02T13:30:00"},
+                        {"type": "range", "status": "ongoing", "start_ts": "2026-01-02T14:30:00", "end_ts": None},
+                    ]
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    payload = module.build_chart_data_payload(
+        {
+            "timeframe": "30m",
+            "label": "30M 结构图",
+            "data_source_path": str(bars_csv),
+        }
+    )
+
+    assert payload is not None
+    # 第一段起点落在左边缘（index 0）被跳过；保留 down@12:30 与 range@14:30 两处分界。
+    assert payload["trend_type_boundaries"] == [2, 4]
+
+
 def test_build_chart_data_payload_enriches_bis_with_endpoint_prices(tmp_path: Path) -> None:
     analyze_dir = tmp_path / "1m" / "analyze"
     analyze_dir.mkdir(parents=True, exist_ok=True)

@@ -441,6 +441,8 @@ def _completed_run_type_entries(live_runs: list[list[Zhongshu]]) -> list[dict[st
                 "zs_count": len(run),
                 "start_zs_id": run[0].zs_id,
                 "end_zs_id": run[-1].zs_id,
+                "start_ts": _isoformat_ts(run[0].start_ts),
+                "end_ts": _isoformat_ts(run[-1].end_ts),
             }
         )
     return entries
@@ -454,6 +456,8 @@ def _group_type_chain_entry(group: dict[str, object]) -> dict[str, object]:
         "zs_count": group.get("zs_count") if group.get("zs_count") is not None else group.get("zs_count_so_far"),
         "start_zs_id": group.get("start_zs_id"),
         "end_zs_id": group.get("end_zs_id"),
+        "start_ts": group.get("start_ts"),
+        "end_ts": group.get("end_ts"),
     }
 
 
@@ -742,6 +746,8 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
                     "zs_count": 1,
                     "start_zs_id": only.zs_id,
                     "end_zs_id": only.zs_id,
+                    "start_ts": _isoformat_ts(only.start_ts),
+                    "end_ts": None,
                 }
             ],
         }

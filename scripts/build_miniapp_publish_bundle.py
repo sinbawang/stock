@@ -1597,6 +1597,40 @@ def _enrich_bi_records_with_fractals(
     return enriched
 
 
+def _trend_type_boundary_bar_indices(
+    type_chain: list[dict[str, Any]],
+    bars_records: list[dict[str, Any]],
+) -> list[int]:
+    """把 type_chain 各段 start_ts 映射到 bars CSV 的 bar index。
+
+    chart-data-v1 的 `trend_type_boundaries` 供小程序 canvas 模式画走势类型
+    分界虚竖线（前端 `drawPanelDividers` / `getTrendDividerBarIndices`）。
+    跳过映射到左边缘（index <= 0）的分界，并对重复 index 去重。
+    """
+    if not type_chain or not bars_records:
+        return []
+
+    indices: list[int] = []
+    for entry in type_chain:
+        start_ts = safe_text(entry.get("start_ts"))
+        if not start_ts:
+            continue
+        normalized = start_ts.replace("T", " ")[:16]
+        bar_index = len(bars_records) - 1
+        for index, record in enumerate(bars_records):
+            if safe_text(record.get("ts"))[:16] >= normalized:
+                bar_index = index
+                break
+        if bar_index > 0:
+            indices.append(bar_index)
+
+    unique: list[int] = []
+    for index in indices:
+        if index not in unique:
+            unique.append(index)
+    return unique
+
+
 def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | None:
     source_value = chart_spec.get("data_source_path")
     if not source_value:
@@ -1630,6 +1664,13 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
         read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_zhongshu"))
     )
 
+    bars_records = read_csv_records(bars_csv)
+    structure_state = (tech_payload.get("structure_state") or {}) if isinstance(tech_payload, dict) else {}
+    trend_type_boundaries = _trend_type_boundary_bar_indices(
+        (structure_state or {}).get("type_chain") or [],
+        bars_records,
+    )
+
     return {
         "schema_version": "chart-data-v1",
         "timeframe": timeframe,
@@ -1638,7 +1679,8 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
         "primary_zhongshu_level": safe_text((structure_payload or {}).get("primary_zhongshu_level")) if isinstance(structure_payload, dict) else "",
         "label": chart_spec.get("label"),
         "source_csv": bars_csv.name,
-        "bars": read_csv_records(bars_csv),
+        "bars": bars_records,
+        "trend_type_boundaries": trend_type_boundaries,
         "normalized_bars": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized")),
         "macd": read_csv_records(sibling_analysis_csv(bars_csv, "_normalized_macd")),
         "fractals": fractal_records,

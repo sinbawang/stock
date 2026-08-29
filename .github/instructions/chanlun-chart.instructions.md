@@ -26,6 +26,7 @@ description: "缠论图生成规范：每次生成缠论图表时遵循此要求
 - **顶分型**：`▼` 红色 `#ff6b6b`，标注在 K 线高点上方
 - **底分型**：`▲` 青色 `#4ecdc4`，标注在 K 线低点下方
 - **中枢**：带透明填充的彩色矩形 + 虚线边界，右侧标注 `ZSn [low, high]`
+- **走势类型分界**：按 `structure_state.type_chain` 的每个类型段起点画虚竖线（已完成灰 `#9aa5b1`、进行中黄 `#ffd166`），并在线上方标注类型 `range/up/down`；无 `type_chain` 时回退 `last_completed` / `current_ongoing` 两根边界
 
 ## 坐标系映射
 

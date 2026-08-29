@@ -204,8 +204,8 @@ def test_build_structure_state_type_chain_matches_last_completed_and_ongoing() -
     state = build_structure_state([], [first, second, third])
 
     assert state["type_chain"] == [
-        {"type": "up", "status": "completed", "zs_count": 2, "start_zs_id": 1, "end_zs_id": 2},
-        {"type": "range", "status": "ongoing", "zs_count": 1, "start_zs_id": 3, "end_zs_id": 3},
+        {"type": "up", "status": "completed", "zs_count": 2, "start_zs_id": 1, "end_zs_id": 2, "start_ts": "2026-05-01T10:30:00", "end_ts": "2026-05-05T14:30:00"},
+        {"type": "range", "status": "ongoing", "zs_count": 1, "start_zs_id": 3, "end_zs_id": 3, "start_ts": "2026-05-07T10:30:00", "end_ts": None},
     ]
 
 
@@ -215,7 +215,7 @@ def test_build_structure_state_type_chain_single_and_empty() -> None:
 
     single_state = build_structure_state([], [_zhongshu(1, zs_low=10.0, zs_high=11.0, day=1)])
     assert single_state["type_chain"] == [
-        {"type": "range", "status": "ongoing", "zs_count": 1, "start_zs_id": 1, "end_zs_id": 1},
+        {"type": "range", "status": "ongoing", "zs_count": 1, "start_zs_id": 1, "end_zs_id": 1, "start_ts": "2026-05-01T10:30:00", "end_ts": None},
     ]
 
 
@@ -248,9 +248,9 @@ def test_build_structure_state_type_chain_folds_multiple_completed_runs() -> Non
     state = build_structure_state([], [up1, up2, sep1, down1, down2, sep2, rng])
 
     assert state["type_chain"] == [
-        {"type": "up", "status": "completed", "zs_count": 2, "start_zs_id": 1, "end_zs_id": 2},
-        {"type": "down", "status": "completed", "zs_count": 2, "start_zs_id": 4, "end_zs_id": 5},
-        {"type": "range", "status": "ongoing", "zs_count": 1, "start_zs_id": 7, "end_zs_id": 7},
+        {"type": "up", "status": "completed", "zs_count": 2, "start_zs_id": 1, "end_zs_id": 2, "start_ts": "2026-05-01T10:30:00", "end_ts": "2026-05-05T14:30:00"},
+        {"type": "down", "status": "completed", "zs_count": 2, "start_zs_id": 4, "end_zs_id": 5, "start_ts": "2026-05-10T10:30:00", "end_ts": "2026-05-14T14:30:00"},
+        {"type": "range", "status": "ongoing", "zs_count": 1, "start_zs_id": 7, "end_zs_id": 7, "start_ts": "2026-05-19T10:30:00", "end_ts": None},
     ]
     assert state["last_completed"]["type"] == "down"
     assert state["last_completed"]["zs_count"] == 2
