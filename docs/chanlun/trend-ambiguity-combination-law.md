@@ -68,14 +68,14 @@ applyTo: src/chanlun/analysis.py, docs/chanlun/trend-type-decomposition.md
 
 在多个合法中枢划分中，按以下优先序选择：
 
-1. **避繁就简**：优先选择「不产生中枢扩展」的组合（中枢扩展复杂，能避免则避免）。
+1. **避繁就简**：优先选择「不产生不必要类型边界」的组合（能合并为同类延伸就不拆成新类型）。注意：本文是 38/39 课**同级别分解**的工程实现，同级别分解只按中枢区间重叠与否判定（重叠=延伸，不重叠=趋势），**不处理中枢扩张/更高级别中枢**——「扩张」属非同级别分解视角，不在本选择器判定范围内。
 2. **利于操作**：优先选择能揭示买卖点意义（尤其三类买卖点）的组合。
 3. **级别一致**：同一操作级别内坚持同级别分解，不混搭级别。
 4. **当下锁定**：选定一种组合后，按该组合的图形意义判断、操作，不得混用其它组合的结论。
 
 判定「最适合当下中枢」的可复核标准：
 
-- 该划分是否避免了不必要的扩展；
+- 该划分是否避免了不必要的类型边界拆分；
 - 该划分下三类买卖点位置是否更清晰；
 - 该划分是否保持同级别唯一性。
 
@@ -96,6 +96,7 @@ applyTo: src/chanlun/analysis.py, docs/chanlun/trend-type-decomposition.md
   单中枢与其区间重叠 → `extension`，否则 `new_type`），输出
   `decomposition_selector = {mode, alternatives, selected, selection_reason}`；回归见
   `test_build_structure_state_decomposition_selector_*`。
-- 未实现（后续扩展）：第4节完整的「当下中枢选择器」——在多个合法 live run 划分（含中枢扩张/延伸/新生的多种重组）中
+- 未实现（后续扩展）：同级别分解内更完整的「当下选择器」——在更多合法 live run 划分（如延伸数量限制导致的升级、更多段内类型切换）中
   枚举并选择；当前选择器只覆盖「候选新类型」单一二义，且不改写主分解（`type_chain`/`last_completed`/`current_ongoing`）。
+  中枢扩张/更高级别中枢属非同级别分解视角，不在本程序同级别分解范围内。
 - 涉及代码锚点：`build_structure_state`、`_split_live_zhongshu_runs`（当前只做唯一切分）。
