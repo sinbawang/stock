@@ -84,6 +84,18 @@ def test_source_warning_helpers_build_shared_manual_warning():
     assert normalized == ("以下字段当前使用手工补充口径: 股息率、储量寿命指数。",)
 
 
+def test_clear_proxy_env_sets_socket_default_timeout():
+    # 东财 datacenter 连接挂起时，socket 默认超时保证 ~15s 内失败降级
+    import socket
+
+    original = socket.getdefaulttimeout()
+    try:
+        fetcher._clear_proxy_env()
+        assert socket.getdefaulttimeout() == fetcher._HK_NETWORK_TIMEOUT_SECONDS
+    finally:
+        socket.setdefaulttimeout(original)
+
+
 def test_manual_supplement_helpers_resolve_and_apply_shared_logic(tmp_path):
     supplement_path = tmp_path / "supplement.txt"
     supplement_path.write_text(

@@ -50,7 +50,21 @@ def test_hk_minute_main_parser_defaults_adjust_to_raw(monkeypatch):
     assert captured["adjust"] == ""
 
 
-def test_resolve_xueqiu_cookies_prefers_env(monkeypatch):
+def test_resolve_xueqiu_cookies_prefers_file(monkeypatch):
+    # 文件是权威来源：即使存在环境变量，也优先使用文件 cookie
+    monkeypatch.setattr(module, "_resolve_xueqiu_cookie_file", lambda: ({"xq_a_token": "file"}, "file:test"))
+    monkeypatch.setenv("XUEQIU_COOKIE", "xq_a_token=aaa; xqat=bbb")
+    monkeypatch.setattr(module, "_extract_xueqiu_cookie_from_browser", lambda browser=None: {"xq_a_token": "browser"})
+
+    cookies, source = module._resolve_xueqiu_cookies()
+
+    assert source == "file:test"
+    assert cookies == {"xq_a_token": "file"}
+
+
+def test_resolve_xueqiu_cookies_prefers_env_when_no_file(monkeypatch):
+    # 无文件时回退到环境变量
+    monkeypatch.setattr(module, "_resolve_xueqiu_cookie_file", lambda: None)
     monkeypatch.setenv("XUEQIU_COOKIE", "xq_a_token=aaa; xqat=bbb")
     monkeypatch.setattr(module, "_extract_xueqiu_cookie_from_browser", lambda browser=None: {"xq_a_token": "browser"})
 
@@ -69,6 +83,18 @@ def test_resolve_xueqiu_cookies_falls_back_to_browser(monkeypatch):
 
     assert source == "browser"
     assert cookies == {"xq_a_token": "browser"}
+
+
+def test_resolve_xueqiu_cookie_file_reads_explicit_env(monkeypatch, tmp_path):
+    # 显式 XUEQIU_COOKIE_FILE 优先于默认候选文件
+    cookie_file = tmp_path / "xueqiu_cookie.env"
+    cookie_file.write_text("XUEQIU_COOKIE=xq_a_token=aaa; xqat=bbb\n", encoding="utf-8")
+    monkeypatch.setenv("XUEQIU_COOKIE_FILE", str(cookie_file))
+
+    cookies, source = module._resolve_xueqiu_cookie_file()
+
+    assert source == f"file:{cookie_file}"
+    assert cookies == {"xq_a_token": "aaa", "xqat": "bbb"}
 
 
 def test_extract_xueqiu_cookie_from_browser_uses_named_loader(monkeypatch):

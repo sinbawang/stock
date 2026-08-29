@@ -132,6 +132,11 @@ def _extract_cookie_text_from_file(file_path: Path) -> str:
 
 
 def _resolve_xueqiu_cookie_file() -> tuple[dict[str, str], str] | None:
+    """读取雪球 cookie 文件（默认 data/_meta/xueqiu_cookie.env 等，或 XUEQIU_COOKIE_FILE）。
+
+    优先级由 _resolve_xueqiu_cookies 决定：XUEQIU_COOKIE 环境变量 → cookie 文件 → 浏览器登录态。
+    更新 cookie 只需覆盖 data/_meta/xueqiu_cookie.env 即可。
+    """
     explicit_path = os.getenv("XUEQIU_COOKIE_FILE", "").strip()
     candidates = [Path(explicit_path)] if explicit_path else []
     candidates.extend(_DEFAULT_COOKIE_FILE_CANDIDATES)
@@ -221,13 +226,18 @@ def _extract_xueqiu_cookie_from_browser(browser: Optional[str] = None) -> dict[s
 
 
 def _resolve_xueqiu_cookies() -> tuple[dict[str, str], str]:
-    cookie_text = os.getenv("XUEQIU_COOKIE", "").strip()
-    if cookie_text:
-        return _parse_cookie_string(cookie_text), "env"
+    """解析雪球 cookie，优先级：cookie 文件 → XUEQIU_COOKIE 环境变量 → 浏览器登录态。
 
+    文件是权威来源：轮换 cookie 只需覆盖 data/_meta/xueqiu_cookie.env，
+    避免陈旧的环境变量（如 VS Code 终端缓存值）遮蔽新 cookie。
+    """
     resolved_from_file = _resolve_xueqiu_cookie_file()
     if resolved_from_file is not None:
         return resolved_from_file
+
+    cookie_text = os.getenv("XUEQIU_COOKIE", "").strip()
+    if cookie_text:
+        return _parse_cookie_string(cookie_text), "env"
 
     cookies = _extract_xueqiu_cookie_from_browser()
     return cookies, "browser"

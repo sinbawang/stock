@@ -7,6 +7,7 @@ from datetime import date, datetime
 from io import BytesIO
 import os
 import re
+import socket
 from typing import Any, Optional, Sequence
 from urllib.parse import urljoin
 
@@ -49,6 +50,12 @@ def _clear_proxy_env() -> None:
     for var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
         os.environ.pop(var, None)
     os.environ["NO_PROXY"] = "*"
+    # Windows 上 requests 的 timeout 对连接挂起不可靠；用 socket 默认超时做 OS 级兜底，
+    # 保证东财 datacenter 等接口连接挂起时也能在 ~15s 内失败降级，而不是无限等待。
+    socket.setdefaulttimeout(_HK_NETWORK_TIMEOUT_SECONDS)
+
+
+_HK_NETWORK_TIMEOUT_SECONDS = 15
 
 
 def _normalize_hk_symbol(symbol: str) -> str:
@@ -100,7 +107,7 @@ def _fetch_hk_cashflow_df(symbol: str, report_dates: Sequence[str]) -> pd.DataFr
             "client": "PC",
             "v": "01975982096513973",
         },
-        timeout=30,
+        timeout=_HK_NETWORK_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     payload = response.json()
@@ -132,7 +139,7 @@ def _fetch_hk_balance_df(symbol: str, report_dates: Sequence[str]) -> pd.DataFra
             "client": "PC",
             "v": "01975982096513973",
         },
-        timeout=30,
+        timeout=_HK_NETWORK_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     payload = response.json()
@@ -163,7 +170,7 @@ def _fetch_hk_dividend_payout_df(symbol: str) -> pd.DataFrame:
             "client": "PC",
             "v": "035584639294227527",
         },
-        timeout=30,
+        timeout=_HK_NETWORK_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     payload = response.json()
