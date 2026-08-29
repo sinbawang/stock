@@ -39,7 +39,9 @@ tests: tests/test_segment.py, tests/test_segment_regression_suite.py
 - 67 课第二种情况（第一二元素有缺口）已实现最小闭环
 - 71 课更细的完整再分辨仍未全部落地
 
-关于 78 课：78 课要求「第二种情况的第二特征序列分型判断必须严格按包含关系处理」。当前再分辨主路径采用 71 课「先破终点/先破起点」捷径（`_rediscriminate_gap_break_detail`），该捷径在判定上**蕴含** 67 课「第二特征序列分型」（分型左元素条件即捷径的「先破终点」条件），因此 78 课的包含处理要求被隐含满足，无需在同一窗口内再单独判一次第二特征序列分型。78 课的「缺口后 C 段未成第二特征序列分型又直接新高/新低 → A+B+C 只算一个线段」规则对应 `is_reclaimed`/`absorbed_segment_ids` 再吸收路径，当前尚未与该原文判据显式对齐。
+关于 78 课：78 课要求「第二种情况的第二特征序列分型判断必须严格按包含关系处理」。当前再分辨主路径采用 71 课「先破终点/先破起点」捷径（`_rediscriminate_gap_break_detail`），该捷径在判定上**蕴含** 67 课「第二特征序列分型」——分型「中元素越过左元素」的左条件与捷径「先破终点」在几何上严格等价（中元素低/高点恰等于同向第三笔终点，左元素低/高点恰等于缺口 pivot 终点），因此捷径在左条件处即确认、早于完整分型，78 课的包含处理要求被隐含满足，无需在同一窗口内再单独判一次第二特征序列分型（等价关系见 `test_78_second_feature_sequence_left_condition_equals_shortcut`）。
+
+78 课的「缺口后 C 段未成第二特征序列分型又直接新高/新低 → A+B+C 只算一个线段」规则对应「缺口候选失效 → 旧段延续吸收 B」+「后续同方向线段经 `_merge_segments_same_direction` 合流」的再吸收路径，以 `is_reclaimed=True` / `absorbed_segment_ids` 记录吸收身份（对应关系见 `test_78_a_plus_b_plus_c_merge_marks_reclaim_metadata`）。
 
 ## 1. 输入口径
 

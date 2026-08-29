@@ -108,7 +108,7 @@
 
 ## 当前 blocker
 
-- 78课「第二种情况第二特征序列」分型判定仍未实现（`_rediscriminate_gap_break_detail` 在首笔无法封闭缺口时仍 `return None`）。经 2026-08-28 对 7 个历史过度延伸标的（00175/002555/00700/01339/03690/09988/600900）全周期复核：当前数据快照已无「缺口永久挂起 → 跑过底部」的过度延伸——最长真实段 01339 5m down 26→68（43 笔）为真实下行趋势，段停点即底部 bi68，中途缺口候选 bi33/39/45 均被正确判失效。此项从「活跃 bug」降级为「理论完整性待办」，补 78课判定属特性而非缺陷。
+- 78课「第二种情况第二特征序列」分型判定已论证为被 71课捷径蕴含：第二特征序列分型的「中元素越过左元素」左条件与捷径「先破终点」在几何上严格等价，捷径在左条件处即确认、早于完整分型（完整分型还须「中元素越过右元素」），故无需在同一窗口内再判一次（见 `segment-spec.md` 5.2 与 `test_78_second_feature_sequence_left_condition_equals_shortcut`）。`_rediscriminate_gap_break_detail` 在无任何一笔越过缺口 pivot 极值时 `return None`（pending）是理论正确行为（pivot 包含后续所有反向笔、特征序列被合并为单元素，捷径与分型都无法形成），非缺陷。78课「A+B+C 合一」已与 `is_reclaimed`/`absorbed_segment_ids` 显式对齐（`test_78_a_plus_b_plus_c_merge_marks_reclaim_metadata`）。
 - reclaim / 重写 与 gap 再分辨交界仍是理论语义最复杂的一环，补 78课判定时需连同该交界一起收口。
 - 上游线段边界只要继续漂移，下游标准中枢完成态也会跟着漂移。
 

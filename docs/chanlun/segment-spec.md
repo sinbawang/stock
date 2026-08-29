@@ -69,7 +69,25 @@ tests: tests/test_segment.py, tests/test_segment_rediscrimination_matrix.py, tes
 - 若后续反向笔**先破第一笔起点**，则视为旧线段延续，撤销该候选分界点；
 - 若先经历至少一轮「弱同向未突破」，再由更晚一轮同向强推进确认终结，则记为 `feature_sequence_gap_fractal_delayed_true`。
 
-> 78 课补充：第二种情况的**第二特征序列**分型判断必须严格按包含关系处理（与第一种情况中「假设分界点两边不做包含处理」不同）。当前实现以 71 课「先破终点/先破起点」为再分辨主路径，该捷径在判定上蕴含 67 课「第二特征序列分型」（分型左元素条件即捷径条件），因此 78 课的包含处理要求被隐含满足；`feature_sequence_gap_fractal_delayed_true` 的「弱同向轮次」为工程扩展，非原文定义。
+> 78 课补充（两种情况的第二特征序列）：
+
+> 1. **分型左条件 ⟺ 捷径「先破终点」**：67课第二种情况要求「从该分型极值点开始的
+>    反向笔序列的特征序列出现分型」。对该第二特征序列，分型的「中元素越过左元素」
+>    左条件与 71课捷径「同向第三笔先破第一笔终点」在几何上严格等价——中元素低/高点
+>    恰等于同向第三笔的终点，左元素低/高点恰等于缺口 pivot 的终点。因此捷径在左条件
+>    处即确认，**早于**完整分型（完整分型还需「中元素越过右元素」），属急切近似而非
+>    漏判；78课「严格按包含关系处理」的要求被捷径蕴含，无需在同一窗口内再判一次。
+>    等价关系由 `test_78_second_feature_sequence_left_condition_equals_shortcut` 锁定。
+> 2. **A+B+C 合一**：78课「线段 C 未成第二特征序列分型又直接新高/新低 → A+B+C 只算
+>    一个线段」对应「缺口候选失效（先破第一笔起点）→ 旧段延续吸收 B」+「后续同方向
+>    线段经 `_merge_segments_same_direction` 合流」，以 `is_reclaimed=True` 与
+>    `absorbed_segment_ids` 记录吸收身份，由 `test_78_a_plus_b_plus_c_merge_marks_reclaim_metadata` 锁定。
+> 3. **退化挂起**：若缺口后价格被夹在 `[pivot 低点, pivot 高点]` 内且无任何一笔越界，
+>    则捷径与第二特征序列分型都无法形成（pivot 包含后续所有反向笔，特征序列被合并为
+>    单元素），此时 `_rediscriminate_gap_break_detail` 返回 `None`（pending）是理论上
+>    的正确行为，非缺陷。
+
+> `feature_sequence_gap_fractal_delayed_true` 的「弱同向轮次」为工程扩展，非原文定义。
 
 ### 5.3 反向笔破坏关键点
 

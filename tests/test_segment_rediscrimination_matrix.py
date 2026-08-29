@@ -30,9 +30,11 @@ from chanlun.segment import (
     _build_standard_feature_sequence,
     _extend_segment,
     _gap_feature_sequence_candidate,
+    _merge_segments_same_direction,
     _rediscriminate_gap_break,
     _rediscriminate_gap_break_detail,
     _replace_gap_candidate,
+    _same_direction_extends,
 )
 
 
@@ -783,3 +785,83 @@ def test_summarize_stop_reason_outcome_returns_caller_friendly_summary() -> None
         "should_wait": True,
         "label": "no-stop-reason",
     }
+
+
+def test_78_second_feature_sequence_left_condition_equals_shortcut() -> None:
+    """78课：第二特征序列分型左条件与 71课「先破终点」捷径在几何上等价。
+
+    67课第二种情况（down 段缺口底分型）要求「从该分型最低点开始的向上一笔
+    开始的序列的特征序列出现顶分型」。对该第二特征序列（缺口 pivot 之后与
+    pivot 反向的笔序列），分型的「中元素越过左元素」左条件，在几何上等价于
+    71课捷径的「同向第三笔先破第一笔终点」。本测试锁住该等价关系，防止捷径
+    与分型判据静默脱节（78课包含处理要求因此被捷径蕴含）。
+    """
+    bis = [
+        _bi(8, BiDirection.DOWN, 112, 109),    # 缺口顶分型 pivot（DOWN，终点低点 109）
+        _bi(9, BiDirection.UP, 110, 109),      # 第二特征序列第一元素（UP，低点=pivot 低点）
+        _bi(10, BiDirection.DOWN, 110, 106.0),  # 同向第三笔：先破 pivot 终点（106 < 109）
+        _bi(11, BiDirection.UP, 108, 106.0),    # 第二特征序列第二元素（UP，低点=第三笔低点）
+    ]
+    pivot_idx = 0
+    first_bi = bis[pivot_idx]
+    direction = first_bi.direction  # DOWN
+    first_end_extreme = first_bi.low  # 109
+
+    # 捷径左条件：同向第三笔（bis[2]）破第一笔终点。
+    shortcut_confirms = _same_direction_extends(direction, bis[pivot_idx + 2], first_end_extreme)
+
+    # 第二特征序列左条件：中元素（第二根 UP 笔）低点越过左元素（第一根 UP 笔）低点。
+    left_up = bis[pivot_idx + 1]
+    middle_up = bis[pivot_idx + 3]
+    fractal_left_condition = middle_up.low < left_up.low
+
+    # 几何恒等：中元素低点 == 同向第三笔低点（第三笔终点即中元素起点）。
+    assert middle_up.low == bis[pivot_idx + 2].low
+    assert shortcut_confirms == fractal_left_condition
+
+    outcome, _delayed = _rediscriminate_gap_break_detail(bis, pivot_idx)
+    assert outcome == shortcut_confirms
+
+
+def test_78_a_plus_b_plus_c_merge_marks_reclaim_metadata() -> None:
+    """78课「A+B+C 合一」与 is_reclaimed / absorbed_segment_ids 的对应关系。
+
+    原文（78课）：线段 B 对线段 A 是第二种情况，而线段 C 没有形成第二特征序列
+    的分型又直接新高/新低时，不能认为这是三个线段，A、B、C 加起来只能算一个线段。
+
+    代码对应：B 的缺口候选被再分辨判为失效（旧段 A 延续并吸收 B），随后同方向的
+    C 与 A 通过 `_merge_segments_same_direction` 合流，合并结果以 `is_reclaimed=True`
+    与 `absorbed_segment_ids` 记录被吸收的线段身份。
+    """
+    bis = [
+        _bi(0, BiDirection.UP, 110, 100),
+        _bi(1, BiDirection.DOWN, 108, 103),
+        _bi(2, BiDirection.UP, 115, 104),
+        _bi(3, BiDirection.DOWN, 114, 105),
+        _bi(4, BiDirection.UP, 113, 106),
+        _bi(5, BiDirection.DOWN, 112, 106.5),
+        _bi(6, BiDirection.UP, 116, 107),
+    ]
+    segment_a = _identify_segments(
+        bis[:3],
+        bootstrap_mode="auto",
+        strict_segment_rules=False,
+        termination_mode="practical",
+    )[0]
+    segment_c = _identify_segments(
+        bis[4:],
+        bootstrap_mode="auto",
+        strict_segment_rules=False,
+        termination_mode="practical",
+    )[0]
+    segment_c.segment_id = 1
+    # B（DOWN 段，segment_id=2）在缺口再分辨失效时被 A 吸收，
+    # 其身份进入 C 的 absorbed_segment_ids。
+    segment_c.absorbed_segment_ids = [2]
+
+    merged = _merge_segments_same_direction(segment_a, segment_c, bis)
+
+    assert merged.direction == BiDirection.UP
+    assert merged.is_reclaimed is True
+    assert merged.absorbed_segment_ids == [1, 2]
+    assert merged.segment_id == segment_a.segment_id
