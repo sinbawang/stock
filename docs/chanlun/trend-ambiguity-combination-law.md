@@ -91,5 +91,11 @@ applyTo: src/chanlun/analysis.py, docs/chanlun/trend-type-decomposition.md
 ## 6. 与当前工程实现的边界
 
 - 已实现：TD1 唯一分解主链（[trend-type-decomposition.md](trend-type-decomposition.md)）、多义性降级 gate（`dual_interpretation_pending`）。
-- 未实现：第4节的「当下中枢选择器」——即在多个合法 live run 划分中，按「避繁就简 / 利于操作 / 级别一致」自动选择最适合当下的中枢。
+- 已实现（首版有界选择器）：`_build_decomposition_selector` 在 `candidate_new_type` 二义场景枚举
+  `new_type` / `extension` 两种解读，并按「避繁就简 + 同级别分解唯一性」选择（上一段末中枢未确认离开且当前
+  单中枢与其区间重叠 → `extension`，否则 `new_type`），输出
+  `decomposition_selector = {mode, alternatives, selected, selection_reason}`；回归见
+  `test_build_structure_state_decomposition_selector_*`。
+- 未实现（后续扩展）：第4节完整的「当下中枢选择器」——在多个合法 live run 划分（含中枢扩张/延伸/新生的多种重组）中
+  枚举并选择；当前选择器只覆盖「候选新类型」单一二义，且不改写主分解（`type_chain`/`last_completed`/`current_ongoing`）。
 - 涉及代码锚点：`build_structure_state`、`_split_live_zhongshu_runs`（当前只做唯一切分）。

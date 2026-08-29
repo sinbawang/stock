@@ -643,6 +643,94 @@ def _build_same_level_decomposition_mode(structure_state: dict[str, object]) -> 
     return "single_confirmed"
 
 
+def _build_decomposition_selector(
+    structure_state: dict[str, object],
+    zhongshus: list[Zhongshu],
+) -> dict[str, object]:
+    """多义性/结合律选择器（第33/36/38/39/40课，见 trend-ambiguity-combination-law.md）。
+
+    仅覆盖「候选新类型」这一已明确的二义场景：前段完成后，当前单中枢既可读为
+    「新同级别走势起点」（new_type），也可读为「前段同类延伸」（extension）。
+    按结合律第4节选择规则：
+      - 当前单中枢与上一段末中枢区间重叠 → 选 extension（避繁就简：不产生新边界）；
+      - 否则唯一合法分解为 new_type。
+    该字段是「选择器」而非「降级器」：给出替代方案与选择理由，但不改写主分解。
+    """
+    mode = _build_same_level_decomposition_mode(structure_state)
+    if mode != "dual_interpretation_pending":
+        return {
+            "mode": mode,
+            "alternatives": [],
+            "selected": None,
+            "selection_reason": "唯一分解已收敛，无需选择。",
+        }
+
+    relationship = structure_state.get("relationship") or {}
+    transition_state = str(relationship.get("transition_state") or "").strip()
+    if transition_state != "candidate_new_type":
+        return {
+            "mode": mode,
+            "alternatives": [],
+            "selected": None,
+            "selection_reason": "多义待定但非候选新类型，暂保留待确认。",
+        }
+
+    last_completed = structure_state.get("last_completed") or {}
+    current_ongoing = structure_state.get("current_ongoing") or {}
+    zs_by_id = {zs.zs_id: zs for zs in zhongshus}
+    previous_end = zs_by_id.get(last_completed.get("end_zs_id"))
+    current_start = zs_by_id.get(current_ongoing.get("start_zs_id"))
+
+    overlap = False
+    if previous_end is not None and current_start is not None:
+        overlap = (
+            max(previous_end.zs_low, current_start.zs_low)
+            < min(previous_end.zs_high, current_start.zs_high)
+        )
+    previous_end_terminated = (
+        bool(getattr(previous_end, "is_terminated", False)) if previous_end is not None else True
+    )
+
+    alternatives = [
+        {
+            "key": "new_type",
+            "label": "前段完成，当前为新的同级别走势（range 进行中）",
+            "boundary_count": 1,
+        }
+    ]
+    if overlap:
+        alternatives.append(
+            {
+                "key": "extension",
+                "label": "前段未完成，当前单中枢并入前段同类延伸",
+                "boundary_count": 0,
+            }
+        )
+
+    select_extension = overlap and not previous_end_terminated
+    selected = "extension" if select_extension else "new_type"
+    if select_extension:
+        reason = "上一段末中枢未确认离开且当前单中枢与其区间重叠，按结合律避繁就简选择「延续」，不产生新类型边界。"
+    elif overlap:
+        reason = "当前单中枢虽与上一段末中枢区间重叠，但上一段末中枢已确认离开，按同级别分解唯一性选择「新类型」。"
+    else:
+        reason = "当前单中枢与上一段末中枢区间不重叠，唯一合法分解为「新类型」。"
+    return {
+        "mode": mode,
+        "alternatives": alternatives,
+        "selected": selected,
+        "selection_reason": reason,
+    }
+
+
+def _finalize_structure_state(
+    structure_state: dict[str, object],
+    zhongshus: list[Zhongshu],
+) -> dict[str, object]:
+    structure_state["decomposition_selector"] = _build_decomposition_selector(structure_state, zhongshus)
+    return structure_state
+
+
 def _build_same_level_consumption_level(structure_state: dict[str, object]) -> str:
     current_status = str(structure_state.get("current_structure_status") or "").strip()
     current_ongoing = structure_state.get("current_ongoing") or {}
@@ -716,7 +804,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
     live_runs = _split_live_zhongshu_runs(zhongshus)
 
     if not live_runs:
-        return {
+        return _finalize_structure_state({
             "last_completed": None,
             "current_ongoing": {
                 "type": "unknown",
@@ -734,7 +822,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
             "current_structure_status": "ongoing_same_type",
             "consumption_level": "auxiliary",
             "type_chain": [],
-        }
+        }, zhongshus)
 
     current_run = live_runs[-1]
     previous_run = live_runs[-2] if len(live_runs) > 1 else None
@@ -757,7 +845,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
             transition_state = "candidate_new_type"
             relationship_note = "上一段同级别走势已结束，当前新的同级别走势仍处候选待确认阶段。"
             current_structure_status = "candidate_completed_waiting_stability"
-        return {
+        return _finalize_structure_state({
             "last_completed": last_completed,
             "current_ongoing": {
                 "type": current_group_type,
@@ -788,7 +876,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
                     "end_ts": None,
                 }
             ],
-        }
+        }, zhongshus)
 
     relations = [_relation_kind(previous, current) for previous, current in zip(current_run, current_run[1:])]
     current_kind = relations[-1]
@@ -886,7 +974,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
         )
     type_chain.append(_group_type_chain_entry(current_ongoing))
 
-    return {
+    return _finalize_structure_state({
         "last_completed": last_completed,
         "current_ongoing": current_ongoing,
         "relationship": {
@@ -897,7 +985,7 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
         "current_structure_status": current_structure_status,
         "consumption_level": consumption_level,
         "type_chain": type_chain,
-    }
+    }, zhongshus)
 
 
 def _build_strength_comparison(
