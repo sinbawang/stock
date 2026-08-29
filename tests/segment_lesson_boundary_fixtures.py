@@ -97,11 +97,14 @@ def get_lesson_boundary_cases() -> list[LessonBoundaryCase]:
                 _bi(7, BiDirection.DOWN, 110.0, 108.6),
                 _bi(8, BiDirection.UP, 116.0, 109.0),
             ],
-            # 71课：第一笔 bi3.low=109 未跌破左元素 bi1 高点 108，缺口未封闭，
-            # 缺口顶为假顶，不再按捷径确认；两模式首段均未确认。
-            expected_first_stop_reason="exhausted_confirmed_bis",
-            expected_first_stop_reason_practical="same_direction_not_extending",
-            expected_first_confirmed=False,
+            # 缺口分型后的再分辨：下跌特征序列在 bi3 出现缺口（bi5.low=109.4 未破
+            # bi3.low=109），先经一轮「弱同向未突破」，随后更晚同向强推进 bi7.low=108.6
+            # 破 bi3.low=109 → 缺口分型延迟确认旧线段终结（71 课「先破终点/先破起点」
+            # 再分辨主路径）。theory / practical 均落 `feature_sequence_gap_fractal_delayed_true`
+            # 且 confirmed=True。见 docs/chanlun/segment-visual-example-library.md 7.6 R6。
+            expected_first_stop_reason="feature_sequence_gap_fractal_delayed_true",
+            expected_first_stop_reason_practical="feature_sequence_gap_fractal_delayed_true",
+            expected_first_confirmed=True,
             expected_min_segments_theory=2,
             expected_min_segments_practical=2,
         ),
