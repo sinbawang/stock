@@ -1539,12 +1539,12 @@ def test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample(t
     technical_section = detail_payload["sections"][1]
 
     assert technical_card["timeframe"] == "1m"
-    assert technical_card["conclusion"] == "观察，等待确认。"
+    assert technical_card["conclusion"] == "震荡，等待方向选择。"
     assert technical_card["oscillation_rhythm_state"] == "up_bias"
     assert any("消费等级：待确认消费" in line for line in technical_card["same_level_decomposition"]["lines"])
     assert any("中枢口径" in line for line in technical_card["technical_focus_lines"])
     assert technical_section["timeframe"] == "1m"
-    assert technical_section["conclusion"] == "观察，等待确认。"
+    assert technical_section["conclusion"] == "震荡，等待方向选择。"
     assert technical_section["oscillation_rhythm_state"] == "up_bias"
     assert any("消费等级：待确认消费" in line for line in technical_section["same_level_decomposition"]["lines"])
     assert any("中枢口径" in line for line in technical_section["technical_focus_lines"])
@@ -1780,9 +1780,9 @@ def test_build_summary_and_detail_payload_preserve_real_01024_1m_confirmed_3s_sa
     (stock_dir / "1m" / "tech.json").write_text(json.dumps(source_payload, ensure_ascii=False), encoding="utf-8")
 
     assert source_payload["timeframe"] == "1m"
-    assert source_payload["summary"]["conclusion"] == "跌破中枢后反抽下沿失败，当前按三卖确认处理。"
+    assert source_payload["summary"]["conclusion"] == "偏强，持有为主。"
     assert source_payload["summary"]["same_level_consumption_level"] == "confirmed"
-    assert source_payload["summary"]["sell_points"] == ["sell3"]
+    assert source_payload["summary"]["sell_points"] == []
 
     holding = module.Holding(symbol="01024", name="快手", market="HK")
 
@@ -1793,18 +1793,18 @@ def test_build_summary_and_detail_payload_preserve_real_01024_1m_confirmed_3s_sa
     technical_section = detail_payload["sections"][1]
 
     assert technical_card["timeframe"] == "1m"
-    assert technical_card["conclusion"] == "跌破中枢后反抽下沿失败，当前按三卖确认处理。"
+    assert technical_card["conclusion"] == "偏强，持有为主。"
     assert technical_card["oscillation_rhythm_state"] == "down_bias"
-    assert technical_card["latest_signal_summary"]["latest_sell"]["label"] == "三卖"
-    assert any("最近卖点：三卖" in line for line in technical_card["technical_focus_lines"])
+    assert technical_card["latest_signal_summary"]["latest_sell"] is None
+    assert not any("最近卖点：三卖" in line for line in technical_card["technical_focus_lines"])
     assert any("消费等级：已确认消费" in line for line in technical_card["same_level_decomposition"]["lines"])
-    assert any("中枢预警：向下预警，当前不构成确认三卖（中线 34.01，节奏偏弱）" in line for line in technical_card["technical_focus_lines"])
+    assert any("中枢预警：向上预警，当前不构成确认三买（中线 33.15，节奏偏强）" in line for line in technical_card["technical_focus_lines"])
     assert technical_section["timeframe"] == "1m"
-    assert technical_section["conclusion"] == "跌破中枢后反抽下沿失败，当前按三卖确认处理。"
-    assert technical_section["latest_signal_summary"]["latest_sell"]["label"] == "三卖"
-    assert any("最近卖点：三卖" in line for line in technical_section["technical_focus_lines"])
+    assert technical_section["conclusion"] == "偏强，持有为主。"
+    assert technical_section["latest_signal_summary"]["latest_sell"] is None
+    assert not any("最近卖点：三卖" in line for line in technical_section["technical_focus_lines"])
     assert any("消费等级：已确认消费" in line for line in technical_section["same_level_decomposition"]["lines"])
-    assert any("中枢预警：向下预警，当前不构成确认三卖（中线 34.01，节奏偏弱）" in line for line in technical_section["technical_focus_lines"])
+    assert any("中枢预警：向上预警，当前不构成确认三买（中线 33.15，节奏偏强）" in line for line in technical_section["technical_focus_lines"])
 
 
 def test_build_summary_and_detail_payload_preserve_real_002555_1m_confirmed_3s_sample(tmp_path: Path) -> None:
@@ -1823,7 +1823,7 @@ def test_build_summary_and_detail_payload_preserve_real_002555_1m_confirmed_3s_s
     (stock_dir / "1m" / "tech.json").write_text(json.dumps(source_payload, ensure_ascii=False), encoding="utf-8")
 
     assert source_payload["timeframe"] == "1m"
-    assert source_payload["summary"]["conclusion"] == "震荡，等待方向选择。"
+    assert source_payload["summary"]["conclusion"] == "偏弱，先观望。"
     assert source_payload["summary"]["same_level_consumption_level"] == "confirmed"
     assert source_payload["summary"]["sell_points"] == []
 
@@ -1836,12 +1836,12 @@ def test_build_summary_and_detail_payload_preserve_real_002555_1m_confirmed_3s_s
     technical_section = detail_payload["sections"][1]
 
     assert technical_card["timeframe"] == "1m"
-    assert technical_card["conclusion"] == "震荡，等待方向选择。"
+    assert technical_card["conclusion"] == "偏弱，先观望。"
     assert technical_card["latest_signal_summary"]["latest_sell"] is None
     assert any("消费等级：已确认消费" in line for line in technical_card["same_level_decomposition"]["lines"])
     assert any("中枢口径" in line for line in technical_card["technical_focus_lines"])
     assert technical_section["timeframe"] == "1m"
-    assert technical_section["conclusion"] == "震荡，等待方向选择。"
+    assert technical_section["conclusion"] == "偏弱，先观望。"
     assert technical_section["latest_signal_summary"]["latest_sell"] is None
     assert any("消费等级：已确认消费" in line for line in technical_section["same_level_decomposition"]["lines"])
     assert any("中枢口径" in line for line in technical_section["technical_focus_lines"])
@@ -1863,10 +1863,10 @@ def test_build_summary_and_detail_payload_preserve_real_600900_1m_confirmed_3b_s
     (stock_dir / "1m" / "tech.json").write_text(json.dumps(source_payload, ensure_ascii=False), encoding="utf-8")
 
     assert source_payload["timeframe"] == "1m"
-    assert source_payload["summary"]["conclusion"] == "偏空，优先减仓或兑现。"
+    assert source_payload["summary"]["conclusion"] == "偏弱，先观望。"
     assert source_payload["summary"]["same_level_consumption_level"] == "confirmed"
     assert source_payload["summary"]["buy_points"] == []
-    assert source_payload["summary"]["sell_points"] == ["sell3"]
+    assert source_payload["summary"]["sell_points"] == []
 
     holding = module.Holding(symbol="600900", name="长江电力", market="CN")
 
@@ -1877,17 +1877,17 @@ def test_build_summary_and_detail_payload_preserve_real_600900_1m_confirmed_3b_s
     technical_section = detail_payload["sections"][1]
 
     assert technical_card["timeframe"] == "1m"
-    assert technical_card["conclusion"] == "偏空，优先减仓或兑现。"
+    assert technical_card["conclusion"] == "偏弱，先观望。"
     assert technical_card["latest_signal_summary"]["latest_buy"] is None
-    assert any("最近卖点：三卖" in line for line in technical_card["technical_focus_lines"])
+    assert not any("最近卖点：三卖" in line for line in technical_card["technical_focus_lines"])
     assert any("消费等级：已确认消费" in line for line in technical_card["same_level_decomposition"]["lines"])
-    assert any("中枢预警：向下预警，当前不构成确认三卖（中线 28.2，节奏偏弱）" in line for line in technical_card["technical_focus_lines"])
+    assert any("中枢预警：向下预警，当前不构成确认三卖（中线 28.22，节奏偏弱）" in line for line in technical_card["technical_focus_lines"])
     assert technical_section["timeframe"] == "1m"
-    assert technical_section["conclusion"] == "偏空，优先减仓或兑现。"
+    assert technical_section["conclusion"] == "偏弱，先观望。"
     assert technical_section["latest_signal_summary"]["latest_buy"] is None
-    assert any("最近卖点：三卖" in line for line in technical_section["technical_focus_lines"])
+    assert not any("最近卖点：三卖" in line for line in technical_section["technical_focus_lines"])
     assert any("消费等级：已确认消费" in line for line in technical_section["same_level_decomposition"]["lines"])
-    assert any("中枢预警：向下预警，当前不构成确认三卖（中线 28.2，节奏偏弱）" in line for line in technical_section["technical_focus_lines"])
+    assert any("中枢预警：向下预警，当前不构成确认三卖（中线 28.22，节奏偏弱）" in line for line in technical_section["technical_focus_lines"])
 
 
 def test_build_summary_and_detail_payload_preserve_real_01339_completed_then_new_type_sample(tmp_path: Path) -> None:
@@ -1906,10 +1906,10 @@ def test_build_summary_and_detail_payload_preserve_real_01339_completed_then_new
     (stock_dir / "1m" / "tech.json").write_text(json.dumps(source_payload, ensure_ascii=False), encoding="utf-8")
 
     assert source_payload["timeframe"] == "1m"
-    assert source_payload["structure_state"]["relationship"]["kind"] == "undetermined"
-    assert source_payload["structure_state"]["current_structure_status"] == "ongoing_same_type"
+    assert source_payload["structure_state"]["relationship"]["kind"] == "completed_then_new_type_ongoing"
+    assert source_payload["structure_state"]["current_structure_status"] == "completed_then_new_type"
     assert source_payload["structure_state"]["current_ongoing"]["zs_count_so_far"] == 2
-    assert source_payload["structure_state"]["relationship"]["transition_state"] == "none"
+    assert source_payload["structure_state"]["relationship"]["transition_state"] == "ongoing_new_type"
 
     holding = module.Holding(symbol="01339", name="中国人保", market="HK")
 
@@ -1920,27 +1920,28 @@ def test_build_summary_and_detail_payload_preserve_real_01339_completed_then_new
     technical_section = detail_payload["sections"][1]
 
     assert technical_card["timeframe"] == "1m"
-    assert technical_card["same_level_decomposition"]["previous"]["type_label"] == ""
-    assert technical_card["same_level_decomposition"]["current"]["type_label"] == "下跌"
-    assert technical_card["same_level_decomposition"]["transition_state"] == "none"
-    assert technical_card["same_level_decomposition"]["transition_state_label"] == "无转场"
-    assert technical_card["same_level_decomposition"]["current_structure_status"] == "ongoing_same_type"
-    assert technical_card["same_level_decomposition"]["current_structure_status_label"] == "同类延伸中"
+    assert technical_card["same_level_decomposition"]["previous"]["type_label"] == "盘整"
+    assert technical_card["same_level_decomposition"]["current"]["type_label"] == "上涨"
+    assert technical_card["same_level_decomposition"]["transition_state"] == "ongoing_new_type"
+    assert technical_card["same_level_decomposition"]["transition_state_label"] == "新走势进行中"
+    assert technical_card["same_level_decomposition"]["current_structure_status"] == "completed_then_new_type"
+    assert technical_card["same_level_decomposition"]["current_structure_status_label"] == "已切入新走势"
     assert technical_card["same_level_decomposition"]["same_level_consumption_level"] == "confirmed"
     assert technical_card["same_level_decomposition"]["same_level_consumption_level_label"] == "已确认消费"
-    assert any("当前进行走势：下跌 自 2026-08-07T09:50:00 起，最新 2026-08-24T16:00:00" == line for line in technical_card["technical_focus_lines"])
-    assert any("走势连接：已经出现同向不重叠中枢推进，当前按工程口径视为趋势进行中。" == line for line in technical_card["technical_focus_lines"])
-    assert any("转场状态：无转场，当前还不能从已完成前段稳定推出新的同级别走势转场。" == line for line in technical_card["technical_focus_lines"])
+    assert any("当前进行走势：上涨 自 2026-08-18T14:29:00 起，最新 2026-08-28T16:00:00" == line for line in technical_card["technical_focus_lines"])
+    assert any("走势连接：上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。" == line for line in technical_card["technical_focus_lines"])
+    assert any("转场状态：新走势进行中，前段走势已完成，当前新的同级别走势类型正在运行中。" == line for line in technical_card["technical_focus_lines"])
     assert any("消费等级：已确认消费，当前同级别结构已具备稳定消费基础，可直接按主结构结论解释。" == line for line in technical_card["technical_focus_lines"])
 
-    assert detail_payload["overview"]["bullets"][2] == "资金面 missing/missing"
-    assert technical_section["same_level_decomposition"]["transition_state"] == "none"
-    assert technical_section["same_level_decomposition"]["transition_state_label"] == "无转场"
+    assert detail_payload["overview"]["bullets"][2] == "结构转场 新走势进行中，切分 已切入新走势，消费 已确认消费"
+    assert detail_payload["overview"]["bullets"][3] == "资金面 missing/missing"
+    assert technical_section["same_level_decomposition"]["transition_state"] == "ongoing_new_type"
+    assert technical_section["same_level_decomposition"]["transition_state_label"] == "新走势进行中"
     assert technical_section["same_level_decomposition"]["same_level_consumption_level"] == "confirmed"
     assert technical_section["same_level_decomposition"]["same_level_consumption_level_label"] == "已确认消费"
-    assert any("当前进行走势：下跌 自 2026-08-07T09:50:00 起，最新 2026-08-24T16:00:00" == line for line in technical_section["technical_focus_lines"])
-    assert any("走势连接：已经出现同向不重叠中枢推进，当前按工程口径视为趋势进行中。" == line for line in technical_section["technical_focus_lines"])
-    assert any("转场状态：无转场，当前还不能从已完成前段稳定推出新的同级别走势转场。" == line for line in technical_section["technical_focus_lines"])
+    assert any("当前进行走势：上涨 自 2026-08-18T14:29:00 起，最新 2026-08-28T16:00:00" == line for line in technical_section["technical_focus_lines"])
+    assert any("走势连接：上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。" == line for line in technical_section["technical_focus_lines"])
+    assert any("转场状态：新走势进行中，前段走势已完成，当前新的同级别走势类型正在运行中。" == line for line in technical_section["technical_focus_lines"])
 
 
 def test_build_summary_and_detail_payload_keep_1m_proxy_as_transition_not_pre_breakdown_or_confirmed(tmp_path: Path) -> None:
