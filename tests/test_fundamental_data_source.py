@@ -67,6 +67,39 @@ fetch_service_module = importlib.import_module("fundamental.services.fetch_and_a
 cn_fetch_service_module = importlib.import_module("fundamental.services.fetch_and_analyze_cn_snapshot")
 
 
+def _raise_network_unavailable(*_args, **_kwargs):
+    raise RuntimeError("test: supplemental fundamental data source unavailable (network stubbed)")
+
+
+@pytest.fixture(autouse=True)
+def _stub_supplemental_network_fetchers(monkeypatch):
+    """测试会话内默认禁用基本面「补充类」数据源的网络调用。
+
+    本机对 Eastmoney / AkShare / PICC / 华泰等数据源存在病理性连通问题（连接建立后服务端
+    不返回数据，Windows 的 connect 甚至不遵守 socket 超时），而 fetch_hk/cn_fundamental_snapshot
+    在四个必需抓取之外还会按条件调用分红派息、官方财务字段（PICC/华泰 PDF）、A股财务指标
+    /分红历史/日线等补充数据源。若测试未逐一 mock 这些补充 fetcher，就会真实请求网络并卡死
+    整个测试进程。
+
+    这里用一个 autouse fixture 把这些补充 fetcher 默认替换为「抛错」，让代码走
+    「补充数据不可用」的快速路径（各调用点均有 try/except 兜底）；需要特定数据的测试
+    在其函数体内 monkeypatch 覆盖即可（测试体内的 setattr 会覆盖本 fixture 的默认值）。
+    """
+    for name in (
+        "_fetch_hk_dividend_payout_df",
+        "_fetch_hk_official_financial_fields",
+        "_fetch_hk_financial_indicator_df",
+        "_fetch_hk_quote_xueqiu",
+    ):
+        monkeypatch.setattr(fetcher, name, _raise_network_unavailable)
+    for name in (
+        "_fetch_cn_financial_analysis_indicator_df",
+        "_fetch_cn_dividend_history_df",
+        "_fetch_cn_daily_price_df",
+    ):
+        monkeypatch.setattr(cn_fetcher, name, _raise_network_unavailable)
+
+
 def test_source_warning_helpers_build_shared_manual_warning():
     field_sources = {
         "dividend_yield": "manual.supplement",

@@ -2,10 +2,36 @@
 共享 pytest fixtures。
 """
 
-import pytest
+import socket
 from datetime import datetime
 
+import pytest
+import requests
+
 from chanlun.models import Bar, NormalizedBar
+
+# --- 测试网络安全网（仅测试会话内生效） ---
+# 本机对部分行情/资金流数据源（Eastmoney / AkShare 等）存在病理性连通问题：
+# 连接可以建立，但服务端不返回数据，导致无显式 timeout 的 requests 调用无限阻塞，
+# 进而把全量测试永久卡死（此前 03690 HK 数据源与资金流抓取均踩过这个坑）。
+# 这里在测试会话层面注入默认超时：
+#   1) socket.setdefaulttimeout 兜住裸 socket；
+#   2) 包装 requests.Session.request，凡未显式传 timeout 的调用一律补上默认超时。
+# 生产代码不受影响（显式传入 timeout 的调用原样透传）。
+_TEST_NETWORK_TIMEOUT = 15
+
+socket.setdefaulttimeout(_TEST_NETWORK_TIMEOUT)
+
+_original_session_request = requests.Session.request
+
+
+def _session_request_with_default_timeout(self, method, url, **kwargs):
+    if kwargs.get("timeout") is None:
+        kwargs["timeout"] = _TEST_NETWORK_TIMEOUT
+    return _original_session_request(self, method, url, **kwargs)
+
+
+requests.Session.request = _session_request_with_default_timeout
 
 
 @pytest.fixture

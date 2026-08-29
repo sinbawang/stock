@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 import pandas as pd
+import pytest
 
 from capital_flow.data import cn_flow_fetcher, hk_flow_fetcher
 from capital_flow.models import CapitalFlowSnapshot
@@ -45,6 +46,43 @@ HkBatchCapitalFlowResult = batch_hk_capital_flow_module.BatchCapitalFlowResult
 discover_hk_capital_flow_targets = batch_hk_capital_flow_module.discover_targets_from_holdings_file
 save_hk_capital_flow_batch_summary = batch_hk_capital_flow_module.save_batch_summary
 run_hk_capital_flow_batch = batch_hk_capital_flow_module.run_batch
+
+
+def _raise_network_unavailable(*_args, **_kwargs):
+    raise RuntimeError("test: supplemental capital-flow data source unavailable (network stubbed)")
+
+
+@pytest.fixture(autouse=True)
+def _stub_supplemental_network_fetchers(monkeypatch):
+    """测试会话内默认禁用资金流「补充类」数据源的网络调用。
+
+    本机对 Eastmoney / AkShare / 交易所等数据源存在病理性连通问题（连接建立后服务端
+    不返回数据，Windows 的 connect 甚至不遵守 socket 超时），而 fetch_cn/hk_capital_flow_snapshot
+    在主抓取之外会无条件调用北向持股、融资融券、龙虎榜、大宗交易、港股通净买额、港股
+    分钟/日线等补充数据源。若测试未逐一 mock 这些补充 fetcher，就会真实请求网络并卡死
+    整个测试进程（此前全量运行在此处挂起）。
+
+    这里用一个 autouse fixture 把这些补充 fetcher 默认替换为「抛错」，让代码走
+    「补充数据不可用」的快速路径（各调用点均有 try/except 兜底）；需要特定数据的测试
+    在其函数体内 monkeypatch 覆盖即可（测试体内的 setattr 会覆盖本 fixture 的默认值）。
+    """
+    for name in (
+        "_fetch_cn_northbound_holding_df",
+        "_fetch_cn_margin_detail_sse_df",
+        "_fetch_cn_margin_detail_szse_df",
+        "_fetch_cn_dragon_tiger_detail_df",
+        "_fetch_cn_block_trade_detail_df",
+    ):
+        monkeypatch.setattr(cn_flow_fetcher, name, _raise_network_unavailable)
+    for name in (
+        "_fetch_hk_connect_components_df",
+        "_fetch_hk_minute_hist_df",
+        "_fetch_hk_daily_hist_df",
+        "_fetch_hk_southbound_net_buy_df",
+        "_fetch_hk_southbound_holding_df",
+        "_fetch_hkex_short_selling_df",
+    ):
+        monkeypatch.setattr(hk_flow_fetcher, name, _raise_network_unavailable)
 
 
 def test_capital_flow_snapshot_scoring_and_rendering() -> None:
