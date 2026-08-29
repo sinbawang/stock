@@ -91,12 +91,9 @@ applyTo: src/chanlun/analysis.py, docs/chanlun/trend-type-decomposition.md
 ## 6. 与当前工程实现的边界
 
 - 已实现：TD1 唯一分解主链（[trend-type-decomposition.md](trend-type-decomposition.md)）、多义性降级 gate（`dual_interpretation_pending`）。
-- 已实现（首版有界选择器）：`_build_decomposition_selector` 在 `candidate_new_type` 二义场景枚举
-  `new_type` / `extension` 两种解读，并按「避繁就简 + 同级别分解唯一性」选择（上一段末中枢未确认离开且当前
-  单中枢与其区间重叠 → `extension`，否则 `new_type`），输出
-  `decomposition_selector = {mode, alternatives, selected, selection_reason}`；回归见
-  `test_build_structure_state_decomposition_selector_*`。
-- 未实现（后续扩展）：同级别分解内更完整的「当下选择器」——在更多合法 live run 划分（如延伸数量限制导致的升级、更多段内类型切换）中
-  枚举并选择；当前选择器只覆盖「候选新类型」单一二义，且不改写主分解（`type_chain`/`last_completed`/`current_ongoing`）。
-  中枢扩张/更高级别中枢属非同级别分解视角，不在本程序同级别分解范围内。
+- 已实现（契约锚点）：`_build_decomposition_selector` 输出 `decomposition_selector = {mode, alternatives, selected, selection_reason}`。
+  因同级别分解具唯一性（38/39课），`dual_interpretation_pending` 表达「确认待定」（单中枢/候选新类型尚未确认）而非
+  「存在多个合法分解」，故 `alternatives` 恒为空、`selected` 恒为 `None`——选择器仅作为 machine-readable 契约锚点保留，
+  未来若引入扩张/更高级别分解（非同级别分解视角）再从此挂接多解枚举。回归见 `test_build_structure_state_decomposition_selector_*`。
+- 未实现（后续扩展）：中枢扩张/延伸/新生视角下的「多义性选择」——属非同级别分解（更高/更低级别），本程序当前不做。
 - 涉及代码锚点：`build_structure_state`、`_split_live_zhongshu_runs`（当前只做唯一切分）。

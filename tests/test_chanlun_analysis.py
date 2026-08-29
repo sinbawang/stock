@@ -305,8 +305,8 @@ def test_build_structure_state_decomposition_selector_unique() -> None:
     assert selector["selected"] is None
 
 
-def test_build_structure_state_decomposition_selector_extension_when_overlap_unterminated() -> None:
-    """candidate_new_type 且当前单中枢与上一段末中枢重叠、上一段未确认离开 → 选 extension。"""
+def test_build_structure_state_decomposition_selector_candidate_new_type() -> None:
+    """candidate_new_type 是「确认待定」而非「多解」：同级别分解具唯一性，无替代方案。"""
     zs1 = _zhongshu(1, zs_low=10.0, zs_high=12.0, day=1)
     sep = _zhongshu(2, zs_low=12.2, zs_high=12.5, day=4)
     sep.superseded_by_zs_id = 3
@@ -318,41 +318,20 @@ def test_build_structure_state_decomposition_selector_extension_when_overlap_unt
     assert state["relationship"]["transition_state"] == "candidate_new_type"
     selector = state["decomposition_selector"]
     assert selector["mode"] == "dual_interpretation_pending"
-    assert [alt["key"] for alt in selector["alternatives"]] == ["new_type", "extension"]
-    assert selector["selected"] == "extension"
+    assert selector["alternatives"] == []
+    assert selector["selected"] is None
+    assert "新类型候选" in selector["selection_reason"]
 
 
-def test_build_structure_state_decomposition_selector_new_type_when_terminated() -> None:
-    """candidate_new_type 且上一段末中枢已确认离开 → 选 new_type（唯一性优先）。"""
-    zs1 = _zhongshu(1, zs_low=10.0, zs_high=12.0, day=1)
-    zs1.is_terminated = True
-    sep = _zhongshu(2, zs_low=12.2, zs_high=12.5, day=4)
-    sep.superseded_by_zs_id = 3
-    sep.is_reabsorbed_by_larger_expansion = True
-    zs2 = _zhongshu(3, zs_low=10.5, zs_high=11.8, day=7)
+def test_build_structure_state_decomposition_selector_single_zhongshu_pending() -> None:
+    """单中枢（无前段）的 dual_interpretation_pending 亦无多解可选。"""
+    state = build_structure_state([], [_zhongshu(1, zs_low=10.0, zs_high=11.0, day=1)])
 
-    state = build_structure_state([], [zs1, sep, zs2])
-
-    assert state["relationship"]["transition_state"] == "candidate_new_type"
     selector = state["decomposition_selector"]
-    assert selector["selected"] == "new_type"
-    assert [alt["key"] for alt in selector["alternatives"]] == ["new_type", "extension"]
-
-
-def test_build_structure_state_decomposition_selector_new_type_when_no_overlap() -> None:
-    """candidate_new_type 且当前单中枢与上一段区间不重叠 → 唯一合法分解 new_type。"""
-    zs1 = _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1)
-    sep = _zhongshu(2, zs_low=11.2, zs_high=11.4, day=4)
-    sep.superseded_by_zs_id = 3
-    sep.is_reabsorbed_by_larger_expansion = True
-    zs2 = _zhongshu(3, zs_low=11.5, zs_high=12.0, day=7)
-
-    state = build_structure_state([], [zs1, sep, zs2])
-
-    assert state["relationship"]["transition_state"] == "candidate_new_type"
-    selector = state["decomposition_selector"]
-    assert selector["selected"] == "new_type"
-    assert [alt["key"] for alt in selector["alternatives"]] == ["new_type"]
+    assert selector["mode"] == "dual_interpretation_pending"
+    assert selector["alternatives"] == []
+    assert selector["selected"] is None
+    assert "确认待定" in selector["selection_reason"]
 
 
 def test_analyze_chanlun_signals_marks_single_zhongshu_as_dual_interpretation_pending() -> None:
