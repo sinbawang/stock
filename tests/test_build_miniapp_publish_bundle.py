@@ -1764,7 +1764,7 @@ def test_build_summary_and_detail_payload_preserve_real_600900_1m_pre_breakout_s
     assert not any("最近买点：三买" in line for line in technical_section["technical_focus_lines"])
 
 
-def test_build_summary_and_detail_payload_preserve_real_01024_1m_confirmed_3s_sample(tmp_path: Path) -> None:
+def test_build_summary_and_detail_payload_preserve_real_01024_1m_up_warning_sample(tmp_path: Path) -> None:
     source_tech_path = ROOT / "data" / "reports" / "01024" / "1m" / "tech.json"
     source_payload = json.loads(source_tech_path.read_text(encoding="utf-8"))
     stock_dir = tmp_path / "01024"
@@ -1807,7 +1807,7 @@ def test_build_summary_and_detail_payload_preserve_real_01024_1m_confirmed_3s_sa
     assert any("中枢预警：向上预警，当前不构成确认三买（中线 33.15，节奏偏强）" in line for line in technical_section["technical_focus_lines"])
 
 
-def test_build_summary_and_detail_payload_preserve_real_002555_1m_confirmed_3s_sample(tmp_path: Path) -> None:
+def test_build_summary_and_detail_payload_preserve_real_002555_1m_down_warning_sample(tmp_path: Path) -> None:
     source_tech_path = ROOT / "data" / "reports" / "002555" / "1m" / "tech.json"
     source_payload = json.loads(source_tech_path.read_text(encoding="utf-8"))
     stock_dir = tmp_path / "002555"
@@ -1847,7 +1847,7 @@ def test_build_summary_and_detail_payload_preserve_real_002555_1m_confirmed_3s_s
     assert any("中枢口径" in line for line in technical_section["technical_focus_lines"])
 
 
-def test_build_summary_and_detail_payload_preserve_real_600900_1m_confirmed_3b_sample(tmp_path: Path) -> None:
+def test_build_summary_and_detail_payload_preserve_real_600900_1m_down_warning_sample(tmp_path: Path) -> None:
     source_tech_path = ROOT / "data" / "reports" / "600900" / "1m" / "tech.json"
     source_payload = json.loads(source_tech_path.read_text(encoding="utf-8"))
     stock_dir = tmp_path / "600900"

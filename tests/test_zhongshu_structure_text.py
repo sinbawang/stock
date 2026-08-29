@@ -140,64 +140,72 @@ def test_build_advice_keeps_pre_breakdown_as_pending_watch() -> None:
 # 以及 build_advice 单测 test_build_advice_keeps_pre_breakdown_as_pending_watch。
 
 
-def test_real_01024_1m_confirmed_3s_live_sample_keeps_confirmed_advice_and_analysis() -> None:
+def test_real_01024_1m_up_warning_live_sample_keeps_current_state() -> None:
+    # 数据刷新（2026-08-28）后，01024 1m 真实样本已不再产生确认三卖，而是「向上预警 + 偏强持有」态；
+    # confirmed 三卖文案由 test_build_advice_prefers_confirmed_sell3_when_downtrend_conflicts_with_buy1 与
+    # bundle 层 reference anchor 兜底。
     sample_path = ROOT / "data" / "reports" / "01024" / "1m" / "tech.json"
     payload = json.loads(sample_path.read_text(encoding="utf-8"))
 
     assert payload["timeframe"] == "1m"
-    assert payload["summary"]["conclusion"] == "跌破中枢后反抽下沿失败，当前按三卖确认处理。"
+    assert payload["summary"]["conclusion"] == "偏强，持有为主。"
     assert payload["summary"]["same_level_consumption_level"] == "confirmed"
     assert payload["summary"]["same_level_consumption_level_label"] == "已确认消费"
     assert payload["summary"]["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["summary"]["oscillation_rhythm_state"] == "down_bias"
-    assert payload["summary"]["buy_points"] == ["buy1"]
-    assert payload["summary"]["sell_points"] == ["sell3"]
+    assert payload["summary"]["buy_points"] == []
+    assert payload["summary"]["sell_points"] == []
     assert "消费等级：已确认消费" in payload["analysis_text"]
-    assert "卖点：三卖" in payload["analysis_text"]
-    assert "结论：跌破中枢后反抽下沿失败，当前按三卖确认处理。" in payload["advice_text"]
-    assert "理由：出现 三卖，且当前同级别结构已具备稳定消费基础。" in payload["advice_text"]
-    assert "建议：反抽不过 33.94 以减仓为主，不逆势加仓。" in payload["advice_text"]
-    assert "偏多，允许轻仓试错。" not in payload["advice_text"]
-    assert "出现向下预警，但当前不构成确认三卖。" not in payload["advice_text"]
+    assert "买点：当前无确认一二三类买点" in payload["analysis_text"]
+    assert "卖点：当前无确认一二三类卖点" in payload["analysis_text"]
+    assert "结论：偏强，持有为主。" in payload["advice_text"]
+    assert "预警状态 向上预警" in payload["advice_text"]
+    assert "三卖" not in payload["advice_text"]
+    assert "三买" not in payload["advice_text"]
 
 
-def test_real_002555_1m_confirmed_3s_live_sample_keeps_confirmed_advice_and_analysis() -> None:
+def test_real_002555_1m_down_warning_live_sample_keeps_current_state() -> None:
+    # 数据刷新（2026-08-28）后，002555 1m 真实样本已不再产生确认三卖，而是「向下预警 + 偏弱观望」态。
     sample_path = ROOT / "data" / "reports" / "002555" / "1m" / "tech.json"
     payload = json.loads(sample_path.read_text(encoding="utf-8"))
 
     assert payload["timeframe"] == "1m"
-    assert payload["summary"]["conclusion"] == "跌破中枢后反抽下沿失败，当前按三卖确认处理。"
+    assert payload["summary"]["conclusion"] == "偏弱，先观望。"
     assert payload["summary"]["same_level_consumption_level"] == "confirmed"
     assert payload["summary"]["same_level_consumption_level_label"] == "已确认消费"
     assert payload["summary"]["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["summary"]["oscillation_rhythm_state"] == "up_bias"
     assert payload["summary"]["buy_points"] == []
-    assert payload["summary"]["sell_points"] == ["sell3"]
+    assert payload["summary"]["sell_points"] == []
     assert "消费等级：已确认消费" in payload["analysis_text"]
-    assert "卖点：三卖" in payload["analysis_text"]
-    assert "结论：跌破中枢后反抽下沿失败，当前按三卖确认处理。" in payload["advice_text"]
-    assert "理由：出现 三卖，且当前同级别结构已具备稳定消费基础。" in payload["advice_text"]
-    assert "建议：反抽不过 18.56 以减仓为主，不逆势加仓。" in payload["advice_text"]
-    assert "偏空，优先减仓或兑现。" not in payload["advice_text"]
-    assert "出现向下预警，但当前不构成确认三卖。" not in payload["advice_text"]
+    assert "买点：当前无确认一二三类买点" in payload["analysis_text"]
+    assert "卖点：当前无确认一二三类卖点" in payload["analysis_text"]
+    assert "结论：偏弱，先观望。" in payload["advice_text"]
+    assert "预警状态 向下预警" in payload["advice_text"]
+    assert "三卖" not in payload["advice_text"]
+    assert "三买" not in payload["advice_text"]
 
 
-def test_real_600900_1m_confirmed_3b_live_sample_keeps_confirmed_advice_and_analysis() -> None:
+def test_real_600900_1m_down_warning_live_sample_keeps_current_state() -> None:
+    # 数据刷新（2026-08-28）后，600900 1m 真实样本已不再产生确认三买，而是「向下预警 + 偏弱观望」态。
     sample_path = ROOT / "data" / "reports" / "600900" / "1m" / "tech.json"
     payload = json.loads(sample_path.read_text(encoding="utf-8"))
 
     assert payload["timeframe"] == "1m"
-    assert payload["summary"]["conclusion"] == "突破中枢并完成回试，当前按三买确认处理。"
+    assert payload["summary"]["conclusion"] == "偏弱，先观望。"
     assert payload["summary"]["same_level_consumption_level"] == "confirmed"
     assert payload["summary"]["same_level_consumption_level_label"] == "已确认消费"
     assert payload["summary"]["same_level_decomposition_mode"] == "single_confirmed"
-    assert payload["summary"]["buy_points"] == ["buy3"]
+    assert payload["summary"]["oscillation_rhythm_state"] == "up_bias"
+    assert payload["summary"]["buy_points"] == []
     assert payload["summary"]["sell_points"] == []
     assert "消费等级：已确认消费" in payload["analysis_text"]
-    assert "买点：三买" in payload["analysis_text"]
-    assert "结论：突破中枢并完成回试，当前按三买确认处理。" in payload["advice_text"]
-    assert "理由：出现 三买，且当前同级别结构已具备稳定消费基础。" in payload["advice_text"]
-    assert "建议：回试不破 28.10 前以持有或顺势跟踪为主。" in payload["advice_text"]
-    assert "偏多，允许轻仓试错。" not in payload["advice_text"]
+    assert "买点：当前无确认一二三类买点" in payload["analysis_text"]
+    assert "卖点：当前无确认一二三类卖点" in payload["analysis_text"]
+    assert "结论：偏弱，先观望。" in payload["advice_text"]
+    assert "预警状态 向下预警" in payload["advice_text"]
+    assert "三卖" not in payload["advice_text"]
+    assert "三买" not in payload["advice_text"]
     assert "出现向上预警，但当前不构成确认三买。" not in payload["advice_text"]
 
 
@@ -335,7 +343,7 @@ def test_analyze_current_state_includes_cut_status_text(monkeypatch) -> None:
         FakeBi(12, "down", datetime(2026, 5, 9, 10, 30), datetime(2026, 5, 29, 14, 30), 10.8, 10.2, is_confirmed=False),
     ]
 
-    def fake_analyze(raw_bars, bis, zhongshus, macd_points):
+    def fake_analyze(raw_bars, bis, zhongshus, macd_points, segments=None):
         payload = original_analyze(raw_bars, bis, zhongshus, macd_points)
         payload["structure_state"]["current_structure_status"] = "candidate_completed_waiting_stability"
         return payload
@@ -359,7 +367,7 @@ def test_analyze_current_state_includes_consumption_level_text(monkeypatch) -> N
         FakeBi(12, "down", datetime(2026, 5, 9, 10, 30), datetime(2026, 5, 29, 14, 30), 10.8, 10.2, is_confirmed=False),
     ]
 
-    def fake_analyze(raw_bars, bis, zhongshus, macd_points):
+    def fake_analyze(raw_bars, bis, zhongshus, macd_points, segments=None):
         payload = original_analyze(raw_bars, bis, zhongshus, macd_points)
         payload["same_level_consumption_level"] = "pending"
         payload["structure_state"]["consumption_level"] = "pending"
@@ -384,7 +392,7 @@ def test_analyze_current_state_includes_transition_state_text(monkeypatch) -> No
         FakeBi(12, "down", datetime(2026, 5, 9, 10, 30), datetime(2026, 5, 29, 14, 30), 10.8, 10.2, is_confirmed=False),
     ]
 
-    def fake_analyze(raw_bars, bis, zhongshus, macd_points):
+    def fake_analyze(raw_bars, bis, zhongshus, macd_points, segments=None):
         payload = original_analyze(raw_bars, bis, zhongshus, macd_points)
         payload["structure_state"] = {
             "last_completed": {
@@ -444,7 +452,7 @@ def test_analyze_current_state_uses_human_readable_signal_names(monkeypatch) -> 
     ]
     original_analyze = cn_report.analyze_chanlun_signals
 
-    def fake_analyze(raw_bars, bis, zhongshus, macd_points):
+    def fake_analyze(raw_bars, bis, zhongshus, macd_points, segments=None):
         payload = original_analyze(raw_bars, bis, zhongshus, macd_points)
         payload["buy_points"] = ["buy_2"]
         payload["signal_points"] = [
@@ -478,7 +486,7 @@ def test_analyze_current_state_labels_same_type_extension_as_confirmed_slice(mon
         FakeBi(12, "down", datetime(2026, 5, 9, 10, 30), datetime(2026, 5, 29, 14, 30), 10.8, 10.2, is_confirmed=False),
     ]
 
-    def fake_analyze(raw_bars, bis, zhongshus, macd_points):
+    def fake_analyze(raw_bars, bis, zhongshus, macd_points, segments=None):
         payload = original_analyze(raw_bars, bis, zhongshus, macd_points)
         payload["structure_state"] = {
             "last_completed": {
