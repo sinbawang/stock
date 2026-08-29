@@ -248,13 +248,13 @@ def test_bootstrap_modes_do_not_introduce_unknown_stop_categories() -> None:
 @pytest.mark.parametrize(
     "csv_path",
     [
-        Path(r"c:\sandbox\sinba\stock\data\reports\000591\day\analyze\000591_day_20210902_to_20260818.csv"),
+        Path(r"c:\sandbox\sinba\stock\data\reports\000591\day\analyze\000591_day_20210914_to_20260828.csv"),
         Path(r"c:\sandbox\sinba\stock\data\reports\000591\60m\analyze\000591_60m_20260213_to_20260618.csv"),
         Path(r"c:\sandbox\sinba\stock\data\reports\300124\15m\analyze\300124_15m_20260506_to_20260618.csv"),
         Path(r"c:\sandbox\sinba\stock\data\reports\300124\60m\analyze\300124_60m_20260213_to_20260618.csv"),
-        Path(r"c:\sandbox\sinba\stock\data\reports\00700\30m\analyze\00700_30m_20260527_to_20260814.csv"),
+        Path(r"c:\sandbox\sinba\stock\data\reports\00700\30m\analyze\00700_30m_20260319_to_20260828.csv"),
         Path(r"c:\sandbox\sinba\stock\data\reports\00700\60m\analyze\00700_60m_20260213_to_20260624.csv"),
-        Path(r"c:\sandbox\sinba\stock\data\reports\03690\30m\analyze\03690_30m_20260527_to_20260814.csv"),
+        Path(r"c:\sandbox\sinba\stock\data\reports\03690\30m\analyze\03690_30m_20260319_to_20260828.csv"),
     ],
     ids=["000591-day", "000591-60m", "300124-15m", "300124-60m", "00700-30m", "00700-60m", "03690-30m"],
 )

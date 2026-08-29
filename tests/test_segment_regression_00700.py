@@ -4,7 +4,7 @@ from tests.segment_regression_support import identify_segments_from_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_DAY_CSV = ROOT / "data" / "reports" / "00700" / "day" / "analyze" / "00700_day_20230925_to_20260618.csv"
+SAMPLE_DAY_CSV = ROOT / "data" / "reports" / "00700" / "day" / "analyze" / "00700_day_20211015_to_20260828.csv"
 SAMPLE_15M_CSV = ROOT / "data" / "reports" / "00700" / "15m" / "analyze" / "00700_15m_20260518_to_20260618.csv"
 
 
@@ -32,7 +32,7 @@ def test_00700_day_segments_keep_gap_and_tail_landmarks() -> None:
     assert any(segment.stop_reason in {"feature_sequence_gap_fractal", "reverse_break"} for segment in segments)
 
     tail = segments[-1]
-    assert tail.direction.value == "down"
+    assert tail.direction.value == "up"
     assert tail.stop_reason in {"exhausted_confirmed_bis", "no_followup_same_direction"}
     assert tail.is_confirmed is False
 

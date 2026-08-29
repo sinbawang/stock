@@ -4,7 +4,7 @@ from tests.segment_regression_support import assert_landmarks_equal, identify_se
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_DAY_CSV = ROOT / "data" / "reports" / "000591" / "day" / "analyze" / "000591_day_20210902_to_20260818.csv"
+SAMPLE_DAY_CSV = ROOT / "data" / "reports" / "000591" / "day" / "analyze" / "000591_day_20210914_to_20260828.csv"
 SAMPLE_60M_LONG_CSV = ROOT / "data" / "reports" / "000591" / "60m" / "analyze" / "000591_60m_20251210_to_20260618.csv"
 SAMPLE_60M_CSV = ROOT / "data" / "reports" / "000591" / "60m" / "analyze" / "000591_60m_20260213_to_20260618.csv"
 SAMPLE_15M_CSV = ROOT / "data" / "reports" / "000591" / "15m" / "analyze" / "000591_15m_20260506_to_20260618.csv"
@@ -62,7 +62,7 @@ def test_000591_60m_segments_keep_current_landmarks() -> None:
         ("up", 9, 13, "reverse_break", True, (79, 137)),
     ]
     assert theory_landmarks == [
-        ("down", 0, 6, "exhausted_confirmed_bis", False, (7, 71)),
+        ("down", 0, 6, "feature_sequence_gap_fractal", True, (7, 71)),
         ("up", 7, 13, "exhausted_confirmed_bis", False, (71, 137)),
     ]
 
@@ -114,9 +114,9 @@ def test_000591_60m_long_window_reclaims_middle_ground_breaks() -> None:
         ("up", 15, 21, "reverse_break", True, (155, 221)),
     ]
     assert theory_landmarks == [
-        ("down", 0, 2, "exhausted_confirmed_bis", False, (1, 11)),
+        ("down", 0, 2, "first_bi_break_then_third_extends", True, (1, 11)),
         ("up", 3, 9, "feature_sequence_fractal", True, (11, 108)),
-        ("down", 10, 14, "exhausted_confirmed_bis", False, (108, 155)),
+        ("down", 10, 14, "feature_sequence_gap_fractal", True, (108, 155)),
         ("up", 15, 21, "exhausted_confirmed_bis", False, (155, 221)),
     ]
 

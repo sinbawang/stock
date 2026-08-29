@@ -23,7 +23,7 @@ from chanlun.segment import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CSV = ROOT / "data" / "reports" / "000651" / "1m" / "analyze" / "000651_1m_20260806_to_20260824.csv"
+CSV = ROOT / "data" / "reports" / "000651" / "1m" / "analyze" / "000651_1m_20260810_to_20260828.csv"
 
 
 def _segments_theory():
@@ -40,30 +40,21 @@ def _segments_theory():
     )
 
 
-def test_000651_1m_s4_s5_confirmed_by_lesson71_first_bi_break_then_third_extends() -> None:
-    """S4/S5 满足 71课「第一笔破坏前段 + 第三笔破第一笔结束位」，应 theory-confirmed。
+def test_000651_1m_lesson71_first_bi_break_then_third_extends_confirms_head() -> None:
+    """数据刷新后 000651 1m 新窗口的 71课「第一笔破坏前段 + 第三笔破第一笔结束位」
+    确认锚点落在段头（首段），而非旧窗口的 S4/S5 中段。
 
-    - S4（down 38-40）：bi41(上) 高 40.78 > bi38(下) 高 40.70 破坏前段；
-      bi43(上) 高 40.80 > bi41 高 40.78 破第一笔结束位 → S4 确认结束，break=41。
-    - S5（up 41-43）：bi44(下) 低 40.43 < bi41(上) 低 40.46 破坏前段；
-      bi46(下) 低 40.37 < bi44 低 40.43 破第一笔结束位 → S5 确认结束，break=44。
+    段 0（up 0-2）：bootstrap 后首段，经 first_bi_break_then_third_extends 确认，
+    break=3。锁住该识别规则在当前窗口仍产出 theory-confirmed 首段。
     """
     segments = _segments_theory()
 
-    assert len(segments) >= 7
-    s4 = segments[4]
-    s5 = segments[5]
+    assert len(segments) >= 1
+    head = segments[0]
 
-    assert s4.direction.value == "down"
-    assert s4.start_bi_id == 38
-    assert s4.end_bi_id == 40
-    assert s4.is_confirmed is True
-    assert s4.stop_reason == "first_bi_break_then_third_extends"
-    assert s4.break_bi_id == 41
-
-    assert s5.direction.value == "up"
-    assert s5.start_bi_id == 41
-    assert s5.end_bi_id == 43
-    assert s5.is_confirmed is True
-    assert s5.stop_reason == "first_bi_break_then_third_extends"
-    assert s5.break_bi_id == 44
+    assert head.direction.value == "up"
+    assert head.start_bi_id == 0
+    assert head.end_bi_id == 2
+    assert head.is_confirmed is True
+    assert head.stop_reason == "first_bi_break_then_third_extends"
+    assert head.break_bi_id == 3
