@@ -261,6 +261,34 @@ def test_build_structure_state_type_chain_folds_multiple_completed_runs() -> Non
     assert state["relationship"]["transition_state"] == "candidate_new_type"
 
 
+def test_build_structure_state_type_chain_enumerates_in_run_type_switches() -> None:
+    """Stage 2：单 run 内多段类型切换（up→range→up）应完整展开进 type_chain 前缀。
+
+    relations = [up, range, range, up, up, up]；ongoing 为末尾 up 段（zs4..zs7），
+    completed 前缀应包含 up（zs1..zs2）与 range（zs2..zs3）两段。
+    """
+    zhongshus = [
+        _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1),
+        _zhongshu(2, zs_low=11.5, zs_high=12.0, day=4),
+        _zhongshu(3, zs_low=11.8, zs_high=12.1, day=7),
+        _zhongshu(4, zs_low=11.6, zs_high=12.2, day=10),
+        _zhongshu(5, zs_low=12.5, zs_high=13.0, day=13),
+        _zhongshu(6, zs_low=13.2, zs_high=13.7, day=16),
+        _zhongshu(7, zs_low=13.9, zs_high=14.4, day=19),
+    ]
+
+    state = build_structure_state([], zhongshus)
+
+    assert state["type_chain"] == [
+        {"type": "up", "status": "completed", "zs_count": 2, "start_zs_id": 1, "end_zs_id": 2, "start_ts": "2026-05-01T10:30:00", "end_ts": "2026-05-05T14:30:00"},
+        {"type": "range", "status": "completed", "zs_count": 2, "start_zs_id": 2, "end_zs_id": 3, "start_ts": "2026-05-04T10:30:00", "end_ts": "2026-05-08T14:30:00"},
+        {"type": "up", "status": "ongoing", "zs_count": 4, "start_zs_id": 4, "end_zs_id": 7, "start_ts": "2026-05-10T10:30:00", "end_ts": None},
+    ]
+    assert state["last_completed"]["type"] == "range"
+    assert state["last_completed"]["start_zs_id"] == 2
+    assert state["last_completed"]["end_zs_id"] == 3
+
+
 def test_analyze_chanlun_signals_marks_single_zhongshu_as_dual_interpretation_pending() -> None:
     raw_bars = [SimpleNamespace(ts=datetime(2026, 5, 2, 14, 30), close=10.2)]
 

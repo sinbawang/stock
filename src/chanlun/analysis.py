@@ -461,6 +461,44 @@ def _group_type_chain_entry(group: dict[str, object]) -> dict[str, object]:
     }
 
 
+def _current_run_completed_type_entries(
+    current_run: list[Zhongshu],
+    relations: list[str],
+    current_start_index: int,
+) -> list[dict[str, object]]:
+    """枚举 current_run 内 current_start_index 之前的所有已完成类型块（早→晚）。
+
+    块边界按 relations 的相邻异同切分，与 `last_completed` 的回退口径一致；
+    相邻块共享一个边界中枢（后一块的 start_index 即前一块的 end_index），
+    从而把 `up → range → up` 这类段内多段切换完整展开进 type_chain 前缀。
+    """
+    entries: list[dict[str, object]] = []
+    end_index = current_start_index - 1
+    while end_index >= 0:
+        start_index = end_index
+        if end_index > 0:
+            block_kind = relations[end_index - 1]
+            while start_index > 0 and relations[start_index - 1] == block_kind:
+                start_index -= 1
+        entries.insert(
+            0,
+            _group_type_chain_entry(
+                _build_group_state(
+                    current_run,
+                    start_index,
+                    end_index,
+                    status="completed",
+                    latest_ts=current_run[end_index].end_ts,
+                    confirmation_basis="confirmed_by_following_same_level_structure",
+                )
+            ),
+        )
+        if start_index == 0:
+            break
+        end_index = start_index
+    return entries
+
+
 def _find_reabsorbed_tail_before_current(zhongshus: list[Zhongshu], current: Zhongshu | None) -> Zhongshu | None:
     if current is None:
         return None
@@ -842,8 +880,10 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
     )
 
     type_chain = _completed_run_type_entries(live_runs)
-    if last_completed is not None:
-        type_chain.append(_group_type_chain_entry(last_completed))
+    if current_start_index > 0:
+        type_chain.extend(
+            _current_run_completed_type_entries(current_run, relations, current_start_index)
+        )
     type_chain.append(_group_type_chain_entry(current_ongoing))
 
     return {

@@ -61,6 +61,8 @@
 
 ## 5. 后续细化（非本阶段 blocker）
 
-- 单个 run 内部多段类型切换（如 `up → range → up`）的完整前缀枚举：当前 `type_chain` 只展开到
-  `last_completed` + `current_ongoing`，更早的段内细分由 `type_chain` 的 completed 前缀按 run 粒度折叠。
+- 单个 run 内部多段类型切换（如 `up → range → up`）的完整前缀枚举：`type_chain` 现按 `relations`
+  相邻异同把段内所有已完成类型块完整展开（`_current_run_completed_type_entries`，相邻块共享边界中枢），
+  不再只展开到 `last_completed` + `current_ongoing`；回归见
+  `test_build_structure_state_type_chain_enumerates_in_run_type_switches`。
 - 背驰严格判定（TD2/TD3）直接消费 `type_chain` / `current_ongoing.type` / 最近中枢。
