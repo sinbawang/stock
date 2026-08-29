@@ -168,7 +168,13 @@ def test_09988_1m_segment_zhongshu_keeps_two_disjoint_centers_without_false_reab
 
 
 def test_03690_5m_segment_zhongshu_keeps_two_disjoint_centers_without_false_reabsorption() -> None:
-    """03690 5m（首选级别）：两个区间不相交的标准中枢，不得误标 reabsorbed。"""
+    """03690 5m（首选级别）：两个区间不相交的标准中枢，不得误标 reabsorbed。
+
+    s6 同向突破 ZG 且下一段 s7 不回中枢 → 为 ZS0 的走出段（第三类买点）；
+    ZS1 复用 s6 为进入段，区间 [92.05, 93.95]，随后 s11 反向跌破 ZD 触发趋势
+    反转（无走出段）。当前回归窗口（pending_reverse_mode=any）s12/s13/s14
+    三段无公共重叠，故不再形成第三个中枢。
+    """
     segments = identify_segments_from_csv(SAMPLE_03690_5M_CSV)
 
     zhongshus = identify_zhongshu(segments, structure_level="segment")
@@ -176,8 +182,8 @@ def test_03690_5m_segment_zhongshu_keeps_two_disjoint_centers_without_false_reab
     _assert_centers_no_reabsorbed(
         zhongshus,
         [
-            (0, 1, 6, 89.0, 91.95, None),
-            (7, 8, 11, 92.05, 92.2, None),
+            (0, 1, 5, 89.0, 91.95, 6),
+            (6, 7, 10, 92.05, 93.95, None),
         ],
     )
 

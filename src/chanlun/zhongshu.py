@@ -19,6 +19,15 @@ def _overlaps_zone(item: Bi | Segment, zs_low: float, zs_high: float) -> bool:
     return max(zs_low, item.low) < min(zs_high, item.high)
 
 
+def _extend_zhongshu_with_item(zs: Zhongshu, item: Bi | Segment) -> None:
+    zs.end_bi_id = _item_id(item)
+    zs.end_ts = item.end_ts
+    zs.bi_ids.append(_item_id(item))
+    zs.peak_low = min(zs.peak_low, item.low)
+    zs.peak_high = max(zs.peak_high, item.high)
+    zs.render_end_bi_id = _item_id(item)
+
+
 def _zones_overlap(previous: Zhongshu, current: Zhongshu) -> bool:
     return max(previous.zs_low, current.zs_low) < min(previous.zs_high, current.zs_high)
 
@@ -208,32 +217,50 @@ def identify_zhongshu(items: List[Bi | Segment], *, structure_level: str = "bi")
                 render_mode="core_plus_extension",
             )
 
-            # 中枢区间固定为前三笔重叠(ZD/ZG)，后续仅扩展本体参与笔列表
-            # 优先判断重叠：与区间重叠则纳入本体延伸；
-            # 不重叠时再判断是否是走出段（同向+突破ZG/ZD）
+            # 中枢区间固定为前三笔重叠(ZD/ZG)，后续仅扩展本体参与笔列表。
+            # 突破 / 趋势反转判定（第三类买卖点口径，均需前瞻确认）：
+            # - 干净突破（同向破 ZG/ZD 未贯穿、或反向破 ZD/ZG 未贯穿）：
+            #   - 不与区间重叠 → 立即离开（同向）或反转（反向）。
+            #   - 与区间重叠 → 前瞻下一段，不回中枢才确认离开 / 反转；
+            #     回中枢或已无下一段 → 突破失败，并入延伸。
+            # - 贯穿区间（从对侧穿越整个区间）→ 震荡穿越，并入延伸。
+            # - 与区间重叠（无突破）→ 并入延伸。
+            # - 否则 → 终止扫描。
             j = i + 4
             while j < len(items):
                 cand = items[j]
+                same_dir_cand = cand.direction == entering_item.direction
+                # 与进入段同向的突破（上行破 ZG / 下行破 ZD）
+                breaks_out = (
+                    (entering_item.direction == BiDirection.UP and cand.high > zs_high)
+                    or (entering_item.direction == BiDirection.DOWN and cand.low < zs_low)
+                )
+                # 反方向突破（上行中枢被下行破 ZD / 下行中枢被上行破 ZG）
+                crosses_opposite = (
+                    (entering_item.direction == BiDirection.UP and cand.low < zs_low)
+                    or (entering_item.direction == BiDirection.DOWN and cand.high > zs_high)
+                )
+                # 干净突破：同向未贯穿（走出候选）或反向未贯穿（反转候选）
+                clean_breakout = (
+                    (same_dir_cand and breaks_out and not crosses_opposite)
+                    or ((not same_dir_cand) and crosses_opposite and not breaks_out)
+                )
+                if clean_breakout:
+                    if not _overlaps_zone(cand, zs_low, zs_high):
+                        break  # 干净突破不与区间重叠：走出段 / 反转段
+                    next_item = items[j + 1] if j + 1 < len(items) else None
+                    if next_item is not None and not _overlaps_zone(next_item, zs_low, zs_high):
+                        break  # 突破 + 下一段不回中枢：确认离开 / 反转
+                    # 突破失败（下一段回中枢/无法确认）：并入延伸
+                    _extend_zhongshu_with_item(zs, cand)
+                    j += 1
+                    continue
                 if _overlaps_zone(cand, zs_low, zs_high):
                     # 与中枢区间重叠，纳入本体延伸
-                    zs.end_bi_id = _item_id(cand)
-                    zs.end_ts = cand.end_ts
-                    zs.bi_ids.append(_item_id(cand))
-                    zs.peak_low = min(zs.peak_low, cand.low)
-                    zs.peak_high = max(zs.peak_high, cand.high)
-                    zs.render_end_bi_id = _item_id(cand)
+                    _extend_zhongshu_with_item(zs, cand)
                     j += 1
                 else:
-                    # 不与区间重叠，检查是否是走出段
-                    same_dir_cand = cand.direction == entering_item.direction
-                    breaks_out_cand = (
-                        (entering_item.direction == BiDirection.UP and cand.high > zs_high)
-                        or (entering_item.direction == BiDirection.DOWN and cand.low < zs_low)
-                    )
-                    if same_dir_cand and breaks_out_cand:
-                        break  # 视为走出段，停止延伸
-                    else:
-                        break  # 既不延伸也不走出，终止
+                    break  # 既不延伸也不突破，终止扫描
 
             # 走出笔：与进入笔同向，且向对应方向突破中枢区间
             # 上升中枢(进/出向上): exit_bi.high > zs_high (突破ZG)
