@@ -166,11 +166,11 @@ def test_identify_expanded_zhongshus_skips_overlapping_zones() -> None:
     assert identify_expanded_zhongshus(zs) == []
 
 
-def test_relation_kind_zone_disjoint_stays_trend_despite_peak_overlap() -> None:
-    # 同级别分解不处理扩张：区间不重叠即趋势，即使波动（GG/DD）回探重叠也判 up
+def test_relation_kind_zone_disjoint_peak_overlap_returns_range() -> None:
+    # 第20课中枢扩张：区间不重叠但波动（GG/DD）回探重叠 → 归入盘整（range），不再判趋势。
     prev = _zhongshu_with_peaks(0, zone_low=89.0, zone_high=91.35, peak_low=88.7, peak_high=94.5)
     curr = _zhongshu_with_peaks(1, zone_low=92.05, zone_high=92.2, peak_low=85.7, peak_high=96.45)
-    assert _relation_kind(prev, curr) == "up"
+    assert _relation_kind(prev, curr) == "range"
 
 
 def test_relation_kind_zone_disjoint_directions() -> None:

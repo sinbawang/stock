@@ -50,7 +50,10 @@ def test_00700_30m_segment_zhongshu_keeps_two_centers_after_multiple_rewrites() 
     assert structure_state["last_completed"] is None
     assert structure_state["current_ongoing"]["start_zs_id"] == first.zs_id
     assert structure_state["current_ongoing"]["end_zs_id"] == second.zs_id
-    assert structure_state["current_ongoing"]["confirmation_basis"] == "forming_next_same_level_zhongshu"
+    # 两中枢区间不重叠（[476,486.2] -> [425.4,447]）但波动区间回探重叠，
+    # 按第20课中枢扩张归入盘整（range），不再判为同向下跌趋势。
+    assert structure_state["current_ongoing"]["type"] == "range"
+    assert structure_state["current_ongoing"]["confirmation_basis"] == "still_inside_last_zs_extension"
     assert structure_state["relationship"]["transition_state"] == "none"
     assert structure_state["consumption_level"] == "confirmed"
 

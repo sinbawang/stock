@@ -236,7 +236,7 @@ def test_build_structure_state_type_chain_folds_multiple_completed_runs() -> Non
     sep1.is_reabsorbed_by_larger_expansion = True
     # run2: down（zs4 -> zs5 向下推进，zs5 终结）
     down1 = _zhongshu(4, zs_low=9.0, zs_high=9.4, day=10)
-    down2 = _zhongshu(5, zs_low=8.6, zs_high=8.9, day=13)
+    down2 = _zhongshu(5, zs_low=8.5, zs_high=8.8, day=13)
     down2.is_terminated = True
     # 分隔：打断 run2（不重叠，不影响当前 rng 判断）
     sep2 = _zhongshu(6, zs_low=8.2, zs_high=8.6, day=16)
@@ -896,91 +896,102 @@ def test_real_1m_pre_breakdown_replay_sample_03690_preserves_independent_gate() 
     assert "当前按三卖确认处理。" not in payload["advice_text"]
 
 
-def test_real_1m_trend_divergence_replay_sample_000651_down_non_strict() -> None:
-    # 背驰模块首个真实 1m 下跌趋势底背驰（非严格）样本：
-    # 两个不重叠中枢（zs0 [41.75,41.92]、zs1 [40.04,40.51]）构成下跌趋势，
-    # 同向下探力度衰减但离开段未跌破 zs1 下沿 -> trend_active=True、strict=False，
-    # route 回落 last_zs_extension（TD2 趋势轨）。
+def test_real_1m_range_divergence_replay_sample_000651_down_non_strict() -> None:
+    # 真实 1m 盘整底背驰（非严格）样本：两个中枢区间不重叠（zs0 [41.75,41.92]、
+    # zs1 [40.04,40.51]）但波动区间回探重叠，按第20课中枢扩张归入盘整（range）。
+    # 同向下探力度衰减但未跌破 zs1 下沿 -> range_active=True、strict=False、
+    # route 回落 last_zs_extension（TD3 盘整轨）。
     rows = probe_module._load_rows("000651", "1m")
     payload = probe_module._replay("000651", "格力电器", "2026-08-12 10:38", rows)
 
     assert payload["cutoff"] == "2026-08-12 10:38"
-    assert payload["ongoing_type"] == "down"
-    assert payload["divergence_trend_active"] is True
+    assert payload["ongoing_type"] == "range"
+    assert payload["divergence_trend_active"] is False
     assert payload["divergence_trend_strict"] is False
-    assert payload["divergence_range_active"] is False
+    assert payload["divergence_range_active"] is True
     assert payload["divergence_range_strict"] is False
-    assert payload["divergence_range_touches_boundary"] is None
+    assert payload["divergence_range_touches_boundary"] is False
+    assert payload["divergence_range_direction"] == "down"
     assert payload["post_divergence_route"] == "last_zs_extension"
     assert payload["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["same_level_consumption_level"] == "confirmed"
 
 
-def test_real_1m_trend_divergence_replay_sample_000651_down_second_anchor() -> None:
-    # 第二个 cutoff 锚点：与 08-12 同一下跌趋势底背驰（非严格），锁追加更多 bar 后
-    # 结构分类与背驰结论不漂移（trend_active=True、strict=False、route=last_zs_extension）。
+def test_real_1m_range_divergence_replay_sample_000651_down_second_anchor() -> None:
+    # 第二个 cutoff 锚点：与 08-12 同一盘整底背驰（非严格），锁追加更多 bar 后
+    # 结构分类与背驰结论不漂移（range_active=True、strict=False、route=last_zs_extension）。
     rows = probe_module._load_rows("000651", "1m")
     payload = probe_module._replay("000651", "格力电器", "2026-08-14 10:57", rows)
 
     assert payload["cutoff"] == "2026-08-14 10:57"
-    assert payload["ongoing_type"] == "down"
-    assert payload["divergence_trend_active"] is True
+    assert payload["ongoing_type"] == "range"
+    assert payload["divergence_trend_active"] is False
     assert payload["divergence_trend_strict"] is False
-    assert payload["divergence_range_active"] is False
+    assert payload["divergence_range_active"] is True
     assert payload["divergence_range_strict"] is False
-    assert payload["divergence_range_touches_boundary"] is None
+    assert payload["divergence_range_touches_boundary"] is False
+    assert payload["divergence_range_direction"] == "down"
     assert payload["post_divergence_route"] == "last_zs_extension"
     assert payload["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["same_level_consumption_level"] == "confirmed"
 
 
-def test_real_day_trend_divergence_replay_sample_000591_down_strict() -> None:
-    # 严格下跌趋势底背驰真实样本（day 级）：000591 太阳能 2026-08-03。
-    # 与既有 000651 1m 非严格样本互补，锁定 strict=True 趋势背驰轨道
-    # （route=higher_level_reverse_trend、single_confirmed/confirmed）。
+def test_real_day_range_divergence_replay_sample_000591_down_strict() -> None:
+    # 严格盘整底背驰真实样本（day 级）：000591 太阳能 2026-08-03。
+    # 前两中枢（zs0 [6.67,9.54] -> zs1 [4.98,5.54]）构成干净下跌趋势已完结，
+    # 当前 zs1/zs2 区间不重叠但波动回探重叠（中枢扩张）归入盘整，落 strict=True
+    # 盘整背驰轨道（route=higher_level_range、dual_interpretation_pending/pending）。
     rows = probe_module._load_rows("000591", "day")
     payload = probe_module._replay("000591", "太阳能", "2026-08-03", rows)
 
     assert payload["cutoff"] == "2026-08-03"
-    assert payload["ongoing_type"] == "down"
-    assert payload["divergence_trend_active"] is True
-    assert payload["divergence_trend_strict"] is True
-    assert payload["divergence_range_active"] is False
-    assert payload["divergence_range_strict"] is False
-    assert payload["post_divergence_route"] == "higher_level_reverse_trend"
-    assert payload["same_level_decomposition_mode"] == "single_confirmed"
-    assert payload["same_level_consumption_level"] == "confirmed"
+    assert payload["ongoing_type"] == "range"
+    assert payload["divergence_trend_active"] is False
+    assert payload["divergence_trend_strict"] is False
+    assert payload["divergence_range_active"] is True
+    assert payload["divergence_range_strict"] is True
+    assert payload["divergence_range_touches_boundary"] is True
+    assert payload["divergence_range_direction"] == "down"
+    assert payload["post_divergence_route"] == "higher_level_range"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["same_level_consumption_level"] == "pending"
 
 
-def test_real_day_trend_divergence_replay_sample_601328_up_strict() -> None:
-    # 严格上涨趋势顶背驰真实样本（day 级）：601328 交通银行 2025-06-24，
-    # 补上升趋势方向的严格背驰，与 000591 下跌严格样本对称。
+def test_real_day_range_divergence_replay_sample_601328_up_strict() -> None:
+    # 严格盘整顶背驰真实样本（day 级）：601328 交通银行 2025-06-24。
+    # 连续中枢区间不重叠但波动区间回探重叠（中枢扩张），按第20课归入盘整，
+    # 落 strict=True 盘整背驰轨道（route=higher_level_range、single_confirmed/confirmed）。
     rows = probe_module._load_rows("601328", "day")
     payload = probe_module._replay("601328", "交通银行", "2025-06-24", rows)
 
     assert payload["cutoff"] == "2025-06-24"
-    assert payload["ongoing_type"] == "up"
-    assert payload["divergence_trend_active"] is True
-    assert payload["divergence_trend_strict"] is True
-    assert payload["divergence_range_active"] is False
-    assert payload["divergence_range_strict"] is False
-    assert payload["post_divergence_route"] == "higher_level_reverse_trend"
+    assert payload["ongoing_type"] == "range"
+    assert payload["divergence_trend_active"] is False
+    assert payload["divergence_trend_strict"] is False
+    assert payload["divergence_range_active"] is True
+    assert payload["divergence_range_strict"] is True
+    assert payload["divergence_range_touches_boundary"] is True
+    assert payload["divergence_range_direction"] == "up"
+    assert payload["post_divergence_route"] == "higher_level_range"
     assert payload["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["same_level_consumption_level"] == "confirmed"
 
 
-def test_real_1m_trend_divergence_replay_sample_300124_up_non_strict() -> None:
-    # 非严格上涨趋势顶背驰真实样本（1m 级）：300124 汇川技术 2026-08-05 10:29，
-    # 补上升趋势方向、非严格轨道（route=last_zs_extension），与 000651 下跌非严格对称。
+def test_real_1m_range_divergence_replay_sample_300124_up_non_strict() -> None:
+    # 非严格盘整顶背驰真实样本（1m 级）：300124 汇川技术 2026-08-05 10:29。
+    # 两个中枢区间不重叠但波动回探重叠（中枢扩张）归入盘整，落非严格盘整背驰轨道
+    # （route=last_zs_extension），与 000651 下跌非严格对称。
     rows = probe_module._load_rows("300124", "1m")
     payload = probe_module._replay("300124", "汇川技术", "2026-08-05 10:29", rows)
 
     assert payload["cutoff"] == "2026-08-05 10:29"
-    assert payload["ongoing_type"] == "up"
-    assert payload["divergence_trend_active"] is True
+    assert payload["ongoing_type"] == "range"
+    assert payload["divergence_trend_active"] is False
     assert payload["divergence_trend_strict"] is False
-    assert payload["divergence_range_active"] is False
+    assert payload["divergence_range_active"] is True
     assert payload["divergence_range_strict"] is False
+    assert payload["divergence_range_touches_boundary"] is False
+    assert payload["divergence_range_direction"] == "up"
     assert payload["post_divergence_route"] == "last_zs_extension"
     assert payload["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["same_level_consumption_level"] == "confirmed"

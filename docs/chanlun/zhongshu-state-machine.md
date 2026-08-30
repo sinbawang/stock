@@ -39,11 +39,14 @@ stateDiagram-v2
 - `candidate_new_type`：`last_completed.type != current_ongoing.type` 且当前新段 `zs_count_so_far == 1`，只能按 watch / pending 展示。
 - `ongoing_new_type`：`last_completed.type != current_ongoing.type` 且当前新段 `zs_count_so_far >= 2`，允许更强结构表述，但仍不等价于买卖点已确认。
 
-走势类型由中枢区间关系决定（`_relation_kind`）：
+走势类型由中枢区间关系决定（`_relation_kind`，第 38/39 课同级别分解 + 第 20 课中枢扩张）：
 
-- `range`：两个中枢区间重叠（盘整）
-- `up`：`current.zs_low > previous.zs_high`（向上趋势）
-- `down`：`current.zs_high < previous.zs_low`（向下趋势）
+- `range`：两个中枢区间重叠（盘整），或区间不重叠但波动区间（GG/DD）回探重叠（中枢扩张，归入盘整）
+- `up`：`current.zs_low > previous.zs_high` 且波动区间不回探重叠（向上趋势）
+- `down`：`current.zs_high < previous.zs_low` 且波动区间不回探重叠（向下趋势）
+
+中枢扩张判定复用 `is_zhongshu_expansion`（GG/DD inclusive），保证与
+`identify_expanded_zhongshus` 的更大级别中枢对象口径一致。
 
 ## 4. 判定顺序清单
 

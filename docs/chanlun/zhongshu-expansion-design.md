@@ -6,7 +6,11 @@ owner: chanlun
 applyTo: src/chanlun/zhongshu.py, src/chanlun/analysis.py
 
 本文给出「中枢扩张 → 更大级别中枢 → 走势类型改判」的落地设计，锚点为 `03690 5m`
-（窗口 `20260722→20260828`）。**本文只做设计，不改代码。**
+（窗口 `20260722→20260828`）。
+
+> 状态更新（2026-08-30）：§4.1 已落地——`_relation_kind` 现复用 `is_zhongshu_expansion`
+> 把「区间不重叠但波动回探重叠」判为 `range`，触发锚点新增 01339 30m / 09988 30m。
+> §4.2 的 `identify_expanded_zhongshus` 已实现但尚未串入报告输出；§6 待定项仍待评审。
 
 关联：理论口径见 [zhongshu-core-spec.md](zhongshu-core-spec.md) §5-§6、
 [trend-ambiguity-combination-law.md](trend-ambiguity-combination-law.md)（draft）；
