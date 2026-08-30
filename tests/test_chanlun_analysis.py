@@ -843,7 +843,7 @@ def test_real_1m_pre_breakout_replay_sample_600900_preserves_independent_gate() 
     assert payload["zs_monitor_bias"] == "weak"
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
     assert payload["buy_points"] == []
-    assert payload["sell_points"] == ["sell_3"]
+    assert payload["sell_points"] == []
     assert payload["conclusion"] == "观察，等待确认。"
     assert payload["latest_zs_low"] == 28.71
     assert payload["latest_zs_high"] == 28.85
@@ -1067,6 +1067,7 @@ def test_build_signal_point_payloads_include_related_structure() -> None:
 
 
 def test_analyze_chanlun_signals_flags_second_buy_after_buy1_rebound() -> None:
+    prev_zs = _zhongshu(3, zs_low=11.6, zs_high=12.2, day=1)
     current_zs = _zhongshu(4, zs_low=10.2, zs_high=10.8, day=10)
     bis = [
         _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=10),
@@ -1105,7 +1106,7 @@ def test_analyze_chanlun_signals_flags_second_buy_after_buy1_rebound() -> None:
         SimpleNamespace(ts=bis[5].end_ts, macd=1.0, dif=0.2),
     ]
 
-    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+    signals = analyze_chanlun_signals([], bis, [prev_zs, current_zs], macd_points)
 
     assert "buy_2" in signals["buy_points"]
     assert signals["signal_catalog"][1]["active"] is True
@@ -1113,6 +1114,7 @@ def test_analyze_chanlun_signals_flags_second_buy_after_buy1_rebound() -> None:
 
 
 def test_analyze_chanlun_signals_flags_second_sell_after_sell1_rebound() -> None:
+    prev_zs = _zhongshu(0, zs_low=8.2, zs_high=8.8, day=1)
     current_zs = _zhongshu(5, zs_low=10.2, zs_high=10.8, day=15)
     bis = [
         _bi(11, BiDirection.UP, high=10.6, low=10.1, day=15),
@@ -1151,7 +1153,7 @@ def test_analyze_chanlun_signals_flags_second_sell_after_sell1_rebound() -> None
         SimpleNamespace(ts=bis[5].end_ts, macd=-0.6, dif=-0.1),
     ]
 
-    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+    signals = analyze_chanlun_signals([], bis, [prev_zs, current_zs], macd_points)
 
     assert "sell_2" in signals["sell_points"]
     assert signals["signal_catalog"][4]["active"] is True
@@ -1433,6 +1435,7 @@ def test_analyze_chanlun_signals_flags_first_buy_on_bottom_divergence_below_zs_l
     一买核心是「背驰导致的转折」，不是单纯触边；本用例锁定背驰三元组
     （最近中枢 + 离开段 + 力度衰减）下的 buy_1 判定。
     """
+    prev_zs = _zhongshu(0, zs_low=11.6, zs_high=12.2, day=1)
     current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)
     bis = [
         _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=1),
@@ -1471,7 +1474,7 @@ def test_analyze_chanlun_signals_flags_first_buy_on_bottom_divergence_below_zs_l
         SimpleNamespace(ts=bis[5].end_ts, macd=-0.6, dif=0.3),
     ]
 
-    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+    signals = analyze_chanlun_signals([], bis, [prev_zs, current_zs], macd_points)
 
     assert signals["buy_points"] == ["buy_1"]
     assert signals["sell_points"] == []
@@ -1480,6 +1483,7 @@ def test_analyze_chanlun_signals_flags_first_buy_on_bottom_divergence_below_zs_l
 
 def test_analyze_chanlun_signals_flags_first_sell_on_top_divergence_above_zs_high() -> None:
     """BS2 一卖正例（对称样例）：最近中枢 + 向上离开段越过中枢上沿 + 顶背驰 -> sell_1。"""
+    prev_zs = _zhongshu(1, zs_low=8.2, zs_high=8.8, day=1)
     current_zs = _zhongshu(2, zs_low=10.0, zs_high=10.8, day=10)
     bis = [
         _bi(1, BiDirection.UP, high=10.6, low=10.1, day=10),
@@ -1505,7 +1509,7 @@ def test_analyze_chanlun_signals_flags_first_sell_on_top_divergence_above_zs_hig
         SimpleNamespace(ts=bis[4].end_ts, macd=2.2, dif=0.6),
     ]
 
-    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+    signals = analyze_chanlun_signals([], bis, [prev_zs, current_zs], macd_points)
 
     assert signals["sell_points"] == ["sell_1"]
     assert signals["buy_points"] == []
@@ -1612,6 +1616,7 @@ def test_analyze_chanlun_signals_buy1_uses_segment_divergence_strict_strength() 
     离开段(down)创新低且力度弱于进入段 -> 段级底背驰 -> buy_1；
     即使笔级力度表为空（macd 点落在笔窗外），也应以段级口径为准。
     """
+    prev_zs = _segment_zhongshu(0, entering_segment_id=0, exit_segment_id=0, zs_low=11.6, zs_high=12.2)
     zs = _segment_zhongshu(1, entering_segment_id=1, exit_segment_id=2, zs_low=10.0, zs_high=10.8)
     entering = _segment(1, BiDirection.DOWN, high=11.2, low=10.6, start_day=1)
     exit_seg = _segment(2, BiDirection.DOWN, high=10.9, low=9.8, start_day=3)
@@ -1626,7 +1631,7 @@ def test_analyze_chanlun_signals_buy1_uses_segment_divergence_strict_strength() 
         SimpleNamespace(ts=exit_seg.end_ts, macd=-1.0, dif=-0.4),
     ]
 
-    signals = analyze_chanlun_signals([], bis, [zs], macd_points, segments=[entering, exit_seg])
+    signals = analyze_chanlun_signals([], bis, [prev_zs, zs], macd_points, segments=[entering, exit_seg])
 
     assert signals["buy_points"] == ["buy_1"]
     assert signals["sell_points"] == []
@@ -1656,6 +1661,7 @@ def test_analyze_chanlun_signals_buy1_requires_segment_strength_decay() -> None:
 
 def test_analyze_chanlun_signals_sell1_uses_segment_divergence_strict_strength() -> None:
     """BS1 力度口径（对称）：线段级中枢的一卖用「离开段 vs 进入段」力度比较。"""
+    prev_zs = _segment_zhongshu(2, entering_segment_id=0, exit_segment_id=0, zs_low=8.2, zs_high=8.8)
     zs = _segment_zhongshu(3, entering_segment_id=1, exit_segment_id=2, zs_low=10.0, zs_high=10.8)
     entering = _segment(1, BiDirection.UP, high=10.6, low=9.9, start_day=1)
     exit_seg = _segment(2, BiDirection.UP, high=11.2, low=10.3, start_day=3)
@@ -1670,7 +1676,7 @@ def test_analyze_chanlun_signals_sell1_uses_segment_divergence_strict_strength()
         SimpleNamespace(ts=exit_seg.end_ts, macd=1.0, dif=0.4),
     ]
 
-    signals = analyze_chanlun_signals([], bis, [zs], macd_points, segments=[entering, exit_seg])
+    signals = analyze_chanlun_signals([], bis, [prev_zs, zs], macd_points, segments=[entering, exit_seg])
 
     assert signals["sell_points"] == ["sell_1"]
     assert signals["buy_points"] == []
@@ -1678,6 +1684,7 @@ def test_analyze_chanlun_signals_sell1_uses_segment_divergence_strict_strength()
 
 def test_analyze_chanlun_signals_buy1_anchors_on_exit_segment_end_bi() -> None:
     """BS2 段级信号锚点：一买以离开段末笔为基准，而非更晚出现的最新向下笔。"""
+    prev_zs = _segment_zhongshu(30, entering_segment_id=0, exit_segment_id=0, zs_low=11.6, zs_high=12.2)
     zs = _segment_zhongshu(31, entering_segment_id=1, exit_segment_id=2, zs_low=10.0, zs_high=10.8)
     entering = Segment(
         segment_id=1,
@@ -1723,14 +1730,18 @@ def test_analyze_chanlun_signals_buy1_anchors_on_exit_segment_end_bi() -> None:
         SimpleNamespace(ts=exit_seg.end_ts, macd=-1.0, dif=-0.4),
     ]
 
-    signals = analyze_chanlun_signals([], bis, [zs], macd_points, segments=[entering, exit_seg])
+    signals = analyze_chanlun_signals([], bis, [prev_zs, zs], macd_points, segments=[entering, exit_seg])
 
     assert signals["buy_points"] == ["buy_1"]
     assert signals["sell_points"] == []
 
 
-def test_analyze_chanlun_signals_buy3_uses_exit_segment_as_leave() -> None:
-    """BS4 段级离开：三买以向上离开段末笔为离开锚点，而非任一越上沿笔。"""
+def test_analyze_chanlun_signals_buy3_requires_segment_pullback() -> None:
+    """BS4 段级三买严格口径：向上离开段越上沿后，若尚未形成回踩线段，不得报 buy_3。
+
+    旧实现会在回踩尚未成段时回退到笔级回试并提前报三买；段级口径要求
+    离开段 + 回踩线段同时成立（回归 01339 30m buy3 5.29 误报）。
+    """
     zs = _segment_zhongshu(32, entering_segment_id=1, exit_segment_id=2, zs_low=10.0, zs_high=10.8)
     entering = Segment(
         segment_id=1,
@@ -1788,7 +1799,7 @@ def test_analyze_chanlun_signals_buy3_uses_exit_segment_as_leave() -> None:
 
     signals = analyze_chanlun_signals([], bis, [zs], macd_points, segments=[entering, exit_seg])
 
-    assert signals["buy_points"] == ["buy_3"]
+    assert signals["buy_points"] == []
     assert signals["sell_points"] == []
 
 

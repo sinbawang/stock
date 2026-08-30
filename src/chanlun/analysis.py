@@ -361,52 +361,6 @@ def _find_sell3_segment_leave_hold(
     return None, None
 
 
-def _immediate_next_bi(bis: list[Bi], anchor_bi: Bi | None) -> Bi | None:
-    """anchor_bi 在 bis 列表中的紧随下一根笔。"""
-    if anchor_bi is None:
-        return None
-    for i, bi in enumerate(bis):
-        if bi.bi_id == anchor_bi.bi_id and i + 1 < len(bis):
-            return bis[i + 1]
-    return None
-
-
-def _immediate_down_bi_holding_above(bis: list[Bi], anchor_bi: Bi | None, level: float) -> Bi | None:
-    """anchor_bi 紧随的向下笔且 low >= level（回试尚未成段时回退到笔级）。"""
-    next_bi = _immediate_next_bi(bis, anchor_bi)
-    if next_bi is not None and next_bi.is_down() and next_bi.low >= level:
-        return next_bi
-    return None
-
-
-def _immediate_up_bi_holding_below(bis: list[Bi], anchor_bi: Bi | None, level: float) -> Bi | None:
-    """anchor_bi 紧随的向上笔且 high <= level（反抽尚未成段时回退到笔级）。"""
-    next_bi = _immediate_next_bi(bis, anchor_bi)
-    if next_bi is not None and next_bi.is_up() and next_bi.high <= level:
-        return next_bi
-    return None
-
-
-def _last_up_segment_breaking_above(segments: list[Segment], zhongshu: Zhongshu, level: float) -> Segment | None:
-    """段级：核心起，最后一个 high > level 的向上段（回试尚未成段时的离开段）。"""
-    for seg in reversed(segments):
-        if seg.segment_id < zhongshu.start_bi_id:
-            continue
-        if seg.is_up() and seg.high > level:
-            return seg
-    return None
-
-
-def _last_down_segment_breaking_below(segments: list[Segment], zhongshu: Zhongshu, level: float) -> Segment | None:
-    """段级：核心起，最后一个 low < level 的向下段（反抽尚未成段时的离开段）。"""
-    for seg in reversed(segments):
-        if seg.segment_id < zhongshu.start_bi_id:
-            continue
-        if seg.is_down() and seg.low < level:
-            return seg
-    return None
-
-
 def _build_signal_point_detail(
     point: str,
     signal_bi: Bi | None,
@@ -1204,6 +1158,7 @@ def analyze_chanlun_signals(
 
     current_zs = zhongshus[-1] if zhongshus else None
     structure_state = build_structure_state(raw_bars, zhongshus)
+    ongoing_type = (structure_state.get("current_ongoing") or {}).get("type")
 
     # 线段级中枢：一类点背驰用「离开段 vs 进入段」严格力度口径；笔级中枢保持笔级口径。
     segment_bottom_divergence = False
@@ -1261,6 +1216,7 @@ def analyze_chanlun_signals(
                 sell_signal_bi = exit_end_bi
     if (
         current_zs
+        and ongoing_type == "down"
         and buy_signal_bi
         and buy_signal_bi.is_confirmed
         and buy_divergence
@@ -1270,6 +1226,7 @@ def analyze_chanlun_signals(
         buy_points.append("buy_1")
     if (
         current_zs
+        and ongoing_type == "up"
         and sell_signal_bi
         and sell_signal_bi.is_confirmed
         and sell_divergence
@@ -1289,6 +1246,7 @@ def analyze_chanlun_signals(
     buy2_anchor = buy_signal_bi if use_segment_divergence else latest_confirmed_down
     if (
         current_zs
+        and ongoing_type == "down"
         and buy2_precursor
         and latest_up
         and latest_down
@@ -1303,20 +1261,12 @@ def analyze_chanlun_signals(
     buy3_signal_bi: Bi | None = None
     if current_zs and latest_up:
         if use_segment_divergence and segments:
-            leave_seg, hold_seg = _find_buy3_segment_leave_hold(segments, current_zs, current_zs.zs_high)
+            _leave_seg, hold_seg = _find_buy3_segment_leave_hold(segments, current_zs, current_zs.zs_high)
             if hold_seg is not None:
                 hold_bi = _bi_by_id(hold_seg.end_bi_id, bis) or _bi_by_id(hold_seg.start_bi_id, bis)
-            else:
-                anchor_seg = (
-                    exit_segment
-                    if exit_segment is not None and exit_segment.is_up()
-                    else _last_up_segment_breaking_above(segments, current_zs, current_zs.zs_high)
-                )
-                anchor_bi = _bi_by_id(anchor_seg.end_bi_id, bis) if anchor_seg is not None else None
-                hold_bi = _immediate_down_bi_holding_above(bis, anchor_bi, current_zs.zs_high)
-            if hold_bi is not None and latest_up.bi_id > hold_bi.bi_id:
-                buy3_signal_bi = hold_bi
-                buy_points.append("buy_3")
+                if hold_bi is not None and latest_up.bi_id > hold_bi.bi_id:
+                    buy3_signal_bi = hold_bi
+                    buy_points.append("buy_3")
         else:
             _leave_bi, hold_bi = _find_buy3_bi_leave_hold(bis, current_zs.zs_high)
             if hold_bi is not None and latest_up.bi_id > hold_bi.bi_id:
@@ -1333,6 +1283,7 @@ def analyze_chanlun_signals(
     sell2_anchor = sell_signal_bi if use_segment_divergence else latest_confirmed_up
     if (
         current_zs
+        and ongoing_type == "up"
         and sell2_precursor
         and latest_up
         and latest_down
@@ -1347,20 +1298,12 @@ def analyze_chanlun_signals(
     sell3_signal_bi: Bi | None = None
     if current_zs and latest_down:
         if use_segment_divergence and segments:
-            leave_seg, hold_seg = _find_sell3_segment_leave_hold(segments, current_zs, current_zs.zs_low)
+            _leave_seg, hold_seg = _find_sell3_segment_leave_hold(segments, current_zs, current_zs.zs_low)
             if hold_seg is not None:
                 hold_bi = _bi_by_id(hold_seg.end_bi_id, bis) or _bi_by_id(hold_seg.start_bi_id, bis)
-            else:
-                anchor_seg = (
-                    exit_segment
-                    if exit_segment is not None and exit_segment.is_down()
-                    else _last_down_segment_breaking_below(segments, current_zs, current_zs.zs_low)
-                )
-                anchor_bi = _bi_by_id(anchor_seg.end_bi_id, bis) if anchor_seg is not None else None
-                hold_bi = _immediate_up_bi_holding_below(bis, anchor_bi, current_zs.zs_low)
-            if hold_bi is not None and latest_down.bi_id > hold_bi.bi_id:
-                sell3_signal_bi = hold_bi
-                sell_points.append("sell_3")
+                if hold_bi is not None and latest_down.bi_id > hold_bi.bi_id:
+                    sell3_signal_bi = hold_bi
+                    sell_points.append("sell_3")
         else:
             _leave_bi, hold_bi = _find_sell3_bi_leave_hold(bis, current_zs.zs_low)
             if hold_bi is not None and latest_down.bi_id > hold_bi.bi_id:
