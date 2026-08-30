@@ -293,26 +293,6 @@ def _latest_bi_before(anchor_id: int, direction: str, bis: list[Bi]) -> Bi | Non
     return None
 
 
-def _is_first_down_holding_above(anchor: Bi, candidate: Bi, bis: list[Bi], level: float) -> bool:
-    """candidate 是否是 anchor 之后第一个 low >= level 的向下 bi（三类买点首次回试锁定）。"""
-    for other in bis:
-        if other.bi_id <= anchor.bi_id or other.bi_id >= candidate.bi_id:
-            continue
-        if other.is_down() and other.low >= level:
-            return False
-    return True
-
-
-def _is_first_up_holding_below(anchor: Bi, candidate: Bi, bis: list[Bi], level: float) -> bool:
-    """candidate 是否是 anchor 之后第一个 high <= level 的向上 bi（三类卖点首次回试锁定）。"""
-    for other in bis:
-        if other.bi_id <= anchor.bi_id or other.bi_id >= candidate.bi_id:
-            continue
-        if other.is_up() and other.high <= level:
-            return False
-    return True
-
-
 def _renewed_beyond_previous(latest_bi: Bi, pullback_bi: Bi, bis: list[Bi]) -> bool:
     """「再度走强 / 走弱」的力度口径：renewed bi 必须创新高 / 新低。
 
@@ -326,6 +306,104 @@ def _renewed_beyond_previous(latest_bi: Bi, pullback_bi: Bi, bis: list[Bi]) -> b
     if latest_bi.is_up():
         return latest_bi.high > prior.high
     return latest_bi.low < prior.low
+
+
+def _find_buy3_bi_leave_hold(bis: list[Bi], level: float) -> tuple[Bi | None, Bi | None]:
+    """笔级：向上离开（high > level）后紧随的向下回试不破 level。"""
+    for i, bi in enumerate(bis):
+        if not bi.is_up() or bi.high <= level:
+            continue
+        next_bi = bis[i + 1] if i + 1 < len(bis) else None
+        if next_bi is not None and next_bi.is_down() and next_bi.low >= level:
+            return bi, next_bi
+    return None, None
+
+
+def _find_sell3_bi_leave_hold(bis: list[Bi], level: float) -> tuple[Bi | None, Bi | None]:
+    """笔级：向下离开（low < level）后紧随的向上反抽不破 level。"""
+    for i, bi in enumerate(bis):
+        if not bi.is_down() or bi.low >= level:
+            continue
+        next_bi = bis[i + 1] if i + 1 < len(bis) else None
+        if next_bi is not None and next_bi.is_up() and next_bi.high <= level:
+            return bi, next_bi
+    return None, None
+
+
+def _find_buy3_segment_leave_hold(
+    segments: list[Segment], zhongshu: Zhongshu, level: float
+) -> tuple[Segment | None, Segment | None]:
+    """段级：核心起，向上离开后紧随的向下回试不破 level。"""
+    for i, seg in enumerate(segments):
+        if seg.segment_id < zhongshu.start_bi_id:
+            continue
+        if not seg.is_up() or seg.high <= level:
+            continue
+        next_seg = segments[i + 1] if i + 1 < len(segments) else None
+        if next_seg is not None and next_seg.is_down() and next_seg.low >= level:
+            return seg, next_seg
+    return None, None
+
+
+def _find_sell3_segment_leave_hold(
+    segments: list[Segment], zhongshu: Zhongshu, level: float
+) -> tuple[Segment | None, Segment | None]:
+    """段级：核心起，向下离开后紧随的向上反抽不破 level。"""
+    for i, seg in enumerate(segments):
+        if seg.segment_id < zhongshu.start_bi_id:
+            continue
+        if not seg.is_down() or seg.low >= level:
+            continue
+        next_seg = segments[i + 1] if i + 1 < len(segments) else None
+        if next_seg is not None and next_seg.is_up() and next_seg.high <= level:
+            return seg, next_seg
+    return None, None
+
+
+def _immediate_next_bi(bis: list[Bi], anchor_bi: Bi | None) -> Bi | None:
+    """anchor_bi 在 bis 列表中的紧随下一根笔。"""
+    if anchor_bi is None:
+        return None
+    for i, bi in enumerate(bis):
+        if bi.bi_id == anchor_bi.bi_id and i + 1 < len(bis):
+            return bis[i + 1]
+    return None
+
+
+def _immediate_down_bi_holding_above(bis: list[Bi], anchor_bi: Bi | None, level: float) -> Bi | None:
+    """anchor_bi 紧随的向下笔且 low >= level（回试尚未成段时回退到笔级）。"""
+    next_bi = _immediate_next_bi(bis, anchor_bi)
+    if next_bi is not None and next_bi.is_down() and next_bi.low >= level:
+        return next_bi
+    return None
+
+
+def _immediate_up_bi_holding_below(bis: list[Bi], anchor_bi: Bi | None, level: float) -> Bi | None:
+    """anchor_bi 紧随的向上笔且 high <= level（反抽尚未成段时回退到笔级）。"""
+    next_bi = _immediate_next_bi(bis, anchor_bi)
+    if next_bi is not None and next_bi.is_up() and next_bi.high <= level:
+        return next_bi
+    return None
+
+
+def _last_up_segment_breaking_above(segments: list[Segment], zhongshu: Zhongshu, level: float) -> Segment | None:
+    """段级：核心起，最后一个 high > level 的向上段（回试尚未成段时的离开段）。"""
+    for seg in reversed(segments):
+        if seg.segment_id < zhongshu.start_bi_id:
+            continue
+        if seg.is_up() and seg.high > level:
+            return seg
+    return None
+
+
+def _last_down_segment_breaking_below(segments: list[Segment], zhongshu: Zhongshu, level: float) -> Segment | None:
+    """段级：核心起，最后一个 low < level 的向下段（反抽尚未成段时的离开段）。"""
+    for seg in reversed(segments):
+        if seg.segment_id < zhongshu.start_bi_id:
+            continue
+        if seg.is_down() and seg.low < level:
+            return seg
+    return None
 
 
 def _build_signal_point_detail(
@@ -1217,24 +1295,28 @@ def analyze_chanlun_signals(
         and _renewed_beyond_previous(latest_up, latest_down, bis)
     ):
         buy_points.append("buy_2")
-    if (
-        current_zs
-        and latest_down
-        and latest_up
-        and latest_down.low >= current_zs.zs_high
-        and latest_up.bi_id > latest_down.bi_id
-    ):
-        if use_segment_divergence and exit_segment is not None and exit_segment.is_up():
-            leave_up = exit_end_bi
+    buy3_signal_bi: Bi | None = None
+    if current_zs and latest_up:
+        if use_segment_divergence and segments:
+            leave_seg, hold_seg = _find_buy3_segment_leave_hold(segments, current_zs, current_zs.zs_high)
+            if hold_seg is not None:
+                hold_bi = _bi_by_id(hold_seg.end_bi_id, bis) or _bi_by_id(hold_seg.start_bi_id, bis)
+            else:
+                anchor_seg = (
+                    exit_segment
+                    if exit_segment is not None and exit_segment.is_up()
+                    else _last_up_segment_breaking_above(segments, current_zs, current_zs.zs_high)
+                )
+                anchor_bi = _bi_by_id(anchor_seg.end_bi_id, bis) if anchor_seg is not None else None
+                hold_bi = _immediate_down_bi_holding_above(bis, anchor_bi, current_zs.zs_high)
+            if hold_bi is not None and latest_up.bi_id > hold_bi.bi_id:
+                buy3_signal_bi = hold_bi
+                buy_points.append("buy_3")
         else:
-            leave_up = _latest_bi_before(latest_down.bi_id, "up", bis)
-        if (
-            leave_up is not None
-            and leave_up.high > current_zs.zs_high
-            and _is_first_down_holding_above(leave_up, latest_down, bis, current_zs.zs_high)
-            and latest_up.high > leave_up.high
-        ):
-            buy_points.append("buy_3")
+            _leave_bi, hold_bi = _find_buy3_bi_leave_hold(bis, current_zs.zs_high)
+            if hold_bi is not None and latest_up.bi_id > hold_bi.bi_id:
+                buy3_signal_bi = hold_bi
+                buy_points.append("buy_3")
     previous_sell1_active = (
         current_zs is not None
         and latest_confirmed_up is not None
@@ -1257,24 +1339,28 @@ def analyze_chanlun_signals(
         and _renewed_beyond_previous(latest_down, latest_up, bis)
     ):
         sell_points.append("sell_2")
-    if (
-        current_zs
-        and latest_up
-        and latest_down
-        and latest_up.high <= current_zs.zs_low
-        and latest_down.bi_id > latest_up.bi_id
-    ):
-        if use_segment_divergence and exit_segment is not None and exit_segment.is_down():
-            leave_down = exit_end_bi
+    sell3_signal_bi: Bi | None = None
+    if current_zs and latest_down:
+        if use_segment_divergence and segments:
+            leave_seg, hold_seg = _find_sell3_segment_leave_hold(segments, current_zs, current_zs.zs_low)
+            if hold_seg is not None:
+                hold_bi = _bi_by_id(hold_seg.end_bi_id, bis) or _bi_by_id(hold_seg.start_bi_id, bis)
+            else:
+                anchor_seg = (
+                    exit_segment
+                    if exit_segment is not None and exit_segment.is_down()
+                    else _last_down_segment_breaking_below(segments, current_zs, current_zs.zs_low)
+                )
+                anchor_bi = _bi_by_id(anchor_seg.end_bi_id, bis) if anchor_seg is not None else None
+                hold_bi = _immediate_up_bi_holding_below(bis, anchor_bi, current_zs.zs_low)
+            if hold_bi is not None and latest_down.bi_id > hold_bi.bi_id:
+                sell3_signal_bi = hold_bi
+                sell_points.append("sell_3")
         else:
-            leave_down = _latest_bi_before(latest_up.bi_id, "down", bis)
-        if (
-            leave_down is not None
-            and leave_down.low < current_zs.zs_low
-            and _is_first_up_holding_below(leave_down, latest_up, bis, current_zs.zs_low)
-            and latest_down.low < leave_down.low
-        ):
-            sell_points.append("sell_3")
+            _leave_bi, hold_bi = _find_sell3_bi_leave_hold(bis, current_zs.zs_low)
+            if hold_bi is not None and latest_down.bi_id > hold_bi.bi_id:
+                sell3_signal_bi = hold_bi
+                sell_points.append("sell_3")
 
     same_level_decomposition_mode = _build_same_level_decomposition_mode(structure_state)
     same_level_consumption_level = _build_same_level_consumption_level(structure_state)
@@ -1303,6 +1389,8 @@ def analyze_chanlun_signals(
         latest_up=latest_up,
         latest_down=latest_down,
         current_zs=current_zs,
+        buy3_signal_bi=buy3_signal_bi,
+        sell3_signal_bi=sell3_signal_bi,
     )
     zs_monitor_state = _build_zs_monitor_state(
         raw_bars,
@@ -1341,11 +1429,23 @@ def build_signal_point_payloads(
     latest_up: Bi | None,
     latest_down: Bi | None,
     current_zs: Zhongshu | None,
+    buy3_signal_bi: Bi | None = None,
+    sell3_signal_bi: Bi | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     signal_points: list[dict[str, object]] = []
     signal_catalog: list[dict[str, object]] = []
     related_zs_id = current_zs.zs_id if current_zs else None
     related_bi_ids = list(current_zs.bi_ids) if current_zs else []
+
+    def buy_signal_bi_for(point: str) -> Bi | None:
+        if point == "buy_3" and buy3_signal_bi is not None:
+            return buy3_signal_bi
+        return latest_down
+
+    def sell_signal_bi_for(point: str) -> Bi | None:
+        if point == "sell_3" and sell3_signal_bi is not None:
+            return sell3_signal_bi
+        return latest_up if point == "sell_2" else latest_confirmed_up
 
     for point in buy_points:
         basis = {
@@ -1353,11 +1453,12 @@ def build_signal_point_payloads(
             "buy_2": "buy1_pullback_confirmation",
             "buy_3": "leave_zs_then_pullback_holds_upper_edge",
         }.get(point)
+        signal_bi = buy_signal_bi_for(point)
         signal_points.append(
             _build_signal_point_detail(
                 point,
-                latest_down,
-                getattr(latest_down, "low", None),
+                signal_bi,
+                getattr(signal_bi, "low", None),
                 active=True,
                 basis=basis,
                 related_zs_id=related_zs_id,
@@ -1370,7 +1471,7 @@ def build_signal_point_payloads(
             "sell_2": "sell1_rebound_confirmation",
             "sell_3": "leave_zs_then_rebound_fails_lower_edge",
         }.get(point)
-        signal_bi = latest_up if point == "sell_2" else latest_confirmed_up
+        signal_bi = sell_signal_bi_for(point)
         signal_points.append(
             _build_signal_point_detail(
                 point,
@@ -1385,11 +1486,12 @@ def build_signal_point_payloads(
 
     active_points = set(buy_points + sell_points)
     for point in ("buy_1", "buy_2", "buy_3"):
+        signal_bi = buy_signal_bi_for(point)
         signal_catalog.append(
             _build_signal_point_detail(
                 point,
-                latest_down,
-                getattr(latest_down, "low", None) if point in active_points else None,
+                signal_bi,
+                getattr(signal_bi, "low", None) if point in active_points else None,
                 active=point in active_points,
                 basis={
                     "buy_1": "bottom_divergence_near_zs_low",
@@ -1401,7 +1503,7 @@ def build_signal_point_payloads(
             )
         )
     for point in ("sell_1", "sell_2", "sell_3"):
-        signal_bi = latest_up if point == "sell_2" else latest_confirmed_up
+        signal_bi = sell_signal_bi_for(point)
         signal_catalog.append(
             _build_signal_point_detail(
                 point,

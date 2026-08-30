@@ -129,7 +129,7 @@
 | 盘整背驰严格自动判定 | 进行中 | 50% | TD3 已落地 `divergence.range` 的 `strict / reference_zs_id / touches_boundary / strength_comparison`；消费端措辞归 TD4，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 一类买卖点严格确认 | 完成 | 95% | buy_1/sell_1 已落地“确认离开 + 反向转折 + 段级「离开段 vs 进入段」力度、边界、转折均以离开段末笔为基准”（信号锚点 `_bi_by_id(exit_segment.end_bi_id)`）；笔级中枢回退 macd_sum_abs 衰减；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
 | 二类买卖点严格确认 | 完成 | 95% | 已落地「绑定一买/一卖 + 不破前低/前高 + 首次回抽锁定 + 再度走强/走弱（创新高/新低）」，段级链路上前置/不破前低以离开段末笔为锚点；仅笔级中枢（类中枢辅助链路）保持笔级口径；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
-| 三类买卖点严格确认 | 完成 | 95% | 已落地「离开 + 不回归 + 首次回试锁定 + 再度走强/走弱（创新高/新低）」，段级链路上离开以离开段末笔为锚点；仅笔级中枢链路保持笔级口径；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
+| 三类买卖点严格确认 | 完成 | 95% | 已落地「离开 + 不回归 + 首次回试锁定 + 回试后重新向上/向下」，段级链路上离开以向上/向下离开段为锚点、信号价格锚定在首次回试/反抽极值（不强制创新高/新低，贴合第20课）；仅笔级中枢链路保持笔级口径；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
 
 ### 3.2 P1 理论与工程对齐
 

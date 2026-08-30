@@ -78,14 +78,14 @@
 | `buy_1` | `analyze_chanlun_signals` buy_1 段 | 线段级中枢：`segment_bottom_divergence`（离开段 vs 进入段创新低 + 力度衰减）+ 离开段末笔跌破下沿 + `_has_reverse_turn_after` 反向转折（信号锚点=离开段末笔 `_bi_by_id(exit_segment.end_bi_id)`）；笔级中枢回退 `bottom_divergence` | 最近中枢 + 离开段 + 段级背驰；力度、边界、转折均以离开段末笔为基准 | 笔级中枢（类中枢辅助链路）仍为 macd_sum_abs 衰减 | 严格一致 |
 | `sell_1` | `analyze_chanlun_signals` sell_1 段 | 线段级中枢：`segment_top_divergence`（离开段 vs 进入段创新高 + 力度衰减）+ 离开段末笔越上沿 + `_has_reverse_turn_after` 反向转折（信号锚点=离开段末笔）；笔级中枢回退 `top_divergence` | 最近中枢 + 离开段 + 段级顶背驰；力度、边界、转折均以离开段末笔为基准 | 与 buy_1 对称：笔级中枢链路仍为 macd_sum_abs 衰减 | 严格一致 |
 | `buy_2` | `analyze_chanlun_signals` buy_2 段 | 段级中枢：一买前置=`segment_bottom_divergence` + `latest_down.low > 离开段末笔.low`（不破前低）+ `_is_first_reverse_hold`（首次回抽锁定）+ `latest_up.bi_id > latest_down.bi_id` + `_renewed_beyond_previous`（再度走强须创新高）；笔级中枢回退笔级前置 | 绑定一买（段级）+ 不破前低（离开段末笔）+ 首次回抽锁定 + 再度走强（创新高） | 笔级中枢（类中枢辅助链路）仍为笔级口径 | 严格一致 |
-| `buy_3` | `analyze_chanlun_signals` buy_3 段 | 段级中枢：离开段末笔（向上）越上沿 + `latest_down.low >= zs_high`（回抽不跌回上沿）+ `_is_first_down_holding_above`（首次回试锁定）+ `latest_up.bi_id > latest_down.bi_id` + `latest_up.high > leave_up.high`（再度走强须创新高）；笔级中枢回退离开笔 | 离开中枢（离开段）+ 首次不回归 + 首次回试锁定 + 再度走强（创新高） | 笔级中枢链路仍为笔级离开 | 严格一致 |
+| `buy_3` | `analyze_chanlun_signals` buy_3 段 | 段级中枢：向上离开段（核心起 high > zs_high）+ 紧随的向下回试段不破上沿（`_find_buy3_segment_leave_hold`，回试尚未成段时回退到笔级紧随回试笔）+ 回试后重新向上（存在其后向上笔）；信号锚点=首次回试低点；笔级中枢回退笔级离开+回试 | 离开中枢（向上）+ 首次回试不破上沿 + 回试后重新向上（不强制创新高，贴合第20课第三类买卖点定理） | 笔级中枢链路仍为笔级离开 | 严格一致 |
 | `sell_2` | `analyze_chanlun_signals` sell_2 段 | 段级中枢：一卖前置=`segment_top_divergence` + `latest_up.high < 离开段末笔.high`（不破前高）+ `_is_first_reverse_hold`（首次反抽锁定）+ `latest_down.bi_id > latest_up.bi_id` + `_renewed_beyond_previous`（再度走弱须创新低）；笔级中枢回退笔级前置 | 绑定一卖（段级）+ 不破前高（离开段末笔）+ 首次反抽锁定 + 再度走弱（创新低） | 与 buy_2 对称：笔级中枢链路仍为笔级口径 | 严格一致 |
-| `sell_3` | `analyze_chanlun_signals` sell_3 段 | 段级中枢：离开段末笔（向下）破下沿 + `latest_up.high <= zs_low`（反抽不站回下沿）+ `_is_first_up_holding_below`（首次回试锁定）+ `latest_down.bi_id > latest_up.bi_id` + `latest_down.low < leave_down.low`（再度走弱须创新低）；笔级中枢回退离开笔 | 离开中枢（离开段）+ 首次不回归 + 首次回试锁定 + 再度走弱（创新低） | 与 buy_3 对称：笔级中枢链路仍为笔级离开 | 严格一致 |
+| `sell_3` | `analyze_chanlun_signals` sell_3 段 | 段级中枢：向下离开段（核心起 low < zs_low）+ 紧随的向上反抽段不破下沿（`_find_sell3_segment_leave_hold`，反抽尚未成段时回退到笔级紧随反抽笔）+ 反抽后重新向下（存在其后向下笔）；信号锚点=首次反抽高点；笔级中枢回退笔级离开+反抽 | 离开中枢（向下）+ 首次反抽不破下沿 + 反抽后重新向下（不强制创新低，贴合第20课第三类买卖点定理） | 与 buy_3 对称：笔级中枢链路仍为笔级离开 | 严格一致 |
 
 口径汇总：
 
 - 一二三类点的「最近中枢绑定」与「离开段 / 回抽方向」已严格对齐。
-- 三类点（buy_3/sell_3）已绑定「离开 + 不回归 + 首次回试锁定 + 再度走强 / 走弱（创新高 / 新低）」，段级中枢链路上「离开」以离开段末笔为锚点。
+- 三类点（buy_3/sell_3）已绑定「离开 + 不回归 + 首次回试锁定 + 回试后重新向上 / 向下」，段级中枢链路上「离开」以向上 / 向下离开段为锚点，信号价格锚定在首次回试 / 反抽极值（不再强制创新高 / 新低，贴合第20课第三类买卖点定理）。
 - 二类点（buy_2/sell_2）已绑定「一买 / 一卖前置 + 不破前低 / 前高 + 首次回抽锁定 + 再度走强 / 走弱（创新高 / 新低）」，段级中枢链路上「前置 + 不破前低/前高」以离开段末笔为锚点。
 - 一类点（buy_1/sell_1）背驰三元组已绑定，线段级中枢链路上「离开段 vs 进入段」力度、边界、转折均已以离开段末笔为基准（`_bi_by_id(exit_segment.end_bi_id)`）。
 - 工程近似集中在：笔级中枢（类中枢辅助链路）的力度衰减与笔级离开/回抽口径（辅助展示口径）。

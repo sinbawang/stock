@@ -1831,6 +1831,42 @@ def test_analyze_chanlun_signals_flags_third_buy_after_leave_zs_and_pullback_hol
     assert signals["signal_catalog"][2]["basis"] == "leave_zs_then_pullback_holds_upper_edge"
 
 
+def test_analyze_chanlun_signals_buy3_anchors_first_hold_not_latest_pullback() -> None:
+    """BS4 三买锚点：多次回试时锁定首次回试，而非最新回踩（回归 300124 5m 61.5 vs 61.93）。"""
+    current_zs = _zhongshu(19, zs_low=10.0, zs_high=10.8, day=20)
+    bis = [
+        _bi(1, BiDirection.UP, high=11.5, low=10.9, day=20),   # 向上离开
+        _bi(2, BiDirection.DOWN, high=11.4, low=11.1, day=21),  # 首次回试（低点 11.1）
+        _bi(3, BiDirection.UP, high=11.6, low=11.1, day=22),
+        _bi(4, BiDirection.DOWN, high=11.5, low=11.2, day=23),  # 第二次回试（更高低点 11.2）
+        Bi(
+            bi_id=5,
+            direction=BiDirection.UP,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 24, 10, 30),
+            end_ts=datetime(2026, 5, 24, 14, 30),
+            high=11.7,
+            low=11.2,
+            norm_bar_range=(5, 6),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=3.0, dif=1.0),
+        SimpleNamespace(ts=bis[1].end_ts, macd=-1.0, dif=-0.5),
+        SimpleNamespace(ts=bis[2].end_ts, macd=3.0, dif=1.0),
+        SimpleNamespace(ts=bis[3].end_ts, macd=-1.0, dif=-0.5),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["buy_points"] == ["buy_3"]
+    # 锚定在首次回试 bi2（低点 11.1），而非最新回踩 bi4（低点 11.2）。
+    assert signals["signal_points"][0]["signal_bi_id"] == 2
+    assert signals["signal_points"][0]["price"] == 11.1
+
+
 def test_analyze_chanlun_signals_flags_third_sell_after_leave_zs_and_rebound_fails_lower_edge() -> None:
     """BS4 三卖正例（对称样例）：向下离开中枢 + 首次反抽不重回中枢下沿之上 -> sell_3。"""
     current_zs = _zhongshu(4, zs_low=10.0, zs_high=10.8, day=1)
@@ -1866,8 +1902,8 @@ def test_analyze_chanlun_signals_flags_third_sell_after_leave_zs_and_rebound_fai
     assert signals["signal_catalog"][5]["basis"] == "leave_zs_then_rebound_fails_lower_edge"
 
 
-def test_analyze_chanlun_signals_does_not_flag_buy3_when_renew_up_fails_new_high() -> None:
-    """BS4 三买「再度走强」力度：回抽后出现向上笔但未创新高 -> 三买不成立。"""
+def test_analyze_chanlun_signals_flags_buy3_when_renew_up_resumes_without_new_high() -> None:
+    """BS4 三买「再度走强」：回试后重新向上即确认（不强制创新高，贴合第20课原文）。"""
     current_zs = _zhongshu(17, zs_low=10.0, zs_high=10.8, day=20)
     bis = [
         _bi(1, BiDirection.UP, high=10.7, low=10.2, day=20),
@@ -1896,12 +1932,12 @@ def test_analyze_chanlun_signals_does_not_flag_buy3_when_renew_up_fails_new_high
 
     signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
 
-    assert signals["buy_points"] == []
+    assert signals["buy_points"] == ["buy_3"]
     assert signals["sell_points"] == []
 
 
-def test_analyze_chanlun_signals_does_not_flag_sell3_when_renew_down_fails_new_low() -> None:
-    """BS4 三卖「再度走弱」力度：反抽后出现向下笔但未创新低 -> 三卖不成立。"""
+def test_analyze_chanlun_signals_flags_sell3_when_renew_down_resumes_without_new_low() -> None:
+    """BS4 三卖「再度走弱」：反抽后重新向下即确认（不强制创新低，贴合第20课原文）。"""
     current_zs = _zhongshu(18, zs_low=10.0, zs_high=10.8, day=1)
     bis = [
         _bi(1, BiDirection.DOWN, high=10.5, low=10.1, day=1),
@@ -1931,7 +1967,7 @@ def test_analyze_chanlun_signals_does_not_flag_sell3_when_renew_down_fails_new_l
     signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
 
     assert signals["buy_points"] == []
-    assert signals["sell_points"] == []
+    assert signals["sell_points"] == ["sell_3"]
 
 
 def test_analyze_chanlun_signals_does_not_flag_buy1_on_boundary_touch_without_divergence() -> None:
