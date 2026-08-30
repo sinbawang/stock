@@ -230,7 +230,7 @@ def _build_lower_precision_entry(
     bis = identify_bis(fractals, normalized_bars, pending_reverse_mode=LOWER_PRECISION_PENDING_REVERSE_MODE)
     _segments, zhongshus, _lei_zhongshus, _auxiliary_zhongshus = _resolve_primary_and_aux_zhongshus(bis)
     macd_points = calculate_macd(raw_bars)
-    lower_signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
+    lower_signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars, segments=_segments)
     return build_lower_timeframe_precision_entry(
         signals,
         lower_signals,
@@ -322,9 +322,9 @@ def _save_technical_report(
             strict_segment_rules=True,
         )
 
-    analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points)
+    analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points, segments=segments)
     analysis_text = analysis_text.replace("60M", PRIMARY_TECHNICAL_LABEL)
-    signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
+    signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars, segments=segments)
     precision_entry = None
     precision_seconds = 0.0
     if generate_lower_precision:

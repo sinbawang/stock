@@ -1018,7 +1018,7 @@ def export_case(
             strict_segment_rules=True,
         )
 
-    analysis_text = analyze_current_state(security.name, raw_bars, bis, zhongshus, macd_points)
+    analysis_text = analyze_current_state(security.name, raw_bars, bis, zhongshus, macd_points, segments=segments)
     timeframe_label = timeframe_display_label(timeframe)
     if timeframe != "60m":
         analysis_text = analysis_text.replace("60M", timeframe_label)

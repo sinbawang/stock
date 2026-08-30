@@ -254,7 +254,7 @@ def _build_lower_precision_entry(
     segments = identify_segments(bis)
     zhongshus, lei_zhongshus, auxiliary_zhongshus = _resolve_primary_and_aux_zhongshus(bis, segments)
     macd_points = calculate_macd(raw_bars)
-    lower_signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
+    lower_signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars, segments=segments)
     _write_lower_precision_report(
         symbol=symbol,
         name=name,
@@ -339,7 +339,7 @@ def _write_lower_precision_report(
             strict_segment_rules=True,
         )
 
-    analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points).replace("60M", LOWER_PRECISION_LABEL)
+    analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points, segments=segments).replace("60M", LOWER_PRECISION_LABEL)
     advice_text = build_advice(name, LOWER_PRECISION_LABEL, raw_bars, signals)
     summary_payload = build_technical_summary(
         LOWER_PRECISION_LABEL,
@@ -509,9 +509,9 @@ def _save_technical_report(
             strict_segment_rules=True,
         )
 
-    analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points)
+    analysis_text = analyze_current_state(name, raw_bars, bis, zhongshus, macd_points, segments=segments)
     analysis_text = analysis_text.replace("60M", PRIMARY_TECHNICAL_LABEL)
-    signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars)
+    signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars, segments=segments)
     precision_entry = None
     precision_seconds = 0.0
     if generate_lower_precision:
