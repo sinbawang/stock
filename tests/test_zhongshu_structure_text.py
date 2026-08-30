@@ -140,73 +140,73 @@ def test_build_advice_keeps_pre_breakdown_as_pending_watch() -> None:
 # 以及 build_advice 单测 test_build_advice_keeps_pre_breakdown_as_pending_watch。
 
 
-def test_real_01024_1m_up_warning_live_sample_keeps_current_state() -> None:
-    # 数据刷新（2026-08-28）后，01024 1m 真实样本已不再产生确认三卖，而是「向上预警 + 偏强持有」态；
-    # confirmed 三卖文案由 test_build_advice_prefers_confirmed_sell3_when_downtrend_conflicts_with_buy1 与
-    # bundle 层 reference anchor 兜底。
+def test_real_01024_1m_sell3_live_sample_keeps_current_state() -> None:
+    # 三卖修复（不强制创新低，贴合第20课）后，01024 1m 真实样本重新识别出
+    # 「跌破 ZS4 后反抽不破下沿」的三卖雏形（当前走势类型仍为 up，故为未确认三卖）。
     sample_path = ROOT / "data" / "reports" / "01024" / "1m" / "tech.json"
     payload = json.loads(sample_path.read_text(encoding="utf-8"))
 
     assert payload["timeframe"] == "1m"
-    assert payload["summary"]["conclusion"] == "偏强，持有为主。"
+    assert payload["summary"]["conclusion"] == "偏空，优先减仓或兑现。"
     assert payload["summary"]["same_level_consumption_level"] == "confirmed"
     assert payload["summary"]["same_level_consumption_level_label"] == "已确认消费"
     assert payload["summary"]["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["summary"]["oscillation_rhythm_state"] == "down_bias"
     assert payload["summary"]["buy_points"] == []
-    assert payload["summary"]["sell_points"] == []
+    assert payload["summary"]["sell_points"] == ["sell3"]
     assert "消费等级：已确认消费" in payload["analysis_text"]
     assert "买点：当前无确认一二三类买点" in payload["analysis_text"]
-    assert "卖点：当前无确认一二三类卖点" in payload["analysis_text"]
-    assert "结论：偏强，持有为主。" in payload["advice_text"]
-    assert "预警状态 向上预警" in payload["advice_text"]
-    assert "三卖" not in payload["advice_text"]
+    assert "卖点：三卖" in payload["analysis_text"]
+    assert "结论：偏空，优先减仓或兑现。" in payload["advice_text"]
+    assert "预警状态 向下预警" in payload["advice_text"]
+    assert "三卖" in payload["advice_text"]
     assert "三买" not in payload["advice_text"]
 
 
-def test_real_002555_1m_down_warning_live_sample_keeps_current_state() -> None:
-    # 数据刷新（2026-08-28）后，002555 1m 真实样本已不再产生确认三卖，而是「向下预警 + 偏弱观望」态。
+def test_real_002555_1m_confirmed_sell3_live_sample_keeps_current_state() -> None:
+    # 三卖修复后，002555 1m 真实样本（下行趋势 ZS0→ZS1→ZS2）重新识别出
+    # 「跌破 ZS2 后反抽不破下沿」的确认三卖（当前走势类型为 down）。
     sample_path = ROOT / "data" / "reports" / "002555" / "1m" / "tech.json"
     payload = json.loads(sample_path.read_text(encoding="utf-8"))
 
     assert payload["timeframe"] == "1m"
-    assert payload["summary"]["conclusion"] == "偏弱，先观望。"
+    assert payload["summary"]["conclusion"] == "跌破中枢后反抽下沿失败，当前按三卖确认处理。"
     assert payload["summary"]["same_level_consumption_level"] == "confirmed"
     assert payload["summary"]["same_level_consumption_level_label"] == "已确认消费"
     assert payload["summary"]["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["summary"]["oscillation_rhythm_state"] == "up_bias"
     assert payload["summary"]["buy_points"] == []
-    assert payload["summary"]["sell_points"] == []
+    assert payload["summary"]["sell_points"] == ["sell3"]
     assert "消费等级：已确认消费" in payload["analysis_text"]
     assert "买点：当前无确认一二三类买点" in payload["analysis_text"]
-    assert "卖点：当前无确认一二三类卖点" in payload["analysis_text"]
-    assert "结论：偏弱，先观望。" in payload["advice_text"]
+    assert "卖点：三卖" in payload["analysis_text"]
+    assert "结论：跌破中枢后反抽下沿失败，当前按三卖确认处理。" in payload["advice_text"]
     assert "预警状态 向下预警" in payload["advice_text"]
-    assert "三卖" not in payload["advice_text"]
+    assert "三卖" in payload["advice_text"]
     assert "三买" not in payload["advice_text"]
 
 
-def test_real_600900_1m_down_warning_live_sample_keeps_current_state() -> None:
-    # 数据刷新（2026-08-28）后，600900 1m 真实样本已不再产生确认三买，而是「向下预警 + 偏弱观望」态。
+def test_real_600900_1m_sell3_live_sample_keeps_current_state() -> None:
+    # 三卖修复后，600900 1m 真实样本（ZS2→ZS3 上行后向下跌破）重新识别出
+    # 「跌破 ZS3 后反抽不破下沿」的三卖雏形（当前走势类型仍为 up，故为未确认三卖）。
     sample_path = ROOT / "data" / "reports" / "600900" / "1m" / "tech.json"
     payload = json.loads(sample_path.read_text(encoding="utf-8"))
 
     assert payload["timeframe"] == "1m"
-    assert payload["summary"]["conclusion"] == "偏弱，先观望。"
+    assert payload["summary"]["conclusion"] == "偏空，优先减仓或兑现。"
     assert payload["summary"]["same_level_consumption_level"] == "confirmed"
     assert payload["summary"]["same_level_consumption_level_label"] == "已确认消费"
     assert payload["summary"]["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["summary"]["oscillation_rhythm_state"] == "up_bias"
     assert payload["summary"]["buy_points"] == []
-    assert payload["summary"]["sell_points"] == []
+    assert payload["summary"]["sell_points"] == ["sell3"]
     assert "消费等级：已确认消费" in payload["analysis_text"]
     assert "买点：当前无确认一二三类买点" in payload["analysis_text"]
-    assert "卖点：当前无确认一二三类卖点" in payload["analysis_text"]
-    assert "结论：偏弱，先观望。" in payload["advice_text"]
+    assert "卖点：三卖" in payload["analysis_text"]
+    assert "结论：偏空，优先减仓或兑现。" in payload["advice_text"]
     assert "预警状态 向下预警" in payload["advice_text"]
-    assert "三卖" not in payload["advice_text"]
+    assert "三卖" in payload["advice_text"]
     assert "三买" not in payload["advice_text"]
-    assert "出现向上预警，但当前不构成确认三买。" not in payload["advice_text"]
 
 
 def test_build_advice_downgrades_buy_signal_when_same_level_decomposition_is_pending() -> None:

@@ -1362,6 +1362,18 @@ def analyze_chanlun_signals(
                 sell3_signal_bi = hold_bi
                 sell_points.append("sell_3")
 
+    # 三买与三卖针对同一中枢互斥：若两者同时触发，仅保留更晚的「离开-回试」，
+    # 较新的信号覆盖较早的信号（例如先向上离开成三买、随后反转向下跌破成三卖）。
+    if buy3_signal_bi is not None and sell3_signal_bi is not None:
+        if sell3_signal_bi.bi_id > buy3_signal_bi.bi_id:
+            buy3_signal_bi = None
+            if "buy_3" in buy_points:
+                buy_points.remove("buy_3")
+        else:
+            sell3_signal_bi = None
+            if "sell_3" in sell_points:
+                sell_points.remove("sell_3")
+
     same_level_decomposition_mode = _build_same_level_decomposition_mode(structure_state)
     same_level_consumption_level = _build_same_level_consumption_level(structure_state)
     divergence = build_divergence_state(
