@@ -102,7 +102,7 @@ tests: tests/test_segment.py, tests/test_segment_rediscrimination_matrix.py, tes
 
 - 状态码：`first_bi_break_then_third_extends`（`theory_confirmed`）。
 - 判定入口：`_first_bi_breaks_prior_segment_and_third_extends()`，仅在首个转折轮次、theory 模式触发。
-- 若第三笔完全落在第一笔范围内（先破终点/先破起点未定），仍由 `transition_pending` / `_evaluate_transition_state()` 处理。
+- 若第三笔完全落在第一笔范围内（71课复杂情形），`_first_bi_break_with_contained_third_confirms()` 向后扫描：后续先破第一笔结束位置 → `first_bi_break_then_contained_third_breaks_end`（`theory_confirmed`）确认；先破第一笔开始位置 → 旧线段延续。
 
 ## 6. 未确认尾段
 

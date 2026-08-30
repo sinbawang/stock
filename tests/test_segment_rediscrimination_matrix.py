@@ -572,6 +572,10 @@ def test_theory_mode_looks_ahead_two_reverse_bis_for_stalled_down_gap_fractal() 
     场景：down 段在 bi8 创新低后，同向 bi10/bi12 均为弱 down 笔（未破前低），
     触发「弱同向笔」停扫分支。缺口底分型的右元素 bi13 在停扫点之后第二根反向笔，
     弱同向笔分支需向前多看一根反向笔才能补全分型并确认。
+
+    注：该几何同时满足 71课复杂情形（bi9 破坏前段、bi11 被 bi9 包含、
+    bi13 先破 bi9 结束位置），当前实现里 71课复杂情形优先级更高，先以
+    `first_bi_break_then_contained_third_breaks_end` 确认同一终点。
     """
     bis = [
         _bi(0, BiDirection.DOWN, 6.155, 5.800),
@@ -597,7 +601,7 @@ def test_theory_mode_looks_ahead_two_reverse_bis_for_stalled_down_gap_fractal() 
     theory = identify_segments(bis, termination_mode="theory")
     assert theory[0].direction == BiDirection.DOWN
     assert theory[0].is_confirmed is True
-    assert theory[0].stop_reason == "feature_sequence_gap_fractal_delayed_true"
+    assert theory[0].stop_reason == "first_bi_break_then_contained_third_breaks_end"
 
     practical = identify_segments(bis, termination_mode="practical")
     assert practical[0].direction == BiDirection.DOWN
@@ -717,6 +721,7 @@ def test_stop_reason_category_buckets_match_expected_semantics() -> None:
         "feature_sequence_gap_fractal",
         "feature_sequence_gap_fractal_delayed_true",
         "first_bi_break_then_third_extends",
+        "first_bi_break_then_contained_third_breaks_end",
     )
     assert contract[StopOutcomeCategory.FALLBACK_CONFIRMED.value] == (
         "reverse_break",

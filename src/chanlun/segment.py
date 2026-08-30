@@ -12,6 +12,7 @@ STOP_REASON_LABELS = {
     "feature_sequence_gap_fractal": "反向特征序列形成缺口分型，等待后续再分辨确认旧线段终结",
     "feature_sequence_gap_fractal_delayed_true": "缺口分型经历至少一轮弱同向未突破后，由更晚一轮同向强推进确认终结",
     "first_bi_break_then_third_extends": "转折点第一笔破坏前线段，且第三笔破第一笔结束位置，前线段确认终结",
+    "first_bi_break_then_contained_third_breaks_end": "转折点第一笔破坏前线段，第三笔被第一笔包含，后续先破第一笔结束位置，前线段确认终结",
     "reverse_break": "反向笔直接突破最近关键低/高点，旧线段立即确认终结",
     "reverse_break_after_gap": "缺口候选后，后续反向扩张再次破坏关键点，旧线段确认终结",
     "unexpected_same_direction": "在预期反向位置直接出现同向笔，当前线段停止扩展",
@@ -35,6 +36,7 @@ STOP_REASON_CATEGORIES = {
     "feature_sequence_gap_fractal": StopOutcomeCategory.THEORY_CONFIRMED,
     "feature_sequence_gap_fractal_delayed_true": StopOutcomeCategory.THEORY_CONFIRMED,
     "first_bi_break_then_third_extends": StopOutcomeCategory.THEORY_CONFIRMED,
+    "first_bi_break_then_contained_third_breaks_end": StopOutcomeCategory.THEORY_CONFIRMED,
     "reverse_break": StopOutcomeCategory.FALLBACK_CONFIRMED,
     "reverse_break_after_gap": StopOutcomeCategory.FALLBACK_CONFIRMED,
     "unexpected_same_direction": StopOutcomeCategory.PENDING,
@@ -748,6 +750,63 @@ def _first_bi_breaks_prior_segment_and_third_extends(
     return _same_direction_extends(first_bi.direction, third_bi, first_bi_end)
 
 
+def _first_bi_break_with_contained_third_confirms(
+    bis: List[Bi],
+    cursor: int,
+    direction: BiDirection,
+    last_reverse_extreme: float,
+) -> bool:
+    """71课复杂情形：转折点第一笔破坏前线段，且第三笔完全在第一笔范围内。
+
+    原文（71课）：第三笔完全在第一笔的范围内……这种情况，无非两种最后的结果：
+    1、最终还是先破了第一笔的结束位置，这时候，新的线段显然成立，旧线段还是被破坏了；
+    2、最终，先破第一笔的开始位置，这样，旧线段只被一笔破坏，接着就延续原来的方向。
+
+    本函数只判定结果 1（先破第一笔结束位置）是否已成立；成立时前线段确认结束，
+    新线段从该第一笔开始。结果 2 或尚未决出时返回 False（旧线段延续/继续观察）。
+    """
+    if cursor + 2 >= len(bis):
+        return False
+
+    first_bi = bis[cursor]
+    third_bi = bis[cursor + 2]
+    if third_bi.direction != first_bi.direction:
+        return False
+
+    # 第一笔破坏前线段（封住最后一个特征序列缺口）。
+    if not _reverse_breaks_last_reverse_extreme(direction, first_bi, last_reverse_extreme):
+        return False
+
+    # 第三笔必须完全在第一笔范围内（否则走简单情形「第三笔破第一笔结束位置」）。
+    if not (first_bi.low <= third_bi.low and third_bi.high <= first_bi.high):
+        return False
+
+    if first_bi.direction == BiDirection.UP:
+        first_bi_end = first_bi.high
+        first_bi_start = first_bi.low
+    else:
+        first_bi_end = first_bi.low
+        first_bi_start = first_bi.high
+
+    # 从第二笔起扫描：看先破第一笔结束位置还是开始位置。
+    for idx in range(cursor + 1, len(bis)):
+        bi = bis[idx]
+        if first_bi.direction == BiDirection.UP:
+            breaks_end = bi.high > first_bi_end
+            breaks_start = bi.low < first_bi_start
+        else:
+            breaks_end = bi.low < first_bi_end
+            breaks_start = bi.high > first_bi_start
+
+        if breaks_end and not breaks_start:
+            return True
+        if breaks_start:
+            # 先破开始位置（结果 2），或同一笔同时破两端：旧线段延续，不再确认。
+            return False
+
+    return False
+
+
 def _evaluate_transition_state(
     bis: List[Bi],
     transition_idx: int,
@@ -1181,6 +1240,20 @@ def _extend_segment(
             is_confirmed = True
             break_bi_id = reverse_bi.bi_id
             stop_reason = "first_bi_break_then_third_extends"
+            break
+        if (
+            not enable_fallback_reverse_break
+            and _first_bi_break_with_contained_third_confirms(
+                bis, cursor, direction, last_reverse_extreme
+            )
+        ):
+            # 71课复杂情形：第一笔破坏前线段，第三笔被第一笔包含，
+            # 后续先破第一笔结束位置 → 前线段一定结束。
+            end_idx = cursor - 1
+            break_idx = cursor
+            is_confirmed = True
+            break_bi_id = reverse_bi.bi_id
+            stop_reason = "first_bi_break_then_contained_third_breaks_end"
             break
         if (
             is_first_transition_round

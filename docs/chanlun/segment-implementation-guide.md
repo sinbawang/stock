@@ -116,6 +116,7 @@ tests: tests/test_segment.py, tests/test_segment_regression_suite.py
 
 - 从转折点开始，若第一笔反向笔就破坏了前线段，且该笔延伸出三笔后第三笔破第一笔的结束位置，则新线段一定形成、前线段一定结束
 - 当前实现把这条主路径正式建模为理论确认：`_first_bi_breaks_prior_segment_and_third_extends()` 在首个转折轮次检测该条件，满足时以 `first_bi_break_then_third_extends`（`theory_confirmed`）确认前线段结束，下一段从该转折第一笔开始
+- 若第三笔完全落在第一笔范围内（71课复杂情形），则 `_first_bi_break_with_contained_third_confirms()` 向后扫描：后续先破第一笔结束位置时以 `first_bi_break_then_contained_third_breaks_end`（`theory_confirmed`）确认；先破第一笔开始位置时旧线段延续
 - 仅在 theory 模式触发；practical 模式下同一形态由 `reverse_break` 兜底覆盖
 
 ### 向上线段
@@ -161,6 +162,7 @@ tests: tests/test_segment.py, tests/test_segment_regression_suite.py
 - `feature_sequence_gap_fractal`：反向特征序列分型的第一二元素存在缺口，需等待其后的反向序列再长出分型，随后回头确认旧线段终结
 - `feature_sequence_gap_fractal_delayed_true`：缺口分型进入再分辨后，先经历至少一轮“弱同向未突破”，随后由更晚一轮同向强推进确认旧线段终结
 - `first_bi_break_then_third_extends`：转折点第一笔破坏前线段，且第三笔破第一笔结束位置，前线段确认终结（71课第一种情况）
+- `first_bi_break_then_contained_third_breaks_end`：转折点第一笔破坏前线段，第三笔被第一笔包含，后续先破第一笔结束位置，前线段确认终结（71课复杂情形）
 - `reverse_break`：反向笔直接破坏最近关键低点或关键高点，前一线段立即确认终结
 - `reverse_break_after_gap`：首根反向笔尚未破坏最近关键低点/高点，但后续同向恢复失败，并由再次反向扩张完成确认破坏
 - `no_followup_same_direction`：出现反向回撤后，没有等到后续同向推进笔

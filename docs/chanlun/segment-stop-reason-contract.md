@@ -29,6 +29,7 @@ tests: tests/test_segment_rediscrimination_matrix.py, tests/test_segment.py
 - `feature_sequence_gap_fractal`
 - `feature_sequence_gap_fractal_delayed_true`
 - `first_bi_break_then_third_extends`
+- `first_bi_break_then_contained_third_breaks_end`
 
 2. `fallback_confirmed`
 - `reverse_break`
