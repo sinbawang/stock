@@ -51,18 +51,18 @@ SCENARIOS = [
     {
         "name": "00700-1m",
         "csv_path": ROOT / "data" / "reports" / "00700" / "1m" / "analyze" / "00700_1m_20260814_to_20260828.csv",
-        "expected_stop_reasons": {"feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break", "same_direction_not_extending"},
-        "min_segments": 10,
-        "min_confirmed": 9,
+        "expected_stop_reasons": {"reverse_break", "same_direction_not_extending"},
+        "min_segments": 2,
+        "min_confirmed": 1,
         "min_preprocessing": 1,
     },
     {
         "name": "00700-5m",
         "csv_path": ROOT / "data" / "reports" / "00700" / "5m" / "analyze" / "00700_5m_20260722_to_20260828.csv",
-        "expected_stop_reasons": {"feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break", "same_direction_not_extending"},
+        "expected_stop_reasons": {"feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break"},
         "min_segments": 8,
         "min_confirmed": 6,
-        "min_preprocessing": 1,
+        "min_preprocessing": 0,
     },
     {
         "name": "00700-60m",
@@ -83,7 +83,7 @@ SCENARIOS = [
     {
         "name": "03690-1m",
         "csv_path": ROOT / "data" / "reports" / "03690" / "1m" / "analyze" / "03690_1m_20260814_to_20260828.csv",
-        "expected_stop_reasons": {"feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break", "same_direction_not_extending"},
+        "expected_stop_reasons": {"feature_sequence_fractal", "reverse_break", "same_direction_not_extending"},
         "min_segments": 12,
         "min_confirmed": 10,
         "min_preprocessing": 1,
@@ -107,10 +107,10 @@ SCENARIOS = [
     {
         "name": "300124-15m",
         "csv_path": ROOT / "data" / "reports" / "300124" / "15m" / "analyze" / "300124_15m_20260506_to_20260618.csv",
-        "expected_stop_reasons": {"feature_sequence_gap_fractal", "same_direction_not_extending"},
+        "expected_stop_reasons": {"feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break"},
         "min_segments": 2,
         "min_confirmed": 1,
-        "min_preprocessing": 1,
+        "min_preprocessing": 0,
     },
     {
         "name": "300124-1m",
@@ -131,9 +131,9 @@ SCENARIOS = [
     {
         "name": "300124-60m",
         "csv_path": ROOT / "data" / "reports" / "300124" / "60m" / "analyze" / "300124_60m_20260213_to_20260618.csv",
-        "expected_stop_reasons": {"feature_sequence_fractal", "reverse_break"},
-        "min_segments": 5,
-        "min_confirmed": 4,
+        "expected_stop_reasons": {"exhausted_confirmed_bis", "reverse_break"},
+        "min_segments": 4,
+        "min_confirmed": 3,
         "min_preprocessing": 1,
     },
 ]
@@ -335,37 +335,36 @@ def test_300124_60m_keeps_mixed_overlap_and_restart_anchors() -> None:
 
     practical_segments = identify_segments_from_csv(csv_path, termination_mode="practical")
 
-    assert len(practical_segments) >= 5
+    assert len(practical_segments) >= 4
     second = practical_segments[1]
     third = practical_segments[2]
     fourth = practical_segments[3]
-    fifth = practical_segments[4]
 
-    assert second.direction.value == "up"
-    assert second.end_bi_id == 8
-    assert second.break_bi_id == 11
+    # effective_only 后该窗口不再含 overlap-reuse（下一段起点 < 上一段 break），
+    # 改为干净的 restart 链：每段起点 == 上一段 break，且尾段为 pending 的 exhausted。
+    assert second.direction.value == "down"
+    assert second.start_bi_id == 5
+    assert second.end_bi_id == 15
+    assert second.break_bi_id == 16
     assert second.stop_reason == "reverse_break"
-    assert third.direction.value == "down"
-    assert third.start_bi_id == 9
-    assert 11 in third.bi_ids
-    assert third.break_bi_id == 12
+    assert third.direction.value == "up"
+    assert third.start_bi_id == second.break_bi_id
+    assert third.start_bi_id == 16
+    assert third.break_bi_id == 21
     assert third.stop_reason == "reverse_break"
-    assert fourth.direction.value == "up"
+    assert fourth.direction.value == "down"
     assert fourth.start_bi_id == third.break_bi_id
-    assert fourth.break_bi_id == 17
-    assert fourth.stop_reason == "reverse_break"
-    assert fifth.direction.value == "down"
-    assert fifth.start_bi_id == fourth.break_bi_id
-    assert fifth.start_bi_id == 17
-    assert fifth.break_bi_id == 20
+    assert fourth.start_bi_id == 21
+    assert fourth.break_bi_id == 26
+    assert fourth.stop_reason == "exhausted_confirmed_bis"
 
 
 def test_00700_5m_practical_keeps_mixed_stop_reasons_with_overlap_reuse_anchors() -> None:
     """00700 5m：锁住混合 stop_reason 链与 overlap-reuse 边界。
 
-    数据刷新后 00700 1m 新窗口不再含 overlap-reuse 结构，改到 5m：
-    段 6 `down 46-50 break=53` 后段 7 `up 51-53` 起点 51 < break 53，
-    段 10 `down 68-72 break=75` 后段 11 `up 73-79` 起点 73 < break 75：
+    effective_only 后 00700 5m 的 overlap-reuse 锚点迁移到：
+    段 2 `down 6-8 break=11` 后段 3 `up 9-39` 起点 9 < break 11，
+    段 12 `down 98-102 break=105` 后段 13 `up 103-105` 起点 103 < break 105：
     这两处都是「下一段在上一段 break 之前复用重叠区域」的 overlap-reuse 锚点，
     对应 S3 重写/吸收/复用输出口径不得漂移。
     """
@@ -376,43 +375,43 @@ def test_00700_5m_practical_keeps_mixed_stop_reasons_with_overlap_reuse_anchors(
 
     practical_segments = identify_segments_from_csv(csv_path, termination_mode="practical")
 
-    assert len(practical_segments) >= 12
-    seg6 = practical_segments[6]
-    seg7 = practical_segments[7]
-    seg10 = practical_segments[10]
-    seg11 = practical_segments[11]
+    assert len(practical_segments) >= 14
+    seg2 = practical_segments[2]
+    seg3 = practical_segments[3]
+    seg12 = practical_segments[12]
+    seg13 = practical_segments[13]
 
-    # overlap-reuse #1: down 46-50 reverse_break break=53, next up 51-53 起点在 break 之前
-    assert seg6.direction.value == "down"
-    assert seg6.start_bi_id == 46
-    assert seg6.end_bi_id == 50
-    assert seg6.break_bi_id == 53
-    assert seg6.stop_reason == "reverse_break"
-    assert seg7.direction.value == "up"
-    assert seg7.start_bi_id == 51
-    assert seg7.start_bi_id == seg6.break_bi_id - 2
-    assert seg7.end_bi_id == 53
-    assert seg7.stop_reason == "reverse_break"
+    # overlap-reuse #1: down 6-8 reverse_break break=11, next up 9-39 起点在 break 之前
+    assert seg2.direction.value == "down"
+    assert seg2.start_bi_id == 6
+    assert seg2.end_bi_id == 8
+    assert seg2.break_bi_id == 11
+    assert seg2.stop_reason == "reverse_break"
+    assert seg3.direction.value == "up"
+    assert seg3.start_bi_id == 9
+    assert seg3.start_bi_id == seg2.break_bi_id - 2
+    assert seg3.end_bi_id == 39
+    assert seg3.stop_reason == "feature_sequence_fractal"
 
-    # overlap-reuse #2: down 68-72 reverse_break break=75, next up 73-79 起点在 break 之前
-    assert seg10.direction.value == "down"
-    assert seg10.start_bi_id == 68
-    assert seg10.end_bi_id == 72
-    assert seg10.break_bi_id == 75
-    assert seg10.stop_reason == "reverse_break"
-    assert seg11.direction.value == "up"
-    assert seg11.start_bi_id == 73
-    assert seg11.start_bi_id == seg10.break_bi_id - 2
-    assert seg11.break_bi_id == 80
-    assert seg11.stop_reason == "feature_sequence_gap_fractal"
+    # overlap-reuse #2: down 98-102 reverse_break break=105, next up 103-105 起点在 break 之前
+    assert seg12.direction.value == "down"
+    assert seg12.start_bi_id == 98
+    assert seg12.end_bi_id == 102
+    assert seg12.break_bi_id == 105
+    assert seg12.stop_reason == "reverse_break"
+    assert seg13.direction.value == "up"
+    assert seg13.start_bi_id == 103
+    assert seg13.start_bi_id == seg12.break_bi_id - 2
+    assert seg13.end_bi_id == 105
+    assert seg13.stop_reason == "reverse_break"
 
 
 def test_300124_5m_practical_keeps_mixed_stop_reasons_with_pending_middle_tail() -> None:
     """300124 5m：锁住混合 stop_reason 链与「历史中间段仍带 pending 停靠标签」。
 
-    数据刷新后 300124 1m 新窗口不再含中间 pending 段，改到 5m：
-    段 3 `up 18-28 same_direction_not_extending is_confirmed=False` 之后仍有
-    已确认段 4/5（down 31-37、up 38-42），锁住「中间 pending 段在后续段存在时
+    effective_only 后 300124 5m 的中间 pending 段迁移到：
+    段 7 `up 50-62 same_direction_not_extending is_confirmed=False` 之后仍有
+    已确认段 8/9（down 65-67、up 68-82），锁住「中间 pending 段在后续段存在时
     必须留在交替链中、不能被裁掉」的口径（否则该窗口会塌缩出错误的段集合）。
     """
     scenario = next(item for item in SCENARIOS if item["name"] == "300124-5m")
@@ -424,14 +423,15 @@ def test_300124_5m_practical_keeps_mixed_stop_reasons_with_pending_middle_tail()
 
     assert len(practical_segments) >= 9
     expected_head = [
-        ("down", 3, 9, "feature_sequence_fractal", True),
-        ("up", 10, 14, "reverse_break", True),
-        ("down", 15, 17, "reverse_break", True),
-        ("up", 18, 28, "same_direction_not_extending", False),
-        ("down", 31, 37, "reverse_break", True),
-        ("up", 38, 42, "reverse_break", True),
-        ("down", 43, 51, "feature_sequence_fractal", True),
-        ("up", 52, 58, "reverse_break", True),
+        ("down", 5, 11, "reverse_break", True),
+        ("up", 12, 18, "feature_sequence_gap_fractal", True),
+        ("down", 19, 21, "feature_sequence_fractal", True),
+        ("up", 22, 24, "feature_sequence_fractal", True),
+        ("down", 25, 29, "feature_sequence_fractal", True),
+        ("up", 30, 34, "reverse_break", True),
+        ("down", 35, 49, "reverse_break", True),
+        ("up", 50, 62, "same_direction_not_extending", False),
+        ("down", 65, 67, "feature_sequence_fractal", True),
     ]
     for segment, (direction, start, end, reason, confirmed) in zip(practical_segments, expected_head):
         assert segment.direction.value == direction

@@ -25,9 +25,12 @@ def test_00700_day_segments_keep_gap_and_tail_landmarks() -> None:
             segment.is_confirmed,
         )
         for segment in segments
-        if segment.start_bi_id in {18, 23}
+        if segment.stop_reason in {"feature_sequence_gap_fractal", "feature_sequence_gap_fractal_delayed_true"}
     ]
-    assert gap_landmarks == []
+    assert gap_landmarks == [
+        ("up", 23, 25, "feature_sequence_gap_fractal", True),
+        ("up", 51, 55, "feature_sequence_gap_fractal_delayed_true", True),
+    ]
 
     assert any(segment.stop_reason in {"feature_sequence_gap_fractal", "reverse_break"} for segment in segments)
 
@@ -51,12 +54,12 @@ def test_00700_15m_segments_keep_two_consecutive_gap_fractal_turns() -> None:
         for segment in segments
     ]
 
-    assert landmarks[0][:4] == ("down", 2, 8, "reverse_break")
+    assert landmarks[0][:4] == ("down", 2, 14, "reverse_break")
     assert any(reason == "feature_sequence_gap_fractal" for _, _, _, reason, _ in landmarks)
     assert any(reason == "reverse_break" for _, _, _, reason, _ in landmarks)
 
     tail = segments[-1]
     assert tail.direction.value == "up"
-    assert tail.start_bi_id == 19
-    assert tail.stop_reason == "same_direction_not_extending"
+    assert tail.start_bi_id == 33
+    assert tail.stop_reason == "exhausted_confirmed_bis"
     assert tail.is_confirmed is False

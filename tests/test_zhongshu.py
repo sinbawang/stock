@@ -212,7 +212,7 @@ def test_03690_5m_same_level_decomp_down_trend_and_expansion_detected_separately
     同级别分解不处理扩张 → ZS0/ZS1 按区间不重叠判 up，扩张由独立的「按中枢」层
     identify_expanded_zhongshus 单独检出，不改变同级别分解的类型；s6 为 ZS0 的
     走出段（第三类买点），ZS1=(s7,s8,s9)=[92.05,93.95] 复用 s6 为进入段，随后
-    s11 反向跌破 ZD 触发趋势反转，ZS2=(s12,s13,s14)=[85.7,88.75] 成型，最终走势
+    s11 反向跌破 ZD 触发趋势反转，ZS2=(s12,s13,s14)=[85.7,88.2] 成型，最终走势
     类型为「ZS0 盘整 + ZS1/ZS2 下跌趋势」。
     """
     path = (
@@ -229,7 +229,7 @@ def test_03690_5m_same_level_decomp_down_trend_and_expansion_detected_separately
     assert [(z.zs_id, z.zs_low, z.zs_high) for z in zhongshus] == [
         (0, 89.0, 91.35),
         (1, 92.05, 93.95),
-        (2, 85.7, 88.75),
+        (2, 85.7, 88.2),
     ]
     assert len(expanded) == 1
     assert expanded[0].sub_zs_ids == [0, 1]

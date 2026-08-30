@@ -142,7 +142,7 @@ def load_bis_from_csv(path: Path):
     bars = clean_bars(read_bars_from_csv(str(path)))
     normalized_bars = normalize_bars(bars)
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
-    return identify_bis(fractals, normalized_bars, pending_reverse_mode="any")
+    return identify_bis(fractals, normalized_bars, pending_reverse_mode="effective_only")
 
 
 def identify_segments_from_csv(

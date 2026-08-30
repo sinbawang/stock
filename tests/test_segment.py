@@ -56,7 +56,7 @@ NESTED_DEFERRED_INVALIDATED_ANCHORS = [
     ),
     (
         SAMPLE_01024_1M_CSV,
-        ["down", "up", "down", "up", "down", "up", "down", "up", "down", "up", "down"],
+        ["up", "down", "up", "down", "up", "down", "up", "down", "up", "down", "up"],
     ),
 ]
 

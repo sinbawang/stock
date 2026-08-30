@@ -20,30 +20,39 @@ SAMPLE_03690_5M_CSV = ROOT / "data" / "reports" / "03690" / "5m" / "analyze" / "
 SAMPLE_00700_1M_CSV = ROOT / "data" / "reports" / "00700" / "1m" / "analyze" / "00700_1m_20260814_to_20260828.csv"
 
 
-def test_00700_30m_segment_zhongshu_keeps_single_active_center_after_multiple_rewrites() -> None:
+def test_00700_30m_segment_zhongshu_keeps_two_centers_after_multiple_rewrites() -> None:
     segments = identify_segments_from_csv(SAMPLE_00700_30M_CSV)
 
     zhongshus = identify_zhongshu(segments, structure_level="segment")
     structure_state = build_structure_state([], zhongshus)
 
-    assert len(zhongshus) == 1
-    current = zhongshus[0]
-    assert current.structure_level == "segment"
-    assert current.entering_bi_id == 0
-    assert current.start_bi_id == 1
-    assert current.end_bi_id == 8
-    assert current.exit_bi_id is None
-    assert current.zs_low == 476.0
-    assert current.zs_high == 486.2
-    assert current.is_terminated is False
-    assert current.superseded_by_zs_id is None
-    assert current.is_reabsorbed_by_larger_expansion is False
+    assert len(zhongshus) == 2
+    first, second = zhongshus
+    assert first.structure_level == "segment"
+    assert first.entering_bi_id == 0
+    assert first.start_bi_id == 1
+    assert first.end_bi_id == 5
+    assert first.exit_bi_id == 6
+    assert first.zs_low == 476.0
+    assert first.zs_high == 486.2
+    assert first.is_terminated is True
+    assert first.superseded_by_zs_id is None
+    assert first.is_reabsorbed_by_larger_expansion is False
+    assert second.entering_bi_id == 6
+    assert second.start_bi_id == 7
+    assert second.end_bi_id == 13
+    assert second.exit_bi_id is None
+    assert second.zs_low == 425.4
+    assert second.zs_high == 447.0
+    assert second.is_terminated is False
+    assert second.superseded_by_zs_id is None
+    assert second.is_reabsorbed_by_larger_expansion is False
     assert structure_state["last_completed"] is None
-    assert structure_state["current_ongoing"]["start_zs_id"] == current.zs_id
-    assert structure_state["current_ongoing"]["end_zs_id"] == current.zs_id
-    assert structure_state["current_ongoing"]["confirmation_basis"] == "single_active_zhongshu"
+    assert structure_state["current_ongoing"]["start_zs_id"] == first.zs_id
+    assert structure_state["current_ongoing"]["end_zs_id"] == second.zs_id
+    assert structure_state["current_ongoing"]["confirmation_basis"] == "forming_next_same_level_zhongshu"
     assert structure_state["relationship"]["transition_state"] == "none"
-    assert structure_state["consumption_level"] == "pending"
+    assert structure_state["consumption_level"] == "confirmed"
 
 
 def test_03690_30m_segment_zhongshu_keeps_single_active_center_after_gap_restart() -> None:
@@ -65,7 +74,7 @@ def test_03690_30m_segment_zhongshu_keeps_single_active_center_after_gap_restart
     assert current.start_bi_id == 1
     assert current.end_bi_id == 8
     assert current.exit_bi_id is None
-    assert round(current.zs_low, 6) == 83.75
+    assert round(current.zs_low, 6) == 80.2
     assert round(current.zs_high, 6) == 89.45
     assert current.is_terminated is False
     assert current.superseded_by_zs_id is None
@@ -101,12 +110,11 @@ def test_300124_60m_mixed_overlap_restart_chain_does_not_leave_segment_level_gho
         for segment in segments
     ]
 
-    assert landmarks[:5] == [
-        ("down", 1, 3, 4, "feature_sequence_fractal"),
-        ("up", 4, 8, 11, "reverse_break"),
-        ("down", 9, 11, 12, "reverse_break"),
-        ("up", 12, 16, 17, "reverse_break"),
-        ("down", 17, 19, 20, "exhausted_confirmed_bis"),
+    assert landmarks == [
+        ("up", 2, 4, 5, "reverse_break"),
+        ("down", 5, 15, 16, "reverse_break"),
+        ("up", 16, 20, 21, "reverse_break"),
+        ("down", 21, 25, 26, "exhausted_confirmed_bis"),
     ]
     assert zhongshus == []
     assert structure_state["last_completed"] is None
@@ -132,11 +140,8 @@ def _assert_centers_no_reabsorbed(zhongshus, expected):
         assert zs.is_reabsorbed_by_larger_expansion is False
 
 
-def test_600900_1m_segment_zhongshu_keeps_single_active_center_without_false_reabsorption() -> None:
-    """600900 1m（首选级别）：数据刷新后该窗口现为单个未终结标准中枢，不得误标 reabsorbed。
-
-    原「两不相交中枢」场景已不在新窗口（双中枢不吸收由 03690 5m / 09988 1m 继续覆盖）。
-    """
+def test_600900_1m_segment_zhongshu_keeps_two_centers_without_false_reabsorption() -> None:
+    """600900 1m（首选级别）：effective_only 后该窗口现为两个标准中枢，不得误标 reabsorbed。"""
     segments = identify_segments_from_csv(SAMPLE_600900_1M_CSV)
 
     zhongshus = identify_zhongshu(segments, structure_level="segment")
@@ -144,16 +149,14 @@ def test_600900_1m_segment_zhongshu_keeps_single_active_center_without_false_rea
     _assert_centers_no_reabsorbed(
         zhongshus,
         [
-            (0, 1, 18, 27.96, 28.24, None),
+            (0, 1, 23, 27.97, 28.2, 24),
+            (24, 25, 27, 28.2, 28.35, None),
         ],
     )
 
 
-def test_09988_1m_segment_zhongshu_keeps_two_disjoint_centers_without_false_reabsorption() -> None:
-    """09988 1m（首选级别）：数据刷新后该窗口为两个区间不相交的标准中枢，不得误标 reabsorbed。
-
-    原「四中枢」场景已不在新窗口；双中枢不吸收不变式仍覆盖（此处 zs0 低 123.4 > zs1 高 117.8）。
-    """
+def test_09988_1m_segment_zhongshu_keeps_disjoint_centers_without_false_reabsorption() -> None:
+    """09988 1m（首选级别）：effective_only 后该窗口为三个区间不相交的标准中枢，不得误标 reabsorbed。"""
     segments = identify_segments_from_csv(SAMPLE_09988_1M_CSV)
 
     zhongshus = identify_zhongshu(segments, structure_level="segment")
@@ -161,19 +164,19 @@ def test_09988_1m_segment_zhongshu_keeps_two_disjoint_centers_without_false_reab
     _assert_centers_no_reabsorbed(
         zhongshus,
         [
-            (4, 5, 7, 123.4, 125.6, None),
-            (10, 11, 13, 115.6, 117.8, None),
+            (6, 7, 9, 126.6, 128.3, None),
+            (11, 12, 15, 112.2, 114.3, None),
+            (16, 17, 21, 116.0, 116.4, None),
         ],
     )
 
 
-def test_03690_5m_segment_zhongshu_keeps_two_disjoint_centers_without_false_reabsorption() -> None:
-    """03690 5m（首选级别）：两个区间不相交的标准中枢，不得误标 reabsorbed。
+def test_03690_5m_segment_zhongshu_keeps_disjoint_centers_without_false_reabsorption() -> None:
+    """03690 5m（首选级别）：三个区间不相交的标准中枢，不得误标 reabsorbed。
 
     s6 同向突破 ZG 且下一段 s7 不回中枢 → 为 ZS0 的走出段（第三类买点）；
     ZS1 复用 s6 为进入段，区间 [92.05, 93.95]，随后 s11 反向跌破 ZD 触发趋势
-    反转（无走出段）。当前回归窗口（pending_reverse_mode=any）s12/s13/s14
-    三段无公共重叠，故不再形成第三个中枢。
+    反转（无走出段）。effective_only 后 s12/s13/s14 形成 ZS2=[85.7, 88.75]。
     """
     segments = identify_segments_from_csv(SAMPLE_03690_5M_CSV)
 
@@ -182,24 +185,20 @@ def test_03690_5m_segment_zhongshu_keeps_two_disjoint_centers_without_false_reab
     _assert_centers_no_reabsorbed(
         zhongshus,
         [
-            (0, 1, 5, 89.0, 91.95, 6),
+            (0, 1, 5, 89.0, 91.35, 6),
             (6, 7, 10, 92.05, 93.95, None),
+            (11, 12, 15, 85.7, 88.75, None),
         ],
     )
 
 
-def test_00700_1m_segment_zhongshu_keeps_single_active_center_without_false_reabsorption() -> None:
-    """00700 1m（首选级别）：数据刷新后该窗口为单个未终结标准中枢，不得误标 reabsorbed。"""
+def test_00700_1m_segment_zhongshu_has_no_center_after_data_refresh() -> None:
+    """00700 1m（首选级别）：effective_only 后该窗口只剩 2 段，不再形成 segment 级中枢。"""
     segments = identify_segments_from_csv(SAMPLE_00700_1M_CSV)
 
     zhongshus = identify_zhongshu(segments, structure_level="segment")
 
-    _assert_centers_no_reabsorbed(
-        zhongshus,
-        [
-            (0, 1, 10, 437.6, 450.4, None),
-        ],
-    )
+    assert zhongshus == []
 
 
 def _segment_landmarks(segments):
@@ -278,7 +277,7 @@ def test_first_standard_zhongshu_identity_is_stable_across_rebuilds() -> None:
     """首个标准中枢的进入段 / 本体区间 / 离开段边界必须跨重算稳定。
 
     这是 ZS1.3 “首个中枢成立位置不漂移”的 review 锚点：锁住 00700 30m
-    首个 segment 级标准中枢的进入段、本体区间与未终结状态。
+    首个 segment 级标准中枢的进入段、本体区间与已终结状态。
     """
     identities = []
     for _ in range(3):
@@ -288,7 +287,7 @@ def test_first_standard_zhongshu_identity_is_stable_across_rebuilds() -> None:
         identities.append(_first_zhongshu_identity(zhongshus[0]))
 
     assert identities == [
-        (0, 1, 8, 476.0, 486.2, None, False),
-        (0, 1, 8, 476.0, 486.2, None, False),
-        (0, 1, 8, 476.0, 486.2, None, False),
+        (0, 1, 5, 476.0, 486.2, 6, True),
+        (0, 1, 5, 476.0, 486.2, 6, True),
+        (0, 1, 5, 476.0, 486.2, 6, True),
     ]

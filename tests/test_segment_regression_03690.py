@@ -26,7 +26,7 @@ def test_03690_day_segments_keep_current_landmarks() -> None:
     assert landmarks
     assert landmarks[0][:4] == ("up", 0, 2, "reverse_break")
     assert any(reason == "reverse_break" for _, _, _, reason, _ in landmarks)
-    assert landmarks[-1][3] in {"exhausted_confirmed_bis", "same_direction_not_extending", "transition_pending"}
+    assert landmarks[-1] == ("down", 105, 113, "reverse_break", True)
 
 
 def test_03690_30m_segments_keep_gap_landmarks_and_tail() -> None:
@@ -46,15 +46,15 @@ def test_03690_30m_segments_keep_gap_landmarks_and_tail() -> None:
 
     assert landmarks == [
         ("up", 0, 2, "feature_sequence_gap_fractal", True, (1, 22)),
-        ("down", 3, 11, "reverse_break", True, (22, 99)),
-        ("up", 12, 14, "reverse_break", True, (99, 116)),
-        ("down", 15, 21, "reverse_break", True, (116, 170)),
-        ("up", 22, 24, "feature_sequence_fractal", True, (170, 191)),
-        ("down", 25, 27, "reverse_break", True, (191, 211)),
-        ("up", 28, 30, "reverse_break", True, (211, 249)),
-        ("down", 31, 49, "feature_sequence_fractal", True, (249, 457)),
-        ("up", 50, 68, "feature_sequence_fractal", True, (457, 637)),
-        ("down", 69, 79, "exhausted_confirmed_bis", False, (637, 728)),
+        ("down", 3, 7, "reverse_break", True, (22, 57)),
+        ("up", 8, 16, "reverse_break", True, (57, 116)),
+        ("down", 17, 27, "reverse_break", True, (116, 170)),
+        ("up", 28, 30, "feature_sequence_fractal", True, (170, 191)),
+        ("down", 31, 33, "reverse_break", True, (191, 211)),
+        ("up", 34, 40, "reverse_break", True, (211, 249)),
+        ("down", 41, 63, "reverse_break", True, (249, 466)),
+        ("up", 64, 86, "feature_sequence_fractal", True, (466, 637)),
+        ("down", 87, 99, "exhausted_confirmed_bis", False, (637, 753)),
     ]
 
 
@@ -66,12 +66,12 @@ def test_03690_30m_long_up_segment_keeps_current_restart_anchor() -> None:
     following = segments[9]
 
     assert long_up.direction.value == "up"
-    assert long_up.end_bi_id == 68
-    assert long_up.break_bi_id == 69
+    assert long_up.end_bi_id == 86
+    assert long_up.break_bi_id == 87
     assert long_up.stop_reason == "feature_sequence_fractal"
     assert following.direction.value == "down"
     assert following.start_bi_id == long_up.break_bi_id
-    assert following.start_bi_id == 69
+    assert following.start_bi_id == 87
 
 
 def test_03690_15m_segments_keep_gap_turns_and_preprocess_tail() -> None:
@@ -89,7 +89,7 @@ def test_03690_15m_segments_keep_gap_turns_and_preprocess_tail() -> None:
     ]
 
     assert landmarks
-    assert any(reason == "feature_sequence_gap_fractal" for _, _, _, reason, _ in landmarks)
+    assert landmarks[0][:4] == ("up", 1, 3, "reverse_break")
     assert any(reason == "feature_sequence_fractal" for _, _, _, reason, _ in landmarks)
     assert landmarks[-1][3] in {"no_followup_same_direction", "exhausted_confirmed_bis", "same_direction_not_extending"}
 

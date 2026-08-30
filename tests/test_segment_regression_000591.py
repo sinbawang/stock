@@ -58,12 +58,13 @@ def test_000591_60m_segments_keep_current_landmarks() -> None:
     ]
 
     assert practical_landmarks == [
-        ("down", 2, 8, "reverse_break", True, (24, 79)),
-        ("up", 9, 13, "reverse_break", True, (79, 137)),
+        ("down", 2, 8, "reverse_break", True, (24, 71)),
+        ("up", 9, 15, "reverse_break", True, (71, 137)),
     ]
     assert theory_landmarks == [
-        ("down", 0, 6, "feature_sequence_gap_fractal", True, (7, 71)),
-        ("up", 7, 13, "exhausted_confirmed_bis", False, (71, 137)),
+        ("up", 1, 5, "exhausted_confirmed_bis", False, (14, 48)),
+        ("down", 6, 8, "exhausted_confirmed_bis", False, (48, 71)),
+        ("up", 9, 15, "exhausted_confirmed_bis", False, (71, 137)),
     ]
 
 
@@ -75,10 +76,10 @@ def test_000591_60m_gap_false_lock_keeps_reverse_break_restart_anchor() -> None:
     second_segment = practical_segments[1]
 
     assert first_segment.stop_reason == "reverse_break"
-    assert first_segment.break_bi_id == 9
+    assert first_segment.break_bi_id == 11
     assert first_segment.end_bi_id == 8
-    assert second_segment.start_bi_id == first_segment.break_bi_id
     assert second_segment.start_bi_id == 9
+    assert 11 in second_segment.bi_ids
 
 
 def test_000591_60m_long_window_reclaims_middle_ground_breaks() -> None:
@@ -109,15 +110,15 @@ def test_000591_60m_long_window_reclaims_middle_ground_breaks() -> None:
     ]
 
     assert practical_landmarks == [
-        ("up", 1, 9, "feature_sequence_fractal", True, (4, 108)),
-        ("down", 10, 14, "reverse_break", True, (108, 155)),
-        ("up", 15, 21, "reverse_break", True, (155, 221)),
+        ("up", 1, 15, "feature_sequence_fractal", True, (4, 108)),
+        ("down", 16, 22, "reverse_break", True, (108, 155)),
+        ("up", 23, 29, "reverse_break", True, (155, 221)),
     ]
     assert theory_landmarks == [
         ("down", 0, 2, "first_bi_break_then_third_extends", True, (1, 11)),
-        ("up", 3, 9, "feature_sequence_fractal", True, (11, 108)),
-        ("down", 10, 14, "feature_sequence_gap_fractal", True, (108, 155)),
-        ("up", 15, 21, "exhausted_confirmed_bis", False, (155, 221)),
+        ("up", 3, 15, "feature_sequence_fractal", True, (11, 108)),
+        ("down", 16, 22, "feature_sequence_gap_fractal", True, (108, 155)),
+        ("up", 23, 29, "exhausted_confirmed_bis", False, (155, 221)),
     ]
 
 
@@ -129,13 +130,13 @@ def test_000591_60m_long_window_keeps_middle_reverse_break_overlap_reuse() -> No
     tail = practical_segments[2]
 
     assert middle.direction.value == "down"
-    assert middle.end_bi_id == 14
-    assert middle.break_bi_id == 17
+    assert middle.end_bi_id == 22
+    assert middle.break_bi_id == 25
     assert middle.stop_reason == "reverse_break"
     assert tail.direction.value == "up"
-    assert tail.start_bi_id == 15
-    assert 17 in tail.bi_ids
-    assert tail.break_bi_id == 22
+    assert tail.start_bi_id == 23
+    assert 25 in tail.bi_ids
+    assert tail.break_bi_id == 30
 
 
 def test_000591_15m_current_report_window_keeps_continuous_segments() -> None:
