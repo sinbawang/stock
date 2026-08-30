@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import csv
+from functools import lru_cache
+import hashlib
 import inspect
 import json
 import os
@@ -93,6 +95,37 @@ INTRADAY_SOURCE_PROBE_ROWS = 1200
 M1_BAR_DEFAULT = 3500
 BAR_COUNT_POLICY = "feasible_maximum"
 HK_REUSABLE_5M_MIN_ROWS = 480
+
+# tech.json 内容决定源码集合；这些文件变化时，已缓存的 5m/1m 报告应失效重算。
+TECH_REPORT_SOURCE_ROOTS = (
+    SRC / "chanlun",
+    SRC / "report_json.py",
+    SRC / "storage_layout.py",
+    SCRIPTS / "batch_prepare_chanlun_reports.py",
+    SCRIPTS / "run_hk_60m_chanlun_report.py",
+    SCRIPTS / "export_structures_with_boxes.py",
+)
+
+
+@lru_cache(maxsize=1)
+def compute_tech_report_fingerprint() -> str:
+    """返回决定 tech.json 内容的源码稳定指纹（SHA-256）。"""
+    hasher = hashlib.sha256()
+    files: set[Path] = set()
+    for base in TECH_REPORT_SOURCE_ROOTS:
+        if base.is_dir():
+            files.update(path for path in base.rglob("*.py") if "__pycache__" not in path.parts)
+        elif base.is_file():
+            files.add(base)
+    for path in sorted(files, key=lambda p: str(p).replace("\\", "/")):
+        relative = str(path.relative_to(ROOT)).replace("\\", "/")
+        hasher.update(relative.encode("utf-8"))
+        hasher.update(b"\x00")
+        hasher.update(path.read_bytes())
+        hasher.update(b"\x00")
+    return hasher.hexdigest()
+
+
 INTRADAY_TIMEFRAME_SPECS = (
     ("60m", "60", "60M"),
     ("30m", "30", "30M"),
@@ -1055,6 +1088,7 @@ def export_case(
             "data_fetch": data_fetch,
             "pending_reverse_mode": pending_reverse_mode,
             "zhongshu_level": "segment",
+            "code_fingerprint": compute_tech_report_fingerprint(),
             "structure": {
                 "primary_zhongshu_level": "segment",
                 "latest_zhongshu": latest_zhongshu,
@@ -1234,6 +1268,8 @@ def _reuse_existing_hk_5m_case(
         return None
     if str(payload.get("zhongshu_level") or "segment") != zhongshu_level:
         return None
+    if str(payload.get("code_fingerprint") or "") != compute_tech_report_fingerprint():
+        return None
 
     data_fetch = payload.get("data_fetch") or {}
     if int(data_fetch.get("actual_bar_count") or 0) < len(rows):
@@ -1297,6 +1333,8 @@ def _reuse_existing_exact_case(
     if str(payload.get("pending_reverse_mode") or "") != pending_reverse_mode:
         return None
     if str(payload.get("zhongshu_level") or "segment") != zhongshu_level:
+        return None
+    if str(payload.get("code_fingerprint") or "") != compute_tech_report_fingerprint():
         return None
 
     data_fetch = payload.get("data_fetch") or {}
