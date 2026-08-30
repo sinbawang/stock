@@ -189,6 +189,7 @@ def _generate_all_timeframe_charts(
     zhongshu_level: str = "segment",
     tech_timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
     export_structure_images: bool = True,
+    force_regenerate: bool = False,
 ) -> None:
     requested_timeframes = tuple(dict.fromkeys(tech_timeframes))
     if not requested_timeframes:
@@ -227,6 +228,8 @@ def _generate_all_timeframe_charts(
         ]
         if not export_structure_images:
             command.append("--no-export-structure-images")
+        if force_regenerate:
+            command.append("--force-regenerate")
         _run_command(command)
 
 
@@ -313,6 +316,7 @@ def generate_bundle(
     zhongshu_level: str = "segment",
     tech_timeframes: tuple[str, ...] = ("day", "30m", "5m", "1m"),
     export_structure_images: bool = True,
+    force_regenerate: bool = False,
 ) -> GeneratedBundle:
     requested_timeframes = set(tech_timeframes)
     run_primary_technical = PRIMARY_TECHNICAL_TIMEFRAME in requested_timeframes
@@ -375,6 +379,7 @@ def generate_bundle(
         zhongshu_level=zhongshu_level,
         tech_timeframes=tech_timeframes,
         export_structure_images=export_structure_images,
+        force_regenerate=force_regenerate,
     )
     print(f"timing {holding.symbol} extra_charts seconds={time.perf_counter() - started_charts:.2f}", flush=True)
 

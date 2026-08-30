@@ -163,6 +163,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--snapshot-stamp", default=None, help="Optional explicit snapshot stamp such as 20260531_100500")
     parser.add_argument("--latest-only", action="store_true", help="Only write latest/ and skip snapshots/<stamp>")
     parser.add_argument("--skip-regenerate", action="store_true", help="Skip regenerating holdings reports and charts")
+    parser.add_argument(
+        "--force-regenerate",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Ignore existing report reuse and force-regenerate all technical timeframes.",
+    )
     parser.add_argument("--skip-build", action="store_true", help="Skip rebuilding the publish bundle")
     parser.add_argument("--skip-upload", action="store_true", help="Skip CloudBase upload")
     parser.add_argument(
@@ -457,6 +463,7 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                     zhongshu_level=args.zhongshu_level,
                     tech_timeframes=tuple(args.tech_timeframes),
                     export_structure_images=bool(args.export_structure_images),
+                    force_regenerate=args.force_regenerate,
                 )
                 print(
                     f"generated {index}/{len(holdings)} {holding.market} {holding.symbol} {holding.name} "
@@ -512,6 +519,7 @@ def regenerate_holdings(args: argparse.Namespace) -> dict[str, object]:
                     zhongshu_level=args.zhongshu_level,
                     tech_timeframes=tuple(args.tech_timeframes),
                     export_structure_images=bool(args.export_structure_images),
+                    force_regenerate=args.force_regenerate,
                 ): (idx, holding, time.perf_counter())
                 for idx, holding in enumerate(holdings, start=1)
             }

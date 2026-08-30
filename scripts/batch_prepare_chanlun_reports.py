@@ -246,6 +246,12 @@ def parse_args() -> argparse.Namespace:
         help="需要生成的技术级别；默认生成 day/30m/5m/1m。",
     )
     parser.add_argument(
+        "--force-regenerate",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="忽略已有报告复用判定，强制重新生成所有技术级别报告。",
+    )
+    parser.add_argument(
         "--use-local-store",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -1325,6 +1331,7 @@ def _prepare_security_result(
     incremental_overlap_bars: int,
     local_store_root: Path | None,
     export_structure_images: bool,
+    force_regenerate: bool = False,
 ) -> PreparedSecurityResult:
     day_case: dict[str, Path] = {}
     m60_case: dict[str, Path] = {}
@@ -1413,7 +1420,7 @@ def _prepare_security_result(
         )
         exported = None
         reused_existing_case = False
-        if timeframe == "5m":
+        if timeframe == "5m" and not force_regenerate:
             exported = _reuse_existing_hk_5m_case(
                 security,
                 rows,
@@ -1423,7 +1430,7 @@ def _prepare_security_result(
             if exported is not None:
                 reused_existing_case = True
                 print(f"reuse {security.symbol} 5m existing_effective_only_case", flush=True)
-        if exported is None and timeframe in {"5m", "1m"}:
+        if exported is None and timeframe in {"5m", "1m"} and not force_regenerate:
             exported = _reuse_existing_exact_case(
                 security,
                 timeframe,
@@ -1488,6 +1495,7 @@ def run_batch_prepare(
     incremental_overlap_bars: int = 120,
     local_store_root: Path | None = None,
     export_structure_images: bool = True,
+    force_regenerate: bool = False,
     parallelism: int = min(4, max(1, os.cpu_count() or 1)),
 ) -> BatchPrepareResult:
     local_store_read_only = False
@@ -1526,6 +1534,7 @@ def run_batch_prepare(
                 incremental_overlap_bars=incremental_overlap_bars,
                 local_store_root=local_store_root,
                 export_structure_images=export_structure_images,
+                force_regenerate=force_regenerate,
             )
     else:
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
@@ -1553,6 +1562,7 @@ def run_batch_prepare(
                     incremental_overlap_bars=incremental_overlap_bars,
                     local_store_root=local_store_root,
                     export_structure_images=export_structure_images,
+                    force_regenerate=force_regenerate,
                 ): index
                 for index, security in enumerate(securities)
             }
@@ -1621,6 +1631,7 @@ def main() -> None:
         incremental_overlap_bars=args.incremental_overlap_bars,
         local_store_root=Path(args.local_store_root) if args.local_store_root else None,
         export_structure_images=bool(args.export_structure_images),
+        force_regenerate=args.force_regenerate,
         parallelism=args.parallelism,
     )
 
