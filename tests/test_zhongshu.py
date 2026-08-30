@@ -284,7 +284,19 @@ class TestIdentifyZhongshu:
             _bi(3, BiDirection.DOWN, 103, 102),
             _bi(4, BiDirection.UP, 112, 101),
         ]
-        assert identify_zhongshu(bis) == []
+
+        result = identify_zhongshu(bis)
+
+        # i=0 以 bi0 为进入段、与本体区间 [102,103] 无交集 → 不成立；
+        # i=1 以 bi1 为进入段（与本体重叠）成立，故结果只含进入段为 bi1 的中枢。
+        assert len(result) == 1
+        assert result[0].entering_bi_id == 1
+        assert result[0].start_bi_id == 2
+        assert result[0].end_bi_id == 4
+        assert result[0].zs_low == 102
+        assert result[0].zs_high == 103
+        assert result[0].exit_bi_id is None
+        assert result[0].is_terminated is False
 
     def test_fixed_zone_does_not_recompute_on_extension(self):
         bis = [
@@ -365,7 +377,18 @@ class TestIdentifyZhongshu:
             _segment(4, BiDirection.UP, 112, 101),
         ]
 
-        assert identify_zhongshu(segments, structure_level="segment") == []
+        result = identify_zhongshu(segments, structure_level="segment")
+
+        # i=0 以 segment0 为进入段、与本体区间 [102,103] 无交集 → 不成立；
+        # i=1 以 segment1 为进入段（与本体重叠）成立。
+        assert len(result) == 1
+        assert result[0].entering_bi_id == 1
+        assert result[0].start_bi_id == 2
+        assert result[0].end_bi_id == 4
+        assert result[0].zs_low == 102
+        assert result[0].zs_high == 103
+        assert result[0].exit_bi_id is None
+        assert result[0].is_terminated is False
 
     def test_segment_zhongshu_exit_failure_merges_back_into_body(self):
         segments = [

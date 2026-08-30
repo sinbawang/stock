@@ -168,7 +168,7 @@ def identify_zhongshu(items: List[Bi | Segment], *, structure_level: str = "bi")
 
     # 从前往后扫描：items[i] 视为进入单元，中枢本体起始候选为 items[i+1:i+4]
     i = 0
-    while i < len(items) - 4:
+    while i < len(items) - 3:
         entering_item = items[i]
         internal_items = items[i + 1:i + 4]
         if not _has_alternating_directions(internal_items):
