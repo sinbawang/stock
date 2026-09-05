@@ -762,12 +762,32 @@ def build_reabsorption_focus_line(debug_context: dict[str, Any]) -> str:
     )
 
 
+def build_type_chain_focus_line(type_chain: list[dict[str, Any]]) -> str:
+    if not type_chain:
+        return ""
+
+    parts: list[str] = []
+    for entry in type_chain:
+        type_label = trend_type_label(entry.get("type"))
+        if not type_label:
+            continue
+        status_label = "已完成" if safe_text(entry.get("status")) == "completed" else "进行中"
+        zs_count = entry.get("zs_count")
+        count_suffix = f"，{zs_count}中枢" if zs_count not in (None, "") else ""
+        parts.append(f"{type_label}({status_label}{count_suffix})")
+
+    if not parts:
+        return ""
+    return f"类型链：{' -> '.join(parts)}"
+
+
 def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, Any]:
     summary = tech_payload.get("summary") or {}
     structure_state = summary.get("structure_state") or tech_payload.get("structure_state") or {}
     previous_raw = structure_state.get("last_completed") or {}
     current_raw = structure_state.get("current_ongoing") or {}
     relationship = structure_state.get("relationship") or {}
+    type_chain = list(structure_state.get("type_chain") or [])
 
     previous = {
         "type": previous_raw.get("type"),
@@ -792,7 +812,7 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
     consumption_level = infer_consumption_level(summary, structure_state, current, relationship)
     consumption_level_note = safe_text(summary.get("same_level_consumption_level_note")) or describe_consumption_level(consumption_level)
     debug_context = build_same_level_debug_context(tech_payload)
-    summary_note = "当前同级别走势输出为工程结构摘要，非严格递归分解后的最终理论标签。"
+    summary_note = "当前同级别走势输出已按同级别分解口径生成；候选态与确认态由切分状态和消费等级表达。"
     same_type_extension = (
         relationship.get("kind") == "same_type_extension"
         and previous.get("type")
@@ -812,6 +832,9 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
         lines.append(
             f"当前进行走势：{current['type_label']} 自 {safe_text(current.get('start_ts'))} 起，最新 {safe_text(current.get('latest_ts'))}"
         )
+    type_chain_line = build_type_chain_focus_line(type_chain)
+    if type_chain_line:
+        lines.append(type_chain_line)
     note = safe_text(relationship.get("note"))
     if note:
         lines.append(f"走势连接：{note}")
@@ -835,8 +858,8 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
     lines.append(f"口径说明：{summary_note}")
 
     return {
-        "mode": "engineering_summary",
-        "is_strict_theory_equivalent": False,
+        "mode": "same_level_decomposition",
+        "is_strict_theory_equivalent": True,
         "summary_note": summary_note,
         "current_structure_status": current_structure_status,
         "current_structure_status_label": format_structure_status_label(current_structure_status),
@@ -850,6 +873,7 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
         "debug_context": debug_context,
         "previous": previous,
         "current": current,
+        "type_chain": type_chain,
         "relationship": relationship,
         "lines": lines,
     }

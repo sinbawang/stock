@@ -11,6 +11,7 @@ applyTo: src/chanlun/analysis.py, docs/chanlun/trend-type-decomposition.md
 
 它承接：
 
+- [same-level-decomposition-spec.md](same-level-decomposition-spec.md)：同级别分解的理论口径（应然）。
 - [trend-type-decomposition.md](trend-type-decomposition.md)：同级别走势类型自动分解主链（TD1，工程唯一分解）。
 - [zhongshu-dual-track-spec.md](zhongshu-dual-track-spec.md)：多义性的消费降级 gate。
 

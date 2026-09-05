@@ -223,13 +223,19 @@
 
 - `ZS2.3a 已完成`：首版 machine-readable 转场字段 `relationship.transition_state` 已落地，并已贯通 `tech.json`、报告、小程序卡片、overview、index/group 聚合层与 focused regression。
 - `ZS2.3b 阶段性完成`：`structure_state.consumption_level` 首版已落地，并已镜像到 `signals.same_level_consumption_level`、`tech.json root` 与 `summary.same_level_consumption_level*`；miniapp bundle 的 `same_level_decomposition`、focus lines、overview bullet、index/group 聚合字段，以及 `build_advice(...)` / `analyze_current_state(...)` 的主文本判定与展示，也已开始优先读取该字段。当前 advice 主文案也已改成直接表述“待确认消费 / 已确认消费”，不再把 `same_level_decomposition_mode` 当主语义字段；standalone 60m / wechat / mixed-report 技术产物的 root `tech.json` 也都已补出 `same_level_consumption_level`，并已有 A/H mixed-report 与 CN/HK report/wechat 60m focused regression 锁住这些独立产物链。`combined-analysis-output-spec`、`theory-implementation-consumer-diff-matrix`、`zhongshu-consumer-display-examples` 这三份核心 consumer/spec 契约页，以及 `zhongshu-dual-track-spec`、`segment-review-entry`、`sample-case-pack-2026-08-v2` 这批外围消费示例页，也都已切到“`same_level_consumption_level` 主消费、`same_level_decomposition_mode` 仅兼容回退”的正式口径。旧 payload fallback regression 继续锁住缺少该字段时仍能从 `same_level_decomposition_mode / current_structure_status` 稳定回退。当前剩余事项更适合归到后续清理/扩展，而不再阻塞 `ZS2.3b` 本阶段收口。
-- `ZS2.3` 整体已可标完成：此前暂不标完成的原因是复杂 `reclaim / rewrite / gap` 交界尚未收口，现 `ZS3.1 / ZS3.2 / ZS3.3` 均已收口，该阻塞已解除；`transition_state` / `consumption_level` 转场真值不再受上游边界重算影响。剩余 `candidate_new_type` 真实样本缺口归 `ZS6` review 样本项，不阻塞本阶段。
+- `ZS2.3` 整体已可标完成：此前暂不标完成的原因是复杂 `reclaim / rewrite / gap` 交界尚未收口，现 `ZS3.1 / ZS3.2 / ZS3.3` 均已收口，该阻塞已解除；`transition_state` / `consumption_level` 转场真值不再受上游边界重算影响。`2026-09-05` 又补 `09988 1m down ongoing` 与 `03690 5m completed_then_new_type` 两条真实 `type_chain` regression，剩余 `candidate_new_type` 真实样本缺口归 `ZS6` review 样本项，不阻塞本阶段。
 
 当前判定：
 
 - `ZS2.3` 主实现与消费接线已收口，不再把新增展示层接线当 blocker。
 - 剩余事项只保留少量兼容清理与增量 regression；`candidate_new_type` 真实样本缺口继续由 `ZS6.3` 样本绑定项跟踪。
-- `2026-08-20` 已对 `data/reports/**/*.json` 做真实样本扫描：当前未发现满足“`last_completed` 已存在、`relationship.kind=completed_then_new_type_ongoing`、且 `current_ongoing.zs_count_so_far=1`”的正式 `candidate_new_type` 样本。现有 `HK.01339 1m`、`03690 1m`、`06088 1m` 等最接近锚点，当前都已落在 `ongoing_new_type` 侧，因为当前新段内已经形成 `>=2` 个同级别中枢。
+- `2026-08-20` 已对 `data/reports/**/*.json` 做真实样本扫描：正式落盘产物里当时未发现满足“`last_completed` 已存在、`relationship.kind=completed_then_new_type_ongoing`、且 `current_ongoing.zs_count_so_far=1`”的 `candidate_new_type` 样本。
+- `2026-09-05` 曾从旧 `06088 1m` 窗口提取过 `candidate_new_type` 历史 cutoff 原型；后续数据刷新后该 live 锚点已漂移，当前以 `build/scan_real_candidate_new_type_samples.py` 继续搜寻新的稳定样本。剩余缺口已收敛为“当前 live 数据里是否继续补出新的同类样本广度”。
+- `2026-09-05` 已补样本扫描工具：`build/scan_real_candidate_new_type_samples.py` 可批量扫描 `data/reports/*/{1m,5m,30m,day}/analyze/*.csv` 的 cutoff，直接寻找真实 `candidate_new_type` 窗口，供 `ZS6` 后续扩样本使用；当前已增强为 `exact_candidate_matches + near_matches` 双输出，旧 `06088 1m` 锚点漂移后，该工具已成为主入口。
+- 当前扫描快照见 `build/scan_real_candidate_new_type_samples_latest.json`：`1m/5m` live 产物里暂无 `exact_candidate_matches`，最接近的 `near_matches` 为 `000651 5m`、`002555 1m/5m`、`00981 1m`、`03690 5m`、`06088 1m` 等 `completed_then_new_type_ongoing + ongoing_new_type` 组合。当前更高 ROI 的动作是对这些 near live 样本做历史 cutoff 回放，而不是继续把当前 live `tech.json` 误当 strict `candidate_new_type`。
+- 同一快照现已补 `recommended_probe_targets`：当前首批建议回放目标依次为 `000651 5m`、`002555 1m`、`002555 5m`、`00981 1m`、`03690 5m`、`06088 1m`、`01024 5m`，供 `ZS6` 后续按 ROI 排序回放。
+- 已确认 `000651 5m` 的历史回放结果：`exact_candidate_new_type` 与 `new_type_zs1` 都未命中（`matches=0`）；因此当前下一优先级 live 回放目标已上移为 `002555 1m`。
+- 已确认 `002555 1m` 的历史回放结果：`exact_candidate_new_type` 与 `new_type_zs1` 都未命中（`matches=0`）；因此当前下一优先级 live 回放目标已上移为 `002555 5m`。
 - `2026-08-20` 补充：`candidate_new_type` 路径已新增静态扫描 + 历史 cutoff 回放探针，但当前扩窗后的 `00175 1m/5m` 也未命中严格窗口；该项暂降为低优先级样本缺口。下一主入口改为 `build/scan_real_1m_prebreakout_samples.py`，优先批量回放现有 `1m analyze CSV` 寻找真实 `pre_breakout` 落盘窗口。
 
 `ZS2.3 / ZS3` 下一阶段最小任务：
@@ -528,7 +534,7 @@
 
 - `serialize_zhongshu` / `export_zhongshus` 已按 `structure_level` 双命名空间输出：segment 级补 `*_segment_id` 别名，bi 级保留 `*_bi_id`，不再让消费端靠上下文猜。
 - `normalize_chart_zhongshu_records` 已在发布链路按 `structure_level` 剔除错命名空间键，segment 记录只保留 `*_segment_id`、bi 记录只保留 `*_bi_id`，并由 `tests/test_build_miniapp_publish_bundle.py` 锁定。
-- `detail.json` / `summary` / miniapp 卡片已统一外露 `same_level_consumption_level` 主入口，旧 `same_level_decomposition.*` 分组仅作兼容回退。
+- `detail.json` / `summary` / miniapp 卡片已统一外露 `same_level_consumption_level` 主入口；`same_level_decomposition.*` 分组现已升级为正式同级别分解视图（含 `transition_state`、`current_structure_status`、`type_chain`），仅 `same_level_decomposition_mode` 仍保留兼容回退语义。
 - 文本层 confirmed 风险已由 `build_advice(...)` / `analyze_current_state(...)` 改为优先读 `same_level_consumption_level`，不再把“预警前态 / 辅助口径 / 节奏偏弱”偷换成强确认结论。
 
 当前建议的消费收口顺序：
@@ -1088,7 +1094,7 @@ gate 收口规则：
 
 ## 当前 blocker
 
-- 真实 `candidate_new_type` 样本仍缺（已确认是样本缺口，非代码缺口）；真实 successor-chain 主锚点 `HK.01339 1m` 已由 publish regression 锁定为 `ongoing_new_type`。
+- 真实 `candidate_new_type` 当前 live 主锚点仍在补：旧 `HK.06088 1m @ 2026-08-25 14:09` cutoff 已随数据刷新漂移，当前剩余的是重新补出新的 live 锚点与样本广度；扫描主入口为 `build/scan_real_candidate_new_type_samples.py`。
 - 真实 `reabsorbed lineage` cutoff 样本为**确定性数据缺口**（`2026-08-23` 全量 558 窗口 + `09988 1m` 1334 个 cutoff 瞬态均 MATCHED 0）。成因：最终窗口状态中中枢几乎不终结（`exit=None`），终结后的下一中枢区间又几乎不相交。T3 已用「合成单测（`tests/test_zhongshu.py` 四例）+ 首选级别多中枢真实窗口（`600900 1m` / `09988 1m` / `03690 5m` / `00700 1m`）」双轨覆盖该交界；后续若想补真实 reabsorbed 样本，需先造出「中枢终结 + 后续区间重叠」的真实数据窗口，而不是继续扩大既有语料扫描。
 
 （ZS1-ZS6 均已收口；复杂 reclaim / 重写 / gap 交界、标准中枢完成态、标准中枢与后续买卖点绑定不再阻塞。）

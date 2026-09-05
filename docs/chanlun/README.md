@@ -23,6 +23,7 @@
 - [segment-spec.md](segment-spec.md)：线段严格理论（应然）
 - [zhongshu-core-spec.md](zhongshu-core-spec.md)：中枢核心理论
 - [zhongshu-dual-track-spec.md](zhongshu-dual-track-spec.md)：中枢/类中枢主辅规范
+- [same-level-decomposition-spec.md](same-level-decomposition-spec.md)：同级别分解理论口径（应然）
 - [trend-divergence-spec.md](trend-divergence-spec.md)：走势类型 / 背驰 / 盘整背驰 / 背驰后去向
 - [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md)：一二三类买卖点 / 区间套 / 小转大 / 多级别联立
 

@@ -220,45 +220,41 @@ def test_build_structure_state_type_chain_single_and_empty() -> None:
 
 
 def test_build_structure_state_type_chain_folds_multiple_completed_runs() -> None:
-    """TD1 复杂前缀链：多个已完成的同级别 run 折叠为 completed，当前 ongoing 尾段保留。
+    """TD1 严格同级别分解：全部检出中枢都参与分解（扩张重吸收标记被忽略）。
 
-    构造三个 run：up（zs1->zs2 终结）→ down（zs4->zs5 终结）→ range（zs7 ongoing），
-    中间用被更大扩张吸收的中枢分隔。验证 type_chain 把两个历史 run 按 run 粒度折叠为
-    completed，并保留当前 ongoing，且 last_completed 指向最近的 completed run（down）。
+    relations = [up, up, down, down, range, up]，唯一切分为 up（zs1..zs3）→
+    down（zs4..zs5）→ up（zs6..zs7 ongoing）三个走势类型块；last_completed 指向
+    最近的 completed 块（down）。
     """
-    # run1: up（zs1 -> zs2 向上推进，zs2 终结）
     up1 = _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1)
     up2 = _zhongshu(2, zs_low=11.5, zs_high=12.0, day=4)
     up2.is_terminated = True
-    # 分隔：被更大扩张吸收，打断 run1
+    # 旧扩张重吸收标记：严格同级别分解不再据此裁剪，中枢仍参与走势类型分解。
     sep1 = _zhongshu(3, zs_low=12.5, zs_high=13.0, day=7)
     sep1.superseded_by_zs_id = 4
     sep1.is_reabsorbed_by_larger_expansion = True
-    # run2: down（zs4 -> zs5 向下推进，zs5 终结）
     down1 = _zhongshu(4, zs_low=9.0, zs_high=9.4, day=10)
     down2 = _zhongshu(5, zs_low=8.5, zs_high=8.8, day=13)
     down2.is_terminated = True
-    # 分隔：打断 run2（不重叠，不影响当前 rng 判断）
     sep2 = _zhongshu(6, zs_low=8.2, zs_high=8.6, day=16)
     sep2.superseded_by_zs_id = 7
     sep2.is_reabsorbed_by_larger_expansion = True
-    # run3: range ongoing
     rng = _zhongshu(7, zs_low=10.0, zs_high=10.5, day=19)
 
     state = build_structure_state([], [up1, up2, sep1, down1, down2, sep2, rng])
 
     assert state["type_chain"] == [
-        {"type": "up", "status": "completed", "zs_count": 2, "start_zs_id": 1, "end_zs_id": 2, "start_ts": "2026-05-01T10:30:00", "end_ts": "2026-05-05T14:30:00"},
+        {"type": "up", "status": "completed", "zs_count": 3, "start_zs_id": 1, "end_zs_id": 3, "start_ts": "2026-05-01T10:30:00", "end_ts": "2026-05-08T14:30:00"},
         {"type": "down", "status": "completed", "zs_count": 2, "start_zs_id": 4, "end_zs_id": 5, "start_ts": "2026-05-10T10:30:00", "end_ts": "2026-05-14T14:30:00"},
-        {"type": "range", "status": "ongoing", "zs_count": 1, "start_zs_id": 7, "end_zs_id": 7, "start_ts": "2026-05-19T10:30:00", "end_ts": None},
+        {"type": "up", "status": "ongoing", "zs_count": 2, "start_zs_id": 6, "end_zs_id": 7, "start_ts": "2026-05-16T10:30:00", "end_ts": None},
     ]
     assert state["last_completed"]["type"] == "down"
     assert state["last_completed"]["zs_count"] == 2
     assert state["last_completed"]["status"] == "completed"
-    assert state["current_ongoing"]["type"] == "range"
-    assert state["current_ongoing"]["confirmation_basis"] == "single_active_zhongshu"
+    assert state["current_ongoing"]["type"] == "up"
+    assert state["current_ongoing"]["confirmation_basis"] == "forming_next_same_level_zhongshu"
     assert state["relationship"]["kind"] == "completed_then_new_type_ongoing"
-    assert state["relationship"]["transition_state"] == "candidate_new_type"
+    assert state["relationship"]["transition_state"] == "ongoing_new_type"
 
 
 def test_build_structure_state_type_chain_enumerates_in_run_type_switches() -> None:
@@ -281,11 +277,11 @@ def test_build_structure_state_type_chain_enumerates_in_run_type_switches() -> N
 
     assert state["type_chain"] == [
         {"type": "up", "status": "completed", "zs_count": 2, "start_zs_id": 1, "end_zs_id": 2, "start_ts": "2026-05-01T10:30:00", "end_ts": "2026-05-05T14:30:00"},
-        {"type": "range", "status": "completed", "zs_count": 2, "start_zs_id": 2, "end_zs_id": 3, "start_ts": "2026-05-04T10:30:00", "end_ts": "2026-05-08T14:30:00"},
+        {"type": "range", "status": "completed", "zs_count": 1, "start_zs_id": 3, "end_zs_id": 3, "start_ts": "2026-05-07T10:30:00", "end_ts": "2026-05-08T14:30:00"},
         {"type": "up", "status": "ongoing", "zs_count": 4, "start_zs_id": 4, "end_zs_id": 7, "start_ts": "2026-05-10T10:30:00", "end_ts": None},
     ]
     assert state["last_completed"]["type"] == "range"
-    assert state["last_completed"]["start_zs_id"] == 2
+    assert state["last_completed"]["start_zs_id"] == 3
     assert state["last_completed"]["end_zs_id"] == 3
 
 
@@ -362,6 +358,11 @@ def test_build_signal_summary_fields_keeps_missing_consumption_level_as_none() -
 
 
 def test_build_structure_state_unterminated_trend_tail_overlap_stays_same_trend_ongoing() -> None:
+    """严格同级别分解：上涨趋势后出现重叠中枢，则趋势完成、重叠中枢另起一个盘整。
+
+    zs1->zs2 同向不重叠=上涨趋势（已完成）；zs3 与 zs2 重叠→ 新盘整（ongoing），
+    不再归为同趋势延伸（§8.2：重叠中枢=独立盘整）。
+    """
     zhongshus = [
         _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1),
         _zhongshu(2, zs_low=11.5, zs_high=12.0, day=4),
@@ -370,16 +371,23 @@ def test_build_structure_state_unterminated_trend_tail_overlap_stays_same_trend_
 
     state = build_structure_state([], zhongshus)
 
-    assert state["last_completed"] is None
-    assert state["current_ongoing"]["type"] == "up"
+    assert state["last_completed"]["type"] == "up"
+    assert state["last_completed"]["zs_count"] == 2
+    assert state["current_ongoing"]["type"] == "range"
     assert state["current_ongoing"]["status"] == "ongoing"
-    assert state["current_ongoing"]["zs_count_so_far"] == 3
-    assert state["current_ongoing"]["confirmation_basis"] == "forming_next_same_level_zhongshu"
-    assert state["relationship"]["kind"] == "undetermined"
-    assert state["current_structure_status"] == "ongoing_same_type"
+    assert state["current_ongoing"]["zs_count_so_far"] == 1
+    assert state["current_ongoing"]["confirmation_basis"] == "single_active_zhongshu"
+    assert state["relationship"]["kind"] == "completed_then_new_type_ongoing"
+    assert state["relationship"]["transition_state"] == "candidate_new_type"
+    assert state["current_structure_status"] == "candidate_completed_waiting_stability"
 
 
 def test_build_structure_state_terminated_tail_may_still_be_higher_level_expansion() -> None:
+    """严格同级别分解：扩张重吸收标记被忽略，中枢仍参与分解。
+
+    first->second 同向下跌不重叠=下跌趋势（已完成）；second 虽标 reabsorbed，
+    但不再被裁剪；third 与 second 重叠→ 新盘整（ongoing）。
+    """
     first = _zhongshu(1, zs_low=12.0, zs_high=13.0, day=1)
     second = _zhongshu(2, zs_low=10.5, zs_high=11.5, day=4)
     third = _zhongshu(3, zs_low=10.7, zs_high=11.4, day=7)
@@ -390,10 +398,12 @@ def test_build_structure_state_terminated_tail_may_still_be_higher_level_expansi
 
     state = build_structure_state([], [first, second, third])
 
-    assert state["last_completed"] is None
-    assert state["current_ongoing"]["type"] == "down"
-    assert state["relationship"]["kind"] == "undetermined"
-    assert state["current_structure_status"] == "ongoing_same_type"
+    assert state["last_completed"]["type"] == "down"
+    assert state["last_completed"]["zs_count"] == 2
+    assert state["current_ongoing"]["type"] == "range"
+    assert state["current_ongoing"]["zs_count_so_far"] == 1
+    assert state["relationship"]["kind"] == "completed_then_new_type_ongoing"
+    assert state["current_structure_status"] == "candidate_completed_waiting_stability"
 
 
 def test_build_structure_state_auto_detects_reabsorbed_tail_from_identified_zhongshus() -> None:
@@ -416,10 +426,14 @@ def test_build_structure_state_auto_detects_reabsorbed_tail_from_identified_zhon
     assert len(zhongshus) == 3
     assert zhongshus[1].is_reabsorbed_by_larger_expansion is True
     assert zhongshus[1].superseded_by_zs_id == zhongshus[2].zs_id
-    assert state["last_completed"] is None
-    assert state["current_ongoing"]["type"] == "down"
-    assert state["relationship"]["kind"] == "undetermined"
-    assert state["current_structure_status"] == "ongoing_same_type"
+    # 严格同级别分解忽略 reabsorbed 标记，三个重叠中枢各自独立成盘整。
+    assert [entry["type"] for entry in state["type_chain"]] == ["range", "range", "range"]
+    assert state["last_completed"]["type"] == "range"
+    assert state["last_completed"]["start_zs_id"] == zhongshus[1].zs_id
+    assert state["current_ongoing"]["type"] == "range"
+    assert state["current_ongoing"]["start_zs_id"] == zhongshus[2].zs_id
+    assert state["relationship"]["kind"] == "completed_then_new_type_ongoing"
+    assert state["current_structure_status"] == "candidate_completed_waiting_stability"
 
 
 def test_build_structure_state_range_then_non_overlapping_up_marks_previous_range_completed() -> None:
@@ -467,15 +481,18 @@ def test_build_structure_state_ignores_reabsorbed_ghost_zhongshu_in_current_grou
 
     state = build_structure_state([], [first, second, third])
 
+    # 严格同级别分解：reabsorbed 标记被忽略，second 仍参与分解（与 third 同向不重叠=上涨）。
     assert state["last_completed"] is not None
+    assert state["last_completed"]["type"] == "range"
     assert state["last_completed"]["start_zs_id"] == first.zs_id
     assert state["last_completed"]["end_zs_id"] == first.zs_id
-    assert state["current_ongoing"]["start_zs_id"] == third.zs_id
+    assert state["current_ongoing"]["type"] == "up"
+    assert state["current_ongoing"]["start_zs_id"] == second.zs_id
     assert state["current_ongoing"]["end_zs_id"] == third.zs_id
-    assert state["current_ongoing"]["zs_count_so_far"] == 1
+    assert state["current_ongoing"]["zs_count_so_far"] == 2
     assert state["relationship"]["kind"] == "completed_then_new_type_ongoing"
-    assert state["relationship"]["transition_state"] == "candidate_new_type"
-    assert state["current_structure_status"] == "candidate_completed_waiting_stability"
+    assert state["relationship"]["transition_state"] == "ongoing_new_type"
+    assert state["current_structure_status"] == "completed_then_new_type"
 
 
 def test_analyze_chanlun_signals_marks_stable_new_type_as_single_confirmed() -> None:
@@ -896,41 +913,35 @@ def test_real_1m_pre_breakdown_replay_sample_03690_preserves_independent_gate() 
     assert "当前按三卖确认处理。" not in payload["advice_text"]
 
 
-def test_real_1m_range_divergence_replay_sample_000651_down_non_strict() -> None:
-    # 真实 1m 盘整底背驰（非严格）样本：两个中枢区间不重叠（zs0 [41.75,41.92]、
-    # zs1 [40.04,40.51]）但波动区间回探重叠，按第20课中枢扩张归入盘整（range）。
-    # 同向下探力度衰减但未跌破 zs1 下沿 -> range_active=True、strict=False、
-    # route 回落 last_zs_extension（TD3 盘整轨）。
+def test_real_1m_trend_divergence_replay_sample_000651_down_non_strict() -> None:
+    # 真实 1m 下跌趋势背驰（非严格）样本：修正中枢离开判定（贯穿段方向性前瞻）后，
+    # ZS0 不再吸收向下离开段 s5，ZS0 [41.75,41.92] 与 ZS1 [40.21,40.51] 波动区间不再回探重叠，
+    # 构成干净下跌趋势（rel=down、非扩张）。同向下探力度衰减但未跌破 -> trend_active=True、strict=False，
+    # route 回落 last_zs_extension。见 trend-divergence-tasks.md「趋势背驰（下跌非严格）000651 双锚点」。
     rows = probe_module._load_rows("000651", "1m")
     payload = probe_module._replay("000651", "格力电器", "2026-08-12 10:38", rows)
 
     assert payload["cutoff"] == "2026-08-12 10:38"
-    assert payload["ongoing_type"] == "range"
-    assert payload["divergence_trend_active"] is False
+    assert payload["ongoing_type"] == "down"
+    assert payload["divergence_trend_active"] is True
     assert payload["divergence_trend_strict"] is False
-    assert payload["divergence_range_active"] is True
-    assert payload["divergence_range_strict"] is False
-    assert payload["divergence_range_touches_boundary"] is False
-    assert payload["divergence_range_direction"] == "down"
+    assert payload["divergence_range_active"] is False
     assert payload["post_divergence_route"] == "last_zs_extension"
     assert payload["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["same_level_consumption_level"] == "confirmed"
 
 
-def test_real_1m_range_divergence_replay_sample_000651_down_second_anchor() -> None:
-    # 第二个 cutoff 锚点：与 08-12 同一盘整底背驰（非严格），锁追加更多 bar 后
-    # 结构分类与背驰结论不漂移（range_active=True、strict=False、route=last_zs_extension）。
+def test_real_1m_trend_divergence_replay_sample_000651_down_second_anchor() -> None:
+    # 第二个 cutoff 锚点：与 08-12 同一下跌趋势背驰（非严格），锁追加更多 bar 后
+    # 结构分类与背驰结论不漂移（ongoing=down、trend_active=True、strict=False、route=last_zs_extension）。
     rows = probe_module._load_rows("000651", "1m")
     payload = probe_module._replay("000651", "格力电器", "2026-08-14 10:57", rows)
 
     assert payload["cutoff"] == "2026-08-14 10:57"
-    assert payload["ongoing_type"] == "range"
-    assert payload["divergence_trend_active"] is False
+    assert payload["ongoing_type"] == "down"
+    assert payload["divergence_trend_active"] is True
     assert payload["divergence_trend_strict"] is False
-    assert payload["divergence_range_active"] is True
-    assert payload["divergence_range_strict"] is False
-    assert payload["divergence_range_touches_boundary"] is False
-    assert payload["divergence_range_direction"] == "down"
+    assert payload["divergence_range_active"] is False
     assert payload["post_divergence_route"] == "last_zs_extension"
     assert payload["same_level_decomposition_mode"] == "single_confirmed"
     assert payload["same_level_consumption_level"] == "confirmed"
@@ -960,7 +971,7 @@ def test_real_day_range_divergence_replay_sample_000591_down_strict() -> None:
 def test_real_day_range_divergence_replay_sample_601328_up_strict() -> None:
     # 严格盘整顶背驰真实样本（day 级）：601328 交通银行 2025-06-24。
     # 连续中枢区间不重叠但波动区间回探重叠（中枢扩张），按第20课归入盘整，
-    # 落 strict=True 盘整背驰轨道（route=higher_level_range、single_confirmed/confirmed）。
+    # 落 strict=True 盘整背驰轨道（route=higher_level_range、dual_interpretation_pending/pending）。
     rows = probe_module._load_rows("601328", "day")
     payload = probe_module._replay("601328", "交通银行", "2025-06-24", rows)
 
@@ -973,8 +984,8 @@ def test_real_day_range_divergence_replay_sample_601328_up_strict() -> None:
     assert payload["divergence_range_touches_boundary"] is True
     assert payload["divergence_range_direction"] == "up"
     assert payload["post_divergence_route"] == "higher_level_range"
-    assert payload["same_level_decomposition_mode"] == "single_confirmed"
-    assert payload["same_level_consumption_level"] == "confirmed"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["same_level_consumption_level"] == "pending"
 
 
 def test_real_1m_range_divergence_replay_sample_300124_up_non_strict() -> None:
@@ -993,8 +1004,8 @@ def test_real_1m_range_divergence_replay_sample_300124_up_non_strict() -> None:
     assert payload["divergence_range_touches_boundary"] is False
     assert payload["divergence_range_direction"] == "up"
     assert payload["post_divergence_route"] == "last_zs_extension"
-    assert payload["same_level_decomposition_mode"] == "single_confirmed"
-    assert payload["same_level_consumption_level"] == "confirmed"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["same_level_consumption_level"] == "pending"
 
 
 def test_real_1m_range_divergence_replay_sample_000651_strict() -> None:

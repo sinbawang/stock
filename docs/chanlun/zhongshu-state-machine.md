@@ -1,8 +1,9 @@
 # 中枢完成 / 扩张 / 新中枢状态机
 
 本页把“中枢还在、刚完成、还是已经换成新中枢”拆成统一状态机，是 ZS2 的交付说明。
-机器字段由 `src/chanlun/analysis.py::build_structure_state(...)` 生成，理论口径见
-[zhongshu-core-spec.md](zhongshu-core-spec.md)。
+机器字段由 `src/chanlun/analysis.py::build_structure_state(...)` 生成；中枢理论口径见
+[zhongshu-core-spec.md](zhongshu-core-spec.md)，同级别分解理论口径见
+[same-level-decomposition-spec.md](same-level-decomposition-spec.md)。
 
 ## 1. 术语表
 

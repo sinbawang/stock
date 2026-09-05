@@ -46,7 +46,7 @@
 
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
-| T1 | 走势类型主链 regressions | 高 | 锁 repeated rebuild 下的类型链不漂移 | 进行中 | TD1 主链已成型，已有 `type_chain` 单例、空集与复杂前缀链回归（`2026-08-23` 补 `test_build_structure_state_type_chain_folds_multiple_completed_runs`，锁 up->down->range 三 run 折叠）。 |
+| T1 | 走势类型主链 regressions | 高 | 锁 repeated rebuild 下的类型链不漂移 | 进行中 | TD1 主链已成型，已有 `type_chain` 单例、空集、复杂前缀链回归与真实窗口锚点（`09988 1m down ongoing`、`03690 5m completed_then_new_type`）；`candidate_new_type` 继续通过扫描工具搜当前 live cutoff。 |
 | T2 | 趋势背驰 / 盘整背驰回归 | 中 | 为正例、反例、易混淆例建立最小自动化锚点 | 进行中 | 趋势/盘整背驰正例 + 反例（离开段未突破 / 未试探边界）均已落地；`2026-08-23` 补「趋势 vs 盘整分轨互斥」回归（`test_analyze_chanlun_signals_trend_and_range_divergence_tracks_are_mutually_exclusive`），锁同一结构不会同时 active 两条背驰轨。 |
 | T3 | 字段与消费核验 | 中 | 核验 `post_divergence_route`、`oscillation_rhythm_state` 不被误升为 confirmed | 完成 | `post_divergence_route` 已按 `strict` 输出，非严格背驰回落到 `last_zs_extension`。 |
 
@@ -75,10 +75,18 @@
 
 当前进展：
 
+- 已新增 [same-level-decomposition-spec.md](same-level-decomposition-spec.md) 作为同级别分解的理论口径（应然）：中枢形成、盘整候选、趋势形成、切点确认的判定顺序；工程唯一分解主链另见 [trend-type-decomposition.md](trend-type-decomposition.md)。
 - 已新增 [trend-type-decomposition.md](trend-type-decomposition.md)，写死输入边界（confirmed segments → segment 中枢 → live runs）、切换条件（盘整延续 / 趋势延续 / 完成后转入新类型 / 重吸收）与 machine-readable 输出契约。
 - `build_structure_state(...)` 已新增 `type_chain` 字段：`[{type, status, zs_count, start_zs_id, end_zs_id}]`，与 `last_completed` / `current_ongoing` 严格一致（completed 段取自 `last_completed`，ongoing 段取自 `current_ongoing`），早前 run 按 run 粒度折叠为 completed；过渡段继续由 `relationship.transition_state` 表达。
 - 已新增 `tests/test_chanlun_analysis.py::test_build_structure_state_type_chain_matches_last_completed_and_ongoing` 与 `test_build_structure_state_type_chain_single_and_empty`，锁住 up→range 拆出 completed up + ongoing range、单中枢与空集三档真值。
 - `2026-08-23` 补复杂前缀链回归 `tests/test_chanlun_analysis.py::test_build_structure_state_type_chain_folds_multiple_completed_runs`：构造 up（zs1->zs2 终结）→ down（zs4->zs5 终结）→ range（zs7 ongoing）三个 run（中间用被更大扩张吸收的中枢分隔），锁住 `type_chain` 把两个历史 run 按 run 粒度折叠为 completed（`up(2)`、`down(2)`），保留当前 `ongoing range(1)`，且 `last_completed` 指向最近 completed run（down）。
+- 已补 [trend-divergence-visual-example-library.md](trend-divergence-visual-example-library.md) 的同级别分解样例卡片：覆盖 `up -> range`、`up -> down -> range`、`up -> range -> up` 三类 `type_chain` 场景，并回链到现有 TD1 pytest 锚点。
+- `2026-09-05` 补真实窗口 regression：`tests/test_zhongshu_regression_real_fixtures.py::test_09988_1m_structure_state_keeps_real_down_type_chain` 锁 `down ongoing(3)`；`test_03690_5m_structure_state_keeps_real_completed_then_new_type_chain` 锁 `range completed -> down ongoing` 与 `transition_state=ongoing_new_type`。
+- 已新增 `build/scan_real_candidate_new_type_samples.py`，用于批量扫描 `1m/5m/30m/day` 报告 CSV 的真实 `candidate_new_type` cutoff；当前已增强为 `exact_candidate_matches + near_matches` 双输出，即使没有 exact 命中，也能直接给出最接近的 `completed_then_new_type / ongoing_new_type` live 样本清单，减少后续样本扩张时的手工回放成本。
+- 当前扫描快照见 `build/scan_real_candidate_new_type_samples_latest.json`：`1m/5m` 暂无 `exact_candidate_matches`，`near_matches` 头部为 `000651 5m`、`002555 1m/5m`、`00981 1m`、`03690 5m`、`06088 1m`。下一步应优先对这些 near live 样本做历史 cutoff 回放，寻找新的 strict `candidate_new_type` 锚点。
+- 同一快照现已补 `recommended_probe_targets`：当前首批建议回放目标依次为 `000651 5m`、`002555 1m`、`002555 5m`、`00981 1m`、`03690 5m`、`06088 1m`、`01024 5m`。
+- 已确认 `000651 5m` 的历史回放结果：`exact_candidate_new_type` 与 `new_type_zs1` 均为 `matches=0`（见 `build/probe_000651_5m_exact_candidate.json` 与 `build/probe_000651_5m_new_type_zs1.json`）。当前下一优先级 live 回放目标已上移为 `002555 1m`。
+- 已确认 `002555 1m` 的历史回放结果：`exact_candidate_new_type` 与 `new_type_zs1` 均为 `matches=0`（见 `build/probe_002555_1m_exact_candidate.json` 与 `build/probe_002555_1m_new_type_zs1.json`）。当前下一优先级 live 回放目标已上移为 `002555 5m`。
 
 <a id="td2-trend-divergence"></a>
 ### TD2 趋势背驰严格判定
@@ -140,6 +148,7 @@
 
 - `_build_post_divergence_route(...)` 改为按 `divergence.trend.strict` / `divergence.range.strict` 输出：严格背驰才给 `higher_level_reverse_trend` / `higher_level_range`，工程提示回落到 `last_zs_extension`（最后中枢扩展观察）。
 - 四个 60m 报告 / wechat 文案消费者（`run_cn_60m_*`、`run_hk_60m_*`）的“趋势背驰 / 盘整背驰”行改为三档：`确认`（strict）/ `迹象`（active 但非 strict）/ `无`。
+- `build_miniapp_publish_bundle.py::build_same_level_decomposition(...)` 已从 `engineering_summary` 升级为正式 `same_level_decomposition` 口径：保留 `current_structure_status` / `transition_state` / `same_level_consumption_level`，并透传 `type_chain`，不再把同级别分解卡片标成“非严格理论等价”。
 - 已新增非严格路由断言：`test_analyze_chanlun_signals_trend_divergence_without_departure_confirmation_is_not_strict` 与 `test_analyze_chanlun_signals_range_divergence_without_touching_boundary_is_not_strict` 均锁定 `post_divergence_route == "last_zs_extension"`。
 
 <a id="td5-case-gates"></a>

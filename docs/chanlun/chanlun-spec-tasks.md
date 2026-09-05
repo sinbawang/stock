@@ -42,6 +42,7 @@
 - [x] 为买卖点/多级别联立模块补齐“原文复核矩阵 + 图文化示例库”配套文档。
 - [x] 建立线段专题导航 [segment-doc-map.md](segment-doc-map.md)。
 - [x] 为线段模块补齐“原文复核矩阵 + 图文化示例库”配套文档。
+- [x] 建立同级别分解理论规格 [same-level-decomposition-spec.md](same-level-decomposition-spec.md)，把中枢形成 / 盘整候选 / 趋势形成 / 切点确认的判定顺序写成应然口径，并与工程主链 [trend-type-decomposition.md](trend-type-decomposition.md) 拆开。
 
 ### 2.2 原文对照层
 
@@ -114,7 +115,7 @@
 | 任务 | 优先级 | 当前重点 | 当前状态 | 完成度 | 执行入口 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 标准线段级中枢主实现 | 高 | 收口真实 `1m pre_breakout` 之外的主状态机缺口 | 进行中 | 89% | [状态机](zhongshu-tasks.md#zs2-state-machine) / [重写交界](zhongshu-tasks.md#zs3-rewrite-gap) | `ZS2.3a` 已完成首版转场字段与消费契约；`ZS3` 已补 synthetic + real fixture 两层 regression，当前新增锁住了 `00700 30m` 单活跃中枢与 `000591 60m long` 空集真值，并补了 `build/find_segment_reabsorbed_zhongshu_cases.py` 作为真实重吸收窗口探针。`nested deferred -> invalidated` 路径现已由参数化 regression 统一收口，覆盖 `1m/5m/30m/day` 首选级别与 `600900/01024` 跨标的锚点，并新增锚点健康检查确保数据窗口漂移不会先于业务断言失效；常用真实样本首轮扫描 `SCANNED 142 / MATCHED 0`，说明当前主缺口已更明确地落在“真实重吸收 cutoff 样本不足”以及 `ZS2.3b` 统一消费等级字段。 |
-| 严格同级别走势类型自动分解 | 高 | 形成稳定自动判定闭环 | 进行中 | 45% | [TD1 主链](trend-divergence-tasks.md#td1-route-chain) | TD1 已落地 `type_chain` 首版并锁回归，背驰严格化进入 TD2/TD3。 |
+| 严格同级别走势类型自动分解 | 高 | 维持主链稳定并继续补真实样本 / 展示回归 | 阶段性完成 | 88% | [TD1 主链](trend-divergence-tasks.md#td1-route-chain) | TD1 主链、publish/miniapp 消费、`type_chain` 透传与核心回归已闭环，并已补 `09988 1m` / `03690 5m` 真实窗口 gate；`candidate_new_type` 当前转由扫描工具持续搜当前 live cutoff，剩余主要是更多真实窗口覆盖、图示/案例绑定与前端展示细化。 |
 | `tech.json` / 报告 / 小程序口径统一 | 高 | 继续把 pending / confirmed / auxiliary 三态落到消费层 | 进行中 | 82%-90% | [中枢消费](zhongshu-tasks.md#zs43-consumer-output) / [中枢三态](zhongshu-tasks.md#zs52-tristate-output) / [多级别降级](buy-sell-multi-level-tasks.md#bs5-multi-level-consumer) | `1m pre_breakdown` 已打通，本轮又把 `transition_state` 接进同级别分解、报告 summary/advice、主分析文案、小程序 focus lines、detail overview bullets 与 index/group 聚合 item 消费链；下一重点是 `1m pre_breakout` 与 confirmed live 卡片。 |
 | 趋势背驰 / 盘整背驰严格自动判定 | 中 | 把工程化 divergence 收口成严格判定链 | 进行中 | 65% | [趋势背驰](trend-divergence-tasks.md#td2-trend-divergence) / [盘整背驰](trend-divergence-tasks.md#td3-range-divergence) | 严格判定字段（TD2/TD3）与消费措辞（TD4）均已收口，案例回归归 TD5。 |
 | 一二三类买卖点严格确认 | 中 | 与最近中枢、首次回抽、级别绑定收口 | 进行中 | 95% | [一类点](buy-sell-multi-level-tasks.md#bs2-buy1) / [二类点](buy-sell-multi-level-tasks.md#bs3-buy2) / [三类点](buy-sell-multi-level-tasks.md#bs4-buy3) | 一二三类点均已在段级中枢链路上以离开段末笔为锚点（力度/边界/转折/离开/回抽/前置均段级）；仅笔级中枢（类中枢辅助链路）保持笔级口径。 |
@@ -124,7 +125,7 @@
 | 任务 | 当前状态 | 完成度 | 说明 |
 | --- | --- | --- | --- |
 | 标准线段级中枢主实现 | 完成 | 92% | 当前已完成 `segment` 主口径锁定、仅已确认线段参与标准中枢、reclaim/吸收字段下沉、bootstrap / gap / reclaim / reverse_break 多条边界修正，以及多组真实 fixture regression 锁定；`1m pre_breakdown` / `1m pre_breakout`（002555/03690/600900）与 confirmed 3S/3B live 样本均已补真实回归；`transition_state` / `consumption_level` 转场字段已贯通消费层；复杂 reclaim/重写与 gap 交界、中枢完成/扩张/新中枢切换、标准中枢与后续买卖点绑定（买卖点段级化）均已收口。剩余为数据缺口：真实 `candidate_new_type` 与 `reabsorbed lineage` 样本（确定性数据缺口，见 [zhongshu-tasks.md](zhongshu-tasks.md) 当前 blocker）。 |
-| 严格同级别走势类型自动分解 | 进行中 | 45% | TD1 已落地 machine-readable `type_chain` 与过渡段转场字段；TD2/TD3 背驰严格判定仍待收口，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
+| 严格同级别走势类型自动分解 | 阶段性完成 | 88% | 同级别分解 spec、TD1 主链、`type_chain` / `transition_state` / `same_level_consumption_level` 字段与 publish/miniapp 消费链已收口，并已补 `09988 1m` / `03690 5m` 真实窗口 gate；`candidate_new_type` 当前转由扫描工具持续搜当前 live cutoff，剩余主要是样例库、真实窗口广度与前端展示细化，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 趋势背驰严格自动判定 | 进行中 | 55% | TD2 已落地 `divergence.trend` 的 `strict / reference_zs_id / departure_confirmed / strength_comparison`；消费端按 `strict` 措辞归 TD4，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 盘整背驰严格自动判定 | 进行中 | 50% | TD3 已落地 `divergence.range` 的 `strict / reference_zs_id / touches_boundary / strength_comparison`；消费端措辞归 TD4，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 一类买卖点严格确认 | 完成 | 95% | buy_1/sell_1 已落地“确认离开 + 反向转折 + 段级「离开段 vs 进入段」力度、边界、转折均以离开段末笔为基准”（信号锚点 `_bi_by_id(exit_segment.end_bi_id)`）；笔级中枢回退 macd_sum_abs 衰减；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
@@ -164,10 +165,10 @@
 按「先正确识别当下结构，再精确买卖点，最后迭代收口」的优先级推进（优先保证：**当下走势类型 → 最近中枢 → 一二三类买卖点**识别正确，再不断迭代完善）：
 
 1. 巩固上游基础（基础结构 / 线段）：已较完整，维持现状与回归闸门，不再新增主线工作。
-2. 主攻「当下走势类型 + 最近中枢」识别正确性：收口 TD1 同级别分解主链与 ZS 标准中枢主链，让 `current_ongoing.type`、`current_zs`、`type_chain` 稳定可信。
-3. 主攻「一二三类买卖点严格确认」：一类点严格门已起步（确认离开 + 背驰 + 反向转折），下一步补二类点首次回抽、三类点首次不回归的严格绑定。
-4. 同步收口「趋势背驰 / 盘整背驰」严格判定（TD2/TD3）：作为一类点的背驰支撑，避免买卖点依赖未严格化的背驰。
-5. 迭代完善：输出差异表、真实样本案例包、消费口径统一，逐项压缩工程近似。
+2. 维持「当下走势类型 + 最近中枢」主链稳定：TD1 同级别分解与 ZS 标准中枢主链已能稳定给出 `current_ongoing.type`、`current_zs`、`type_chain`，下一步重点转为真实窗口广度与样例绑定，而非重写主逻辑。
+3. 继续补「一二三类买卖点严格确认」的样例广度与 review 资料：主判定链已落地，剩余重点是更多正反例与跨级别样本。
+4. 继续补「趋势背驰 / 盘整背驰」真实样本与案例库（TD2/TD3 已落地、TD5 持续扩样）：作为一类点支撑，优先补图示库和易混淆反例。
+5. 迭代完善：输出差异表、前端/小程序展示细化、真实样本案例包，逐项压缩工程近似与文档残留旧措辞。
 
 依赖说明：走势类型依赖中枢、中枢依赖线段，因此 1 是 2/3 的前置；但线段已较稳定，不再作为主线阻塞项，重点是 2 → 3 这条「结构 → 买卖点」正确性链。
 

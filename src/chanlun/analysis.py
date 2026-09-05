@@ -427,62 +427,36 @@ def _build_group_state(
     }
 
 
-def _is_reabsorbed_tail(zhongshu: Zhongshu) -> bool:
-    return bool(
-        getattr(zhongshu, "is_reabsorbed_by_larger_expansion", False)
-        or getattr(zhongshu, "superseded_by_zs_id", None) is not None
-    )
+def _decompose_walk_types(zhongshus: list[Zhongshu]) -> list[tuple[str, int, int]]:
+    """同级别分解（第38/39课，spec §2/§5/§8）：把中枢链唯一分解为走势类型块。
 
+    - 盘整(range)=恰好一个本级别中枢；相邻 range 关系（区间重叠或 GG/DD 回探扩张）
+      各自独立成一个盘整（§8.2），不折叠成 zs_count>1 的大盘整。
+    - 趋势(up/down)=>=2 个连续、同向、真不重叠（`_relation_kind` 判为 up/down）的中枢，
+      合并为一个趋势块（§7）。
 
-def _is_live_zhongshu(zhongshu: Zhongshu) -> bool:
-    return getattr(zhongshu, "superseded_by_zs_id", None) is None and not getattr(
-        zhongshu, "is_reabsorbed_by_larger_expansion", False
-    )
-
-
-def _split_live_zhongshu_runs(zhongshus: list[Zhongshu]) -> list[list[Zhongshu]]:
-    runs: list[list[Zhongshu]] = []
-    current_run: list[Zhongshu] = []
-    for zhongshu in zhongshus:
-        if _is_live_zhongshu(zhongshu):
-            current_run.append(zhongshu)
-            continue
-        if current_run:
-            runs.append(current_run)
-            current_run = []
-    if current_run:
-        runs.append(current_run)
-    return runs
-
-
-def _build_completed_run_state(zhongshus: list[Zhongshu]) -> dict[str, object]:
-    return _build_group_state(
-        zhongshus,
-        0,
-        len(zhongshus) - 1,
-        status="completed",
-        latest_ts=zhongshus[-1].end_ts,
-        confirmation_basis="confirmed_by_following_same_level_structure",
-    )
-
-
-def _completed_run_type_entries(live_runs: list[list[Zhongshu]]) -> list[dict[str, object]]:
-    """把当前 run 之前的所有 run 折叠成 completed 类型链条目（run 粒度）。"""
-    entries: list[dict[str, object]] = []
-    for run in live_runs[:-1]:
-        group_type = "range" if len(run) < 2 else _relation_kind(run[0], run[1])
-        entries.append(
-            {
-                "type": group_type,
-                "status": "completed",
-                "zs_count": len(run),
-                "start_zs_id": run[0].zs_id,
-                "end_zs_id": run[-1].zs_id,
-                "start_ts": _isoformat_ts(run[0].start_ts),
-                "end_ts": _isoformat_ts(run[-1].end_ts),
-            }
-        )
-    return entries
+    返回 [(type, start_index, end_index), ...]，index 指向 zhongshus（含首尾）。
+    """
+    count = len(zhongshus)
+    if count == 0:
+        return []
+    if count == 1:
+        return [("range", 0, 0)]
+    relations = [_relation_kind(zhongshus[i], zhongshus[i + 1]) for i in range(count - 1)]
+    blocks: list[tuple[str, int, int]] = []
+    index = 0
+    while index < count:
+        if index < count - 1 and relations[index] in {"up", "down"}:
+            direction = relations[index]
+            end_index = index + 1
+            while end_index < count - 1 and relations[end_index] == direction:
+                end_index += 1
+            blocks.append((direction, index, end_index))
+            index = end_index + 1
+        else:
+            blocks.append(("range", index, index))
+            index += 1
+    return blocks
 
 
 def _group_type_chain_entry(group: dict[str, object]) -> dict[str, object]:
@@ -496,60 +470,6 @@ def _group_type_chain_entry(group: dict[str, object]) -> dict[str, object]:
         "start_ts": group.get("start_ts"),
         "end_ts": group.get("end_ts"),
     }
-
-
-def _current_run_completed_type_entries(
-    current_run: list[Zhongshu],
-    relations: list[str],
-    current_start_index: int,
-) -> list[dict[str, object]]:
-    """枚举 current_run 内 current_start_index 之前的所有已完成类型块（早→晚）。
-
-    块边界按 relations 的相邻异同切分，与 `last_completed` 的回退口径一致；
-    相邻块共享一个边界中枢（后一块的 start_index 即前一块的 end_index），
-    从而把 `up → range → up` 这类段内多段切换完整展开进 type_chain 前缀。
-    """
-    entries: list[dict[str, object]] = []
-    end_index = current_start_index - 1
-    while end_index >= 0:
-        start_index = end_index
-        if end_index > 0:
-            block_kind = relations[end_index - 1]
-            while start_index > 0 and relations[start_index - 1] == block_kind:
-                start_index -= 1
-        entries.insert(
-            0,
-            _group_type_chain_entry(
-                _build_group_state(
-                    current_run,
-                    start_index,
-                    end_index,
-                    status="completed",
-                    latest_ts=current_run[end_index].end_ts,
-                    confirmation_basis="confirmed_by_following_same_level_structure",
-                )
-            ),
-        )
-        if start_index == 0:
-            break
-        end_index = start_index
-    return entries
-
-
-def _find_reabsorbed_tail_before_current(zhongshus: list[Zhongshu], current: Zhongshu | None) -> Zhongshu | None:
-    if current is None:
-        return None
-    target_id = getattr(current, "zs_id", None)
-    if target_id is None:
-        return None
-    for item in reversed(zhongshus):
-        if item is current:
-            continue
-        if getattr(item, "superseded_by_zs_id", None) != target_id:
-            continue
-        if getattr(item, "is_reabsorbed_by_larger_expansion", False):
-            return item
-    return None
 
 
 def _safe_float(value: object) -> float | None:
@@ -792,11 +712,16 @@ def _build_oscillation_rhythm_state(
 
 
 def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dict[str, object]:
-    # spec_id: SPEC.TREND_DIVERGENCE.CORE（见 docs/chanlun/trend-divergence-spec.md）
+    # spec_id: SPEC.TREND_DIVERGENCE.SAME_LEVEL_DECOMPOSITION
+    # 见 docs/chanlun/same-level-decomposition-spec.md；其上层走势类型/背驰总纲见
+    # docs/chanlun/trend-divergence-spec.md。
+    # 严格同级别分解：消费全部检出中枢（不做扩张重吸收裁剪），按 _decompose_walk_types 唯一切分
+    # 为盘整(每盘整=1中枢) / 趋势(>=2 同向不重叠中枢) 走势类型块。
     latest_bar_ts = raw_bars[-1].ts if raw_bars else None
-    live_runs = _split_live_zhongshu_runs(zhongshus)
+    chain = list(zhongshus)
+    blocks = _decompose_walk_types(chain)
 
-    if not live_runs:
+    if not blocks:
         return _finalize_structure_state({
             "last_completed": None,
             "current_ongoing": {
@@ -817,141 +742,50 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
             "type_chain": [],
         }, zhongshus)
 
-    current_run = live_runs[-1]
-    previous_run = live_runs[-2] if len(live_runs) > 1 else None
+    def _block_confirmation_basis(kind: str, status: str) -> str:
+        if status == "completed":
+            return "confirmed_by_following_same_level_structure"
+        if kind in {"up", "down"}:
+            return "forming_next_same_level_zhongshu"
+        return "single_active_zhongshu"
 
-    if len(current_run) == 1:
-        only = current_run[0]
-        reabsorbed_tail = _find_reabsorbed_tail_before_current(zhongshus, only)
-        last_completed = None
-        current_group_type = "range"
-        if previous_run and not (reabsorbed_tail is not None and max(reabsorbed_tail.zs_low, only.zs_low) < min(reabsorbed_tail.zs_high, only.zs_high)):
-            last_completed = _build_completed_run_state(previous_run)
-        if reabsorbed_tail is not None and max(reabsorbed_tail.zs_low, only.zs_low) < min(reabsorbed_tail.zs_high, only.zs_high):
-            current_group_type = _relation_kind(previous_run[-1], only) if previous_run else "range"
+    groups: list[dict[str, object]] = []
+    for block_index, (kind, start_index, end_index) in enumerate(blocks):
+        is_last = block_index == len(blocks) - 1
+        status = "ongoing" if is_last else "completed"
+        groups.append(
+            _build_group_state(
+                chain,
+                start_index,
+                end_index,
+                status=status,
+                latest_ts=latest_bar_ts if is_last else chain[end_index].end_ts,
+                confirmation_basis=_block_confirmation_basis(kind, status),
+            )
+        )
+
+    current_ongoing = groups[-1]
+    last_completed = groups[-2] if len(groups) >= 2 else None
+    type_chain = [_group_type_chain_entry(group) for group in groups]
+
+    if last_completed is None:
         relationship_kind = "undetermined"
         transition_state = "none"
-        relationship_note = "当前只有一个同级别中枢，按工程口径先视为盘整进行中。"
-        current_structure_status = "ongoing_same_type"
-        if last_completed is not None:
-            relationship_kind = "completed_then_new_type_ongoing"
-            transition_state = "candidate_new_type"
-            relationship_note = "上一段同级别走势已结束，当前新的同级别走势仍处候选待确认阶段。"
-            current_structure_status = "candidate_completed_waiting_stability"
-        return _finalize_structure_state({
-            "last_completed": last_completed,
-            "current_ongoing": {
-                "type": current_group_type,
-                "status": "ongoing",
-                "start_ts": _isoformat_ts(only.start_ts),
-                "latest_ts": _isoformat_ts(latest_bar_ts or only.end_ts),
-                "zs_count_so_far": 1,
-                "confirmation_basis": "single_active_zhongshu",
-                "start_zs_id": only.zs_id,
-                "end_zs_id": only.zs_id,
-            },
-            "relationship": {
-                "kind": relationship_kind,
-                "transition_state": transition_state,
-                "note": relationship_note,
-            },
-            "current_structure_status": current_structure_status,
-            "consumption_level": "pending",
-            "type_chain": _completed_run_type_entries(live_runs)
-            + [
-                {
-                    "type": current_group_type,
-                    "status": "ongoing",
-                    "zs_count": 1,
-                    "start_zs_id": only.zs_id,
-                    "end_zs_id": only.zs_id,
-                    "start_ts": _isoformat_ts(only.start_ts),
-                    "end_ts": None,
-                }
-            ],
-        }, zhongshus)
-
-    relations = [_relation_kind(previous, current) for previous, current in zip(current_run, current_run[1:])]
-    current_kind = relations[-1]
-    current_start_relation = len(relations) - 1
-    while current_start_relation > 0 and relations[current_start_relation - 1] == current_kind:
-        current_start_relation -= 1
-    current_start_index = current_start_relation
-    if current_kind == "range" and current_start_relation > 0:
-        previous_run_kind = relations[current_start_relation - 1]
-        previous_tail = current_run[-2]
-        previous_tail_is_same_type_extension = not bool(getattr(previous_tail, "is_terminated", False)) or _is_reabsorbed_tail(previous_tail)
-        if previous_run_kind in {"up", "down"} and previous_tail_is_same_type_extension:
-            while current_start_relation > 1 and relations[current_start_relation - 2] == previous_run_kind:
-                current_start_relation -= 1
-            current_start_index = current_start_relation - 1
-            current_kind = previous_run_kind
+        if current_ongoing.get("type") in {"up", "down"}:
+            relationship_note = "已经出现同向不重叠中枢推进，当前按同级别分解视为趋势进行中。"
         else:
-            # When a new overlap suffix appears after a finished up/down run,
-            # treat the latest zhongshu as the start of the new ongoing range.
-            current_start_index = current_start_relation + 1
-    current_group_count = len(current_run) - current_start_index
-    current_ongoing = _build_group_state(
-        current_run,
-        current_start_index,
-        len(current_run) - 1,
-        status="ongoing",
-        latest_ts=latest_bar_ts,
-        confirmation_basis=(
-            "forming_next_same_level_zhongshu"
-            if current_kind in {"up", "down"}
-            else ("single_active_zhongshu" if current_group_count == 1 else "still_inside_last_zs_extension")
-        ),
-    )
-
-    last_completed = None
-    if current_start_index > 0:
-        previous_end_index = current_start_index - 1
-        previous_start_index = previous_end_index
-        if previous_end_index > 0:
-            previous_kind = relations[previous_end_index - 1]
-            while previous_start_index > 0 and relations[previous_start_index - 1] == previous_kind:
-                previous_start_index -= 1
-        last_completed = _build_group_state(
-            current_run,
-            previous_start_index,
-            previous_end_index,
-            status="completed",
-            latest_ts=current_run[previous_end_index].end_ts,
-            confirmation_basis="confirmed_by_following_same_level_structure",
-        )
-    elif previous_run is not None:
-        last_completed = _build_completed_run_state(previous_run)
-
-    relationship_kind = "undetermined"
-    transition_state = "none"
-    relationship_note = "当前同级别结构仍在演化，尚不能把新旧走势关系完全定型。"
-    current_structure_status = "ongoing_same_type"
-    if last_completed is not None:
-        if str(last_completed.get("type")) == str(current_ongoing.get("type")):
-            relationship_kind = "same_type_extension"
-            transition_state = "same_type_extension"
-            relationship_note = "当前结构更接近前一走势类型的同类延伸，暂未看到清晰的新类型完成边界。"
-            current_structure_status = "ongoing_same_type"
-        else:
-            relationship_kind = "completed_then_new_type_ongoing"
-            transition_state = (
-                "candidate_new_type"
-                if current_ongoing.get("confirmation_basis") == "single_active_zhongshu"
-                else "ongoing_new_type"
-            )
-            relationship_note = "上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。"
-            current_structure_status = (
-                "candidate_completed_waiting_stability"
-                if current_ongoing.get("confirmation_basis") == "single_active_zhongshu"
-                else "completed_then_new_type"
-            )
-    elif current_kind in {"up", "down"}:
-        relationship_note = "已经出现同向不重叠中枢推进，当前按工程口径视为趋势进行中。"
+            relationship_note = "当前只有一个同级别中枢，按同级别分解视为盘整进行中。"
         current_structure_status = "ongoing_same_type"
     else:
-        relationship_note = "当前主要围绕最近同级别中枢展开，按工程口径视为盘整进行中。"
-        current_structure_status = "ongoing_same_type"
+        relationship_kind = "completed_then_new_type_ongoing"
+        if current_ongoing.get("confirmation_basis") == "single_active_zhongshu":
+            transition_state = "candidate_new_type"
+            current_structure_status = "candidate_completed_waiting_stability"
+            relationship_note = "上一段同级别走势已结束，当前新的同级别走势仍处候选待确认阶段。"
+        else:
+            transition_state = "ongoing_new_type"
+            current_structure_status = "completed_then_new_type"
+            relationship_note = "上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。"
 
     consumption_level = _build_same_level_consumption_level(
         {
@@ -959,13 +793,6 @@ def build_structure_state(raw_bars: list[Bar], zhongshus: list[Zhongshu]) -> dic
             "current_structure_status": current_structure_status,
         }
     )
-
-    type_chain = _completed_run_type_entries(live_runs)
-    if current_start_index > 0:
-        type_chain.extend(
-            _current_run_completed_type_entries(current_run, relations, current_start_index)
-        )
-    type_chain.append(_group_type_chain_entry(current_ongoing))
 
     return _finalize_structure_state({
         "last_completed": last_completed,

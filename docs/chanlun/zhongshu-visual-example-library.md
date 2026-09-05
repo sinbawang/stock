@@ -105,6 +105,33 @@ flowchart LR
 - `current_structure_status=completed_then_new_type` 应被解释成结构切换已发生、当前新段仍在展开，而不是直接输出交易动作型确认。
 - 最终文案可固定为：`上一段同级别走势已结束，当前新段运行中，继续观察是否形成有效确认。`
 
+#### 1.3.1 补充对照：`candidate_new_type` 历史 cutoff 单中枢原型
+
+- 标的/级别/时间窗：历史 `1m` cutoff 原型（旧 `06088 1m` 窗口曾出现，当前 live 数据需重新扫描）
+- 当前中枢数量：`3`
+- 上一个已完成走势类型：`down`
+- 当前进行结构：`range`
+- `relationship.kind`：`completed_then_new_type_ongoing`
+- `transition_state`：`candidate_new_type`
+- `current_structure_status`：`candidate_completed_waiting_stability`
+- `same_level_consumption_level`：`pending`
+- 当前信号结论：无确认一二三类买卖点
+
+```mermaid
+flowchart LR
+  A[last_completed=down] --> B[current_ongoing=range]
+  B --> C[仅 1 个新中枢]
+  C --> D[candidate_new_type]
+  D --> E[pending / watch]
+```
+
+图上 review 重点：
+
+- 这个真实 `1m` cutoff 比 `1.3` 更早一步：它已经有 `last_completed`，但当前新段只有 1 个同级别中枢，因此只能落在 `candidate_new_type`。
+- `transition_state=candidate_new_type` 与 `same_level_consumption_level=pending` 必须成对解释，不能只因为前段已完成，就把当前新段包装成已确认趋势延续。
+- 它正好补齐 `1.2` 单中枢未定、`1.3` 新段进行中之外的第三档：前段完成后，新段候选但尚未形成第 2 个同级别中枢。
+- 当前 live 数据中的具体锚点需通过 `build/scan_real_candidate_new_type_samples.py` 重扫；本节保留作语义原型卡片。
+
 ### 1.4 进入段 / 本体 / 离开段分层图（ZS6.1）
 
 场景目标：把标准中枢的进入段 / 本体 / 离开段三层边界画清，避免把进入段当本体、把离开段并回本体。

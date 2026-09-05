@@ -95,7 +95,7 @@
 2. [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 4 节第 92 课监视器预警与确认链对照示例，现优先使用 `SZ.002594 30m pre_breakout`、真实 `SZ.000651 1m pre_breakdown`、真实 replay `002555 1m pre_breakout`、真实 `01024 1m confirmed 3S` 与真实 `600900 1m confirmed 3B`；`SH.601328 1m` 暂作 `1m` 预警前态代理样本，`HK.01024 60m pre_breakdown` 暂作补充对照，旧 confirmed reference gate 继续保留为兜底回归锚点。
 3. [rhythm-replay-log-2026-08-first-batch.md](rhythm-replay-log-2026-08-first-batch.md) 与 [rhythm-replay-log-2026-08-second-batch.md](rhythm-replay-log-2026-08-second-batch.md)。
 
-当前级别取样原则：尽可能优先使用 `1m / 5m / 30m / day`。本轮已稳定覆盖 `1m / 5m / 30m / day映射`，其中 `HK.02357 1m` 已可作为 watch/pending 场景锚点，`HK.01339 1m` 已可作为 completed_then_new_type 场景锚点，真实 `SZ.000651 1m` 已可作为正式 `pre_breakdown` 场景锚点，真实 replay `002555 1m` 已可作为正式 `pre_breakout` 场景锚点，真实 `01024 1m` 已可作为 confirmed `3S` live 场景锚点，真实 `600900 1m` 已可作为 confirmed `3B` live 场景锚点，`SH.601328 1m` 已可作为预警前态代理锚点；旧 confirmed reference gate 继续保留为自动化兜底。当前 `1m` 的主要缺口已从“角色缺失”收敛为“是否继续补更多 confirmed 多样本对照”。
+当前级别取样原则：尽可能优先使用 `1m / 5m / 30m / day`。本轮已稳定覆盖 `1m / 5m / 30m / day映射`，其中 `HK.02357 1m` 已可作为 watch/pending 场景锚点，`HK.01339 1m` 已可作为 completed_then_new_type 场景锚点，真实 `SZ.000651 1m` 已可作为正式 `pre_breakdown` 场景锚点，真实 replay `002555 1m` 已可作为正式 `pre_breakout` 场景锚点，真实 `01024 1m` 已可作为 confirmed `3S` live 场景锚点，真实 `600900 1m` 已可作为 confirmed `3B` live 场景锚点，`SH.601328 1m` 已可作为预警前态代理锚点；旧 confirmed reference gate 继续保留为自动化兜底。`candidate_new_type` 当前 live 锚点仍由 `build/scan_real_candidate_new_type_samples.py` 持续扫描补齐。当前 `1m` 的主要缺口已从“角色缺失”收敛为“是否继续补更多同类样本广度与 confirmed 多样本对照”。
 
 ## 4. 下游消费字段映射
 

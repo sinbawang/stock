@@ -200,6 +200,8 @@ def test_generate_bundle_writes_index_groups_and_stock_payloads(tmp_path: Path) 
                                 "start_ts": "2026-04-01T10:30:00",
                                 "end_ts": "2026-05-10T10:30:00",
                                 "zs_count": 2,
+                                "start_zs_id": 1,
+                                "end_zs_id": 2,
                             },
                             "current_ongoing": {
                                 "type": "down",
@@ -207,7 +209,29 @@ def test_generate_bundle_writes_index_groups_and_stock_payloads(tmp_path: Path) 
                                 "start_ts": "2026-05-15T10:30:00",
                                 "latest_ts": "2026-05-29T10:30:00",
                                 "zs_count": 1,
+                                "start_zs_id": 3,
+                                "end_zs_id": 3,
                             },
+                            "type_chain": [
+                                {
+                                    "type": "up",
+                                    "status": "completed",
+                                    "zs_count": 2,
+                                    "start_zs_id": 1,
+                                    "end_zs_id": 2,
+                                    "start_ts": "2026-04-01T10:30:00",
+                                    "end_ts": "2026-05-10T10:30:00",
+                                },
+                                {
+                                    "type": "down",
+                                    "status": "ongoing",
+                                    "zs_count": 1,
+                                    "start_zs_id": 3,
+                                    "end_zs_id": 3,
+                                    "start_ts": "2026-05-15T10:30:00",
+                                    "end_ts": None,
+                                },
+                            ],
                             "relationship": {
                                 "kind": "completed_then_new_type_ongoing",
                                 "note": "上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。",
@@ -351,9 +375,9 @@ Generated at: 2026-05-30T20:05:52
         "5M窗口：中枢到锚点窗口",
         "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
     ]
-    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["mode"] == "engineering_summary"
-    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["is_strict_theory_equivalent"] is False
-    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["summary_note"].startswith("当前同级别走势输出为工程结构摘要")
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["mode"] == "same_level_decomposition"
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["is_strict_theory_equivalent"] is True
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["summary_note"].startswith("当前同级别走势输出已按同级别分解口径生成")
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["current_structure_status"] == "candidate_completed_waiting_stability"
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["current_structure_status_label"] == "候选完成待确认"
     assert "边界仍待右侧结构确认稳定" in summary_payload["cards"]["technical"]["same_level_decomposition"]["current_structure_status_note"]
@@ -366,6 +390,10 @@ Generated at: 2026-05-30T20:05:52
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["debug_context"]["reabsorbed_predecessor"]["superseded_by_zs_id"] == 3
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["previous"]["type_label"] == "上涨"
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["current"]["type_label"] == "下跌"
+    assert summary_payload["cards"]["technical"]["same_level_decomposition"]["type_chain"] == [
+        {"type": "up", "status": "completed", "zs_count": 2, "start_zs_id": 1, "end_zs_id": 2, "start_ts": "2026-04-01T10:30:00", "end_ts": "2026-05-10T10:30:00"},
+        {"type": "down", "status": "ongoing", "zs_count": 1, "start_zs_id": 3, "end_zs_id": 3, "start_ts": "2026-05-15T10:30:00", "end_ts": None},
+    ]
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["transition_state"] == "candidate_new_type"
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["transition_state_label"] == "新走势候选"
     assert summary_payload["cards"]["technical"]["latest_signal_summary"]["latest_buy"]["label"] == "二买"
@@ -373,12 +401,13 @@ Generated at: 2026-05-30T20:05:52
     assert summary_payload["cards"]["technical"]["technical_focus_lines"] == [
         "上个已完成走势：上涨 2026-04-01T10:30:00 -> 2026-05-10T10:30:00",
         "当前进行走势：下跌 自 2026-05-15T10:30:00 起，最新 2026-05-29T10:30:00",
+        "类型链：上涨(已完成，2中枢) -> 下跌(进行中，1中枢)",
         "走势连接：上一段同级别走势已结束，当前正在运行的是新的同级别走势类型。",
         "转场状态：新走势候选，前段走势已完成，但当前新走势仍处候选待确认阶段。",
         "切分状态：前段走势已具备完成候选，但边界仍待右侧结构确认稳定。",
         "消费等级：待确认消费，当前已有结构线索，但还不能直接升级为同级别强确认结论。",
         "重写说明：前一中枢 ZS2 的走出笔 29 被当前中枢 ZS3 复用为进入笔 29，当前按更大级别扩展吸收处理。",
-        "口径说明：当前同级别走势输出为工程结构摘要，非严格递归分解后的最终理论标签。",
+        "口径说明：当前同级别走势输出已按同级别分解口径生成；候选态与确认态由切分状态和消费等级表达。",
         "最近买点：二买 2026-05-29T10:30:00，价格 10.25",
         "最近卖点：三卖 2026-05-27T14:30:00，价格 10.88",
     ]
@@ -410,9 +439,9 @@ Generated at: 2026-05-30T20:05:52
         "5M窗口：中枢到锚点窗口",
         "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
     ]
-    assert detail_payload["sections"][1]["same_level_decomposition"]["mode"] == "engineering_summary"
-    assert detail_payload["sections"][1]["same_level_decomposition"]["is_strict_theory_equivalent"] is False
-    assert detail_payload["sections"][1]["same_level_decomposition"]["summary_note"].startswith("当前同级别走势输出为工程结构摘要")
+    assert detail_payload["sections"][1]["same_level_decomposition"]["mode"] == "same_level_decomposition"
+    assert detail_payload["sections"][1]["same_level_decomposition"]["is_strict_theory_equivalent"] is True
+    assert detail_payload["sections"][1]["same_level_decomposition"]["summary_note"].startswith("当前同级别走势输出已按同级别分解口径生成")
     assert detail_payload["sections"][1]["same_level_decomposition"]["current_structure_status"] == "candidate_completed_waiting_stability"
     assert detail_payload["sections"][1]["same_level_decomposition"]["current_structure_status_label"] == "候选完成待确认"
     assert detail_payload["sections"][1]["same_level_decomposition"]["same_level_consumption_level"] == "pending"
@@ -421,6 +450,10 @@ Generated at: 2026-05-30T20:05:52
     assert detail_payload["sections"][1]["same_level_decomposition"]["debug_context"]["reabsorbed_predecessor"]["zs_id"] == 2
     assert detail_payload["sections"][1]["same_level_decomposition"]["previous"]["type_label"] == "上涨"
     assert detail_payload["sections"][1]["same_level_decomposition"]["current"]["type_label"] == "下跌"
+    assert detail_payload["sections"][1]["same_level_decomposition"]["type_chain"] == [
+        {"type": "up", "status": "completed", "zs_count": 2, "start_zs_id": 1, "end_zs_id": 2, "start_ts": "2026-04-01T10:30:00", "end_ts": "2026-05-10T10:30:00"},
+        {"type": "down", "status": "ongoing", "zs_count": 1, "start_zs_id": 3, "end_zs_id": 3, "start_ts": "2026-05-15T10:30:00", "end_ts": None},
+    ]
     assert detail_payload["sections"][1]["same_level_decomposition"]["transition_state"] == "candidate_new_type"
     assert detail_payload["sections"][1]["same_level_decomposition"]["transition_state_label"] == "新走势候选"
     assert detail_payload["sections"][1]["latest_signal_summary"]["latest_overall"]["label"] == "二买"
@@ -431,7 +464,7 @@ Generated at: 2026-05-30T20:05:52
     assert detail_payload["sections"][1]["segment_tail_interpretations"][-1]["is_reclaimed"] is False
     assert any("转场状态：新走势候选，前段走势已完成，但当前新走势仍处候选待确认阶段。" == line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert any("候选完成待确认" in line or "边界仍待右侧结构确认稳定" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
-    assert any("工程结构摘要" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
+    assert any("同级别分解口径" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
     assert any("停驻原因：" in line for line in detail_payload["sections"][1]["technical_focus_lines"])
 
     a_share_group = json.loads((latest_dir / "groups" / "a_share.json").read_text(encoding="utf-8"))
@@ -604,6 +637,10 @@ def test_build_same_level_decomposition_exposes_candidate_new_type_transition_st
                         "zs_count_so_far": 1,
                         "confirmation_basis": "single_active_zhongshu",
                     },
+                    "type_chain": [
+                        {"type": "up", "status": "completed", "zs_count": 2},
+                        {"type": "down", "status": "ongoing", "zs_count": 1},
+                    ],
                     "relationship": {
                         "kind": "completed_then_new_type_ongoing",
                         "transition_state": "candidate_new_type",
@@ -618,6 +655,7 @@ def test_build_same_level_decomposition_exposes_candidate_new_type_transition_st
     assert decomposition["transition_state"] == "candidate_new_type"
     assert decomposition["transition_state_label"] == "新走势候选"
     assert "当前新走势仍处候选待确认阶段" in decomposition["transition_state_note"]
+    assert any("类型链：上涨(已完成，2中枢) -> 下跌(进行中，1中枢)" == line for line in decomposition["lines"])
     assert any("转场状态：新走势候选，前段走势已完成，但当前新走势仍处候选待确认阶段。" == line for line in decomposition["lines"])
 
 

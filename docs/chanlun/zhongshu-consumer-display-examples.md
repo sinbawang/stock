@@ -8,7 +8,7 @@
 
 本页不重复中枢理论定义；理论层看 [zhongshu-core-spec.md](zhongshu-core-spec.md)，review 入口看 [zhongshu-review-entry.md](zhongshu-review-entry.md)，页内案例本体看 [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md)。
 
-当前示例级别优先顺序：尽可能优先使用 `1m / 5m / 30m / day` 这条链；当前已经稳定覆盖 `1m / 5m / 30m / day映射`，其中 `1m` 已覆盖 watch/pending、completed_then_new_type、预警前态代理与 confirmed 四类消费示例。
+当前示例级别优先顺序：尽可能优先使用 `1m / 5m / 30m / day` 这条链；当前已经稳定覆盖 `1m / 5m / 30m / day映射`，其中 `1m` 已稳定覆盖 watch/pending、completed_then_new_type、预警前态代理与 confirmed 四类消费示例；`candidate_new_type` 当前以历史 cutoff 原型 + 扫描工具补位。
 
 ## 1. 使用方式
 
@@ -23,7 +23,7 @@
 
 | 级别 | 当前状态 | 当前主锚点 |
 | --- | --- | --- |
-| `1m` | 已有七类消费示例 | `HK.02357 1m range ongoing`、`HK.01339 1m completed_then_new_type`、真实 `SZ.000651 1m pre_breakdown`、真实 replay `002555 1m pre_breakout`、真实 `01024 1m confirmed 3S`、真实 `600900 1m confirmed 3B`、`SH.601328 1m pre-warning proxy`、confirmed regression reference |
+| `1m` | 已有七类稳定消费示例 + 1 类历史原型 | `HK.02357 1m range ongoing`、`HK.01339 1m completed_then_new_type`、真实 `SZ.000651 1m pre_breakdown`、真实 replay `002555 1m pre_breakout`、真实 `01024 1m confirmed 3S`、真实 `600900 1m confirmed 3B`、`SH.601328 1m pre-warning proxy`、confirmed regression reference；`candidate_new_type` 当前由历史原型 + 扫描工具补位 |
 | `5m` | 已有稳定节奏案例 | `SH.601318 5m down_bias` |
 | `30m` | 已有稳定扩张、去向、预警案例 | `SZ.000651 30m`、`SZ.002594 30m` |
 | `day` | 当前主要作为上级别闭合/映射目标出现 | `30m -> day` 的去向与扩张解释 |
@@ -38,7 +38,7 @@
 
 ### 1.2 `1m` 当前稳定消费锚点
 
-当前 `1m` 首选锚点由六个真实产物/回放锚点加一个 regression reference 组成：
+当前 `1m` 首选锚点由六个真实产物/回放锚点加一个 regression reference 组成；`candidate_new_type` 当前通过历史原型与扫描工具维护：
 
 1. [data/reports/02357/1m/tech.json](data/reports/02357/1m/tech.json)：单中枢 `range ongoing`
 2. [data/reports/01339/1m/tech.json](data/reports/01339/1m/tech.json)：`completed_then_new_type`
@@ -47,6 +47,8 @@
 5. [data/reports/01024/1m/tech.json](data/reports/01024/1m/tech.json)：真实 live `confirmed 3S`，当前已确认消费
 6. [data/reports/601328/1m/tech.json](data/reports/601328/1m/tech.json)：顶背驰迹象已出现，但仍未进入正式 `pre_breakdown` 字段链
 7. `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_confirmed_3s_reference_anchor`：`1m confirmed 3S` regression reference gate
+
+`candidate_new_type` 当前说明：旧 `06088 1m` cutoff 原型已随 live 数据刷新漂移；后续以 `build/scan_real_candidate_new_type_samples.py` 继续搜当前可复用锚点。
 
 当前已锁定事实：
 
@@ -58,11 +60,11 @@
 - `SH.601328 1m`：中枢仍在运行，`advice_text` 已明确提示“等向上离开或向下跌破后再做决策”，并补充“已有顶背驰迹象”，但没有正式 `zs_monitor_alert` 字段落盘。
 - `1m confirmed 3S` regression reference：当前继续作为兜底 gate，防止 live 样本未来漂移时把 confirmed 文案退回 pending/watch。
 - 进一步确认：`zs_monitor_alert` 与 confirmed `3S` 已在 `src / scripts / tests` 形成双链稳定主口径，当前缺的重点已经从“角色是否存在”收敛到“是否补更多同类样本对照”。
-- 这说明当前 `1m` 已经有“watch/pending”“前段完成后新段运行中”“正式向下预警未确认”“正式向上预警未确认”“真实 confirmed 3S”“预警前态代理”六类真实消费案例，并额外有一条 confirmed regression reference。
+- 这说明当前 `1m` 已经有“watch/pending”“前段完成后新段运行中”“正式向下预警未确认”“正式向上预警未确认”“真实 confirmed 3S”“预警前态代理”六类稳定消费案例，并额外有一条 confirmed regression reference；`candidate_new_type` 当前改由历史原型 + 扫描工具补位。
 
 当前适用方式：
 
-- 可用于校验 `1m` 在 `tech.json`、报告和小程序里，如何把“单中枢盘整进行中”“前段完成后新段运行中”“正式预警未确认”“风险迹象已出现但尚未进入正式预警字段链”“confirmed reference”稳定区分开。
+- 可用于校验 `1m` 在 `tech.json`、报告和小程序里，如何把“单中枢盘整进行中”“前段完成后新段运行中”“正式预警未确认”“风险迹象已出现但尚未进入正式预警字段链”“confirmed reference”稳定区分开；`candidate_new_type` 当前补位方式是先用扫描工具找 cutoff，再套用本页 7.5.1 的消费约束。
 - `HK.02357 1m` 可直接作为 watch/pending 示例，`HK.01339 1m` 可直接作为 completed_then_new_type 示例，真实 `SZ.000651 1m` 可直接作为正式 `pre_breakdown` 示例，真实 replay `002555 1m` 可直接作为正式 `pre_breakout` 示例，真实 `01024 1m` 可直接作为 confirmed `3S` live 示例，`SH.601328 1m` 可直接作为预警前态代理示例，`1m confirmed 3S` reference gate 当前则保留为兜底回归。
 - 只有在需要展示“尚未进入正式字段链”时才继续保留 `SH.601328 1m`；它不再承担 `1m` 主预警链上破方向的缺口填补角色。
 
@@ -306,6 +308,18 @@
 | 小程序/图表 | 可显示“新段运行中”或“结构切换后观察”标签，但必须与 `watch/pending` 及 `confirmed` 分层 | 不得把这个 `1m` 卡片直接贴成 `confirmed`，也不得和单中枢未定场景混成同一种说明 |
 
 最小消费结论：这个 `1m` 例子用于说明“上一段已完成”只能推出结构切换，不足以直接推出当前新段的确认买卖点，是 `1m` 中间态的主锚点。
+
+#### 7.5.1 `candidate_new_type` 历史 cutoff 原型
+
+对应案例： [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 1.3.1 节。
+
+| 展示位 | 推荐写法 | 绝对红线 |
+| --- | --- | --- |
+| `tech.json` / cutoff replay payload | 保留 `last_completed.type=down`、`current_ongoing.type=range`、`relationship.kind=completed_then_new_type_ongoing`、`transition_state=candidate_new_type`、`current_structure_status=candidate_completed_waiting_stability` 与 `same_level_consumption_level=pending` | 不得把“前段已完成 + 当前单中枢候选”写成 `completed_then_new_type`、`ongoing_new_type` 或任意 confirmed 结论 |
+| 报告 | `上一段同级别下跌已结束，当前新段仅形成 1 个中枢，先按候选待确认观察。` | 不得写成 `新一轮盘整已确认`、`趋势已重新稳定` 或 `买卖点已确认` |
+| 小程序/图表 | 可显示“新段候选”或 `pending/watch` 标签，并保留“候选完成待确认”说明 | 不得给这个 `1m` cutoff 卡片贴 `confirmed`，也不得与 `completed_then_new_type` 或单中枢未定场景混成同一种说明 |
+
+最小消费结论：这类 `1m` cutoff 原型用于说明“上一段已完成 + 当前只有 1 个新中枢”应稳定落在 `candidate_new_type`；当前 live 数据里的具体锚点需用 `build/scan_real_candidate_new_type_samples.py` 重新扫描。
 
 ### 7.6 `002555 1m` pre_breakout replay anchor
 
