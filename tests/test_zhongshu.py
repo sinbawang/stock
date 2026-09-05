@@ -110,6 +110,20 @@ def _zhongshu_with_peaks(
     )
 
 
+def test_zhongshu_unit_aliases_mirror_bi_id_fields() -> None:
+    # 级别中性只读别名：segment 级中枢时 *_bi_id 存的是 segment_id，别名给出语义正确的名字。
+    zs = _zhongshu(1, low=10.0, high=11.0, entering_bi_id=4, exit_bi_id=8, terminated=True, structure_level="segment")
+
+    assert zs.entering_unit_id == zs.entering_bi_id == 4
+    assert zs.exit_unit_id == zs.exit_bi_id == 8
+    assert zs.core_unit_ids == zs.core_bi_ids
+    assert zs.unit_ids == zs.bi_ids
+    assert zs.start_unit_id == zs.start_bi_id
+    assert zs.end_unit_id == zs.end_bi_id
+    assert zs.render_start_unit_id == zs.render_start_bi_id
+    assert zs.render_end_unit_id == zs.render_end_bi_id
+
+
 def test_is_zhongshu_expansion_up_dip_back() -> None:
     # 向上候选：当前中枢波动下沿（85.7）回探到前中枢上沿（91.35）之下 → 扩张
     a = _zhongshu_with_peaks(0, zone_low=89.0, zone_high=91.35, peak_low=88.7, peak_high=94.5)

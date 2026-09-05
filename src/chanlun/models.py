@@ -206,6 +206,40 @@ class Zhongshu:
         """中枢宽度"""
         return self.zs_high - self.zs_low
 
+    # 级别中性只读别名：segment 级中枢时 *_bi_id 存的其实是 segment_id，
+    # 这些别名给出与 structure_level 无关的语义名，消费端可用而不必记住底层字段叫 *_bi_id。
+    @property
+    def entering_unit_id(self) -> int | None:
+        return self.entering_bi_id
+
+    @property
+    def core_unit_ids(self) -> List[int]:
+        return self.core_bi_ids
+
+    @property
+    def exit_unit_id(self) -> int | None:
+        return self.exit_bi_id
+
+    @property
+    def unit_ids(self) -> List[int]:
+        return self.bi_ids
+
+    @property
+    def start_unit_id(self) -> int:
+        return self.start_bi_id
+
+    @property
+    def end_unit_id(self) -> int:
+        return self.end_bi_id
+
+    @property
+    def render_start_unit_id(self) -> int | None:
+        return self.render_start_bi_id
+
+    @property
+    def render_end_unit_id(self) -> int | None:
+        return self.render_end_bi_id
+
 
 @dataclass
 class ExpandedZhongshu:
