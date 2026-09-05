@@ -238,6 +238,33 @@ def test_03690_5m_same_level_decomp_down_trend_and_expansion_detected_separately
     assert state["current_ongoing"]["type"] == "down"
 
 
+def test_300124_30m_directional_departure_captures_reversed_leave_center() -> None:
+    """真实锚点（贯穿段方向性前瞻）：300124 30m 窄中枢 ZS0=[67.62,68.72]。
+
+    旧口径把向上贯穿段 s7（low=60.13<ZD、high=79.87>ZG，其中 60.13 只是起点）当「贯穿」
+    并入延伸，导致 ZS0 过度延伸到 s1..s7、漏掉 (s8,s9,s10) 中枢。修正后 s7 按自身方向判
+    向上离开（回试 s8.low=75.69 >= ZG=68.72 确认），ZS0 在 s6 处结束，s7 作为进入段，
+    (s8,s9,s10)=[75.69,79.87] 成为独立中枢（第20课：离开方向与进入方向无关）。
+    """
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "data" / "reports" / "300124" / "30m" / "analyze"
+        / "300124_30m_20260123_to_20260904_normalized_segments.csv"
+    )
+    segments = _load_segments_from_normalized_csv(path)
+
+    zhongshus = identify_zhongshu(segments, structure_level="segment")
+
+    assert [(z.zs_id, z.zs_low, z.zs_high) for z in zhongshus[:2]] == [
+        (0, 67.62, 68.72),
+        (1, 75.69, 79.87),
+    ]
+    zs0, zs1 = zhongshus[0], zhongshus[1]
+    assert zs0.bi_ids == [1, 2, 3, 4, 5, 6]  # 不再吸收向上离开段 s7
+    assert zs1.entering_bi_id == 7  # 向上离开段 s7 复用为下一中枢进入段
+    assert zs1.core_bi_ids == [8, 9, 10]
+
+
 class TestIdentifyZhongshu:
     def test_empty_bis(self):
         assert identify_zhongshu([]) == []

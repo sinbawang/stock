@@ -137,11 +137,13 @@ def identify_zhongshu(items: List[Bi | Segment], *, structure_level: str = "bi")
     spec_id: SPEC.ZHONGSHU.CORE（见 docs/chanlun/zhongshu-core-spec.md）。
 
     规格文档 7.2-7.3:
-    - 必须存在进入笔；走出笔用于确认中枢终结
-    - 中枢本体位于进入与走出之间，至少由 3 笔构成
+    - 必须存在进入笔；离开笔用于确认中枢终结
+    - 中枢本体位于进入与离开之间，至少由 3 笔构成
     - 中枢本体前三笔必须连续、方向交替，且存在价格重叠
     - 中枢区间(ZD/ZG)固定为中枢本体前三笔的重叠区间
-    - 走出笔必须与进入笔同向，并向对应方向突破中枢区间
+    - 离开方向由离开笔自身方向决定（第20课：向上离开破 ZG、向下离开破 ZD 均合法，
+      与进入方向无关）；同向离开记为走出段（exit_bi，第三类买卖点口径），
+      反向离开为反转段（中枢终结、无走出段，作为下一中枢进入段）
 
     Args:
         items: 笔列表或线段列表
@@ -218,40 +220,33 @@ def identify_zhongshu(items: List[Bi | Segment], *, structure_level: str = "bi")
             )
 
             # 中枢区间固定为前三笔重叠(ZD/ZG)，后续仅扩展本体参与笔列表。
-            # 突破 / 趋势反转判定（第三类买卖点口径，均需前瞻确认）：
-            # - 干净突破（同向破 ZG/ZD 未贯穿、或反向破 ZD/ZG 未贯穿）：
-            #   - 不与区间重叠 → 立即离开（同向）或反转（反向）。
-            #   - 与区间重叠 → 前瞻下一段，不回中枢才确认离开 / 反转；
-            #     回中枢或已无下一段 → 突破失败，并入延伸。
-            # - 贯穿区间（从对侧穿越整个区间）→ 震荡穿越，并入延伸。
-            # - 与区间重叠（无突破）→ 并入延伸。
+            # 离开 / 延伸判定（第三类买卖点口径，均需前瞻确认）：
+            # - 离开方向由候选段“自身方向”决定（第20课：向上离开破 ZG、向下离开破 ZD
+            #   均为合法离开，与进入方向无关）；候选段另一侧越界多为其起点位置，
+            #   不再据此判“贯穿”而强制并入延伸。
+            #   - 不与区间重叠 → 立即离开。
+            #   - 与区间重叠 → 前瞻下一段，不回中枢才确认离开（第20课“连续波动都不触及即离开”）；
+            #     回中枢或已无下一段 → 离开失败，并入延伸。
+            # - 与区间重叠（无离开）→ 并入延伸。
             # - 否则 → 终止扫描。
             j = i + 4
             while j < len(items):
                 cand = items[j]
-                same_dir_cand = cand.direction == entering_item.direction
-                # 与进入段同向的突破（上行破 ZG / 下行破 ZD）
-                breaks_out = (
-                    (entering_item.direction == BiDirection.UP and cand.high > zs_high)
-                    or (entering_item.direction == BiDirection.DOWN and cand.low < zs_low)
-                )
-                # 反方向突破（上行中枢被下行破 ZD / 下行中枢被上行破 ZG）
-                crosses_opposite = (
-                    (entering_item.direction == BiDirection.UP and cand.low < zs_low)
-                    or (entering_item.direction == BiDirection.DOWN and cand.high > zs_high)
-                )
-                # 干净突破：同向未贯穿（走出候选）或反向未贯穿（反转候选）
-                clean_breakout = (
-                    (same_dir_cand and breaks_out and not crosses_opposite)
-                    or ((not same_dir_cand) and crosses_opposite and not breaks_out)
-                )
-                if clean_breakout:
+                departs_up = cand.direction == BiDirection.UP and cand.high > zs_high
+                departs_down = cand.direction == BiDirection.DOWN and cand.low < zs_low
+                if departs_up or departs_down:
                     if not _overlaps_zone(cand, zs_low, zs_high):
-                        break  # 干净突破不与区间重叠：走出段 / 反转段
+                        break  # 干净离开（跳空）：不与区间重叠
                     next_item = items[j + 1] if j + 1 < len(items) else None
-                    if next_item is not None and not _overlaps_zone(next_item, zs_low, zs_high):
-                        break  # 突破 + 下一段不回中枢：确认离开 / 反转
-                    # 突破失败（下一段回中枢/无法确认）：并入延伸
+                    # 方向性前瞻（第20课第三类买卖点）：向上离开回试低点不跌回 ZG（zs_high）、
+                    # 向下离开回抽高点不升回 ZD（zs_low），才确认真离开；否则只是区间内震荡穿越，并入延伸。
+                    confirmed = next_item is not None and (
+                        (departs_up and next_item.low >= zs_high)
+                        or (departs_down and next_item.high <= zs_low)
+                    )
+                    if confirmed:
+                        break  # 离开确认：回试/回抽不回中枢
+                    # 离开失败（回试回中枢/无法确认）：并入延伸
                     _extend_zhongshu_with_item(zs, cand)
                     j += 1
                     continue
@@ -260,11 +255,12 @@ def identify_zhongshu(items: List[Bi | Segment], *, structure_level: str = "bi")
                     _extend_zhongshu_with_item(zs, cand)
                     j += 1
                 else:
-                    break  # 既不延伸也不突破，终止扫描
+                    break  # 既不延伸也不离开，终止扫描
 
-            # 走出笔：与进入笔同向，且向对应方向突破中枢区间
-            # 上升中枢(进/出向上): exit_bi.high > zs_high (突破ZG)
-            # 下降中枢(进/出向下): exit_bi.low  < zs_low  (跌破ZD)
+            # 离开段分两类（均已由上面的前瞻确认离开、循环 break 到此）：
+            # - 同向离开 = 走出段：记 exit_bi、中枢终结（第三类买卖点口径）。
+            # - 反向离开 = 反转段：中枢终结但无走出段，该段作为下一中枢进入段（一类买卖点反转），
+            #   落在下面的 fall-through 分支（i = j 继续扫描）。
             if j < len(items):
                 exit_item = items[j]
                 same_dir = exit_item.direction == entering_item.direction

@@ -3,6 +3,12 @@ from pathlib import Path
 import pytest
 
 from chanlun.analysis import build_structure_state
+from chanlun.bi import identify_bis
+from chanlun.data import read_bars_from_csv
+from chanlun.data.cleaner import clean_bars
+from chanlun.fractal import filter_consecutive_fractals, identify_fractals
+from chanlun.normalize import normalize_bars
+from chanlun.segment import SEGMENT_BOOTSTRAP_FIRST_VALID_SEED, identify_segments
 from chanlun.zhongshu import identify_zhongshu
 from tests.segment_regression_support import identify_segments_from_csv
 
@@ -18,6 +24,21 @@ SAMPLE_600900_1M_CSV = ROOT / "data" / "reports" / "600900" / "1m" / "analyze" /
 SAMPLE_09988_1M_CSV = ROOT / "data" / "reports" / "09988" / "1m" / "analyze" / "09988_1m_20260814_to_20260828.csv"
 SAMPLE_03690_5M_CSV = ROOT / "data" / "reports" / "03690" / "5m" / "analyze" / "03690_5m_20260722_to_20260828.csv"
 SAMPLE_00700_1M_CSV = ROOT / "data" / "reports" / "00700" / "1m" / "analyze" / "00700_1m_20260814_to_20260828.csv"
+
+
+def _build_structure_state_from_csv_cutoff(path: Path, cutoff_iso: str):
+    bars = clean_bars(read_bars_from_csv(str(path)))
+    cutoff_bars = [bar for bar in bars if bar.ts.isoformat(timespec="seconds") <= cutoff_iso]
+    normalized_bars = normalize_bars(cutoff_bars)
+    fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))
+    bis = identify_bis(fractals, normalized_bars, pending_reverse_mode="effective_only")
+    segments = identify_segments(
+        bis,
+        bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
+        termination_mode="practical",
+    )
+    zhongshus = identify_zhongshu(segments, structure_level="segment")
+    return cutoff_bars, segments, zhongshus, build_structure_state(cutoff_bars, zhongshus)
 
 
 def test_00700_30m_segment_zhongshu_keeps_two_centers_after_multiple_rewrites() -> None:
@@ -174,6 +195,32 @@ def test_09988_1m_segment_zhongshu_keeps_disjoint_centers_without_false_reabsorp
     )
 
 
+def test_09988_1m_structure_state_keeps_real_down_type_chain() -> None:
+    """09988 1m（首选级别）：真实窗口应稳定保持 down ongoing 的同级别类型链。"""
+    segments = identify_segments_from_csv(SAMPLE_09988_1M_CSV)
+
+    zhongshus = identify_zhongshu(segments, structure_level="segment")
+    structure_state = build_structure_state([], zhongshus)
+
+    assert structure_state["last_completed"] is None
+    assert structure_state["current_ongoing"]["type"] == "down"
+    assert structure_state["current_ongoing"]["zs_count_so_far"] == 3
+    assert structure_state["current_ongoing"]["confirmation_basis"] == "forming_next_same_level_zhongshu"
+    assert structure_state["relationship"]["transition_state"] == "none"
+    assert structure_state["consumption_level"] == "confirmed"
+    assert structure_state["type_chain"] == [
+        {
+            "type": "down",
+            "status": "ongoing",
+            "zs_count": 3,
+            "start_zs_id": 0,
+            "end_zs_id": 2,
+            "start_ts": "2026-08-18T13:54:00",
+            "end_ts": None,
+        }
+    ]
+
+
 def test_03690_5m_segment_zhongshu_keeps_disjoint_centers_without_false_reabsorption() -> None:
     """03690 5m（首选级别）：三个区间不相交的标准中枢，不得误标 reabsorbed。
 
@@ -193,6 +240,53 @@ def test_03690_5m_segment_zhongshu_keeps_disjoint_centers_without_false_reabsorp
             (11, 12, 15, 85.7, 88.75, None),
         ],
     )
+
+
+def test_03690_5m_structure_state_keeps_real_completed_then_new_type_chain() -> None:
+    """03690 5m（首选级别）：真实窗口应稳定给出 range completed -> down ongoing。"""
+    segments = identify_segments_from_csv(SAMPLE_03690_5M_CSV)
+
+    zhongshus = identify_zhongshu(segments, structure_level="segment")
+    structure_state = build_structure_state([], zhongshus)
+
+    assert structure_state["last_completed"] == {
+        "type": "range",
+        "status": "completed",
+        "start_ts": "2026-07-27T11:05:00",
+        "end_ts": "2026-08-07T10:25:00",
+        "latest_ts": "2026-08-07T10:25:00",
+        "zs_count": 1,
+        "zs_count_so_far": 1,
+        "confirmation_basis": "confirmed_by_following_same_level_structure",
+        "start_zs_id": 0,
+        "end_zs_id": 0,
+    }
+    assert structure_state["current_ongoing"]["type"] == "down"
+    assert structure_state["current_ongoing"]["zs_count_so_far"] == 2
+    assert structure_state["current_ongoing"]["confirmation_basis"] == "forming_next_same_level_zhongshu"
+    assert structure_state["relationship"]["kind"] == "completed_then_new_type_ongoing"
+    assert structure_state["relationship"]["transition_state"] == "ongoing_new_type"
+    assert structure_state["consumption_level"] == "confirmed"
+    assert structure_state["type_chain"] == [
+        {
+            "type": "range",
+            "status": "completed",
+            "zs_count": 1,
+            "start_zs_id": 0,
+            "end_zs_id": 0,
+            "start_ts": "2026-07-27T11:05:00",
+            "end_ts": "2026-08-07T10:25:00",
+        },
+        {
+            "type": "down",
+            "status": "ongoing",
+            "zs_count": 2,
+            "start_zs_id": 1,
+            "end_zs_id": 2,
+            "start_ts": "2026-08-10T09:45:00",
+            "end_ts": None,
+        },
+    ]
 
 
 def test_00700_1m_segment_zhongshu_has_no_center_after_data_refresh() -> None:
