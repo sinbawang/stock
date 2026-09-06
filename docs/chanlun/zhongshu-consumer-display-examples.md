@@ -23,7 +23,7 @@
 
 | 级别 | 当前状态 | 当前主锚点 |
 | --- | --- | --- |
-| `1m` | 已有七类稳定消费示例 + 1 类历史原型 | `HK.02357 1m range ongoing`、`HK.01339 1m completed_then_new_type`、真实 `SZ.000651 1m pre_breakdown`、真实 replay `002555 1m pre_breakout`、真实 `01024 1m confirmed 3S`、真实 `600900 1m confirmed 3B`、`SH.601328 1m pre-warning proxy`、confirmed regression reference；`candidate_new_type` 当前由历史原型 + 扫描工具补位 |
+| `1m` | 已有七类稳定消费示例 + 1 类历史原型 | `HK.02357 1m range ongoing`、`HK.01339 1m completed_then_new_type`、真实 `SZ.000651 1m pre_breakdown`、真实 replay `1m pre_breakout` 六锚点（`002555/03690/600900/01024/09988/00700`）、真实 `01024 1m confirmed 3S`、真实 `600900 1m confirmed 3B`、`SH.601328 1m pre-warning proxy`、confirmed regression reference；`candidate_new_type` 当前由历史原型 + 扫描工具补位 |
 | `5m` | 已有稳定节奏案例 | `SH.601318 5m down_bias` |
 | `30m` | 已有稳定扩张、去向、预警案例 | `SZ.000651 30m`、`SZ.002594 30m` |
 | `day` | 当前主要作为上级别闭合/映射目标出现 | `30m -> day` 的去向与扩张解释 |
@@ -34,16 +34,16 @@
 - `60m / 15m` 仍保留，但当前主要作为补充样例，而不是首选锚点。
 - `1m` 现在已有稳定消费示例，但理论层和样例层仍可继续补更细的多案例对照。
 - 真实 `SZ.000651 1m pre_breakdown` 已接入后，`SH.601328 1m` 不再承担主预警锚点角色，只保留为“预警前态代理/过渡说明”样本。
-- 当前 `1m pre_breakout` 已有真实 replay 样本链，真实 `1m confirmed 3S` 与 `1m confirmed 3B` live 卡片也已分别由 `01024 1m`、`600900 1m` 补齐；剩余工作主要转为扩更多 confirmed 对照样本，而不是补角色空位。
+- 当前 `1m pre_breakout` 已有真实 replay 六锚点样本链（`002555/03690/600900/01024/09988/00700`，P0.1 关门回归 `6/6` 通过），真实 `1m confirmed 3S` 与 `1m confirmed 3B` live 卡片也已分别由 `01024 1m`、`600900 1m` 补齐；剩余工作主要转为扩更多 confirmed 对照样本，而不是补角色空位。
 
 ### 1.2 `1m` 当前稳定消费锚点
 
-当前 `1m` 首选锚点由六个真实产物/回放锚点加一个 regression reference 组成；`candidate_new_type` 当前通过历史原型与扫描工具维护：
+当前 `1m` 首选锚点由多个真实产物/回放锚点加一个 regression reference 组成；`candidate_new_type` 当前通过历史原型与扫描工具维护：
 
 1. [data/reports/02357/1m/tech.json](data/reports/02357/1m/tech.json)：单中枢 `range ongoing`
 2. [data/reports/01339/1m/tech.json](data/reports/01339/1m/tech.json)：`completed_then_new_type`
 3. [data/reports/000651/1m/tech.json](data/reports/000651/1m/tech.json)：真实 `pre_breakdown`，当前仍属 pending/watch
-4. [build/scan_real_1m_prebreakout_samples.json](build/scan_real_1m_prebreakout_samples.json)：真实 replay `002555 1m pre_breakout`，cutoff=`2026-08-04 13:35`，当前仍属 pending/watch
+4. [build/scan_real_1m_prebreakout_samples.json](build/scan_real_1m_prebreakout_samples.json)：真实 replay `1m pre_breakout` 六锚点（`002555 2026-08-04 13:35`、`03690 2026-08-05 09:56`、`600900 2026-08-04 13:18`、`01024 2026-08-10 09:56`、`09988 2026-08-05 10:01`、`00700 2026-08-05 10:01`），当前仍属 pending/watch
 5. [data/reports/01024/1m/tech.json](data/reports/01024/1m/tech.json)：真实 live `confirmed 3S`，当前已确认消费
 6. [data/reports/601328/1m/tech.json](data/reports/601328/1m/tech.json)：顶背驰迹象已出现，但仍未进入正式 `pre_breakdown` 字段链
 7. `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_1m_confirmed_3s_reference_anchor`：`1m confirmed 3S` regression reference gate
@@ -53,13 +53,13 @@
 当前已锁定事实：
 
 - 真实 `SZ.000651 1m`：`zs_monitor_alert=pre_breakdown`，摘要明确给出“出现向下预警，但当前不构成确认三卖”，并保留 `dual_interpretation_pending + down_bias` 的降级语义。
-- 真实 replay `002555 1m`：`zs_monitor_alert=pre_breakout`，摘要明确给出“出现向上预警，但当前不构成确认三买。”，并保留 `dual_interpretation_pending + 待确认消费 + up_bias` 的降级语义。
+- 真实 replay `1m pre_breakout` 六锚点：`zs_monitor_alert=pre_breakout` 的预警链条与 `dual_interpretation_pending + 待确认消费` 的降级语义已在 `002555/03690/600900/01024/09988/00700` 六个历史 cutoff 上回放验证通过。
 - `HK.02357 1m`：`zhongshus=1`，`current_structure_status=ongoing_same_type`，`relationship.kind=undetermined`，且无确认一二三类买卖点。
 - `HK.01339 1m`：`last_completed.type=up`，`current_structure_status=completed_then_new_type`，当前新段为 `down ongoing`，但仍无确认一二三类买卖点。
 - 真实 `01024 1m`：`sell_points=[sell3]`、`same_level_consumption_level=confirmed`、摘要明确给出“跌破中枢后反抽下沿失败，当前按三卖确认处理。”，当前可直接作为 confirmed `3S` live 锚点。
 - `SH.601328 1m`：中枢仍在运行，`advice_text` 已明确提示“等向上离开或向下跌破后再做决策”，并补充“已有顶背驰迹象”，但没有正式 `zs_monitor_alert` 字段落盘。
 - `1m confirmed 3S` regression reference：当前继续作为兜底 gate，防止 live 样本未来漂移时把 confirmed 文案退回 pending/watch。
-- 进一步确认：`zs_monitor_alert` 与 confirmed `3S` 已在 `src / scripts / tests` 形成双链稳定主口径，当前缺的重点已经从“角色是否存在”收敛到“是否补更多同类样本对照”。
+- 进一步确认：`zs_monitor_alert` 与 confirmed `3S` 已在 `src / scripts / tests` 形成双链稳定主口径，且 `1m pre_breakout` 扩样本关门回归（01024/09988/00700 的 analysis+publish 共 6 条）已全部通过；当前缺的重点已经从“角色是否存在”收敛到“confirmed 多样本对照与 candidate_new_type 真实窗口”。
 - 这说明当前 `1m` 已经有“watch/pending”“前段完成后新段运行中”“正式向下预警未确认”“正式向上预警未确认”“真实 confirmed 3S”“预警前态代理”六类稳定消费案例，并额外有一条 confirmed regression reference；`candidate_new_type` 当前改由历史原型 + 扫描工具补位。
 
 当前适用方式：

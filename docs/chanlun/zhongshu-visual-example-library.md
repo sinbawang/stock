@@ -325,10 +325,10 @@ flowchart TD
 3. [sample-case-pack-2026-08-v2.md](sample-case-pack-2026-08-v2.md) 第 2.1 节 `HK.00388 60m` `pre_breakdown` 后回中枢。
 4. [sample-case-pack-2026-08-v2.md](sample-case-pack-2026-08-v2.md) 第 3.3 节 `SZ.300124 15m` 预警后确认失败。
 5. [data/reports/000651/1m/tech.json](data/reports/000651/1m/tech.json) `SZ.000651 1m` 已真实落盘 `pre_breakdown`，当前仍属 pending/watch。
-6. [build/scan_real_1m_prebreakout_samples.json](build/scan_real_1m_prebreakout_samples.json) `002555 1m` 在历史回放 `2026-08-04 13:35` 已出现真实 `pre_breakout`，且仍保留 pending/watch。
+6. [build/scan_real_1m_prebreakout_samples.json](build/scan_real_1m_prebreakout_samples.json) `1m pre_breakout` 历史回放已扩展到六锚点：`002555 2026-08-04 13:35`、`03690 2026-08-05 09:56`、`600900 2026-08-04 13:18`、`01024 2026-08-10 09:56`、`09988 2026-08-05 10:01`、`00700 2026-08-05 10:01`，且仍保留 pending/watch。
 7. [data/reports/601328/1m/tech.json](data/reports/601328/1m/tech.json) `SH.601328 1m` 顶背驰迹象已出现，但仍停留在等待离开中枢的预警前态。
 
-当前 `1m` 接线规则：真实 `SZ.000651 1m pre_breakdown` 与真实 replay `002555 1m pre_breakout` 已经接入第 92 课的双向主预警锚点，`SH.601328 1m` 退回“预警前态代理”角色；`1m confirmed 3S` 当前则只保留为 regression reference，对应消费输出的 confirmed 对照。
+当前 `1m` 接线规则：真实 `SZ.000651 1m pre_breakdown` 与真实 replay `1m pre_breakout` 六锚点（`002555/03690/600900/01024/09988/00700`）已经接入第 92 课的双向主预警锚点，`SH.601328 1m` 退回“预警前态代理”角色；`1m confirmed 3S` 当前则只保留为 regression reference，对应消费输出的 confirmed 对照。
 
 ### 4.1 真实案例 A: HK.01024 60m 向下预警后首次回抽回中枢
 
@@ -424,7 +424,7 @@ flowchart LR
 
 - 这个 `1m` 案例补上的是真实历史回放 `pre_breakout` 字段链，而不是 synthetic 造数。
 - 当前 replay 结果同时给出 `zs_monitor_alert=pre_breakout`、`same_level_decomposition_mode=dual_interpretation_pending`、`zs_monitor_midline=20.10`、`zs_monitor_bias=strong` 与 `消费说明：当前同级别结构处于 待确认消费`，足够作为稳定的 `1m` 正式向上预警未确认示例。
-- 它和 `4.3` 的 `SZ.000651 1m pre_breakdown` 正好构成 `1m` 双向预警对照，能直接约束消费端不要把“向上预警”误写成 confirmed 三买。
+- 它和 `4.3` 的 `SZ.000651 1m pre_breakdown` 正好构成 `1m` 双向预警对照，且当前已扩展到六锚点（`002555/03690/600900/01024/09988/00700`），能直接约束消费端不要把“向上预警”误写成 confirmed 三买。
 - 最终文案可固定为：`出现向上预警，但当前不构成确认三买。`
 
 ### 4.5 真实案例 E: 01024 1m 已进入 confirmed 3S，但不能和预警/代理态混写
