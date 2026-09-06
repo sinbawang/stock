@@ -91,6 +91,34 @@ def test_find_candidate_new_type_finds_candidate_for_00175_1m() -> None:
     assert payload["same_level_consumption_level"] == "pending"
 
 
+def test_find_candidate_new_type_falls_back_to_fine_grained_scan(monkeypatch) -> None:
+    path = ROOT / "data" / "reports" / "06088" / "1m" / "analyze" / "placeholder.csv"
+    bars = [SimpleNamespace(ts=datetime(2026, 8, 25, 9, 30) + timedelta(minutes=index)) for index in range(120)]
+
+    def fake_build_state_for_prefix(loaded_bars, count: int):
+        assert loaded_bars is bars
+        if count == 73:
+            return loaded_bars[:count], {
+                "relationship": {"transition_state": "candidate_new_type"},
+                "current_ongoing": {"type": "range", "zs_count_so_far": 1},
+                "last_completed": {"type": "down", "zs_count": 2},
+                "type_chain": [{"type": "down", "status": "completed"}, {"type": "range", "status": "ongoing"}],
+                "current_structure_status": "candidate_completed_waiting_stability",
+                "consumption_level": "pending",
+            }
+        return loaded_bars[:count], {"relationship": {"transition_state": "none"}}
+
+    monkeypatch.setattr(scan_module, "load_clean_bars", lambda csv_path: bars)
+    monkeypatch.setattr(scan_module, "build_state_for_prefix", fake_build_state_for_prefix)
+
+    payload = scan_module.find_candidate_new_type(path, min_bars=60, step=10)
+
+    assert payload is not None
+    assert payload["bar_count"] == 73
+    assert payload["current_structure_status"] == "candidate_completed_waiting_stability"
+    assert payload["same_level_consumption_level"] == "pending"
+
+
 def test_summarize_near_match_scores_ongoing_new_type_report(tmp_path: Path) -> None:
     tech_path = tmp_path / "00175" / "1m" / "tech.json"
     tech_path.parent.mkdir(parents=True, exist_ok=True)

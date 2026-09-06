@@ -87,6 +87,7 @@
 - 同一快照现已补 `recommended_probe_targets`：当前首批建议回放目标依次为 `000651 5m`、`002555 1m`、`002555 5m`、`00981 1m`、`03690 5m`、`06088 1m`、`01024 5m`。
 - 已确认 `000651 5m` 的历史回放结果：`exact_candidate_new_type` 与 `new_type_zs1` 均为 `matches=0`（见 `build/probe_000651_5m_exact_candidate.json` 与 `build/probe_000651_5m_new_type_zs1.json`）。当前下一优先级 live 回放目标已上移为 `002555 1m`。
 - 已确认 `002555 1m` 的历史回放结果：`exact_candidate_new_type` 与 `new_type_zs1` 均为 `matches=0`（见 `build/probe_002555_1m_exact_candidate.json` 与 `build/probe_002555_1m_new_type_zs1.json`）。当前下一优先级 live 回放目标已上移为 `002555 5m`。
+- 当前实际修正任务已收敛：主扫描脚本与严格 probe 的粒度不一致；`002555 5m`、`00981 1m`、`03690 5m`、`06088 1m`、`01024 5m` 已在 strict backtest 中出现 `matches=5`，说明真正缺口在 coarse scan 的遍历颗粒度，而不是中枢转场逻辑本身。下一步是补一个 near-target 的细粒度二次扫描，消除 `exact_candidate_matches=0` 的假阴性并刷新 JSON 快照。
 
 <a id="td2-trend-divergence"></a>
 ### TD2 趋势背驰严格判定
