@@ -1171,6 +1171,7 @@ def _extend_segment(
     enable_gap_false_defer: bool = True,
     enable_fallback_reverse_break: bool = True,
     enable_same_direction_fallback: bool = True,
+    allow_weak_reextension: bool = True,
 ) -> Optional[Tuple[int, bool, Optional[int], str, Optional[int]]]:
     if start_idx + 2 >= len(bis):
         return None
@@ -1575,13 +1576,25 @@ def _extend_segment(
                         break_bi_id = next_reverse_bi.bi_id
                         stop_reason = "reverse_break"
                         break
-                if enable_same_direction_fallback:
+                # 弱同向笔本身没创新高，但紧邻的下一根同向笔已越过段内高点（真实创新高），
+                # 说明特征序列尚未成顶分型、线段仍在延伸，不应在此提前终结。
+                # 仅对非首段（左侧已有确认段、上下文可靠）放开，首段 bootstrap 左界不稳不做延伸。
+                reextends_immediately = (
+                    allow_weak_reextension
+                    and cursor + 3 < len(bis)
+                    and bis[cursor + 3].direction == direction
+                    and bis[cursor + 3].high > last_same_extreme
+                )
+                if reextends_immediately:
+                    pass
+                elif enable_same_direction_fallback:
                     break_bi_id = same_dir_bi.bi_id
                     stop_reason = "same_direction_not_extending"
                     break
-                break_bi_id = same_dir_bi.bi_id
-                stop_reason = "exhausted_confirmed_bis"
-                break
+                else:
+                    break_bi_id = same_dir_bi.bi_id
+                    stop_reason = "exhausted_confirmed_bis"
+                    break
             last_reverse_extreme = reverse_bi.low
             last_same_extreme = same_dir_bi.high
         else:
@@ -1717,13 +1730,25 @@ def _extend_segment(
                         break_bi_id = next_reverse_bi.bi_id
                         stop_reason = "reverse_break"
                         break
-                if enable_same_direction_fallback:
+                # 对称：弱同向笔没创新低，但紧邻的下一根同向笔已越过段内低点（真实创新低），
+                # 特征序列尚未成底分型、线段仍在延伸，不应提前终结。
+                # 仅对非首段放开，首段 bootstrap 左界不稳不做延伸。
+                reextends_immediately = (
+                    allow_weak_reextension
+                    and cursor + 3 < len(bis)
+                    and bis[cursor + 3].direction == direction
+                    and bis[cursor + 3].low < last_same_extreme
+                )
+                if reextends_immediately:
+                    pass
+                elif enable_same_direction_fallback:
                     break_bi_id = same_dir_bi.bi_id
                     stop_reason = "same_direction_not_extending"
                     break
-                break_bi_id = same_dir_bi.bi_id
-                stop_reason = "exhausted_confirmed_bis"
-                break
+                else:
+                    break_bi_id = same_dir_bi.bi_id
+                    stop_reason = "exhausted_confirmed_bis"
+                    break
             last_reverse_extreme = reverse_bi.high
             last_same_extreme = same_dir_bi.low
 
@@ -1802,6 +1827,7 @@ def identify_segments(
             enable_gap_false_defer=enable_gap_false_defer,
             enable_fallback_reverse_break=enable_fallback_reverse_break,
             enable_same_direction_fallback=enable_same_direction_fallback,
+            allow_weak_reextension=False,
         )
         if probe is None:
             index = 0
@@ -1817,6 +1843,7 @@ def identify_segments(
             enable_gap_false_defer=current_enable_gap_false_defer,
             enable_fallback_reverse_break=enable_fallback_reverse_break,
             enable_same_direction_fallback=enable_same_direction_fallback,
+            allow_weak_reextension=bool(segments),
         )
         if result is None:
             index += 1
