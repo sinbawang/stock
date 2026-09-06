@@ -1829,6 +1829,213 @@ def test_compute_segment_strengths_aggregates_macd_area_by_segment_window() -> N
     assert strengths[2]["macd_sum_abs"] == 3.0
 
 
+def _lb2_gap_segments() -> list[Segment]:
+    # A_i(下) - A_{i+1}(上) - A_{i+2}(下)：A_{i+2} 创新低（回踩段）。
+    return [
+        _segment(1, BiDirection.DOWN, high=11.2, low=10.6, start_day=1),
+        _segment(2, BiDirection.UP, high=11.0, low=10.4, start_day=3),
+        _segment(3, BiDirection.DOWN, high=10.9, low=9.8, start_day=5),
+    ]
+
+
+def _ls2_gap_segments() -> list[Segment]:
+    # A_i(上) - A_{i+1}(下) - A_{i+2}(上)：A_{i+2} 创新高（反抽段）。
+    return [
+        _segment(1, BiDirection.UP, high=10.6, low=9.9, start_day=1),
+        _segment(2, BiDirection.DOWN, high=10.4, low=9.6, start_day=3),
+        _segment(3, BiDirection.UP, high=11.2, low=10.3, start_day=5),
+    ]
+
+
+def _down_trend_zhongshus() -> list[Zhongshu]:
+    # 两个同向不重叠下移中枢 -> 同级别分解 single_confirmed（下跌趋势），使类二类点门控放行。
+    return [
+        _zhongshu(8, zs_low=11.0, zs_high=11.6, day=1),
+        _zhongshu(9, zs_low=10.0, zs_high=10.8, day=8),
+    ]
+
+
+def _up_trend_zhongshus() -> list[Zhongshu]:
+    # 两个同向不重叠上移中枢 -> 同级别分解 single_confirmed（上涨趋势），使类二类点门控放行。
+    return [
+        _zhongshu(8, zs_low=9.2, zs_high=9.8, day=1),
+        _zhongshu(9, zs_low=10.0, zs_high=10.8, day=8),
+    ]
+
+
+def test_analyze_chanlun_signals_flags_buy_2like_on_gap_segment_divergence() -> None:
+    """BS7 类二买正例：同级别隔段背驰（A_i vs A_{i+2}）+ 回踩末笔后向上转折 -> buy_2like。"""
+    segments = _lb2_gap_segments()
+    zhongshus = _down_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(22, BiDirection.UP, high=11.0, low=10.4, day=3),
+        _bi(32, BiDirection.DOWN, high=10.9, low=9.8, day=5),  # A_{i+2} 回踩末笔（低点）
+        _bi(33, BiDirection.UP, high=10.5, low=9.9, day=6),  # 回踩后向上转折
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=-5.0, dif=-1.0),  # A_i 力度强
+        SimpleNamespace(ts=segments[2].end_ts, macd=-1.0, dif=-0.4),  # A_{i+2} 力度衰减
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "buy_2like" in signals["buy_points"]
+    assert "sell_2like" not in signals["sell_points"]
+    catalog_lb2 = next(entry for entry in signals["signal_catalog"] if entry["point"] == "buy2like")
+    assert catalog_lb2["active"] is True
+    assert catalog_lb2["basis"] == "gap_segment_divergence_pullback_end"
+    assert catalog_lb2["signal_bi_id"] == 32
+    assert catalog_lb2["price"] == 9.8
+
+
+def test_analyze_chanlun_signals_flags_buy_2like_when_pullback_holds_prev_low() -> None:
+    """BS7 类二买「不破前低」正例：A_{i+2} 回踩不破 A_i 前低但段级力度衰减 -> 仍报 buy_2like。
+
+    锁定 spec「不需要破前低/前高」：隔段背驰只比较段级力度，不要求 A_{i+2} 创新低。
+    """
+    segments = [
+        _segment(1, BiDirection.DOWN, high=11.2, low=10.6, start_day=1),  # A_i 前低 10.6
+        _segment(2, BiDirection.UP, high=11.0, low=10.5, start_day=3),
+        _segment(3, BiDirection.DOWN, high=10.9, low=10.7, start_day=5),  # A_{i+2} 低点 10.7 未破前低
+    ]
+    zhongshus = _down_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(22, BiDirection.UP, high=11.0, low=10.5, day=3),
+        _bi(32, BiDirection.DOWN, high=10.9, low=10.7, day=5),  # 回踩末笔不破前低
+        _bi(33, BiDirection.UP, high=10.75, low=10.7, day=6),  # 回踩后向上转折
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=-5.0, dif=-1.0),  # A_i 力度强
+        SimpleNamespace(ts=segments[2].end_ts, macd=-1.0, dif=-0.4),  # A_{i+2} 力度衰减
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "buy_2like" in signals["buy_points"]
+    catalog_lb2 = next(entry for entry in signals["signal_catalog"] if entry["point"] == "buy2like")
+    assert catalog_lb2["price"] == 10.7
+
+
+def test_analyze_chanlun_signals_no_buy_2like_without_gap_divergence() -> None:
+    """BS7 类二买反例（无背驰）：A_{i+2} 力度不弱于 A_i -> 不报 buy_2like。"""
+    segments = _lb2_gap_segments()
+    zhongshus = _down_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(22, BiDirection.UP, high=11.0, low=10.4, day=3),
+        _bi(32, BiDirection.DOWN, high=10.9, low=9.8, day=5),
+        _bi(33, BiDirection.UP, high=10.5, low=9.9, day=6),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=-1.0, dif=-0.4),  # A_i 力度弱
+        SimpleNamespace(ts=segments[2].end_ts, macd=-5.0, dif=-1.0),  # A_{i+2} 力度反而更强
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "buy_2like" not in signals["buy_points"]
+
+
+def test_analyze_chanlun_signals_no_buy_2like_when_pullback_not_ended() -> None:
+    """BS7 类二买反例（回踩未结束）：A_{i+2} 末笔后无已确认向上转折 -> 不报 buy_2like。"""
+    segments = _lb2_gap_segments()
+    zhongshus = _down_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(22, BiDirection.UP, high=11.0, low=10.4, day=3),
+        _bi(32, BiDirection.DOWN, high=10.9, low=9.8, day=5),
+        Bi(
+            bi_id=33,
+            direction=BiDirection.UP,
+            start_fx_id=33,
+            end_fx_id=34,
+            start_ts=datetime(2026, 5, 6, 10, 30),
+            end_ts=datetime(2026, 5, 6, 14, 30),
+            high=10.5,
+            low=9.9,
+            norm_bar_range=(33, 34),
+            is_confirmed=False,  # 反向转折笔尚未确认，回踩未结束
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=segments[2].end_ts, macd=-1.0, dif=-0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "buy_2like" not in signals["buy_points"]
+
+
+def test_analyze_chanlun_signals_no_buy_2like_when_decomposition_pending() -> None:
+    """BS7 类二买门控：单一未确认中枢（dual_interpretation_pending）时只作观察，不发类二买。"""
+    segments = _lb2_gap_segments()
+    current_zs = _zhongshu(9, zs_low=10.0, zs_high=10.8, day=8)  # 单中枢 -> pending
+    bis = [
+        _bi(12, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(22, BiDirection.UP, high=11.0, low=10.4, day=3),
+        _bi(32, BiDirection.DOWN, high=10.9, low=9.8, day=5),
+        _bi(33, BiDirection.UP, high=10.5, low=9.9, day=6),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=segments[2].end_ts, macd=-1.0, dif=-0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points, segments=segments)
+
+    assert signals["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert "buy_2like" not in signals["buy_points"]
+
+
+def test_analyze_chanlun_signals_flags_sell_2like_on_gap_segment_divergence() -> None:
+    """BS7 类二卖正例（对称）：同级别隔段顶背驰 + 反抽末笔后向下转折 -> sell_2like。"""
+    segments = _ls2_gap_segments()
+    zhongshus = _up_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.UP, high=10.6, low=9.9, day=1),
+        _bi(22, BiDirection.DOWN, high=10.4, low=9.6, day=3),
+        _bi(32, BiDirection.UP, high=11.2, low=10.3, day=5),  # A_{i+2} 反抽末笔（高点）
+        _bi(33, BiDirection.DOWN, high=11.1, low=10.4, day=6),  # 反抽后向下转折
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=5.0, dif=1.0),  # A_i 力度强
+        SimpleNamespace(ts=segments[2].end_ts, macd=1.0, dif=0.4),  # A_{i+2} 力度衰减
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "sell_2like" in signals["sell_points"]
+    assert "buy_2like" not in signals["buy_points"]
+    catalog_ls2 = next(entry for entry in signals["signal_catalog"] if entry["point"] == "sell2like")
+    assert catalog_ls2["active"] is True
+    assert catalog_ls2["basis"] == "gap_segment_divergence_rebound_end"
+    assert catalog_ls2["signal_bi_id"] == 32
+    assert catalog_ls2["price"] == 11.2
+
+
+def test_analyze_chanlun_signals_no_sell_2like_without_gap_divergence() -> None:
+    """BS7 类二卖反例（无背驰）：A_{i+2} 力度不弱于 A_i -> 不报 sell_2like。"""
+    segments = _ls2_gap_segments()
+    zhongshus = _up_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.UP, high=10.6, low=9.9, day=1),
+        _bi(22, BiDirection.DOWN, high=10.4, low=9.6, day=3),
+        _bi(32, BiDirection.UP, high=11.2, low=10.3, day=5),
+        _bi(33, BiDirection.DOWN, high=11.1, low=10.4, day=6),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=1.0, dif=0.4),  # A_i 力度弱
+        SimpleNamespace(ts=segments[2].end_ts, macd=5.0, dif=1.0),  # A_{i+2} 力度反而更强
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "sell_2like" not in signals["sell_points"]
+
+
 def test_analyze_chanlun_signals_flags_third_buy_after_leave_zs_and_pullback_holds_upper_edge() -> None:
     """BS4 三买正例：向上离开中枢 + 首次回抽不重回中枢上沿之下 -> buy_3。"""
     current_zs = _zhongshu(3, zs_low=10.0, zs_high=10.8, day=20)

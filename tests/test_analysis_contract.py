@@ -30,6 +30,8 @@ def test_signal_point_enum_is_stable_and_complete() -> None:
         "sell_1",
         "sell_2",
         "sell_3",
+        "buy_2like",
+        "sell_2like",
     }
 
 
@@ -41,6 +43,8 @@ def test_signal_basis_enum_is_stable_and_complete() -> None:
         "top_divergence_near_zs_high",
         "sell1_rebound_confirmation",
         "leave_zs_then_rebound_fails_lower_edge",
+        "gap_segment_divergence_pullback_end",
+        "gap_segment_divergence_rebound_end",
     }
 
 

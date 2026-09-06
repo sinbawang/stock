@@ -361,6 +361,46 @@ def _find_sell3_segment_leave_hold(
     return None, None
 
 
+def _find_lb2_gap_divergence(
+    segments: list[Segment],
+    segment_strengths: dict[int, dict[str, float]],
+) -> Segment | None:
+    """类二买（LB2）隔段背驰：以最后一个已确认线段 A_{i+2}（当下回踩段，须向下）为锚，
+    全链相邻取 A_i(下)-A_{i+1}(上)-A_{i+2}(下)；A_{i+2} 相对 A_i 段级力度衰减即成立，
+    不要求破前低（贴合「不需要破前低/前高」）。返回 A_{i+2}（回踩段）。"""
+    idx = next((i for i in range(len(segments) - 1, -1, -1) if segments[i].is_confirmed), None)
+    if idx is None or idx < 2:
+        return None
+    ai, ai1, ai2 = segments[idx - 2], segments[idx - 1], segments[idx]
+    if not (ai.is_down() and ai1.is_up() and ai2.is_down()):
+        return None
+    strength_ai = segment_strengths.get(ai.segment_id, {}).get("macd_sum_abs", 0.0)
+    strength_ai2 = segment_strengths.get(ai2.segment_id, {}).get("macd_sum_abs", 0.0)
+    if strength_ai > 0 and strength_ai2 < strength_ai:
+        return ai2
+    return None
+
+
+def _find_ls2_gap_divergence(
+    segments: list[Segment],
+    segment_strengths: dict[int, dict[str, float]],
+) -> Segment | None:
+    """类二卖（LS2）隔段背驰：以最后一个已确认线段 A_{i+2}（当下反抽段，须向上）为锚，
+    全链相邻取 A_i(上)-A_{i+1}(下)-A_{i+2}(上)；A_{i+2} 相对 A_i 段级力度衰减即成立，
+    不要求破前高（贴合「不需要破前低/前高」）。返回 A_{i+2}（反抽段）。"""
+    idx = next((i for i in range(len(segments) - 1, -1, -1) if segments[i].is_confirmed), None)
+    if idx is None or idx < 2:
+        return None
+    ai, ai1, ai2 = segments[idx - 2], segments[idx - 1], segments[idx]
+    if not (ai.is_up() and ai1.is_down() and ai2.is_up()):
+        return None
+    strength_ai = segment_strengths.get(ai.segment_id, {}).get("macd_sum_abs", 0.0)
+    strength_ai2 = segment_strengths.get(ai2.segment_id, {}).get("macd_sum_abs", 0.0)
+    if strength_ai > 0 and strength_ai2 < strength_ai:
+        return ai2
+    return None
+
+
 def _build_signal_point_detail(
     point: str,
     signal_bi: Bi | None,
@@ -1149,6 +1189,33 @@ def analyze_chanlun_signals(
             if "sell_3" in sell_points:
                 sell_points.remove("sell_3")
 
+    # 类二类买卖点（LB2/LS2）：同级别隔段背驰（A_i vs A_{i+2}）+ 回踩/反抽结束即生成，
+    # 无前置一类点、不设破前低/前高，与标准二类点去重（标准点已成立时不重复标记）。
+    # 仅在同级别分解已确认（最近中枢语义清晰）时给点；dual_interpretation_pending
+    # （单/无确认中枢、候选待定）只作观察，不发机械点（spec §2.5/§2.6）。
+    buy2like_signal_bi: Bi | None = None
+    sell2like_signal_bi: Bi | None = None
+    if (
+        current_zs is not None
+        and segments
+        and _build_same_level_decomposition_mode(structure_state) == "single_confirmed"
+    ):
+        like_segment_strengths = compute_segment_strengths(segments, macd_points)
+        if "buy_2" not in buy_points:
+            lb2_seg = _find_lb2_gap_divergence(segments, like_segment_strengths)
+            if lb2_seg is not None:
+                anchor = _bi_by_id(lb2_seg.end_bi_id, bis)
+                if anchor is not None and _has_reverse_turn_after(anchor, direction="down", bis=bis):
+                    buy2like_signal_bi = anchor
+                    buy_points.append("buy_2like")
+        if "sell_2" not in sell_points:
+            ls2_seg = _find_ls2_gap_divergence(segments, like_segment_strengths)
+            if ls2_seg is not None:
+                anchor = _bi_by_id(ls2_seg.end_bi_id, bis)
+                if anchor is not None and _has_reverse_turn_after(anchor, direction="up", bis=bis):
+                    sell2like_signal_bi = anchor
+                    sell_points.append("sell_2like")
+
     same_level_decomposition_mode = _build_same_level_decomposition_mode(structure_state)
     same_level_consumption_level = _build_same_level_consumption_level(structure_state)
     divergence = build_divergence_state(
@@ -1178,6 +1245,8 @@ def analyze_chanlun_signals(
         current_zs=current_zs,
         buy3_signal_bi=buy3_signal_bi,
         sell3_signal_bi=sell3_signal_bi,
+        buy2like_signal_bi=buy2like_signal_bi,
+        sell2like_signal_bi=sell2like_signal_bi,
     )
     zs_monitor_state = _build_zs_monitor_state(
         raw_bars,
@@ -1218,28 +1287,42 @@ def build_signal_point_payloads(
     current_zs: Zhongshu | None,
     buy3_signal_bi: Bi | None = None,
     sell3_signal_bi: Bi | None = None,
+    buy2like_signal_bi: Bi | None = None,
+    sell2like_signal_bi: Bi | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     signal_points: list[dict[str, object]] = []
     signal_catalog: list[dict[str, object]] = []
     related_zs_id = current_zs.zs_id if current_zs else None
     related_bi_ids = list(current_zs.bi_ids) if current_zs else []
 
+    buy_basis_by_point = {
+        "buy_1": "bottom_divergence_near_zs_low",
+        "buy_2": "buy1_pullback_confirmation",
+        "buy_3": "leave_zs_then_pullback_holds_upper_edge",
+        "buy_2like": "gap_segment_divergence_pullback_end",
+    }
+    sell_basis_by_point = {
+        "sell_1": "top_divergence_near_zs_high",
+        "sell_2": "sell1_rebound_confirmation",
+        "sell_3": "leave_zs_then_rebound_fails_lower_edge",
+        "sell_2like": "gap_segment_divergence_rebound_end",
+    }
+
     def buy_signal_bi_for(point: str) -> Bi | None:
         if point == "buy_3" and buy3_signal_bi is not None:
             return buy3_signal_bi
+        if point == "buy_2like" and buy2like_signal_bi is not None:
+            return buy2like_signal_bi
         return latest_down
 
     def sell_signal_bi_for(point: str) -> Bi | None:
         if point == "sell_3" and sell3_signal_bi is not None:
             return sell3_signal_bi
+        if point == "sell_2like" and sell2like_signal_bi is not None:
+            return sell2like_signal_bi
         return latest_up if point == "sell_2" else latest_confirmed_up
 
     for point in buy_points:
-        basis = {
-            "buy_1": "bottom_divergence_near_zs_low",
-            "buy_2": "buy1_pullback_confirmation",
-            "buy_3": "leave_zs_then_pullback_holds_upper_edge",
-        }.get(point)
         signal_bi = buy_signal_bi_for(point)
         signal_points.append(
             _build_signal_point_detail(
@@ -1247,17 +1330,12 @@ def build_signal_point_payloads(
                 signal_bi,
                 getattr(signal_bi, "low", None),
                 active=True,
-                basis=basis,
+                basis=buy_basis_by_point.get(point),
                 related_zs_id=related_zs_id,
                 related_bi_ids=related_bi_ids,
             )
         )
     for point in sell_points:
-        basis = {
-            "sell_1": "top_divergence_near_zs_high",
-            "sell_2": "sell1_rebound_confirmation",
-            "sell_3": "leave_zs_then_rebound_fails_lower_edge",
-        }.get(point)
         signal_bi = sell_signal_bi_for(point)
         signal_points.append(
             _build_signal_point_detail(
@@ -1265,13 +1343,14 @@ def build_signal_point_payloads(
                 signal_bi,
                 getattr(signal_bi, "high", None),
                 active=True,
-                basis=basis,
+                basis=sell_basis_by_point.get(point),
                 related_zs_id=related_zs_id,
                 related_bi_ids=related_bi_ids,
             )
         )
 
     active_points = set(buy_points + sell_points)
+    # 固定 6 槽（buy_1..sell_3）保持既有索引契约；类二类点（buy_2like/sell_2like）追加在其后。
     for point in ("buy_1", "buy_2", "buy_3"):
         signal_bi = buy_signal_bi_for(point)
         signal_catalog.append(
@@ -1280,11 +1359,7 @@ def build_signal_point_payloads(
                 signal_bi,
                 getattr(signal_bi, "low", None) if point in active_points else None,
                 active=point in active_points,
-                basis={
-                    "buy_1": "bottom_divergence_near_zs_low",
-                    "buy_2": "buy1_pullback_confirmation",
-                    "buy_3": "leave_zs_then_pullback_holds_upper_edge",
-                }.get(point),
+                basis=buy_basis_by_point.get(point),
                 related_zs_id=related_zs_id,
                 related_bi_ids=related_bi_ids,
             )
@@ -1297,15 +1372,34 @@ def build_signal_point_payloads(
                 signal_bi,
                 getattr(signal_bi, "high", None) if point in active_points else None,
                 active=point in active_points,
-                basis={
-                    "sell_1": "top_divergence_near_zs_high",
-                    "sell_2": "sell1_rebound_confirmation",
-                    "sell_3": "leave_zs_then_rebound_fails_lower_edge",
-                }.get(point),
+                basis=sell_basis_by_point.get(point),
                 related_zs_id=related_zs_id,
                 related_bi_ids=related_bi_ids,
             )
         )
+    # 类二类点槽位追加在固定 6 槽之后（槽位 6=buy_2like、7=sell_2like）。
+    signal_catalog.append(
+        _build_signal_point_detail(
+            "buy_2like",
+            buy_signal_bi_for("buy_2like"),
+            getattr(buy2like_signal_bi, "low", None) if "buy_2like" in active_points else None,
+            active="buy_2like" in active_points,
+            basis=buy_basis_by_point.get("buy_2like"),
+            related_zs_id=related_zs_id,
+            related_bi_ids=related_bi_ids,
+        )
+    )
+    signal_catalog.append(
+        _build_signal_point_detail(
+            "sell_2like",
+            sell_signal_bi_for("sell_2like"),
+            getattr(sell2like_signal_bi, "high", None) if "sell_2like" in active_points else None,
+            active="sell_2like" in active_points,
+            basis=sell_basis_by_point.get("sell_2like"),
+            related_zs_id=related_zs_id,
+            related_bi_ids=related_bi_ids,
+        )
+    )
     return signal_points, signal_catalog
 
 

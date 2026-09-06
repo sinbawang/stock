@@ -23,6 +23,9 @@ class SignalPoint(str, Enum):
     SELL_1 = "sell_1"
     SELL_2 = "sell_2"
     SELL_3 = "sell_3"
+    # 类二类买卖点（LB2 / LS2）：同级别隔段背驰生成，无前置一类点、不设破前低/前高。
+    BUY_2_LIKE = "buy_2like"
+    SELL_2_LIKE = "sell_2like"
 
 
 class SignalBasis(str, Enum):
@@ -34,6 +37,8 @@ class SignalBasis(str, Enum):
     TOP_DIVERGENCE_NEAR_ZS_HIGH = "top_divergence_near_zs_high"
     SELL1_REBOUND_CONFIRMATION = "sell1_rebound_confirmation"
     LEAVE_ZS_THEN_REBOUND_FAILS_LOWER_EDGE = "leave_zs_then_rebound_fails_lower_edge"
+    GAP_SEGMENT_DIVERGENCE_PULLBACK_END = "gap_segment_divergence_pullback_end"
+    GAP_SEGMENT_DIVERGENCE_REBOUND_END = "gap_segment_divergence_rebound_end"
 
 
 class StructureStatus(str, Enum):
@@ -59,6 +64,8 @@ SIGNAL_POINT_LABELS = {
     SignalPoint.SELL_1.value: "一卖",
     SignalPoint.SELL_2.value: "二卖",
     SignalPoint.SELL_3.value: "三卖",
+    SignalPoint.BUY_2_LIKE.value: "类二买",
+    SignalPoint.SELL_2_LIKE.value: "类二卖",
 }
 
 
@@ -69,6 +76,8 @@ SIGNAL_BASIS_LABELS = {
     SignalBasis.TOP_DIVERGENCE_NEAR_ZS_HIGH.value: "中枢上沿附近出现顶背驰",
     SignalBasis.SELL1_REBOUND_CONFIRMATION.value: "一卖后反抽确认，高点未再突破前高",
     SignalBasis.LEAVE_ZS_THEN_REBOUND_FAILS_LOWER_EDGE.value: "跌破中枢后反抽下沿失败",
+    SignalBasis.GAP_SEGMENT_DIVERGENCE_PULLBACK_END.value: "同级别隔段背驰，回踩结束即生成（无需前置一买、不破前低）",
+    SignalBasis.GAP_SEGMENT_DIVERGENCE_REBOUND_END.value: "同级别隔段背驰，反抽结束即生成（无需前置一卖、不破前高）",
 }
 
 

@@ -22,6 +22,7 @@
 | BS4 | 三类买卖点严格确认 | 完成 | BS2 | 能严格绑定最近中枢后的首次回抽与级别边界 |
 | BS5 | 多级别联立与消费降级规则 | 进行中 | BS2-BS4 | 高一级方向、操作级别、执行级别和 pending / auxiliary 降级文案一致 |
 | BS6 | 标准案例包与回归闸门 | 进行中 | BS1-BS5 | 一二三类点与区间套样例可 review、可回归、可下游消费 |
+| BS7 | 类二类买卖点（LB2 / LS2）严格确认 | 完成 | BS4（段级背驰口径稳定） | 同级别隔段背驰（A_i vs A_{i+2}）+ 回踩/反抽结束即生成，无前置一类点、不设破前低/前高 |
 
 ## 按任务类型看板
 
@@ -180,6 +181,74 @@
 
 - [buy-sell-multi-level-visual-example-library.md](buy-sell-multi-level-visual-example-library.md) 中的重点样例可被自动化回归支撑。
 - 新增买卖点规则前后，最小回归集能及时暴露行为变化。
+
+<a id="bs7-like-second-point"></a>
+### BS7 类二类买卖点（LB2 / LS2）严格确认
+
+理论口径见 [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) §2.5。这里落设计、任务与测试用例。
+
+#### 设计（design）
+
+判定入口：`src/chanlun/analysis.py::analyze_chanlun_signals`，在标准二 / 三类点之后追加类二类点块。
+
+数据依赖：`segments`（同级别线段序列）、`macd_points`（段级力度）、`current_zs`（最近中枢，用于依附）。
+
+信号码 / 契约：新增 `buy_2like`（类二买）、`sell_2like`（类二卖），落 `analysis_contract.py` 的
+`SignalPoint` 与 `SignalBasis`（依据码 `gap_segment_divergence_pullback_end` /
+`gap_segment_divergence_rebound_end`）。信号码保持单下划线以复用现有
+`_format_signal_point_name` / `format_signal_point_label` 往返归一化。
+
+核心算法（类二买 LB2，类二卖 LS2 对称）：
+
+1. 取同级别线段序列，以最后一个已确认线段 `A_{i+2}`（当下回踩 / 反抽段）为锚，全链相邻
+   回取 `A_{i+1}`（反向段）与 `A_i`（同向段），末三段须为 `A_i(下)-A_{i+1}(上)-A_{i+2}(下)`
+   （LS2 对称）。用全链相邻而非「已确认线段序列末三段」，避免中间未确认段被过滤后破坏隔段相邻。
+2. 隔段背驰：`A_{i+2}` 段级 MACD 面积力度弱于 `A_i`（`strength(A_i) > 0` 且
+   `strength(A_{i+2}) < strength(A_i)`）。**不要求** `A_{i+2}` 破前低 / 前高（贴合
+   「不需要破前低/前高」）。
+3. 回踩结束：`A_{i+2}` 末笔（`_bi_by_id(A_{i+2}.end_bi_id, bis)`）后
+   `_has_reverse_turn_after(anchor, ...)` 出现反向转折。
+4. 门控：仅在 `same_level_decomposition_mode == single_confirmed` 时给点；`pending` 状态只观察。
+5. 生成：信号锚点 = `A_{i+2}` 末笔（回踩 / 反抽极值），`related_zs_id = current_zs.zs_id`。
+
+去重与门控：
+
+- 若标准 `buy_2` 已在 `buy_points`，则不再追加 `buy_2like`（`sell` 侧对称）。
+- 不设 `ongoing_type` 趋势门控（这正是类二类点相对标准一 / 二类点放宽、能多捕获机会之处）；
+  但要求 `same_level_decomposition_mode == single_confirmed`（最近中枢语义已确认），
+  `dual_interpretation_pending`（单/无确认中枢、震荡待方向）只观察不发点，保持与预警独立闸门一致。
+- 不设「破前低 / 前高」与「再度走强 / 走弱创新高 / 新低」约束。
+
+catalog 兼容：`buy_2like` / `sell_2like` 追加在固定 6 槽（buy_1..sell_3）之后（槽位 6 / 7），
+保持既有按索引断言（catalog[1]=buy_2、catalog[4]=sell_2）稳定。
+
+#### 任务（tasks）
+
+| 类型 | 任务 | 状态 |
+| --- | --- | --- |
+| 文档 | 本节 + spec §2.5 理论口径 | 完成 |
+| 代码 | `analysis_contract.py` 新增 `buy_2like` / `sell_2like` 枚举与 label / basis | 完成 |
+| 代码 | `_find_lb2_gap_divergence` / `_find_ls2_gap_divergence` 辅助 + `analyze_chanlun_signals` 集成 | 完成 |
+| 代码 | `build_signal_point_payloads` 透出类二类锚点与 catalog 槽位 | 完成 |
+| 测试 | LB2 / LS2 正例 + 反例（无背驰 / 回踩未结束）+ 契约完整性 | 完成 |
+
+#### 测试用例（test cases）
+
+落 `tests/test_chanlun_analysis.py`（spec_id SPEC.BUY_SELL.CORE）：
+
+- LB2 正例：`A_i(下)-A_{i+1}(上)-A_{i+2}(下)` 隔段背驰（`A_{i+2}` 创新低 + 力度衰减）+ 回踩末笔后
+  出现向上转折 → `buy_2like ∈ buy_points`，catalog 槽位 basis=`gap_segment_divergence_pullback_end`。
+- LB2 反例（无背驰）：`A_{i+2}` 力度不弱于 `A_i` → 不报 `buy_2like`。
+- LB2 反例（回踩未结束）：`A_{i+2}` 末笔后无已确认向上转折笔 → 不报 `buy_2like`。
+- LS2 正例：上跌上（`A_i(上)-A_{i+1}(下)-A_{i+2}(上)`）隔段顶背驰 + 反抽末笔后向下转折 →
+  `sell_2like ∈ sell_points`。
+- LS2 反例（无背驰）：`A_{i+2}` 力度不弱于 `A_i` → 不报 `sell_2like`。
+- 契约完整性：`tests/test_analysis_contract.py` 的 `SignalPoint` / `SignalBasis` 完整集合更新。
+
+验收：
+
+- 在标准一类点因趋势门控缺席的结构里，类二类点仍能给出操作机会。
+- 类二类点与标准二类点不重复标记；catalog 既有索引断言不被破坏。
 
 ## 当前 blocker
 
