@@ -1216,6 +1216,41 @@ def analyze_chanlun_signals(
                     sell2like_signal_bi = anchor
                     sell_points.append("sell_2like")
 
+    # 类一类买卖点（LB1/LS1）：盘整背驰（离开段 vs 进入段，range 门控）+ 反向转折即生成，
+    # 补标准一类点因趋势门控（ongoing_type==down/up）缺席的场景（spec §2.5，第27/65课）。
+    # 复用一买/一卖同一背驰量与锚点，仅把趋势门控换成 range；与标准一类点、类二类点去重。
+    # 门控为「单中枢中枢震荡」（ongoing_type==range 且 current_structure_status==ongoing_same_type，
+    # 即最近中枢语义清晰的盘整），排除 candidate_completed_waiting_stability 过渡态（只观察）。
+    buy1like_signal_bi: Bi | None = None
+    sell1like_signal_bi: Bi | None = None
+    if (
+        current_zs is not None
+        and ongoing_type == "range"
+        and str(structure_state.get("current_structure_status") or "") == "ongoing_same_type"
+    ):
+        if (
+            "buy_1" not in buy_points
+            and buy_signal_bi is not None
+            and buy_signal_bi.is_confirmed
+            and buy_divergence
+            and buy_signal_bi.low <= current_zs.zs_low
+            and (buy2like_signal_bi is None or buy2like_signal_bi.bi_id != buy_signal_bi.bi_id)
+            and _has_reverse_turn_after(buy_signal_bi, direction="down", bis=bis)
+        ):
+            buy1like_signal_bi = buy_signal_bi
+            buy_points.append("buy_1like")
+        if (
+            "sell_1" not in sell_points
+            and sell_signal_bi is not None
+            and sell_signal_bi.is_confirmed
+            and sell_divergence
+            and sell_signal_bi.high >= current_zs.zs_high
+            and (sell2like_signal_bi is None or sell2like_signal_bi.bi_id != sell_signal_bi.bi_id)
+            and _has_reverse_turn_after(sell_signal_bi, direction="up", bis=bis)
+        ):
+            sell1like_signal_bi = sell_signal_bi
+            sell_points.append("sell_1like")
+
     same_level_decomposition_mode = _build_same_level_decomposition_mode(structure_state)
     same_level_consumption_level = _build_same_level_consumption_level(structure_state)
     divergence = build_divergence_state(
@@ -1247,6 +1282,8 @@ def analyze_chanlun_signals(
         sell3_signal_bi=sell3_signal_bi,
         buy2like_signal_bi=buy2like_signal_bi,
         sell2like_signal_bi=sell2like_signal_bi,
+        buy1like_signal_bi=buy1like_signal_bi,
+        sell1like_signal_bi=sell1like_signal_bi,
     )
     zs_monitor_state = _build_zs_monitor_state(
         raw_bars,
@@ -1289,6 +1326,8 @@ def build_signal_point_payloads(
     sell3_signal_bi: Bi | None = None,
     buy2like_signal_bi: Bi | None = None,
     sell2like_signal_bi: Bi | None = None,
+    buy1like_signal_bi: Bi | None = None,
+    sell1like_signal_bi: Bi | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     signal_points: list[dict[str, object]] = []
     signal_catalog: list[dict[str, object]] = []
@@ -1300,12 +1339,14 @@ def build_signal_point_payloads(
         "buy_2": "buy1_pullback_confirmation",
         "buy_3": "leave_zs_then_pullback_holds_upper_edge",
         "buy_2like": "gap_segment_divergence_pullback_end",
+        "buy_1like": "consolidation_divergence_reverse_low",
     }
     sell_basis_by_point = {
         "sell_1": "top_divergence_near_zs_high",
         "sell_2": "sell1_rebound_confirmation",
         "sell_3": "leave_zs_then_rebound_fails_lower_edge",
         "sell_2like": "gap_segment_divergence_rebound_end",
+        "sell_1like": "consolidation_divergence_reverse_high",
     }
 
     def buy_signal_bi_for(point: str) -> Bi | None:
@@ -1313,6 +1354,8 @@ def build_signal_point_payloads(
             return buy3_signal_bi
         if point == "buy_2like" and buy2like_signal_bi is not None:
             return buy2like_signal_bi
+        if point == "buy_1like" and buy1like_signal_bi is not None:
+            return buy1like_signal_bi
         return latest_down
 
     def sell_signal_bi_for(point: str) -> Bi | None:
@@ -1320,6 +1363,8 @@ def build_signal_point_payloads(
             return sell3_signal_bi
         if point == "sell_2like" and sell2like_signal_bi is not None:
             return sell2like_signal_bi
+        if point == "sell_1like" and sell1like_signal_bi is not None:
+            return sell1like_signal_bi
         return latest_up if point == "sell_2" else latest_confirmed_up
 
     for point in buy_points:
@@ -1396,6 +1441,29 @@ def build_signal_point_payloads(
             getattr(sell2like_signal_bi, "high", None) if "sell_2like" in active_points else None,
             active="sell_2like" in active_points,
             basis=sell_basis_by_point.get("sell_2like"),
+            related_zs_id=related_zs_id,
+            related_bi_ids=related_bi_ids,
+        )
+    )
+    # 类一类点槽位追加在类二类槽位之后（槽位 8=buy_1like、9=sell_1like）。
+    signal_catalog.append(
+        _build_signal_point_detail(
+            "buy_1like",
+            buy_signal_bi_for("buy_1like"),
+            getattr(buy1like_signal_bi, "low", None) if "buy_1like" in active_points else None,
+            active="buy_1like" in active_points,
+            basis=buy_basis_by_point.get("buy_1like"),
+            related_zs_id=related_zs_id,
+            related_bi_ids=related_bi_ids,
+        )
+    )
+    signal_catalog.append(
+        _build_signal_point_detail(
+            "sell_1like",
+            sell_signal_bi_for("sell_1like"),
+            getattr(sell1like_signal_bi, "high", None) if "sell_1like" in active_points else None,
+            active="sell_1like" in active_points,
+            basis=sell_basis_by_point.get("sell_1like"),
             related_zs_id=related_zs_id,
             related_bi_ids=related_bi_ids,
         )

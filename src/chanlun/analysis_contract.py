@@ -26,6 +26,9 @@ class SignalPoint(str, Enum):
     # 类二类买卖点（LB2 / LS2）：同级别隔段背驰生成，无前置一类点、不设破前低/前高。
     BUY_2_LIKE = "buy_2like"
     SELL_2_LIKE = "sell_2like"
+    # 类一类买卖点（LB1 / LS1）：盘整背驰（range 门控）构成的类第一类转折点。
+    BUY_1_LIKE = "buy_1like"
+    SELL_1_LIKE = "sell_1like"
 
 
 class SignalBasis(str, Enum):
@@ -39,6 +42,8 @@ class SignalBasis(str, Enum):
     LEAVE_ZS_THEN_REBOUND_FAILS_LOWER_EDGE = "leave_zs_then_rebound_fails_lower_edge"
     GAP_SEGMENT_DIVERGENCE_PULLBACK_END = "gap_segment_divergence_pullback_end"
     GAP_SEGMENT_DIVERGENCE_REBOUND_END = "gap_segment_divergence_rebound_end"
+    CONSOLIDATION_DIVERGENCE_REVERSE_LOW = "consolidation_divergence_reverse_low"
+    CONSOLIDATION_DIVERGENCE_REVERSE_HIGH = "consolidation_divergence_reverse_high"
 
 
 class StructureStatus(str, Enum):
@@ -66,6 +71,8 @@ SIGNAL_POINT_LABELS = {
     SignalPoint.SELL_3.value: "三卖",
     SignalPoint.BUY_2_LIKE.value: "类二买",
     SignalPoint.SELL_2_LIKE.value: "类二卖",
+    SignalPoint.BUY_1_LIKE.value: "类一买",
+    SignalPoint.SELL_1_LIKE.value: "类一卖",
 }
 
 
@@ -78,6 +85,8 @@ SIGNAL_BASIS_LABELS = {
     SignalBasis.LEAVE_ZS_THEN_REBOUND_FAILS_LOWER_EDGE.value: "跌破中枢后反抽下沿失败",
     SignalBasis.GAP_SEGMENT_DIVERGENCE_PULLBACK_END.value: "同级别隔段背驰，回踩结束即生成（无需前置一买、不破前低）",
     SignalBasis.GAP_SEGMENT_DIVERGENCE_REBOUND_END.value: "同级别隔段背驰，反抽结束即生成（无需前置一卖、不破前高）",
+    SignalBasis.CONSOLIDATION_DIVERGENCE_REVERSE_LOW.value: "盘整背驰（离开段 vs 进入段），离开段结束向上转折即生成（趋势门控缺席时补点）",
+    SignalBasis.CONSOLIDATION_DIVERGENCE_REVERSE_HIGH.value: "盘整背驰（离开段 vs 进入段），离开段结束向下转折即生成（趋势门控缺席时补点）",
 }
 
 

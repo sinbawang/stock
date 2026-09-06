@@ -32,6 +32,8 @@ def test_signal_point_enum_is_stable_and_complete() -> None:
         "sell_3",
         "buy_2like",
         "sell_2like",
+        "buy_1like",
+        "sell_1like",
     }
 
 
@@ -45,6 +47,8 @@ def test_signal_basis_enum_is_stable_and_complete() -> None:
         "leave_zs_then_rebound_fails_lower_edge",
         "gap_segment_divergence_pullback_end",
         "gap_segment_divergence_rebound_end",
+        "consolidation_divergence_reverse_low",
+        "consolidation_divergence_reverse_high",
     }
 
 
@@ -94,3 +98,7 @@ def test_signal_point_labels_follow_buy_sell_semantics() -> None:
     assert SIGNAL_POINT_LABELS[SignalPoint.SELL_1.value] == "一卖"
     assert SIGNAL_POINT_LABELS[SignalPoint.SELL_2.value] == "二卖"
     assert SIGNAL_POINT_LABELS[SignalPoint.SELL_3.value] == "三卖"
+    assert SIGNAL_POINT_LABELS[SignalPoint.BUY_2_LIKE.value] == "类二买"
+    assert SIGNAL_POINT_LABELS[SignalPoint.SELL_2_LIKE.value] == "类二卖"
+    assert SIGNAL_POINT_LABELS[SignalPoint.BUY_1_LIKE.value] == "类一买"
+    assert SIGNAL_POINT_LABELS[SignalPoint.SELL_1_LIKE.value] == "类一卖"

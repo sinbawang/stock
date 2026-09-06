@@ -23,6 +23,7 @@
 | BS5 | 多级别联立与消费降级规则 | 进行中 | BS2-BS4 | 高一级方向、操作级别、执行级别和 pending / auxiliary 降级文案一致 |
 | BS6 | 标准案例包与回归闸门 | 进行中 | BS1-BS5 | 一二三类点与区间套样例可 review、可回归、可下游消费 |
 | BS7 | 类二类买卖点（LB2 / LS2）严格确认 | 完成 | BS4（段级背驰口径稳定） | 同级别隔段背驰（A_i vs A_{i+2}）+ 回踩/反抽结束即生成，无前置一类点、不设破前低/前高 |
+| BS8 | 类一类买卖点（LB1 / LS1）严格确认 | 完成 | BS2（一类点段级背驰口径稳定） | 盘整背驰（单中枢 range + ongoing_same_type）+ 离开段 vs 进入段创新低/高 + 力度衰减 + 反向转折即生成，标准一类点趋势门控缺席时补点 |
 
 ## 按任务类型看板
 
@@ -185,7 +186,7 @@
 <a id="bs7-like-second-point"></a>
 ### BS7 类二类买卖点（LB2 / LS2）严格确认
 
-理论口径见 [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) §2.5。这里落设计、任务与测试用例。
+理论口径见 [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) §2.6。这里落设计、任务与测试用例。
 
 #### 设计（design）
 
@@ -226,7 +227,7 @@ catalog 兼容：`buy_2like` / `sell_2like` 追加在固定 6 槽（buy_1..sell_
 
 | 类型 | 任务 | 状态 |
 | --- | --- | --- |
-| 文档 | 本节 + spec §2.5 理论口径 | 完成 |
+| 文档 | 本节 + spec §2.6 理论口径 | 完成 |
 | 代码 | `analysis_contract.py` 新增 `buy_2like` / `sell_2like` 枚举与 label / basis | 完成 |
 | 代码 | `_find_lb2_gap_divergence` / `_find_ls2_gap_divergence` 辅助 + `analyze_chanlun_signals` 集成 | 完成 |
 | 代码 | `build_signal_point_payloads` 透出类二类锚点与 catalog 槽位 | 完成 |
@@ -249,6 +250,106 @@ catalog 兼容：`buy_2like` / `sell_2like` 追加在固定 6 槽（buy_1..sell_
 
 - 在标准一类点因趋势门控缺席的结构里，类二类点仍能给出操作机会。
 - 类二类点与标准二类点不重复标记；catalog 既有索引断言不被破坏。
+
+<a id="bs8-like-first-point"></a>
+### BS8 类一类买卖点（LB1 / LS1）严格确认
+
+理论口径见 [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) §2.5（第27 / 65 课“类第一类买点”）。
+spec + design + tasks + testcases + code + 回归均已落地（`analysis_contract.py` / `analysis.py` /
+`tests/test_chanlun_analysis.py` / `tests/test_analysis_contract.py`）。
+
+#### 设计（design）
+
+判定入口：`src/chanlun/analysis.py::analyze_chanlun_signals`，在标准一 / 二 / 三类点与类二类点块之后
+追加类一类点块。
+
+数据依赖（均已在 `analyze_chanlun_signals` 上游算好，无新增重算）：`segments`、`current_zs`、
+`segment_bottom_divergence` / `segment_top_divergence`（「离开段 vs 进入段」段级背驰布尔量）、
+`entering_segment` / `exit_segment`、`exit_end_bi`（离开段末笔）、`buy_signal_bi` / `sell_signal_bi`（段级
+模式下已取为离开段末笔）、`ongoing_type`、`structure_state`。
+
+信号码 / 契约：新增 `buy_1like`（类一买）、`sell_1like`（类一卖），落 `analysis_contract.py` 的
+`SignalPoint` 与 `SignalBasis`（依据码 `consolidation_divergence_reverse_low` /
+`consolidation_divergence_reverse_high`）。信号码保持单下划线以复用现有
+`_format_signal_point_name` / `format_signal_point_label` 往返归一化（与 `buy_2like` 同口径）。
+
+核心算法（类一买 LB1，类一卖 LS1 对称）：
+
+1. 复用标准一买的「离开段 vs 进入段」段级背驰量：段级中枢下 `buy_divergence = segment_bottom_divergence`
+   （`_has_segment_bottom_divergence`：离开段创新低 + 段级力度衰减），锤点 = 离开段末笔
+   `buy_signal_bi`（= `exit_end_bi`），且 `buy_signal_bi.low <= current_zs.zs_low`（跌破下沿）。
+2. 趋势门控改为 range：`ongoing_type == "range"`（中枢震荡 / 中枢扩张），而非标准一买的
+   `== "down"`。这正是标准一买（`== "down"`）因趋势门控缺席的场景。
+3. 反向转折：`_has_reverse_turn_after(buy_signal_bi, direction="down", bis)` 出现向上转折。
+4. 门控：仅在单中枢中枢震荡（`ongoing_type == "range"` 且
+   `structure_state["current_structure_status"] == "ongoing_same_type"`）时给点；
+   `candidate_completed_waiting_stability` 等过渡态只观察。注：range 走势在同级别分解里
+   恒为 `single_active_zhongshu`（即 `dual_interpretation_pending`），因此不能像 LB2/LS2 那样用
+   `single_confirmed` 作门；改用 `ongoing_same_type` 单中枢作为「盘整背驰」确认闸门。
+5. 生成：信号锤点 = 离开段末笔（离开段低点），`related_zs_id = current_zs.zs_id`。
+
+（LS1 对称：`ongoing_type == "range"`、`sell_divergence = segment_top_divergence`、锤点 = `sell_signal_bi`
+（离开段末笔）、`sell_signal_bi.high >= current_zs.zs_high`、`_has_reverse_turn_after(..., direction="up")`。）
+
+笔级中枢回退：段级中枢缺失（`use_segment_divergence == False`）时回退笔级 `bottom_divergence` /
+`top_divergence`（与标准一买笔级回退口径一致），锤点取 `latest_down` / `latest_confirmed_up`。
+
+去重与门控：
+
+- 与标准 `buy_1` 互斥：若 `buy_1` 已在 `buy_points` 则不追加 `buy_1like`（sell 侧对称）。因 `buy_1`
+  门控是 `ongoing_type == down`、`buy_1like` 门控是 `== range`，两者不会同时命中同一 `ongoing_type`，
+  去重主要防御未来门控放宽时重复。
+- 与 `buy_2like`（LB2）区分：LB1 走「离开段 vs 进入段」 + range 门控；LB2 走「隔段 A_i vs
+  A_{i+2}」。若同一离开段末笔已被 `buy_2like` 认领（`signal_bi_id` 相同），则不再重复标记 `buy_1like`。
+
+catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy_2like、7=sell_2like）之后
+（槽位 8=buy_1like、9=sell_1like），保持固定 6 槽（buy_1..sell_3）+ LB2/LS2（槽 6/7）的按索引断言稳定。
+
+轠额外：`src/chanlun/analysis.py` 类二类块注释引用的 `spec §2.5/§2.6` 在 spec 重编号后指向 类一类/类二类（§2.5/§2.6），继续成立；另在 code 阶段可顺手把类一类块注释锤到 spec §2.5。
+
+#### 任务（tasks）
+
+| 类型 | 任务 | 状态 |
+| --- | --- | --- |
+| 文档 | 本节 + spec §2.5 理论口径 | 完成 |
+| 文档 | 测试用例规格（本节 #### 测试用例） | 完成 |
+| 代码 | `analysis_contract.py` 新增 `buy_1like` / `sell_1like` 枚举与 label / basis | 完成 |
+| 代码 | `analyze_chanlun_signals` 集成 range 门控盘整背驰类一类点块（含去重） | 完成 |
+| 代码 | `build_signal_point_payloads` 透出类一类锤点与 catalog 槽位（8/9） | 完成 |
+| 测试 | LB1 / LS1 正例 + 反例（门控=down/up 归标准一类点 / 无背驰 / 无反向转折 / candidate）+ 契约完整性 | 完成 |
+
+#### 测试用例（test cases）
+
+落 `tests/test_chanlun_analysis.py`（spec_id SPEC.BUY_SELL.CORE）：
+
+- **LB1 正例**：单一最近中枢 + `ongoing_type == range` 且 `current_structure_status == ongoing_same_type`
+  （单中枢中枢震荡）+ 向下离开（末笔）跌破 `zs_low` 且相对进入段创新低 + 力度衰减
+  （`bottom_divergence` / `segment_bottom_divergence == True`）+ 离开末笔后出现向上反向转折 →
+  `buy_1like ∈ buy_points`；catalog 槽位 `basis == consolidation_divergence_reverse_low`，
+  `signal_bi_id` / `price` 锚在离开末笔低点。
+- **LB1 反例（趋势门控 down）**：同背驰结构但 `ongoing_type == down`（两中枢不重叠不回探 → 下跌
+  趋势）→ 报标准 `buy_1`，不报 `buy_1like`（趋势背驰归一买）。
+- **LB1 反例（无背驰）**：离开段力度不弱于进入段（`segment_bottom_divergence == False`）→ 不报 `buy_1like`。
+- **LB1 反例（无反向转折）**：离开段末笔后无向上转折笔（`_has_reverse_turn_after == False`）→ 不报 `buy_1like`。
+- **LB1 门控反例**：前段已完成、当前为新类型候选未确认（`current_structure_status ==
+  candidate_completed_waiting_stability`）→ 只观察，不报 `buy_1like`。
+- **LS1 正例（对称）**：`ongoing_type == range` + 向上离开段升破 `zs_high` + `segment_top_divergence` +
+  离开段末笔后向下反向转折 → `sell_1like ∈ sell_points`，`basis == consolidation_divergence_reverse_high`。
+- **LS1 反例（无背驰）**：`segment_top_divergence == False` → 不报 `sell_1like`。
+- **去重**：同一离开段末笔已被 `buy_2like` 认领（`signal_bi_id` 相同）时不重复标记 `buy_1like`。
+- **契约完整性**：`tests/test_analysis_contract.py` 的 `SignalPoint` / `SignalBasis` 完整集合更新
+  （`buy_1like` / `sell_1like` + 两个 basis）。
+
+固定口（建议）：LB1/LS1 正例可用单中枢（range + `ongoing_same_type`）+ 笔级 / 段级背驰：
+向下离开（末笔）跌破 `zs_low` 且 `bottom_divergence`/`segment_bottom_divergence == True`，随后反向转折笔；
+趋势反例用两个不重叠下移中枢（`ongoing_type == down`）→ 归标准 `buy_1`；过渡态反例用
+「完成块 + range 当前块」使 `current_structure_status == candidate_completed_waiting_stability`。
+
+验收：
+
+- 在盘整 / 中枢震荡（range）结构里，标准一类点因趋势门控缺席时，类一类点仍能给出「盘整背驰
+  转折」操作机会。
+- 类一类点与标准一 / 二类点、类二类点不重复标记；catalog 既有索引断言（buy_1..sell_2like）不被破坏。
 
 ## 当前 blocker
 

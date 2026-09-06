@@ -2036,6 +2036,174 @@ def test_analyze_chanlun_signals_no_sell_2like_without_gap_divergence() -> None:
     assert "sell_2like" not in signals["sell_points"]
 
 
+def _lb1_range_bis() -> list[Bi]:
+    # 单中枢中枢震荡下的向下离开段（末笔 bi5 跌破 zs_low）+ 底背驰 + 向上反向转折（bi6）。
+    return [
+        _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(2, BiDirection.UP, high=10.9, low=10.4, day=2),
+        _bi(3, BiDirection.DOWN, high=11.0, low=10.0, day=3),
+        _bi(4, BiDirection.UP, high=11.3, low=10.2, day=4),
+        _bi(5, BiDirection.DOWN, high=11.0, low=9.8, day=5),  # 离开末笔，跌破 zs_low
+        _bi(6, BiDirection.UP, high=11.5, low=10.3, day=6),  # 向上反向转折
+    ]
+
+
+def _lb1_divergence_macd(bis: list[Bi]) -> list[SimpleNamespace]:
+    return [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-2.5, dif=-0.6),
+        SimpleNamespace(ts=bis[4].end_ts, macd=-1.0, dif=-0.4),  # 离开末笔力度衰减 -> 底背驰
+        SimpleNamespace(ts=bis[5].end_ts, macd=-0.6, dif=0.3),
+    ]
+
+
+def test_analyze_chanlun_signals_flags_buy_1like_on_range_consolidation_divergence() -> None:
+    """BS8 类一买正例：单中枢中枢震荡（range + ongoing_same_type）+ 盘整背驰 + 向上转折 -> buy_1like。
+
+    标准一买要求 ongoing_type==down（趋势背驰）；此处趋势门控缺席（range），由盘整背驰给出
+    类第一类买点（第27/65课）。
+    """
+    current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)  # 单中枢 -> range + ongoing_same_type
+    bis = _lb1_range_bis()
+    macd_points = _lb1_divergence_macd(bis)
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["structure_state"]["current_structure_status"] == "ongoing_same_type"
+    assert signals["structure_state"]["current_ongoing"]["type"] == "range"
+    assert "buy_1" not in signals["buy_points"]
+    assert "buy_1like" in signals["buy_points"]
+    assert signals["bottom_divergence"] is True
+    catalog_lb1 = next(entry for entry in signals["signal_catalog"] if entry["point"] == "buy1like")
+    assert catalog_lb1["active"] is True
+    assert catalog_lb1["basis"] == "consolidation_divergence_reverse_low"
+    assert catalog_lb1["signal_bi_id"] == 5
+    assert catalog_lb1["price"] == 9.8
+
+
+def test_analyze_chanlun_signals_buy_1_not_buy_1like_under_down_trend_gate() -> None:
+    """BS8 类一买反例（趋势门控 down）：同背驰结构但两中枢下移趋势 -> 报标准 buy_1，不报 buy_1like。"""
+    prev_zs = _zhongshu(0, zs_low=11.6, zs_high=12.2, day=1)
+    current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)  # 两中枢不重叠下移 -> down
+    bis = _lb1_range_bis()
+    macd_points = _lb1_divergence_macd(bis)
+
+    signals = analyze_chanlun_signals([], bis, [prev_zs, current_zs], macd_points)
+
+    assert signals["structure_state"]["current_ongoing"]["type"] == "down"
+    assert "buy_1" in signals["buy_points"]
+    assert "buy_1like" not in signals["buy_points"]
+
+
+def test_analyze_chanlun_signals_no_buy_1like_without_consolidation_divergence() -> None:
+    """BS8 类一买反例（无背驰）：离开末笔力度不弱于进入段 -> 不报 buy_1like。"""
+    current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)
+    bis = _lb1_range_bis()
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-1.0, dif=-0.4),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-2.5, dif=-0.6),
+        SimpleNamespace(ts=bis[4].end_ts, macd=-5.0, dif=-1.0),  # 离开末笔力度反而更强 -> 无背驰
+        SimpleNamespace(ts=bis[5].end_ts, macd=-0.6, dif=0.3),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["bottom_divergence"] is False
+    assert "buy_1like" not in signals["buy_points"]
+
+
+def test_analyze_chanlun_signals_no_buy_1like_without_reverse_turn() -> None:
+    """BS8 类一买反例（无反向转折）：离开末笔后无已确认向上转折 -> 不报 buy_1like。"""
+    current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)
+    bis = _lb1_range_bis()[:5] + [
+        Bi(
+            bi_id=6,
+            direction=BiDirection.UP,
+            start_fx_id=7,
+            end_fx_id=8,
+            start_ts=datetime(2026, 5, 6, 10, 30),
+            end_ts=datetime(2026, 5, 6, 14, 30),
+            high=11.5,
+            low=10.3,
+            norm_bar_range=(7, 8),
+            is_confirmed=False,  # 反向转折笔尚未确认
+        ),
+    ]
+    macd_points = _lb1_divergence_macd(bis)
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert "buy_1like" not in signals["buy_points"]
+
+
+def test_analyze_chanlun_signals_no_buy_1like_when_structure_status_candidate() -> None:
+    """BS8 类一买门控反例：前段完成 + 新类型候选未确认（candidate）时只观察，不报 buy_1like。"""
+    first = _zhongshu(1, zs_low=10.0, zs_high=11.0, day=1)
+    second = _zhongshu(2, zs_low=11.5, zs_high=12.0, day=4)
+    third = _zhongshu(3, zs_low=11.8, zs_high=12.1, day=7)  # 与 second 重叠 -> range 候选
+    bis = [
+        _bi(1, BiDirection.DOWN, high=12.4, low=11.8, day=1),
+        _bi(2, BiDirection.UP, high=12.1, low=11.6, day=2),
+        _bi(3, BiDirection.DOWN, high=12.2, low=11.2, day=3),
+        _bi(4, BiDirection.UP, high=12.5, low=11.4, day=4),
+        _bi(5, BiDirection.DOWN, high=12.2, low=11.0, day=5),
+        _bi(6, BiDirection.UP, high=12.7, low=11.5, day=6),
+    ]
+    macd_points = _lb1_divergence_macd(bis)
+
+    signals = analyze_chanlun_signals([], bis, [first, second, third], macd_points)
+
+    assert signals["structure_state"]["current_structure_status"] == "candidate_completed_waiting_stability"
+    assert "buy_1like" not in signals["buy_points"]
+
+
+def test_analyze_chanlun_signals_flags_sell_1like_on_range_consolidation_divergence() -> None:
+    """BS8 类一卖正例（对称）：单中枢中枢震荡 + 盘整顶背驰 + 向下转折 -> sell_1like。"""
+    current_zs = _zhongshu(2, zs_low=10.0, zs_high=10.8, day=10)  # 单中枢 -> range + ongoing_same_type
+    bis = [
+        _bi(1, BiDirection.UP, high=10.6, low=10.1, day=10),
+        _bi(2, BiDirection.DOWN, high=10.5, low=10.0, day=11),
+        _bi(3, BiDirection.UP, high=11.2, low=10.3, day=12),  # 离开末笔越上沿，创新高
+        _bi(4, BiDirection.DOWN, high=11.0, low=10.4, day=13),  # 向下反向转折
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=5.0, dif=1.2),
+        SimpleNamespace(ts=bis[2].end_ts, macd=3.0, dif=0.8),  # 离开末笔力度衰减 -> 顶背驰
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["structure_state"]["current_ongoing"]["type"] == "range"
+    assert "sell_1" not in signals["sell_points"]
+    assert "sell_1like" in signals["sell_points"]
+    assert signals["top_divergence"] is True
+    catalog_ls1 = next(entry for entry in signals["signal_catalog"] if entry["point"] == "sell1like")
+    assert catalog_ls1["active"] is True
+    assert catalog_ls1["basis"] == "consolidation_divergence_reverse_high"
+    assert catalog_ls1["signal_bi_id"] == 3
+    assert catalog_ls1["price"] == 11.2
+
+
+def test_analyze_chanlun_signals_no_sell_1like_without_consolidation_divergence() -> None:
+    """BS8 类一卖反例（无背驰）：离开末笔力度不弱于进入段 -> 不报 sell_1like。"""
+    current_zs = _zhongshu(2, zs_low=10.0, zs_high=10.8, day=10)
+    bis = [
+        _bi(1, BiDirection.UP, high=10.6, low=10.1, day=10),
+        _bi(2, BiDirection.DOWN, high=10.5, low=10.0, day=11),
+        _bi(3, BiDirection.UP, high=11.2, low=10.3, day=12),
+        _bi(4, BiDirection.DOWN, high=11.0, low=10.4, day=13),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=3.0, dif=0.8),
+        SimpleNamespace(ts=bis[2].end_ts, macd=5.0, dif=1.2),  # 离开末笔力度反而更强 -> 无背驰
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["top_divergence"] is False
+    assert "sell_1like" not in signals["sell_points"]
+
+
 def test_analyze_chanlun_signals_flags_third_buy_after_leave_zs_and_pullback_holds_upper_edge() -> None:
     """BS4 三买正例：向上离开中枢 + 首次回抽不重回中枢上沿之下 -> buy_3。"""
     current_zs = _zhongshu(3, zs_low=10.0, zs_high=10.8, day=20)
