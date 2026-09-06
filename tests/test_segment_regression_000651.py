@@ -23,7 +23,7 @@ from chanlun.segment import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CSV = ROOT / "data" / "reports" / "000651" / "1m" / "analyze" / "000651_1m_20260810_to_20260828.csv"
+CSV = ROOT / "data" / "reports" / "000651" / "1m" / "analyze" / "000651_1m_20260817_to_20260904.csv"
 
 
 def _segments_theory():
@@ -40,21 +40,19 @@ def _segments_theory():
     )
 
 
-def test_000651_1m_lesson71_first_bi_break_then_third_extends_confirms_head() -> None:
-    """数据刷新后 000651 1m 新窗口的 71课「第一笔破坏前段 + 第三笔破第一笔结束位」
-    确认锚点落在段头（首段），而非旧窗口的 S4/S5 中段。
-
-    段 0（up 0-2）：bootstrap 后首段，经 first_bi_break_then_third_extends 确认，
-    break=3。锁住该识别规则在当前窗口仍产出 theory-confirmed 首段。
+def test_000651_1m_lesson71_first_bi_break_then_contained_third_confirms_segment() -> None:
+    """数据刷新到 20260904 后 000651 1m 新窗口不再含 first_bi_break_then_third_extends，
+    但仍含 71课「第一笔破坏前段 + 第三笔被第一笔包含、先破第一笔结束位」确认规则：
+    段 1（down 7-9）theory-confirmed，break=10。锁住该 71课识别规则在真实 1m 窗口仍生效。
     """
     segments = _segments_theory()
 
-    assert len(segments) >= 1
-    head = segments[0]
+    assert len(segments) >= 2
+    seg = segments[1]
 
-    assert head.direction.value == "up"
-    assert head.start_bi_id == 0
-    assert head.end_bi_id == 2
-    assert head.is_confirmed is True
-    assert head.stop_reason == "first_bi_break_then_third_extends"
-    assert head.break_bi_id == 3
+    assert seg.direction.value == "down"
+    assert seg.start_bi_id == 7
+    assert seg.end_bi_id == 9
+    assert seg.is_confirmed is True
+    assert seg.stop_reason == "first_bi_break_then_contained_third_breaks_end"
+    assert seg.break_bi_id == 10

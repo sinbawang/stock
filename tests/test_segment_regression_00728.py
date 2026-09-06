@@ -27,7 +27,7 @@ from chanlun.segment import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CSV = ROOT / "data" / "reports" / "00728" / "day" / "analyze" / "00728_day_20211015_to_20260828.csv"
+CSV = ROOT / "data" / "reports" / "00728" / "day" / "analyze" / "00728_day_20211022_to_20260904.csv"
 
 
 def _segments_theory():
@@ -53,13 +53,13 @@ def test_00728_day_s8_contained_third_confirms_down_segment() -> None:
     应 theory-confirmed，break=66。"""
     segments = _segments_theory()
 
-    s8 = _segment_by_start(segments, 61)
+    s8 = _segment_by_start(segments, 59)
     assert s8.direction.value == "down"
-    assert s8.start_bi_id == 61
-    assert s8.end_bi_id == 65
+    assert s8.start_bi_id == 59
+    assert s8.end_bi_id == 63
     assert s8.is_confirmed is True
     assert s8.stop_reason == "first_bi_break_then_contained_third_breaks_end"
-    assert s8.break_bi_id == 66
+    assert s8.break_bi_id == 64
 
 
 def test_00728_day_s9_contained_third_confirms_up_segment() -> None:
@@ -67,10 +67,10 @@ def test_00728_day_s9_contained_third_confirms_up_segment() -> None:
     应 theory-confirmed，break=71。"""
     segments = _segments_theory()
 
-    s9 = _segment_by_start(segments, 66)
+    s9 = _segment_by_start(segments, 64)
     assert s9.direction.value == "up"
-    assert s9.start_bi_id == 66
-    assert s9.end_bi_id == 70
+    assert s9.start_bi_id == 64
+    assert s9.end_bi_id == 68
     assert s9.is_confirmed is True
     assert s9.stop_reason == "first_bi_break_then_contained_third_breaks_end"
-    assert s9.break_bi_id == 71
+    assert s9.break_bi_id == 69

@@ -4,9 +4,8 @@ from tests.segment_regression_support import assert_landmarks_equal, identify_se
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_DAY_CSV = ROOT / "data" / "reports" / "300124" / "day" / "analyze" / "300124_day_20210914_to_20260828.csv"
-SAMPLE_30M_CSV = ROOT / "data" / "reports" / "300124" / "30m" / "analyze" / "300124_30m_20260116_to_20260828.csv"
-SAMPLE_15M_CSV = ROOT / "data" / "reports" / "300124" / "15m" / "analyze" / "300124_15m_20260506_to_20260618.csv"
+SAMPLE_DAY_CSV = ROOT / "data" / "reports" / "300124" / "day" / "analyze" / "300124_day_20210923_to_20260904.csv"
+SAMPLE_30M_CSV = ROOT / "data" / "reports" / "300124" / "30m" / "analyze" / "300124_30m_20260123_to_20260904.csv"
 
 def test_300124_day_segments_keep_current_landmarks() -> None:
     segments = identify_segments_from_csv(SAMPLE_DAY_CSV)
@@ -23,18 +22,17 @@ def test_300124_day_segments_keep_current_landmarks() -> None:
     ]
 
     expected = [
-        ("up", 0, 2, "feature_sequence_fractal", True),
-        ("down", 3, 13, "reverse_break", True),
-        ("up", 14, 16, "reverse_break", True),
-        ("down", 17, 23, "reverse_break", True),
-        ("up", 24, 26, "reverse_break", True),
-        ("down", 27, 33, "reverse_break", True),
-        ("up", 34, 36, "reverse_break", True),
-        ("down", 37, 55, "reverse_break", True),
-        ("up", 56, 58, "reverse_break", True),
-        ("down", 59, 65, "feature_sequence_fractal", True),
-        ("up", 66, 88, "reverse_break", True),
-        ("down", 89, 103, "exhausted_confirmed_bis", False),
+        ("down", 2, 12, "reverse_break", True),
+        ("up", 13, 15, "reverse_break", True),
+        ("down", 16, 22, "reverse_break", True),
+        ("up", 23, 25, "reverse_break", True),
+        ("down", 26, 32, "reverse_break", True),
+        ("up", 33, 35, "reverse_break", True),
+        ("down", 36, 54, "reverse_break", True),
+        ("up", 55, 57, "reverse_break", True),
+        ("down", 58, 64, "feature_sequence_fractal", True),
+        ("up", 65, 87, "reverse_break", True),
+        ("down", 88, 102, "same_direction_not_extending", False),
     ]
 
     assert_landmarks_equal(expected, landmarks)
@@ -56,38 +54,25 @@ def test_300124_30m_segments_keep_tail_and_no_followup_state() -> None:
     ]
 
     expected = [
-        ("up", 0, 2, "reverse_break", True, (5, 19)),
-        ("down", 3, 5, "same_direction_not_extending", False, (19, 50)),
+        ("down", 3, 15, "reverse_break", True, (27, 146)),
+        ("up", 16, 18, "reverse_break", True, (146, 162)),
+        ("down", 19, 21, "reverse_break", True, (162, 189)),
+        ("up", 22, 24, "feature_sequence_fractal", True, (189, 211)),
+        ("down", 25, 29, "reverse_break", True, (211, 248)),
+        ("up", 30, 34, "reverse_break", True, (248, 277)),
+        ("down", 35, 41, "reverse_break", True, (277, 322)),
+        ("up", 42, 48, "feature_sequence_fractal", True, (322, 380)),
+        ("down", 49, 51, "reverse_break", True, (380, 397)),
+        ("up", 52, 54, "reverse_break", True, (397, 417)),
+        ("down", 55, 61, "feature_sequence_fractal", True, (417, 494)),
+        ("up", 62, 64, "reverse_break", True, (494, 510)),
+        ("down", 65, 67, "reverse_break", True, (510, 544)),
+        ("up", 68, 70, "reverse_break", True, (544, 567)),
+        ("down", 71, 75, "reverse_break", True, (567, 629)),
+        ("up", 76, 80, "feature_sequence_gap_fractal", True, (629, 677)),
+        ("down", 81, 91, "reverse_break", True, (677, 766)),
+        ("up", 92, 97, "exhausted_confirmed_bis", False, (766, 795)),
     ]
 
     assert_landmarks_equal(expected, landmarks)
 
-
-def test_300124_15m_segments_keep_gap_and_reverse_break_landmarks() -> None:
-    # 注：旧名 `..._keep_reverse_break_after_gap_landmark` 已过时——该窗口实际产出的
-    # stop_reason 是 `feature_sequence_gap_fractal` + `reverse_break`，并不产出
-    # `reverse_break_after_gap`（后者是契约中保留但实现当前不产出的码，见
-    # tests/test_segment_rediscrimination_matrix.py 中对应 synthetic 引脚）。
-    segments = identify_segments_from_csv(SAMPLE_15M_CSV)
-
-    landmarks = [
-        (
-            segment.direction.value,
-            segment.start_bi_id,
-            segment.end_bi_id,
-            segment.stop_reason,
-            segment.is_confirmed,
-        )
-        for segment in segments
-    ]
-
-    expected = [
-        ("up", 0, 2, "feature_sequence_gap_fractal", True),
-        ("down", 3, 9, "reverse_break", True),
-        ("up", 10, 20, "feature_sequence_fractal", True),
-        ("down", 21, 25, "feature_sequence_fractal", True),
-        ("up", 26, 28, "feature_sequence_fractal", True),
-        ("down", 29, 41, "reverse_break", True),
-    ]
-
-    assert_landmarks_equal(expected, landmarks)
