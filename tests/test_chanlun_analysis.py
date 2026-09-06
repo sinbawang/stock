@@ -870,6 +870,59 @@ def test_real_1m_pre_breakout_replay_sample_600900_preserves_independent_gate() 
     assert "确认三买" not in payload["advice_text"]
 
 
+def test_real_1m_pre_breakout_replay_sample_01024_preserves_independent_gate() -> None:
+    # 第四个真实 1m 回放锚点（01024 快手），用于扩展 pre_breakout 样本广度。
+    # 该断言避免绑定易漂移的价位数值，重点锁 pending/watch 语义与不误升 confirmed。
+    rows = probe_module._load_rows("01024", "1m")
+    payload = probe_module._replay("01024", "快手", "2026-08-10 09:56", rows)
+
+    assert payload["cutoff"] == "2026-08-10 09:56"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["buy_points"] == []
+    assert payload["sell_points"] == []
+    assert payload["zs_monitor_alert"] in {"none", "pre_breakout", "pre_breakdown"}
+    assert payload["zs_monitor_bias"] in {"strong", "weak"}
+    assert isinstance(payload["conclusion"], str)
+    assert payload["conclusion"]
+    assert "监视器：中枢中线" in payload["advice_text"]
+    assert "当前按三买确认处理。" not in payload["advice_text"]
+
+
+def test_real_1m_pre_breakout_replay_sample_09988_preserves_independent_gate() -> None:
+    # 第五个真实 1m 回放锚点（09988 阿里巴巴），继续扩展 pre_breakout 样本广度。
+    # 断言锁 pending/watch 语义，避免绑定易漂移的具体价位。
+    rows = probe_module._load_rows("09988", "1m")
+    payload = probe_module._replay("09988", "阿里巴巴", "2026-08-05 10:01", rows)
+
+    assert payload["cutoff"] == "2026-08-05 10:01"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["buy_points"] == []
+    assert payload["sell_points"] == []
+    assert payload["zs_monitor_alert"] in {"none", "pre_breakout", "pre_breakdown"}
+    assert payload["zs_monitor_bias"] in {"strong", "weak"}
+    assert isinstance(payload["conclusion"], str)
+    assert payload["conclusion"]
+    assert "监视器：中枢中线" in payload["advice_text"]
+    assert "当前按三买确认处理。" not in payload["advice_text"]
+
+
+def test_real_1m_pre_breakout_replay_sample_00700_preserves_independent_gate() -> None:
+    # 第六个真实 1m 回放锚点（00700 腾讯），补齐本轮 pre_breakout 扩样本收口。
+    rows = probe_module._load_rows("00700", "1m")
+    payload = probe_module._replay("00700", "腾讯", "2026-08-05 10:01", rows)
+
+    assert payload["cutoff"] == "2026-08-05 10:01"
+    assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
+    assert payload["buy_points"] == []
+    assert payload["sell_points"] == []
+    assert payload["zs_monitor_alert"] in {"none", "pre_breakout", "pre_breakdown"}
+    assert payload["zs_monitor_bias"] in {"strong", "weak"}
+    assert isinstance(payload["conclusion"], str)
+    assert payload["conclusion"]
+    assert "监视器：中枢中线" in payload["advice_text"]
+    assert "当前按三买确认处理。" not in payload["advice_text"]
+
+
 def test_real_1m_pre_breakdown_replay_sample_preserves_independent_gate() -> None:
     rows = probe_module._load_rows("000651", "1m")
     payload = probe_module._replay("000651", "格力电器", "2026-07-30 10:21", rows)

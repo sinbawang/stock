@@ -840,7 +840,8 @@
 
 输出：
 
-- 一个正式 `1m pre_breakout` 样本锚点。
+- 至少三个正式 `1m pre_breakout` 样本锚点（已完成）。
+- 下一批扩样本锚点（2-3 个）与双 gate 执行序列。
 - 与 `pre_breakdown` 对称的消费约束。
 
 阻塞条件：
@@ -859,6 +860,30 @@
   - `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_03690_1m_pre_breakout_sample`（03690）
   - `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_600900_1m_pre_breakout_sample`（600900）
 - 三个样本同为「无中枢 fallback 监视带 + `dual_interpretation_pending`」，继续锁“向上预警未确认、不升格三买”的口径。
+
+当前进展补充（2026-09-06，P0.1 扩样本）：
+
+- `build/scan_real_1m_prebreakout_samples.json` 已确认 16/16 `1m` 标的都存在 `pre_breakout` 历史 cutoff，本轮从中挑选“未进入现有三锚点”的高 ROI 队列。
+- 下一批执行顺序（先 analysis，再 publish）：
+  - `01024 快手 2026-08-10 09:56`（HK 新增锚点，rows=56）已完成：
+    - analysis gate：`tests/test_chanlun_analysis.py::test_real_1m_pre_breakout_replay_sample_01024_preserves_independent_gate`
+    - publish gate：`tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_01024_1m_pre_breakout_sample`
+    - 定向回归：2 passed
+  - `09988 阿里巴巴 2026-08-05 10:01`（HK 新增锚点，rows=71）已完成：
+    - analysis gate：`tests/test_chanlun_analysis.py::test_real_1m_pre_breakout_replay_sample_09988_preserves_independent_gate`
+    - publish gate：`tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_09988_1m_pre_breakout_sample`
+    - 定向回归：2 passed
+  - `00700 腾讯 2026-08-05 10:01`（HK 新增锚点，rows=71）已完成：
+    - analysis gate：`tests/test_chanlun_analysis.py::test_real_1m_pre_breakout_replay_sample_00700_preserves_independent_gate`
+    - publish gate：`tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_00700_1m_pre_breakout_sample`
+    - 定向回归：2 passed
+- 每个锚点最小验收：
+  - analysis gate：`tests/test_chanlun_analysis.py` 新增 1 条 replay 断言；
+  - publish gate：`tests/test_build_miniapp_publish_bundle.py` 新增 1 条 summary/detail 断言；
+  - 语义锁定：保持 `watch/pending`，不得误升格为 confirmed `3B`。
+- 关门验收（2026-09-06）：
+  - 组合回归一次性执行 6 条新增锚点（01024/09988/00700 的 analysis + publish），结果 `6 passed`。
+  - 结论：P0.1 扩样本任务已完成，后续只需维持回归稳定性与文档案例同步。
 
 <a id="zs53d-pre-breakout-publish"></a>
 #### ZS5.3.d 补发布产物与消费核验链
