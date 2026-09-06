@@ -31,16 +31,16 @@ from tests.segment_regression_support import load_bis_from_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_03690_30M_CSV = ROOT / "data" / "reports" / "03690" / "30m" / "analyze" / "03690_30m_20260319_to_20260828.csv"
-SAMPLE_03690_DAY_CSV = ROOT / "data" / "reports" / "03690" / "day" / "analyze" / "03690_day_20211015_to_20260828.csv"
-SAMPLE_01024_1M_CSV = ROOT / "data" / "reports" / "01024" / "1m" / "analyze" / "01024_1m_20260814_to_20260828.csv"
-SAMPLE_600900_1M_CSV = ROOT / "data" / "reports" / "600900" / "1m" / "analyze" / "600900_1m_20260810_to_20260828.csv"
-SAMPLE_600900_5M_CSV = ROOT / "data" / "reports" / "600900" / "5m" / "analyze" / "600900_5m_20260715_to_20260828.csv"
+SAMPLE_03690_30M_CSV = ROOT / "data" / "reports" / "03690" / "30m" / "analyze" / "03690_30m_20260326_to_20260904.csv"
+SAMPLE_03690_DAY_CSV = ROOT / "data" / "reports" / "03690" / "day" / "analyze" / "03690_day_20211022_to_20260904.csv"
+SAMPLE_01024_1M_CSV = ROOT / "data" / "reports" / "01024" / "1m" / "analyze" / "01024_1m_20260821_to_20260904.csv"
+SAMPLE_600900_1M_CSV = ROOT / "data" / "reports" / "600900" / "1m" / "analyze" / "600900_1m_20260817_to_20260904.csv"
+SAMPLE_600900_5M_CSV = ROOT / "data" / "reports" / "600900" / "5m" / "analyze" / "600900_5m_20260715_to_20260904.csv"
 
 NESTED_DEFERRED_INVALIDATED_ANCHORS = [
     (
         SAMPLE_03690_30M_CSV,
-        ["up", "down", "up", "down", "up", "down", "up", "down", "up", "down", "up"],
+        ["down", "up", "down", "up", "down", "up", "down", "up", "down", "up", "down"],
     ),
     (
         SAMPLE_600900_5M_CSV,
@@ -48,7 +48,7 @@ NESTED_DEFERRED_INVALIDATED_ANCHORS = [
     ),
     (
         SAMPLE_03690_DAY_CSV,
-        ["up", "down", "up", "down", "up", "down", "up", "down", "up", "down", "up"],
+        ["down", "up", "down", "up", "down", "up", "down", "up", "down", "up", "down"],
     ),
     (
         SAMPLE_600900_1M_CSV,
@@ -56,7 +56,7 @@ NESTED_DEFERRED_INVALIDATED_ANCHORS = [
     ),
     (
         SAMPLE_01024_1M_CSV,
-        ["up", "down", "up", "down", "up", "down", "up", "down", "up", "down", "up"],
+        ["down", "up", "down", "up", "down", "up", "down", "up", "down", "up", "down"],
     ),
 ]
 
@@ -69,14 +69,12 @@ NESTED_DEFERRED_INVALIDATED_ANCHOR_IDS = [
 ]
 
 # 深度场景（gap-false 后续 reverse_break 优先于 reclaim）只在仍能复现该结构的窗口上跑。
-# 数据刷新后 03690-30m / 600900-5m 新窗口不再复现该结构，仅保留轻量 anchor_health 覆盖。
+# 数据刷新后 03690-30m / 600900-5m / 03690-day 新窗口不再复现该结构，仅保留轻量 anchor_health 覆盖。
 NESTED_DEFERRED_INVALIDATED_ANCHORS_DEEP = [
-    NESTED_DEFERRED_INVALIDATED_ANCHORS[2],  # 03690-day
     NESTED_DEFERRED_INVALIDATED_ANCHORS[3],  # 600900-1m
     NESTED_DEFERRED_INVALIDATED_ANCHORS[4],  # 01024-1m
 ]
 NESTED_DEFERRED_INVALIDATED_ANCHOR_DEEP_IDS = [
-    NESTED_DEFERRED_INVALIDATED_ANCHOR_IDS[2],
     NESTED_DEFERRED_INVALIDATED_ANCHOR_IDS[3],
     NESTED_DEFERRED_INVALIDATED_ANCHOR_IDS[4],
 ]

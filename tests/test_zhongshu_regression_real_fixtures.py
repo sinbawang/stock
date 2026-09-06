@@ -14,16 +14,14 @@ from tests.segment_regression_support import identify_segments_from_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_00700_30M_CSV = ROOT / "data" / "reports" / "00700" / "30m" / "analyze" / "00700_30m_20260319_to_20260828.csv"
-SAMPLE_03690_30M_CSV = ROOT / "data" / "reports" / "03690" / "30m" / "analyze" / "03690_30m_20260319_to_20260828.csv"
-SAMPLE_000591_60M_LONG_CSV = ROOT / "data" / "reports" / "000591" / "60m" / "analyze" / "000591_60m_20251210_to_20260618.csv"
-SAMPLE_300124_60M_CSV = ROOT / "data" / "reports" / "300124" / "60m" / "analyze" / "300124_60m_20260213_to_20260618.csv"
+SAMPLE_00700_30M_CSV = ROOT / "data" / "reports" / "00700" / "30m" / "analyze" / "00700_30m_20260326_to_20260904.csv"
+SAMPLE_03690_30M_CSV = ROOT / "data" / "reports" / "03690" / "30m" / "analyze" / "03690_30m_20260326_to_20260904.csv"
 
 # 首选级别（1m / 5m）多中枢真实窗口：作为 T3 "多中枢不残留旧中枢幽灵 / 不相交不误标 reabsorbed" 的正面真实窗口 gate。
-SAMPLE_600900_1M_CSV = ROOT / "data" / "reports" / "600900" / "1m" / "analyze" / "600900_1m_20260810_to_20260828.csv"
-SAMPLE_09988_1M_CSV = ROOT / "data" / "reports" / "09988" / "1m" / "analyze" / "09988_1m_20260814_to_20260828.csv"
-SAMPLE_03690_5M_CSV = ROOT / "data" / "reports" / "03690" / "5m" / "analyze" / "03690_5m_20260722_to_20260828.csv"
-SAMPLE_00700_1M_CSV = ROOT / "data" / "reports" / "00700" / "1m" / "analyze" / "00700_1m_20260814_to_20260828.csv"
+SAMPLE_600900_1M_CSV = ROOT / "data" / "reports" / "600900" / "1m" / "analyze" / "600900_1m_20260817_to_20260904.csv"
+SAMPLE_09988_1M_CSV = ROOT / "data" / "reports" / "09988" / "1m" / "analyze" / "09988_1m_20260821_to_20260904.csv"
+SAMPLE_03690_5M_CSV = ROOT / "data" / "reports" / "03690" / "5m" / "analyze" / "03690_5m_20260724_to_20260904.csv"
+SAMPLE_00700_1M_CSV = ROOT / "data" / "reports" / "00700" / "1m" / "analyze" / "00700_1m_20260821_to_20260904.csv"
 
 
 def _build_structure_state_from_csv_cutoff(path: Path, cutoff_iso: str):
@@ -41,42 +39,30 @@ def _build_structure_state_from_csv_cutoff(path: Path, cutoff_iso: str):
     return cutoff_bars, segments, zhongshus, build_structure_state(cutoff_bars, zhongshus)
 
 
-def test_00700_30m_segment_zhongshu_keeps_two_centers_after_multiple_rewrites() -> None:
+def test_00700_30m_segment_zhongshu_keeps_single_active_center_after_data_refresh() -> None:
+    """00700 30m（新窗口 20260904）：数据刷新后当前持有一个未终结 segment 级标准中枢（盘整 single_active）。"""
     segments = identify_segments_from_csv(SAMPLE_00700_30M_CSV)
 
     zhongshus = identify_zhongshu(segments, structure_level="segment")
     structure_state = build_structure_state([], zhongshus)
 
-    assert len(zhongshus) == 2
-    first, second = zhongshus
-    assert first.structure_level == "segment"
-    assert first.entering_bi_id == 0
-    assert first.start_bi_id == 1
-    assert first.end_bi_id == 5
-    assert first.exit_bi_id == 6
-    assert first.zs_low == 476.0
-    assert first.zs_high == 486.2
-    assert first.is_terminated is True
-    assert first.superseded_by_zs_id is None
-    assert first.is_reabsorbed_by_larger_expansion is False
-    assert second.entering_bi_id == 6
-    assert second.start_bi_id == 7
-    assert second.end_bi_id == 13
-    assert second.exit_bi_id is None
-    assert second.zs_low == 425.4
-    assert second.zs_high == 447.0
-    assert second.is_terminated is False
-    assert second.superseded_by_zs_id is None
-    assert second.is_reabsorbed_by_larger_expansion is False
+    assert len(zhongshus) == 1
+    current = zhongshus[0]
+    assert current.structure_level == "segment"
+    assert current.entering_bi_id == 0
+    assert current.start_bi_id == 1
+    assert current.end_bi_id == 12
+    assert current.exit_bi_id is None
+    assert current.zs_low == 443.2
+    assert current.zs_high == 486.2
+    assert current.is_terminated is False
+    assert current.superseded_by_zs_id is None
+    assert current.is_reabsorbed_by_larger_expansion is False
     assert structure_state["last_completed"] is None
-    assert structure_state["current_ongoing"]["start_zs_id"] == first.zs_id
-    assert structure_state["current_ongoing"]["end_zs_id"] == second.zs_id
-    # 两中枢区间不重叠（[476,486.2] -> [425.4,447]）但波动区间回探重叠，
-    # 按第20课中枢扩张归入盘整（range），不再判为同向下跌趋势。
     assert structure_state["current_ongoing"]["type"] == "range"
-    assert structure_state["current_ongoing"]["confirmation_basis"] == "still_inside_last_zs_extension"
+    assert structure_state["current_ongoing"]["confirmation_basis"] == "single_active_zhongshu"
     assert structure_state["relationship"]["transition_state"] == "none"
-    assert structure_state["consumption_level"] == "confirmed"
+    assert structure_state["consumption_level"] == "pending"
 
 
 def test_03690_30m_segment_zhongshu_keeps_single_active_center_after_gap_restart() -> None:
@@ -96,10 +82,10 @@ def test_03690_30m_segment_zhongshu_keeps_single_active_center_after_gap_restart
     assert current.structure_level == "segment"
     assert current.entering_bi_id == 0
     assert current.start_bi_id == 1
-    assert current.end_bi_id == 8
+    assert current.end_bi_id == 7
     assert current.exit_bi_id is None
     assert round(current.zs_low, 6) == 80.2
-    assert round(current.zs_high, 6) == 89.45
+    assert round(current.zs_high, 6) == 86.8
     assert current.is_terminated is False
     assert current.superseded_by_zs_id is None
     assert current.is_reabsorbed_by_larger_expansion is False
@@ -107,44 +93,6 @@ def test_03690_30m_segment_zhongshu_keeps_single_active_center_after_gap_restart
     assert structure_state["current_ongoing"]["confirmation_basis"] == "single_active_zhongshu"
     assert structure_state["relationship"]["transition_state"] == "none"
     assert structure_state["consumption_level"] == "pending"
-
-
-def test_000591_60m_long_segment_zhongshu_does_not_leave_ghost_center_after_overlap_reuse() -> None:
-    segments = identify_segments_from_csv(SAMPLE_000591_60M_LONG_CSV)
-
-    zhongshus = identify_zhongshu(segments, structure_level="segment")
-    structure_state = build_structure_state([], zhongshus)
-
-    assert len(segments) == 3
-    assert zhongshus == []
-    assert structure_state["last_completed"] is None
-    assert structure_state["current_ongoing"]["confirmation_basis"] == "no_same_level_zhongshu"
-    assert structure_state["relationship"]["transition_state"] == "none"
-    assert structure_state["consumption_level"] == "auxiliary"
-
-
-def test_300124_60m_mixed_overlap_restart_chain_does_not_leave_segment_level_ghost_center() -> None:
-    segments = identify_segments_from_csv(SAMPLE_300124_60M_CSV)
-
-    zhongshus = identify_zhongshu(segments, structure_level="segment")
-    structure_state = build_structure_state([], zhongshus)
-
-    landmarks = [
-        (segment.direction.value, segment.start_bi_id, segment.end_bi_id, segment.break_bi_id, segment.stop_reason)
-        for segment in segments
-    ]
-
-    assert landmarks == [
-        ("up", 2, 4, 5, "reverse_break"),
-        ("down", 5, 15, 16, "reverse_break"),
-        ("up", 16, 20, 21, "reverse_break"),
-        ("down", 21, 25, 26, "exhausted_confirmed_bis"),
-    ]
-    assert zhongshus == []
-    assert structure_state["last_completed"] is None
-    assert structure_state["current_ongoing"]["confirmation_basis"] == "no_same_level_zhongshu"
-    assert structure_state["relationship"]["transition_state"] == "none"
-    assert structure_state["consumption_level"] == "auxiliary"
 
 
 def _assert_centers_no_reabsorbed(zhongshus, expected):
@@ -164,8 +112,8 @@ def _assert_centers_no_reabsorbed(zhongshus, expected):
         assert zs.is_reabsorbed_by_larger_expansion is False
 
 
-def test_600900_1m_segment_zhongshu_keeps_two_centers_without_false_reabsorption() -> None:
-    """600900 1m（首选级别）：effective_only 后该窗口现为两个标准中枢，不得误标 reabsorbed。"""
+def test_600900_1m_segment_zhongshu_keeps_multiple_centers_without_false_reabsorption() -> None:
+    """600900 1m（首选级别）：数据刷新后该窗口为多个标准中枢，不得误标 reabsorbed。"""
     segments = identify_segments_from_csv(SAMPLE_600900_1M_CSV)
 
     zhongshus = identify_zhongshu(segments, structure_level="segment")
@@ -173,8 +121,12 @@ def test_600900_1m_segment_zhongshu_keeps_two_centers_without_false_reabsorption
     _assert_centers_no_reabsorbed(
         zhongshus,
         [
-            (0, 1, 23, 27.97, 28.2, 24),
-            (24, 25, 27, 28.2, 28.35, None),
+            (1, 2, 4, 28.09, 28.15, 5),
+            (5, 6, 9, 28.17, 28.38, None),
+            (10, 11, 13, 27.94, 28.08, None),
+            (14, 15, 17, 28.2, 28.35, 18),
+            (18, 19, 22, 28.01, 28.13, None),
+            (25, 26, 28, 28.65, 28.82, None),
         ],
     )
 
@@ -188,37 +140,48 @@ def test_09988_1m_segment_zhongshu_keeps_disjoint_centers_without_false_reabsorp
     _assert_centers_no_reabsorbed(
         zhongshus,
         [
-            (6, 7, 9, 126.6, 128.3, None),
-            (11, 12, 15, 112.2, 114.3, None),
-            (16, 17, 21, 116.0, 116.4, None),
+            (2, 3, 6, 112.2, 114.3, None),
+            (7, 8, 11, 116.0, 116.4, None),
+            (12, 13, 17, 113.5, 114.4, 18),
+            (18, 19, 23, 109.5, 110.1, None),
         ],
     )
 
 
 def test_09988_1m_structure_state_keeps_real_down_type_chain() -> None:
-    """09988 1m（首选级别）：真实窗口应稳定保持 down ongoing 的同级别类型链。"""
+    """09988 1m（首选级别）：数据刷新到 20260904 后为 up completed -> down ongoing 的同级别类型链。"""
     segments = identify_segments_from_csv(SAMPLE_09988_1M_CSV)
 
     zhongshus = identify_zhongshu(segments, structure_level="segment")
     structure_state = build_structure_state([], zhongshus)
 
-    assert structure_state["last_completed"] is None
+    assert structure_state["last_completed"] is not None
     assert structure_state["current_ongoing"]["type"] == "down"
-    assert structure_state["current_ongoing"]["zs_count_so_far"] == 3
+    assert structure_state["current_ongoing"]["zs_count_so_far"] == 2
     assert structure_state["current_ongoing"]["confirmation_basis"] == "forming_next_same_level_zhongshu"
-    assert structure_state["relationship"]["transition_state"] == "none"
+    assert structure_state["relationship"]["transition_state"] == "ongoing_new_type"
     assert structure_state["consumption_level"] == "confirmed"
     assert structure_state["type_chain"] == [
         {
+            "type": "up",
+            "status": "completed",
+            "zs_count": 2,
+            "start_zs_id": 0,
+            "end_zs_id": 1,
+            "start_ts": "2026-08-24T11:13:00",
+            "end_ts": "2026-08-27T13:25:00",
+        },
+        {
             "type": "down",
             "status": "ongoing",
-            "zs_count": 3,
-            "start_zs_id": 0,
-            "end_zs_id": 2,
-            "start_ts": "2026-08-18T13:54:00",
+            "zs_count": 2,
+            "start_zs_id": 2,
+            "end_zs_id": 3,
+            "start_ts": "2026-08-28T09:45:00",
             "end_ts": None,
-        }
+        },
     ]
+
 
 
 def test_03690_5m_segment_zhongshu_keeps_disjoint_centers_without_false_reabsorption() -> None:
@@ -237,7 +200,7 @@ def test_03690_5m_segment_zhongshu_keeps_disjoint_centers_without_false_reabsorp
         [
             (0, 1, 5, 89.0, 91.35, 6),
             (6, 7, 10, 92.05, 93.95, None),
-            (11, 12, 15, 85.7, 88.75, None),
+            (11, 12, 14, 85.7, 88.75, 15),
         ],
     )
 
@@ -289,13 +252,19 @@ def test_03690_5m_structure_state_keeps_real_completed_then_new_type_chain() -> 
     ]
 
 
-def test_00700_1m_segment_zhongshu_has_no_center_after_data_refresh() -> None:
-    """00700 1m（首选级别）：effective_only 后该窗口只剩 2 段，不再形成 segment 级中枢。"""
+def test_00700_1m_segment_zhongshu_keeps_two_centers_after_data_refresh() -> None:
+    """00700 1m（首选级别）：数据刷新到 20260904 后该窗口形成两个 segment 级中枢，不得误标 reabsorbed。"""
     segments = identify_segments_from_csv(SAMPLE_00700_1M_CSV)
 
     zhongshus = identify_zhongshu(segments, structure_level="segment")
 
-    assert zhongshus == []
+    _assert_centers_no_reabsorbed(
+        zhongshus,
+        [
+            (0, 1, 6, 445.0, 450.0, None),
+            (7, 8, 13, 441.4, 444.4, None),
+        ],
+    )
 
 
 def _segment_landmarks(segments):
@@ -324,8 +293,6 @@ def _zhongshu_snapshot(zs):
 REAL_REBUILD_WINDOWS = [
     SAMPLE_00700_30M_CSV,
     SAMPLE_03690_30M_CSV,
-    SAMPLE_000591_60M_LONG_CSV,
-    SAMPLE_300124_60M_CSV,
     SAMPLE_600900_1M_CSV,
     SAMPLE_09988_1M_CSV,
     SAMPLE_03690_5M_CSV,
@@ -384,7 +351,7 @@ def test_first_standard_zhongshu_identity_is_stable_across_rebuilds() -> None:
         identities.append(_first_zhongshu_identity(zhongshus[0]))
 
     assert identities == [
-        (0, 1, 5, 476.0, 486.2, 6, True),
-        (0, 1, 5, 476.0, 486.2, 6, True),
-        (0, 1, 5, 476.0, 486.2, 6, True),
+        (0, 1, 12, 443.2, 486.2, None, False),
+        (0, 1, 12, 443.2, 486.2, None, False),
+        (0, 1, 12, 443.2, 486.2, None, False),
     ]

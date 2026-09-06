@@ -232,7 +232,7 @@ def test_03690_5m_same_level_decomp_down_trend_and_expansion_detected_separately
     path = (
         Path(__file__).resolve().parents[1]
         / "data" / "reports" / "03690" / "5m" / "analyze"
-        / "03690_5m_20260722_to_20260828_normalized_segments.csv"
+        / "03690_5m_20260724_to_20260904_normalized_segments.csv"
     )
     segments = _load_segments_from_normalized_csv(path)
 

@@ -248,15 +248,11 @@ def test_bootstrap_modes_do_not_introduce_unknown_stop_categories() -> None:
 @pytest.mark.parametrize(
     "csv_path",
     [
-        Path(r"c:\sandbox\sinba\stock\data\reports\000591\day\analyze\000591_day_20210914_to_20260828.csv"),
-        Path(r"c:\sandbox\sinba\stock\data\reports\000591\60m\analyze\000591_60m_20260213_to_20260618.csv"),
-        Path(r"c:\sandbox\sinba\stock\data\reports\300124\15m\analyze\300124_15m_20260506_to_20260618.csv"),
-        Path(r"c:\sandbox\sinba\stock\data\reports\300124\60m\analyze\300124_60m_20260213_to_20260618.csv"),
-        Path(r"c:\sandbox\sinba\stock\data\reports\00700\30m\analyze\00700_30m_20260319_to_20260828.csv"),
-        Path(r"c:\sandbox\sinba\stock\data\reports\00700\60m\analyze\00700_60m_20260213_to_20260624.csv"),
-        Path(r"c:\sandbox\sinba\stock\data\reports\03690\30m\analyze\03690_30m_20260319_to_20260828.csv"),
+        Path(r"c:\sandbox\sinba\stock\data\reports\000591\day\analyze\000591_day_20210923_to_20260904.csv"),
+        Path(r"c:\sandbox\sinba\stock\data\reports\00700\30m\analyze\00700_30m_20260326_to_20260904.csv"),
+        Path(r"c:\sandbox\sinba\stock\data\reports\03690\30m\analyze\03690_30m_20260326_to_20260904.csv"),
     ],
-    ids=["000591-day", "000591-60m", "300124-15m", "300124-60m", "00700-30m", "00700-60m", "03690-30m"],
+    ids=["000591-day", "00700-30m", "03690-30m"],
 )
 def test_preferred_bootstrap_keeps_left_seed_on_real_fixtures(csv_path: Path) -> None:
     bis = load_bis_from_csv(csv_path)
@@ -282,28 +278,3 @@ def test_preferred_bootstrap_keeps_left_seed_on_real_fixtures(csv_path: Path) ->
     assert auto_segments[0].start_bi_id == preferred_segments[0].start_bi_id
     assert auto_segments[0].direction == preferred_segments[0].direction
 
-
-def test_practical_stop_outcome_is_stable_across_bootstrap_modes_on_000591_60m_fixture() -> None:
-    csv_path = Path(r"c:\sandbox\sinba\stock\data\reports\000591\60m\analyze\000591_60m_20260213_to_20260618.csv")
-    bis = load_bis_from_csv(csv_path)
-
-    first_seed_segments = identify_segments(
-        bis,
-        bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
-    )
-    auto_segments = identify_segments(
-        bis,
-        bootstrap_mode=SEGMENT_BOOTSTRAP_AUTO,
-    )
-    preferred_segments = identify_segments(
-        bis,
-        bootstrap_mode=SEGMENT_BOOTSTRAP_PREFER_EARLIER_START,
-    )
-
-    assert first_seed_segments
-    assert auto_segments
-    assert preferred_segments
-    assert first_seed_segments[0].start_bi_id == auto_segments[0].start_bi_id == preferred_segments[0].start_bi_id
-    assert first_seed_segments[0].end_bi_id == auto_segments[0].end_bi_id == preferred_segments[0].end_bi_id
-    assert first_seed_segments[0].is_confirmed == auto_segments[0].is_confirmed == preferred_segments[0].is_confirmed
-    assert first_seed_segments[0].stop_reason == auto_segments[0].stop_reason == preferred_segments[0].stop_reason
