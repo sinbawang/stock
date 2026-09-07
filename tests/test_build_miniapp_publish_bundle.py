@@ -2368,6 +2368,109 @@ def test_build_summary_and_detail_payload_preserve_real_00700_5m_confirmed_buy2l
     assert any("去向候选：最后中枢延伸（5m -> 30m），当前只按观察态处理" in line for line in technical_section["technical_focus_lines"])
 
 
+def test_build_summary_and_detail_payload_preserve_real_01024_1m_confirmed_buy2like_replay_sample(tmp_path: Path) -> None:
+    replay_rows = probe_module._load_rows("01024", "1m")
+    replay_payload = probe_module._replay("01024", "快手", "2026-08-03 15:33", replay_rows)
+
+    stock_dir = tmp_path / "01024_1m_confirmed_buy"
+    (stock_dir / "1m").mkdir(parents=True)
+    (stock_dir / "base.json").write_text(
+        json.dumps({"generated_at": "2026-08-20T09:00:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "fund.json").write_text(
+        json.dumps({"generated_at": "2026-08-20T09:05:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "1m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-08-20T09:30:00",
+                "timeframe": "1m",
+                "source": "replay.csv",
+                "zhongshu_level": "segment",
+                "summary": {
+                    "score": 68,
+                    "rating": "B",
+                    "bias": "偏多",
+                    "score_breakdown": {},
+                    "conclusion": replay_payload["conclusion"],
+                    "suggestion": "轻仓试仓，跌破关键回踩位则严格止损。",
+                    "buy_points": [point.replace("_", "") for point in replay_payload["buy_points"]],
+                    "sell_points": [point.replace("_", "") for point in replay_payload["sell_points"]],
+                    "signal_points": [
+                        {
+                            "point": "buy2like",
+                            "active": True,
+                            "time": replay_payload["cutoff"].replace(" ", "T") + ":00",
+                            "price": 44.52,
+                            "basis": "gap_segment_divergence_pullback_end",
+                            "related_zs_id": 1,
+                        }
+                    ],
+                    "signal_catalog": [
+                        {
+                            "point": "buy2like",
+                            "active": True,
+                            "time": replay_payload["cutoff"].replace(" ", "T") + ":00",
+                            "price": 44.52,
+                            "basis": "gap_segment_divergence_pullback_end",
+                            "related_zs_id": 1,
+                        }
+                    ],
+                    "structure_state": {
+                        "last_completed": None,
+                        "current_ongoing": {
+                            "type": "up",
+                            "status": "ongoing",
+                            "zs_count_so_far": 2,
+                        },
+                        "relationship": {
+                            "kind": "same_type_extension",
+                            "note": "已经出现同向不重叠中枢推进，当前按同级别分解视为趋势进行中。",
+                        },
+                        "current_structure_status": "ongoing_same_type",
+                    },
+                    "same_level_decomposition_mode": replay_payload["same_level_decomposition_mode"],
+                    "same_level_consumption_level": replay_payload["same_level_consumption_level"],
+                    "same_level_consumption_level_label": "已确认消费",
+                    "same_level_consumption_level_note": "当前同级别结构已具备稳定消费基础，可直接按主结构结论解释。",
+                    "oscillation_rhythm_state": replay_payload["oscillation_rhythm_state"],
+                    "zs_monitor_alert": replay_payload["zs_monitor_alert"],
+                    "zs_monitor_midline": replay_payload["zs_monitor_midline"],
+                    "zs_monitor_bias": replay_payload["zs_monitor_bias"],
+                },
+                "analysis_text": "概览：\n- 时间区间：2026-08-03 09:30 到 2026-08-03 15:33\n\n结构：\n- 最新确认向上笔：...\n\n信号：\n- 买点：buy_2like\n",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    holding = module.Holding(symbol="01024", name="快手", market="HK")
+
+    summary_payload = module.build_summary_payload(holding, stock_dir, None)
+    detail_payload, _ = module.build_detail_payload(holding, stock_dir, None)
+
+    technical_card = summary_payload["cards"]["technical"]
+    technical_section = detail_payload["sections"][1]
+
+    assert technical_card["timeframe"] == "1m"
+    assert technical_card["conclusion"] == replay_payload["conclusion"]
+    assert technical_card["latest_signal_summary"]["latest_buy"] is not None
+    assert technical_card["latest_signal_summary"]["latest_buy"]["point"] == "buy2like"
+    assert technical_card["latest_signal_summary"]["latest_sell"] is None
+    assert any("最近买点：类二买" in line for line in technical_card["technical_focus_lines"])
+    assert any("消费等级：已确认消费" in line for line in technical_card["same_level_decomposition"]["lines"])
+    assert technical_section["timeframe"] == "1m"
+    assert technical_section["conclusion"] == replay_payload["conclusion"]
+    assert technical_section["latest_signal_summary"]["latest_buy"] is not None
+    assert technical_section["latest_signal_summary"]["latest_buy"]["point"] == "buy2like"
+    assert technical_section["latest_signal_summary"]["latest_sell"] is None
+    assert any("最近买点：类二买" in line for line in technical_section["technical_focus_lines"])
+    assert any("消费等级：已确认消费" in line for line in technical_section["same_level_decomposition"]["lines"])
+
+
 def test_build_summary_and_detail_payload_preserve_real_600900_completed_then_new_type_sample(tmp_path: Path) -> None:
     # 01339 1m 原样本重跑后已不再属 completed_then_new_type（现为 undetermined 上涨）；
     # 该场景现由 600900 1m 呈现（前段盘整完成后切入新的上涨同级别走势）。

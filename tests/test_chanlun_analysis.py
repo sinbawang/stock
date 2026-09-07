@@ -1144,6 +1144,24 @@ def test_real_1m_range_divergence_replay_sample_000651_strict() -> None:
     assert payload["same_level_consumption_level"] == "pending"
 
 
+def test_real_1m_confirmed_buy2like_replay_sample_01024() -> None:
+    # 真实 1m confirmed 买侧样本：01024 快手 2026-08-03 15:33。
+    # 当前窗口已进入 single_confirmed + confirmed，且 buy2like 生效，
+    # 可作为前端 `1m confirmed` 买侧 live 对照候选。
+    rows = probe_module._load_rows("01024", "1m")
+    payload = probe_module._replay("01024", "快手", "2026-08-03 15:33", rows)
+
+    assert payload["cutoff"] == "2026-08-03 15:33"
+    assert payload["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["same_level_consumption_level"] == "confirmed"
+    assert payload["buy_points"] == ["buy_2like"]
+    assert payload["sell_points"] == []
+    assert payload["zs_monitor_alert"] == "none"
+    assert payload["oscillation_rhythm_state"] == "up_bias"
+    assert payload["ongoing_type"] == "up"
+    assert payload["post_divergence_route"] is None
+
+
 def test_build_signal_summary_fields_preserves_catalog_slots() -> None:
     payload = build_signal_summary_fields(
         {
