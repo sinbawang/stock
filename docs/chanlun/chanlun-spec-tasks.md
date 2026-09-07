@@ -151,7 +151,7 @@
 | 线段严格定义案例库 | 进行中 | 58% | 已补复核矩阵与图示库骨架，仍需补 67/71 课正反例和 R1-R6 映射；执行拆解见 [segment-tasks.md](segment-tasks.md)。 |
 | 背驰与盘整背驰标准案例包 | 进行中 | 45% | 已有复核矩阵与图示库骨架，仍需补统一正例、反例、易混淆例；执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 一二三类买卖点标准案例包 | 进行中 | 48% | 已有复核矩阵与图示库骨架，仍需按最近中枢和级别填充案例；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
-| 多级别联立 review 模板 | 进行中 | 40% | 已有区间套/小转大图示骨架，仍需补高一级方向、操作级别、执行级别样例；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
+| 多级别联立 review 模板 | 进行中 | 55% | 已补区间套/小转大图示骨架，并新增前端可见级别的页内卡片：真实 `600900 1m confirmed 3S`、真实 `002555 1m -> 5m` 候选观察链，以及 `5m buy3 -> third_class_confirmed` 契约对照卡；后续主要补更多 `1m/5m/day` 样本广度，执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
 
 ### 3.4 P2 输出与消费层
 
