@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "build" / "scan_real_candidate_new_type_samples.py"
+SNAPSHOT_PATH = ROOT / "build" / "scan_real_candidate_new_type_samples_latest.json"
 
 spec = importlib.util.spec_from_file_location("scan_real_candidate_new_type_samples", MODULE_PATH)
 assert spec is not None and spec.loader is not None
@@ -26,6 +27,14 @@ def _latest_raw_csv(symbol: str, timeframe: str) -> Path:
     )
     assert candidates, f"no raw CSV found for {symbol} {timeframe}"
     return candidates[-1]
+
+
+def _snapshot_exact_candidate_match(symbol: str, timeframe: str) -> dict[str, object]:
+    payload = json.loads(SNAPSHOT_PATH.read_text(encoding="utf-8"))
+    for match in payload.get("exact_candidate_matches", []):
+        if match.get("symbol") == symbol and match.get("timeframe") == timeframe:
+            return match
+    raise AssertionError(f"no snapshot exact candidate match for {symbol} {timeframe}")
 
 
 def test_iter_raw_csv_paths_skips_normalized_files() -> None:
@@ -78,17 +87,29 @@ def test_find_candidate_new_type_builds_payload_from_first_match(monkeypatch) ->
 
 
 def test_find_candidate_new_type_finds_candidate_for_00175_1m() -> None:
-    # 严格同级别分解后，00175 1m 的当前 ongoing 盘整（前段已完成）即为新走势候选，
-    # find_candidate_new_type 应在真实窗口命中 candidate_new_type。
-    path = _latest_raw_csv("00175", "1m")
+    # 00175 这条 exact-match 目前用于锁定扫描快照里的具名历史锚点。
+    match = _snapshot_exact_candidate_match("00175", "1m")
 
-    payload = scan_module.find_candidate_new_type(path, min_bars=60, step=10)
+    assert match["cutoff_ts"] == "2026-08-26T10:51:00"
+    assert match["current_structure_status"] == "candidate_completed_waiting_stability"
+    assert match["same_level_consumption_level"] == "pending"
+    assert match["current_ongoing"]["type"] == "range"
+    assert match["last_completed"]["type"] == "range"
+
+
+def test_find_candidate_new_type_finds_candidate_for_current_000651_1m() -> None:
+    # 当前仓内可执行的 1m 真样本锚点，避免只剩历史快照而没有运行门禁。
+    path = _latest_raw_csv("000651", "1m")
+
+    payload = scan_module.find_candidate_new_type(path, min_bars=60, step=1)
 
     assert payload is not None
-    assert payload["symbol"] == "00175"
+    assert payload["symbol"] == "000651"
     assert payload["timeframe"] == "1m"
     assert payload["current_structure_status"] == "candidate_completed_waiting_stability"
     assert payload["same_level_consumption_level"] == "pending"
+    assert payload["current_ongoing"]["type"] == "range"
+    assert payload["last_completed"]["type"] == "down"
 
 
 def test_find_candidate_new_type_falls_back_to_fine_grained_scan(monkeypatch) -> None:
