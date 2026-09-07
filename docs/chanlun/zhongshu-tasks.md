@@ -232,19 +232,17 @@
 - `2026-08-20` 已对 `data/reports/**/*.json` 做真实样本扫描：正式落盘产物里当时未发现满足“`last_completed` 已存在、`relationship.kind=completed_then_new_type_ongoing`、且 `current_ongoing.zs_count_so_far=1`”的 `candidate_new_type` 样本。
 - `2026-09-05` 曾从旧 `06088 1m` 窗口提取过 `candidate_new_type` 历史 cutoff 原型；后续数据刷新后该 live 锚点已漂移，当前以 `build/scan_real_candidate_new_type_samples.py` 继续搜寻新的稳定样本。剩余缺口已收敛为“当前 live 数据里是否继续补出新的同类样本广度”。
 - `2026-09-05` 已补样本扫描工具：`build/scan_real_candidate_new_type_samples.py` 可批量扫描 `data/reports/*/{1m,5m,30m,day}/analyze/*.csv` 的 cutoff，直接寻找真实 `candidate_new_type` 窗口，供 `ZS6` 后续扩样本使用；当前已增强为 `exact_candidate_matches + near_matches` 双输出，旧 `06088 1m` 锚点漂移后，该工具已成为主入口。
-- 当前扫描快照见 `build/scan_real_candidate_new_type_samples_latest.json`（2026-09-06）：`1m/5m` live 产物里 `exact_candidate_matches=0`，说明严格 `candidate_new_type` 仍未在当前落盘窗口直接命中；当前应继续沿 near 队列做历史 cutoff 回放，而不是把 live `tech.json` 误当 strict 样本。
-- 同一快照 `near_matches` 当前优先队列为：`000651 5m`、`002555 1m`、`002555 5m`、`00981 1m`、`03690 5m`、`06088 1m`、`01024 5m`（均为 `completed_then_new_type_ongoing + ongoing_new_type` 组合，`score=14`）。
-- 同一快照 `recommended_probe_targets` 已与 above 队列同步，继续作为 `ZS6` 的历史回放执行入口（`exact_candidate_new_type` + `new_type_zs1` 双轨）。
+- 当前扫描快照见 `build/scan_real_candidate_new_type_samples_latest.json`（2026-09-06）：`1m/5m` live 产物里已经出现多条 `exact_candidate_matches`，说明主扫描脚本的粗粒度假阴性问题已收口；当前快照中至少已命中 `000651/00175/00700/00981/01024/02357/03690/09988` 的 `1m` 真实窗口。
+- `near_matches` 与 `recommended_probe_targets` 仍保留其价值：前者继续承担“下一批可疑 live 样本队列”，后者继续承担“需要 probe 细查的新窗口入口”，但它们不再用于解释 `exact_candidate_matches=0` 这一旧问题。
 - 已确认 `000651 5m`、`002555 1m` 的历史回放结果均为 `matches=0`；`002555 5m`、`00981 1m`、`03690 5m`、`06088 1m`、`01024 5m` 均已命中 strict `candidate_new_type`：
   - `build/probe_002555_5m_exact_candidate.json` + `build/probe_002555_5m_new_type_zs1.json`：`scanned=1824`、`matches=5`、首个 cutoff=`2026-08-10 10:45`。
   - `build/probe_00981_1m_exact_candidate.json` + `build/probe_00981_1m_new_type_zs1.json`：`exact scanned=3500/matches=5`，`new_type_zs1 scanned=21/matches=5`（窗口 `2026-08-28 11:40~12:10`），首个 cutoff=`2026-08-28 11:51`。
   - `build/probe_03690_5m_exact_candidate.json` + `build/probe_03690_5m_new_type_zs1.json`：`scanned=2000`、`matches=5`、首个 cutoff=`2026-08-12 15:25`。
   - `build/probe_06088_1m_exact_candidate.json` + `build/probe_06088_1m_new_type_zs1.json`：`scanned=3500`、`matches=5`、首个 cutoff=`2026-08-28 09:49`。
   - `build/probe_01024_5m_exact_candidate.json` + `build/probe_01024_5m_new_type_zs1.json`：`scanned=2000`、`matches=5`、首个 cutoff=`2026-08-10 14:20`。
-- 上述命中与 `scan_real_candidate_new_type_samples_latest.json` 的 `exact_candidate_matches=0` 并不矛盾：扫描脚本当前按较粗粒度前缀步长做全量遍历，可能跳过短窗口候选；probe 脚本按细粒度 cutoff 回放，能命中短时 strict 窗口。下一阶段应把扫描主脚本的步长策略与 probe 一致化（或在 near 目标上追加细粒度二次扫描）并刷新快照。
-- 当前下一优先级已更新为：`scan_real_candidate_new_type_samples.py` 粒度对齐 -> 刷新 `scan_real_candidate_new_type_samples_latest.json` -> 回写 `candidate_new_type` 映射与缺口描述。
-- 顶层结论：严格 probe 已在 `002555 5m`、`00981 1m`、`03690 5m`、`06088 1m`、`01024 5m` 上命中 `candidate_new_type`（各 `matches=5`），但扫描主脚本仍以粗粒度 `step=10` 的前缀遍历为主，导致 `exact_candidate_matches=0` 与 probe 结果看似冲突；它们不是逻辑对立，而是同一类窗口被不同粒度扫描时分别命中/漏掉。
-- 这项的明确修正方向是：维持 probe 作为最终 strict oracle；在主扫描脚本中追加细粒度二次扫描或改为按 near-target 近窗口重跑，最后刷新 JSON 快照并把候选队列收敛到真实 “strict matches” 入口。
+- 粒度问题当前已不再是 blocker：扫描脚本默认 `step=1`，最新快照也已直接产出 `exact_candidate_matches`。下一阶段更有价值的工作是回写 `candidate_new_type` 的 review / consumer 映射，并继续补更多真实窗口广度，而不是继续解释旧的 coarse/fine 差异。
+- 当前下一优先级已更新为：`candidate_new_type` 真实窗口 -> review / consumer 样例绑定 -> 缺口描述回写；若样本广度足够，再回头清理 `near_matches` 队列里的低 ROI 目标。
+- 顶层结论：`candidate_new_type` 的扫描主链与 strict probe 目前已不再冲突；当前剩余的是样例广度、review 入口绑定和个别候选窗口的消费文案细化。
 - `2026-08-20` 补充：`candidate_new_type` 路径已新增静态扫描 + 历史 cutoff 回放探针，但当前扩窗后的 `00175 1m/5m` 也未命中严格窗口；该项暂降为低优先级样本缺口。下一主入口改为 `build/scan_real_1m_prebreakout_samples.py`，优先批量回放现有 `1m analyze CSV` 寻找真实 `pre_breakout` 落盘窗口。
 
 `ZS2.3 / ZS3` 下一阶段最小任务：
