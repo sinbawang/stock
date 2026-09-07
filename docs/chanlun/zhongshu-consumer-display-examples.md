@@ -57,15 +57,16 @@
 - `HK.02357 1m`：`zhongshus=1`，`current_structure_status=ongoing_same_type`，`relationship.kind=undetermined`，且无确认一二三类买卖点。
 - `HK.01339 1m`：`last_completed.type=up`，`current_structure_status=completed_then_new_type`，当前新段为 `down ongoing`，但仍无确认一二三类买卖点。
 - 真实 `600900 1m`：`sell_points=[sell3]`、`same_level_consumption_level=confirmed`、摘要明确给出“偏空，优先减仓或兑现。”，当前可直接作为 confirmed `3S` live 锚点。
+- 真实 `00700 5m`：`buy_points=[buy2like]`、`same_level_consumption_level=confirmed`、摘要明确给出“偏多，允许轻仓试错。”，当前可直接作为前端可见级别的 confirmed 买侧 live 锚点。
 - `SH.601328 1m`：中枢仍在运行，`advice_text` 已明确提示“等向上离开或向下跌破后再做决策”，并补充“已有顶背驰迹象”，但没有正式 `zs_monitor_alert` 字段落盘。
 - `1m confirmed 3S` regression reference：当前继续作为兜底 gate，防止 live 样本未来漂移时把 confirmed 文案退回 pending/watch。
 - 进一步确认：`zs_monitor_alert` 与 confirmed `3S` 已在 `src / scripts / tests` 形成双链稳定主口径，且 `1m pre_breakout` 扩样本关门回归（01024/09988/00700 的 analysis+publish 共 6 条）已全部通过；当前缺的重点已经从“角色是否存在”收敛到“confirmed 多样本对照与 candidate_new_type 真实窗口”。
-- 这说明当前 `1m` 已经有“watch/pending”“前段完成后新段运行中”“正式向下预警未确认”“正式向上预警未确认”“真实 confirmed 3S”“预警前态代理”六类稳定消费案例，并额外有一条 confirmed regression reference；`candidate_new_type` 当前改由历史原型 + 扫描工具补位。
+- 这说明当前前端可见级别已经有“watch/pending”“前段完成后新段运行中”“正式向下预警未确认”“正式向上预警未确认”“真实 confirmed 卖点”“真实 confirmed 买点”“预警前态代理”多类稳定消费案例，并额外有一条 confirmed regression reference；`candidate_new_type` 当前改由历史原型 + 扫描工具补位。
 
 当前适用方式：
 
 - 可用于校验 `1m` 在 `tech.json`、报告和小程序里，如何把“单中枢盘整进行中”“前段完成后新段运行中”“正式预警未确认”“风险迹象已出现但尚未进入正式预警字段链”“confirmed reference”稳定区分开；`candidate_new_type` 当前补位方式是先用扫描工具找 cutoff，再套用本页 7.5.1 的消费约束。
-- `HK.02357 1m` 可直接作为 watch/pending 示例，`HK.01339 1m` 可直接作为 completed_then_new_type 示例，真实 `SZ.000651 1m` 可直接作为正式 `pre_breakdown` 示例，真实 replay `002555 1m` 可直接作为正式 `pre_breakout` 示例，真实 `600900 1m` 可直接作为 confirmed `3S` live 示例，`SH.601328 1m` 可直接作为预警前态代理示例，`1m confirmed 3S` reference gate 当前则保留为兜底回归。
+- `HK.02357 1m` 可直接作为 watch/pending 示例，`HK.01339 1m` 可直接作为 completed_then_new_type 示例，真实 `SZ.000651 1m` 可直接作为正式 `pre_breakdown` 示例，真实 replay `002555 1m` 可直接作为正式 `pre_breakout` 示例，真实 `600900 1m` 可直接作为 confirmed `3S` live 示例，真实 `00700 5m` 可直接作为 confirmed 买侧 live 示例，`SH.601328 1m` 可直接作为预警前态代理示例，`1m confirmed 3S` reference gate 当前则保留为兜底回归。
 - 只有在需要展示“尚未进入正式字段链”时才继续保留 `SH.601328 1m`；它不再承担 `1m` 主预警链上破方向的缺口填补角色。
 
 正式样本接线要求：

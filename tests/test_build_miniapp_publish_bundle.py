@@ -2321,6 +2321,53 @@ def test_build_summary_and_detail_payload_preserve_real_600900_1m_down_warning_s
     assert any("中枢预警：向下预警，当前不构成确认三卖（中线 28.73，节奏偏弱）" in line for line in technical_section["technical_focus_lines"])
 
 
+def test_build_summary_and_detail_payload_preserve_real_00700_5m_confirmed_buy2like_sample(tmp_path: Path) -> None:
+    source_tech_path = ROOT / "data" / "reports" / "00700" / "5m" / "tech.json"
+    source_payload = json.loads(source_tech_path.read_text(encoding="utf-8"))
+    stock_dir = tmp_path / "00700_5m"
+    (stock_dir / "5m").mkdir(parents=True)
+    (stock_dir / "base.json").write_text(
+        json.dumps({"generated_at": "2026-09-07T20:40:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "fund.json").write_text(
+        json.dumps({"generated_at": "2026-09-07T20:40:05", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "5m" / "tech.json").write_text(json.dumps(source_payload, ensure_ascii=False), encoding="utf-8")
+
+    assert source_payload["timeframe"] == "5m"
+    assert source_payload["summary"]["conclusion"] == "偏多，允许轻仓试错。"
+    assert source_payload["summary"]["same_level_consumption_level"] == "confirmed"
+    assert source_payload["summary"]["buy_points"] == ["buy2like"]
+    assert source_payload["summary"]["sell_points"] == []
+
+    holding = module.Holding(symbol="00700", name="腾讯", market="HK")
+
+    summary_payload = module.build_summary_payload(holding, stock_dir, None)
+    detail_payload, _ = module.build_detail_payload(holding, stock_dir, None)
+
+    technical_card = summary_payload["cards"]["technical"]
+    technical_section = detail_payload["sections"][1]
+
+    assert technical_card["timeframe"] == "5m"
+    assert technical_card["conclusion"] == "偏多，允许轻仓试错。"
+    assert technical_card["latest_signal_summary"]["latest_buy"] is not None
+    assert technical_card["latest_signal_summary"]["latest_buy"]["point"] == "buy2like"
+    assert technical_card["latest_signal_summary"]["latest_sell"] is None
+    assert any("最近买点：类二买" in line for line in technical_card["technical_focus_lines"])
+    assert any("消费等级：已确认消费" in line for line in technical_card["same_level_decomposition"]["lines"])
+    assert any("去向候选：最后中枢延伸（5m -> 30m），当前只按观察态处理" in line for line in technical_card["technical_focus_lines"])
+    assert technical_section["timeframe"] == "5m"
+    assert technical_section["conclusion"] == "偏多，允许轻仓试错。"
+    assert technical_section["latest_signal_summary"]["latest_buy"] is not None
+    assert technical_section["latest_signal_summary"]["latest_buy"]["point"] == "buy2like"
+    assert technical_section["latest_signal_summary"]["latest_sell"] is None
+    assert any("最近买点：类二买" in line for line in technical_section["technical_focus_lines"])
+    assert any("消费等级：已确认消费" in line for line in technical_section["same_level_decomposition"]["lines"])
+    assert any("去向候选：最后中枢延伸（5m -> 30m），当前只按观察态处理" in line for line in technical_section["technical_focus_lines"])
+
+
 def test_build_summary_and_detail_payload_preserve_real_600900_completed_then_new_type_sample(tmp_path: Path) -> None:
     # 01339 1m 原样本重跑后已不再属 completed_then_new_type（现为 undetermined 上涨）；
     # 该场景现由 600900 1m 呈现（前段盘整完成后切入新的上涨同级别走势）。

@@ -198,6 +198,31 @@ flowchart LR
 - `small_to_large_status=candidate` 和 `precision_entry.status=watch` 必须同时出现，防止前端或报告把“已有窗口”误读成“已确认买点”。
 - 对应回归锁的是 `tech.json -> summary/detail -> precision_window_display` 整条下游展示链。
 
+### 6.7 真实卡片 D: 00700 5M 已出现 confirmed 类二买，前端买侧锚点不再为空缺
+
+- 标的/时间窗：00700 / 5m / 当前实时落盘样本
+- 高级别：5m 同级别结构已进入 `single_confirmed + confirmed`
+- 操作级别：5m 当前结论为“偏多，允许轻仓试错”
+- 执行级别：前端当前主展示仍以 5m 技术卡为主，不要求再下钻未展示级别
+- 最近买点：`buy2like`
+- 展示文案：`偏多，允许轻仓试错。`
+- 结论：买侧 confirmed live 样本在前端可见级别并非缺失；当前至少已有 `5m buy2like` 这条真实消费链可作为正例。
+
+```mermaid
+flowchart LR
+  A[5m 同级别结构 single_confirmed] --> B[same_level_consumption_level=confirmed]
+  B --> C[最新买点=类二买]
+  C --> D[前端显示 confirmed 买侧标签]
+  D --> E[不得回退成候选/观察]
+```
+
+图上 review 重点：
+
+- 这张卡片绑定的是真实 `00700 5m` live 样本，而不是 synthetic buy-side 示例。
+- 当前摘要、latest signal summary 和 technical focus lines 都已经同时给出 `buy2like + confirmed`。
+- 它补的是“前端可见级别买侧 confirmed 对照”缺口，不等于已经拿到 `1m confirmed` 买点 live 样本。
+- 对应回归锁的是 `tech.json -> summary/detail -> latest_signal_summary` 的买侧 confirmed 展示链。
+
 ## 7. 案例 -> 回归锚点映射表
 
 | 案例 | 回归测试 | 绑定说明 |
@@ -212,6 +237,7 @@ flowchart LR
 | 三卖正例（对称样例） | `test_analyze_chanlun_signals_flags_third_sell_after_leave_zs_and_rebound_fails_lower_edge` | `leave_zs_then_rebound_fails_lower_edge` |
 | 三买反例：首次回抽重入中枢 | `test_analyze_chanlun_signals_does_not_flag_buy3_when_first_pullback_reenters_zs` | 回抽回到中枢区间 -> 不成立 |
 | confirmed 消费真实对照：`600900 1m sell3` | `test_build_summary_and_detail_payload_preserve_real_600900_1m_down_warning_sample` | 真实 `1m` live 样本已形成 `sell3 + confirmed`，前端必须把它和 `watch/pending` 候选卡分层展示，不得降写回预警态 |
+| confirmed 买侧真实对照：`00700 5m buy2like` | `test_build_summary_and_detail_payload_preserve_real_00700_5m_confirmed_buy2like_sample` | 真实 `5m` live 样本已形成 `buy2like + confirmed`，前端买侧 confirmed 锚点不再为空；但它不能替代未来 `1m confirmed` 买点样本 |
 | 区间套/小转大必要条件已具备：5M `buy3` 对照卡 | `test_build_lower_timeframe_precision_entry_marks_small_to_large_necessary_condition_when_buy3_sell3_exists` | 次级别已出现 `buy3`，`small_to_large_status` 必须升级到 `third_class_confirmed`，但仍不得把“必要条件成立”偷换成高级别 confirmed |
 | 区间套/小转大真实观察链：`002555 1m -> 5M` | `test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample` | 真实 replay `pre_breakout` 已透传到 `precision_entry/precision_window_display`，5M 只能落 `watch + small_to_large_status=candidate`，不得被消费端误写成 confirmed 三买 |
 
