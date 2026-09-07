@@ -328,7 +328,7 @@ flowchart TD
 6. [build/scan_real_1m_prebreakout_samples.json](build/scan_real_1m_prebreakout_samples.json) `1m pre_breakout` 历史回放已扩展到六锚点：`002555 2026-08-04 13:35`、`03690 2026-08-05 09:56`、`600900 2026-08-04 13:18`、`01024 2026-08-10 09:56`、`09988 2026-08-05 10:01`、`00700 2026-08-05 10:01`，且仍保留 pending/watch。
 7. [data/reports/601328/1m/tech.json](data/reports/601328/1m/tech.json) `SH.601328 1m` 顶背驰迹象已出现，但仍停留在等待离开中枢的预警前态。
 
-当前 `1m` 接线规则：真实 `SZ.000651 1m pre_breakdown` 与真实 replay `1m pre_breakout` 六锚点（`002555/03690/600900/01024/09988/00700`）已经接入第 92 课的双向主预警锚点，`SH.601328 1m` 退回“预警前态代理”角色；`1m confirmed 3S` 当前则只保留为 regression reference，对应消费输出的 confirmed 对照。
+当前 `1m` 接线规则：真实 `SZ.000651 1m pre_breakdown` 与真实 replay `1m pre_breakout` 六锚点（`002555/03690/600900/01024/09988/00700`）已经接入第 92 课的双向主预警锚点，`SH.601328 1m` 退回“预警前态代理”角色；当前稳定的 confirmed live 主锚点为真实 `600900 1m sell3/confirmed`，旧 `confirmed 3S` reference gate 继续保留作自动化兜底。
 
 ### 4.1 真实案例 A: HK.01024 60m 向下预警后首次回抽回中枢
 
@@ -400,7 +400,7 @@ flowchart LR
 - 这类场景适合作为 `30m/60m` 预警案例在更低级别的真实补充锚点，也适合作为 proxy negative 的直接上游对照。
 - 最终文案可固定为：`出现向下预警，但当前不构成确认三卖。`
 
-补充说明：`1m confirmed 3S` 现已由真实 `01024 1m` live 样本回补到本页，同时继续保留具名 regression reference gate 作为自动化兜底。
+补充说明：旧 `1m confirmed 3S` reference gate 继续保留作自动化兜底；当前实时落盘样本里，正式 confirmed live 主卡已切换为真实 `600900 1m sell3/confirmed`，`01024 1m` 则回到 `pre_breakout/pending` 观察链。
 
 ### 4.4 真实案例 D: 002555 1m 向上预警已通过历史回放锁定，但确认链尚未闭合
 
@@ -427,21 +427,21 @@ flowchart LR
 - 它和 `4.3` 的 `SZ.000651 1m pre_breakdown` 正好构成 `1m` 双向预警对照，且当前已扩展到六锚点（`002555/03690/600900/01024/09988/00700`），能直接约束消费端不要把“向上预警”误写成 confirmed 三买。
 - 最终文案可固定为：`出现向上预警，但当前不构成确认三买。`
 
-### 4.5 真实案例 E: 01024 1m 已进入 confirmed 3S，但不能和预警/代理态混写
+### 4.5 真实案例 E: 600900 1m 已进入 confirmed 3S，且不能和预警/代理态混写
 
-- 标的/级别/时间窗：01024 / 1m / 2026-08-07 15:31 ~ 2026-08-20 16:00
-- 当前中枢数量：`2`
-- 最新中枢区间：`40.00 - 40.36`
+- 标的/级别/时间窗：600900 / 1m / 当前实时落盘样本
+- 当前中枢数量：当前落盘摘要已不再要求固定中枢数值才能消费 confirmed 语义
+- 最新中枢区间：当前落盘摘要未强依赖固定区间值
 - 当前进行结构：`down`
-- 当前信号结论：`跌破中枢后反抽下沿失败，当前按三卖确认处理。`
-- 关键信号说明：`当前同级别结构处于已确认消费，最近卖点为三卖，参考价 33.94。`
+- 当前信号结论：`偏空，优先减仓或兑现。`
+- 关键信号说明：`当前同级别结构处于已确认消费，最近卖点为三卖；虽仍可见 pre_breakdown 预警字段，但主结论已闭合为 confirmed。`
 
 ```mermaid
 flowchart LR
   A[跌破中枢] --> B[反抽下沿失败]
   B --> C[confirmed 3S]
   C --> D[维持 confirmed]
-  D --> E[不得降写成 pending 或 pre_breakdown]
+  D --> E[不得降写成 pending 或单纯 pre_breakdown]
 ```
 
 图上 review 重点：
@@ -449,7 +449,7 @@ flowchart LR
 - 这个 `1m` 案例现在补上的是实时 `tech.json` confirmed `3S` live 卡片，不再只是 synthetic/reference gate。
 - 当前 `tech.json` 已同时给出 `sell_points=[sell3]`、`same_level_consumption_level=confirmed`、`same_level_decomposition_mode=single_confirmed` 与 confirmed 结论文案，足够作为 `1m pre_break*` 的 confirmed 对照锚点。
 - 它和 `4.3`、`4.4` 分别形成“向下预警未确认 / 向上预警未确认 / confirmed 三卖”三段式对照，能直接约束消费端不要把 pending/watch 与 confirmed 混写。
-- 最终文案可固定为：`跌破中枢后反抽下沿失败，当前按三卖确认处理。`
+- 最终文案可固定为：`偏空，优先减仓或兑现。`
 
 ### 4.6 真实案例 F: SH.601328 1m 顶背驰迹象已出现，但仍未进入 `pre_breakdown` 确认链
 

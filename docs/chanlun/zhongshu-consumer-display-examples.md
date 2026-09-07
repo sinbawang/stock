@@ -23,7 +23,7 @@
 
 | 级别 | 当前状态 | 当前主锚点 |
 | --- | --- | --- |
-| `1m` | 已有七类稳定消费示例 + 1 类历史原型 | `HK.02357 1m range ongoing`、`HK.01339 1m completed_then_new_type`、真实 `SZ.000651 1m pre_breakdown`、真实 replay `1m pre_breakout` 六锚点（`002555/03690/600900/01024/09988/00700`）、真实 `01024 1m confirmed 3S`、真实 `600900 1m confirmed 3B`、`SH.601328 1m pre-warning proxy`、confirmed regression reference；`candidate_new_type` 当前由历史原型 + 扫描工具补位 |
+| `1m` | 已有七类稳定消费示例 + 1 类历史原型 | `HK.02357 1m range ongoing`、`HK.01339 1m completed_then_new_type`、真实 `SZ.000651 1m pre_breakdown`、真实 replay `1m pre_breakout` 六锚点（`002555/03690/600900/01024/09988/00700`）、真实 `600900 1m confirmed 3S`、`SH.601328 1m pre-warning proxy`、confirmed regression reference；`candidate_new_type` 当前由历史原型 + 扫描工具补位 |
 | `5m` | 已有稳定节奏案例 | `SH.601318 5m down_bias` |
 | `30m` | 已有稳定扩张、去向、预警案例 | `SZ.000651 30m`、`SZ.002594 30m` |
 | `day` | 当前主要作为上级别闭合/映射目标出现 | `30m -> day` 的去向与扩张解释 |

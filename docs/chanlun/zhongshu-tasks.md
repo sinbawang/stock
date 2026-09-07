@@ -49,7 +49,7 @@
 
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
-| D1 | review 入口与样例库 | 高 | 把 `1m pre_breakout` 与 confirmed live 卡片补进第 92 课链路 | 完成 | `pre_breakdown`、`pre_breakout`、真实 `01024 1m confirmed 3S` 主卡片与真实 `002555 1m confirmed 3S` 次对照均已落地，进入段/本体/离开段分层图与主辅冲突卡片也已补。 |
+| D1 | review 入口与样例库 | 高 | 把 `1m pre_breakout` 与 confirmed live 卡片补进第 92 课链路 | 完成 | `pre_breakdown`、`pre_breakout` 与 confirmed live 卡片均已接入第 92 课链路；当前实时 confirmed 主卡已切换为真实 `600900 1m confirmed 3S`，旧 confirmed reference gate 继续保留作兜底，对应进入段/本体/离开段分层图与主辅冲突卡片也已补。 |
 | D3 | 文档-测试映射表 | 高 | 把 `1m pre_break*` 四条 gate 与 review 卡片一一对应 | 完成 | `pre_breakdown` / `pre_breakout` 双向 tech-json + publish gate 均落地（含真实样本与 replay 样本），映射表已一一绑定。 |
 | D2 | 主辅字段盘点与命名约束 | 中 | 继续把扁平字段的“主口径 / 辅口径”归属写死 | 完成 | ZS4 字段盘点、命名对照、降级兼容策略与多消费端展示规范均已冻结。 |
 
@@ -734,19 +734,19 @@
 | watch / pending | `HK.02357 1m range ongoing` | 已稳定 | 约束“已有中枢但结构未完成”不得升级确认。 |
 | completed_then_new_type | `HK.01339 1m completed_then_new_type` | 已稳定 | 约束“前段已完成”不等于“当前新段已确认”。 |
 | pre-warning proxy | `SH.601328 1m pre-warning proxy` | 已稳定但仍属代理 | 约束“风险迹象已出现”不等于“正式 pre_break* 已落盘”。 |
-| confirmed | `01024 1m confirmed 3S` | 已稳定 | 作为 `1m` confirmed live 场景主锚点；`002555 1m confirmed 3S` 与 `600900 1m confirmed 3B` 现已可作为真实 live 对照，旧 reference gate 继续保留作兜底。 |
+| confirmed | `600900 1m confirmed 3S` | 已稳定 | 作为当前 `1m` confirmed live 场景主锚点；旧 reference gate 继续保留作兜底。 |
 
 样本缺口矩阵（首版）：
 
 | 缺口类别 | 当前现状 | 还缺什么 | 优先级 | 下一动作 |
 | --- | --- | --- | --- | --- |
-| 已有消费锚点 | 当前已有 5 个真实 `1m` 主锚点，外加 `002555 1m confirmed 3S` 与 `600900 1m confirmed 3B` 两个真实 live confirmed 对照，以及 1 个 confirmed regression reference，可覆盖 watch/pending、completed_then_new_type、正式 `pre_breakdown`、正式 `pre_breakout`、buy/sell 双向 confirmed 与 pre-warning proxy 最小闭环 | 还缺同场景多案例对照，尤其是多个 pending 反例与更多 confirmed 扩展样本 | 中 | 当前先维持主链稳定，再按 ROI 补更多 pending 反例或更复杂 confirmed 场景。 |
+| 已有消费锚点 | 当前已有 5 个真实 `1m` 主锚点，外加真实 `600900 1m confirmed 3S` 与 1 个 confirmed regression reference，可覆盖 watch/pending、completed_then_new_type、正式 `pre_breakdown`、正式 `pre_breakout`、confirmed 卖点与 pre-warning proxy 最小闭环 | 还缺 confirmed 买点与更多 confirmed / pending 多案例对照 | 中 | 当前先维持主链稳定，再按 ROI 补更多 pending 反例或补一条稳定的 confirmed 买点 live 样本。 |
 | 正式 `1m pre_breakdown` 落盘样本 | `data/reports/000651/1m/tech.json` 已出现真实 `zs_monitor_alert=pre_breakdown`，`SH.601328 1m` 继续保留为预警前态代理 | 补一条与之配套的 review 主卡片，并继续补更多同类样本 | 最高 | 先以 `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakdown_sample` 锁住真实 `tech.json -> summary/detail` 链。 |
 | 正式 `1m pre_breakout` 落盘样本 | 当前最新 `data/reports/<symbol>/1m/tech.json` 仍未保留 `pre_breakout` 终态快照，但历史回放已确认多组真实 `1m pre_breakout` cutoff | 至少 1 个真实 `1m` `zs_monitor_alert=pre_breakout` 样本进入正式 gate 链 | 最高 | 已把 `002555 2026-08-04 13:35` 这类“向上预警但未确认三买”的历史窗口固化成 analysis + publish replay gate，并移除 `_replay` 内 synthetic fallback。 |
-| `1m` 预警未确认 -> confirmed 对照链 | 当前已有真实 `1m pre_breakdown` 落盘样本 + 真实 replay `1m pre_breakout` 样本 + 真实 `01024 / 002555 1m confirmed 3S` 与真实 `600900 1m confirmed 3B` live 样本；reference gate 继续保留作兜底 | 一组“正式 `pre_break*` -> 回中枢未确认”与“一组 `pre_break*` 后确认链闭合”的 `1m` 对照 | 高 | 主链角色已补齐；下一步优先转回更高优先 blocker，或只在需要时扩 confirmed 广度。 |
+| `1m` 预警未确认 -> confirmed 对照链 | 当前已有真实 `1m pre_breakdown` 落盘样本 + 真实 replay `1m pre_breakout` 样本 + 真实 `600900 1m confirmed 3S` live 样本；reference gate 继续保留作兜底 | 一组“正式 `pre_break*` -> 回中枢未确认”与“一组 `pre_break*` 后确认链闭合”的 `1m` 对照 | 高 | 主链角色已补齐；下一步优先转回更高优先 blocker，或补一条稳定的 confirmed 买点 live 对照。 |
 | 发布产物锚点 | 文档已确认 `30m pre_breakdown/pre_breakout -> published summary/detail` 有回归锚点；`1m pre_breakdown` 也已有真实样本 publish regression，`1m pre_breakout` 仍缺真实锚点 | `1m summary/detail/miniapp` 的双边正式预警字段核验 | 高 | 对称补齐 `1m pre_breakout` 的真实 `tech.json -> publish summary/detail` 核验链。 |
 | 自动化测试锚点 | `1m pre_breakdown` 已有独立真实 `tech.json` gate + 真实 publish regression，`1m pre_breakout` 仍只有 synthetic gate | 至少再补一条真实 `1m pre_breakout` regression / publish gate | 高 | 测试侧继续按一上/一下对称补齐真实样本锚点。 |
-| review 卡片锚点 | 真实 `SZ.000651 1m pre_breakdown`、真实 replay `002555 1m pre_breakout`、真实 `01024 / 002555 1m confirmed 3S` 与真实 `600900 1m confirmed 3B` 已接管第 92 课主位，`SH.601328 1m` 已降为代理说明卡片 | 更多 confirmed / pending 多案例对照 | 中高 | 主链卡片已齐，后续只在需要时扩样本广度。 |
+| review 卡片锚点 | 真实 `SZ.000651 1m pre_breakdown`、真实 replay `002555 1m pre_breakout` 与真实 `600900 1m confirmed 3S` 已接管第 92 课主位，`SH.601328 1m` 已降为代理说明卡片 | 更多 confirmed / pending 多案例对照 | 中高 | 主链卡片已齐，后续只在需要时扩样本广度。 |
 
 按任务拆分的推进顺序：
 
@@ -987,7 +987,7 @@
 | `1m-pre-breakdown-publish-gate` | 正式 `1m pre_breakdown` | `summary/detail`、小程序卡片、图表标签都能显示“向下预警未确认” | publish 核验样例链 + `zhongshu-visual-example-library.md` 第 4 节 | 已落地真实样本 pytest + synthetic pytest |
 | `1m-pre-breakout-tech-json-gate` | 正式 `1m pre_breakout` | `tech.json` 或 replay payload 出现 `zs_monitor_alert=pre_breakout`，且摘要仍是 pending/watch，不是 confirmed `3B` | `zhongshu-review-entry.md` 第 92 课 + `zhongshu-consumer-display-examples.md` 第 4 节 | synthetic pytest 已落地；真实 replay gate 已落地 `002555 2026-08-04 13:35` |
 | `1m-pre-breakout-publish-gate` | 正式 `1m pre_breakout` | `summary/detail`、小程序卡片、图表标签都能显示“向上预警未确认” | publish 核验样例链 + `zhongshu-visual-example-library.md` 第 4 节 | synthetic pytest 已落地；真实 replay-based publish gate 已落地 `002555 2026-08-04 13:35` |
-| `1m-confirmed-3s-reference-gate` | `01024 1m confirmed 3S` + synthetic/reference backup | confirmed `3S` 保持稳定，且消费端不会把它回退成 pending/watch 预警说明 | `zhongshu-review-entry.md` 第 92 课 + `zhongshu-consumer-display-examples.md` 第 7 节 | 已落地具名 pytest；真实 live 样本已接入 |
+| `1m-confirmed-3s-reference-gate` | synthetic/reference backup | confirmed `3S` 兜底保持稳定，且消费端不会把 confirmed 对照回退成 pending/watch 预警说明 | `zhongshu-review-entry.md` 第 92 课 + `zhongshu-consumer-display-examples.md` 第 7 节 | 已落地具名 pytest；当前真实 live 主卡已切换到 `600900 1m sell3/confirmed` |
 | `1m-proxy-negative-transition-gate` | `SH.601328 1m pre-warning proxy` | 风险前态仍不得输出正式 `zs_monitor_alert=pre_break*`，也不得被消费端升级成 confirmed | `zhongshu-visual-example-library.md` `4.4` + `zhongshu-consumer-display-examples.md` `7.6` | 已落地具名 pytest |
 
 gate 收口规则：
