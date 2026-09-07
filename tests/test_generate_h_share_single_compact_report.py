@@ -119,6 +119,8 @@ def test_generate_report_writes_compact_single_stock_text(tmp_path: Path, monkey
                         "pending_reverse_mode": "effective_only",
                         "status": "watch",
                         "window_basis_label": "中枢到锚点窗口",
+                        "small_to_large_status": "candidate",
+                        "small_to_large_status_label": "小转大候选",
                         "note": "5M 已出现顶部趋势背驰，等待次级别卖点确认后再精确执行。窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
                     },
                     "signal_catalog": [
@@ -159,6 +161,7 @@ def test_generate_report_writes_compact_single_stock_text(tmp_path: Path, monkey
     assert "买卖点: 三卖(active)@2026-05-22T14:30:00/479.60 [跌破中枢后反抽下沿失败]" in output
     assert "5M区间套: 5M 已出现顶部趋势背驰，等待次级别卖点确认后再精确执行。窗口依据：" in output
     assert "5M窗口: 中枢到锚点窗口" in output
+    assert "小转大: 小转大候选" in output
 
 
 def test_generate_report_writes_a_share_human_signal_text(tmp_path: Path, monkeypatch) -> None:
@@ -219,6 +222,8 @@ def test_generate_report_writes_a_share_human_signal_text(tmp_path: Path, monkey
                         "pending_reverse_mode": "effective_only",
                         "status": "actionable",
                         "window_basis_label": "中枢到锚点窗口",
+                        "small_to_large_status": "third_class_confirmed",
+                        "small_to_large_status_label": "小转大必要条件已具备",
                         "note": "5M 已出现二买，可按 effective_only 口径用于区间套精确定位。窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
                     },
                     "signal_catalog": [
@@ -252,6 +257,7 @@ def test_generate_report_writes_a_share_human_signal_text(tmp_path: Path, monkey
     assert "买卖点: 二买(active)@2026-05-22T14:30:00/72.30 [一买后回抽确认，低点未再跌破前低]" in output
     assert "5M区间套: 5M 已出现二买，可按 effective_only 口径用于区间套精确定位。窗口依据：" in output
     assert "5M窗口: 中枢到锚点窗口" in output
+    assert "小转大: 小转大必要条件已具备" in output
 
 
 def test_batch_main_writes_symbol_compacts_and_group_summary(tmp_path: Path, monkeypatch) -> None:

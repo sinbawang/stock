@@ -275,6 +275,12 @@ def _compact_technical_payload(payload: dict) -> list[str]:
             lines.append(f"{lower_level}窗口: {precision_window_display['label']}")
         if precision_entry.get("dynamic_grade_label"):
             lines.append(f"{lower_level}判级: {precision_entry['dynamic_grade_label']}")
+        small_to_large_status_label = (
+            precision_entry.get("small_to_large_status_label")
+            or (precision_window_display or {}).get("small_to_large_status_label")
+        )
+        if small_to_large_status_label:
+            lines.append(f"小转大: {small_to_large_status_label}")
     return lines
 
 
