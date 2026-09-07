@@ -62,6 +62,13 @@ class PrecisionDynamicGrade(str, Enum):
     NO_OPERATIONAL_VALUE = "no_operational_value"
 
 
+class SmallToLargeStatus(str, Enum):
+    """小转大状态：仅区分候选与必要条件已具备，不直接宣称大级别已确认。"""
+
+    CANDIDATE = "candidate"
+    THIRD_CLASS_CONFIRMED = "third_class_confirmed"
+
+
 SIGNAL_POINT_LABELS = {
     SignalPoint.BUY_1.value: "一买",
     SignalPoint.BUY_2.value: "二买",
@@ -118,6 +125,18 @@ PRECISION_DYNAMIC_GRADE_NOTES = {
 }
 
 
+SMALL_TO_LARGE_STATUS_LABELS = {
+    SmallToLargeStatus.CANDIDATE.value: "小转大候选",
+    SmallToLargeStatus.THIRD_CLASS_CONFIRMED.value: "小转大必要条件已具备",
+}
+
+
+SMALL_TO_LARGE_STATUS_NOTES = {
+    SmallToLargeStatus.CANDIDATE.value: "次级别转折已出现，但最后一个次级别中枢尚未见对应三类买卖点，当前只能按小转大候选观察。",
+    SmallToLargeStatus.THIRD_CLASS_CONFIRMED.value: "最后一个次级别中枢已出现对应三类买卖点，仅说明小转大的必要条件已具备，仍不等于高级别转折充分确认。",
+}
+
+
 def get_analysis_contract() -> dict[str, dict[str, tuple[str, str]]]:
     """返回机器可读的 analysis 契约投影。
 
@@ -139,5 +158,9 @@ def get_analysis_contract() -> dict[str, dict[str, tuple[str, str]]]:
         "precision_dynamic_grade": {
             member.value: (PRECISION_DYNAMIC_GRADE_LABELS[member.value], PRECISION_DYNAMIC_GRADE_NOTES[member.value])
             for member in PrecisionDynamicGrade
+        },
+        "small_to_large_status": {
+            member.value: (SMALL_TO_LARGE_STATUS_LABELS[member.value], SMALL_TO_LARGE_STATUS_NOTES[member.value])
+            for member in SmallToLargeStatus
         },
     }

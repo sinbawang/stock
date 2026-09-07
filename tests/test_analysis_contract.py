@@ -12,11 +12,14 @@ from chanlun.analysis_contract import (
     PRECISION_DYNAMIC_GRADE_NOTES,
     SIGNAL_BASIS_LABELS,
     SIGNAL_POINT_LABELS,
+    SMALL_TO_LARGE_STATUS_LABELS,
+    SMALL_TO_LARGE_STATUS_NOTES,
     STRUCTURE_STATUS_LABELS,
     STRUCTURE_STATUS_NOTES,
     PrecisionDynamicGrade,
     SignalBasis,
     SignalPoint,
+    SmallToLargeStatus,
     StructureStatus,
     get_analysis_contract,
 )
@@ -68,6 +71,13 @@ def test_precision_dynamic_grade_enum_is_stable_and_complete() -> None:
     }
 
 
+def test_small_to_large_status_enum_is_stable_and_complete() -> None:
+    assert {member.value for member in SmallToLargeStatus} == {
+        "candidate",
+        "third_class_confirmed",
+    }
+
+
 def test_analysis_consumes_the_same_label_and_note_objects() -> None:
     """analysis.py 的展示字典必须直接来自契约模块，不得维护第二份拷贝。"""
     assert analysis.SIGNAL_POINT_LABELS is SIGNAL_POINT_LABELS
@@ -79,7 +89,13 @@ def test_analysis_consumes_the_same_label_and_note_objects() -> None:
 def test_contract_projection_covers_all_codes_with_non_empty_labels() -> None:
     contract = get_analysis_contract()
 
-    assert set(contract) == {"signal_point", "signal_basis", "structure_status", "precision_dynamic_grade"}
+    assert set(contract) == {
+        "signal_point",
+        "signal_basis",
+        "structure_status",
+        "precision_dynamic_grade",
+        "small_to_large_status",
+    }
 
     for family, entries in contract.items():
         assert entries, f"{family} 契约为空"
@@ -87,7 +103,7 @@ def test_contract_projection_covers_all_codes_with_non_empty_labels() -> None:
             assert code, f"{family} 存在空 code"
             assert label, f"{family}.{code} label 为空"
             # structure_status / precision_dynamic_grade 必须带 note；signal_point / signal_basis 暂允许 note 为空。
-            if family in {"structure_status", "precision_dynamic_grade"}:
+            if family in {"structure_status", "precision_dynamic_grade", "small_to_large_status"}:
                 assert note, f"{family}.{code} note 为空"
 
 
@@ -102,3 +118,10 @@ def test_signal_point_labels_follow_buy_sell_semantics() -> None:
     assert SIGNAL_POINT_LABELS[SignalPoint.SELL_2_LIKE.value] == "类二卖"
     assert SIGNAL_POINT_LABELS[SignalPoint.BUY_1_LIKE.value] == "类一买"
     assert SIGNAL_POINT_LABELS[SignalPoint.SELL_1_LIKE.value] == "类一卖"
+
+
+def test_small_to_large_status_labels_and_notes_are_stable() -> None:
+    assert SMALL_TO_LARGE_STATUS_LABELS[SmallToLargeStatus.CANDIDATE.value] == "小转大候选"
+    assert SMALL_TO_LARGE_STATUS_LABELS[SmallToLargeStatus.THIRD_CLASS_CONFIRMED.value] == "小转大必要条件已具备"
+    assert "最后一个次级别中枢" in SMALL_TO_LARGE_STATUS_NOTES[SmallToLargeStatus.CANDIDATE.value]
+    assert "不等于高级别转折充分确认" in SMALL_TO_LARGE_STATUS_NOTES[SmallToLargeStatus.THIRD_CLASS_CONFIRMED.value]

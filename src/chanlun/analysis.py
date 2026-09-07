@@ -15,9 +15,12 @@ from .analysis_contract import (
     PRECISION_DYNAMIC_GRADE_LABELS,
     SIGNAL_BASIS_LABELS,
     SIGNAL_POINT_LABELS,
+    SMALL_TO_LARGE_STATUS_LABELS,
+    SMALL_TO_LARGE_STATUS_NOTES,
     STRUCTURE_STATUS_LABELS,
     STRUCTURE_STATUS_NOTES,
     PrecisionDynamicGrade,
+    SmallToLargeStatus,
 )
 
 
@@ -114,6 +117,16 @@ def format_consumption_level_label(value: Any) -> str | None:
 
 def describe_consumption_level(value: Any) -> str:
     return CONSUMPTION_LEVEL_NOTES.get(str(value or ""), "")
+
+
+def format_small_to_large_status_label(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    return SMALL_TO_LARGE_STATUS_LABELS.get(str(value), str(value))
+
+
+def describe_small_to_large_status(value: Any) -> str:
+    return SMALL_TO_LARGE_STATUS_NOTES.get(str(value or ""), "")
 
 
 def describe_reabsorbed_zhongshu_debug(zhongshus: list[Any], current_zs: Any | None) -> str:
@@ -1539,17 +1552,23 @@ def build_precision_window_display(precision_entry: dict[str, object] | None) ->
     description = precision_entry.get("window_basis_description") or nested_from.get("window_basis_description")
     dynamic_grade = precision_entry.get("dynamic_grade")
     dynamic_grade_label = precision_entry.get("dynamic_grade_label")
-    if not label and not description and not dynamic_grade_label:
+    small_to_large_status = precision_entry.get("small_to_large_status")
+    small_to_large_status_label = precision_entry.get("small_to_large_status_label")
+    if not label and not description and not dynamic_grade_label and not small_to_large_status_label:
         return None
     lines = [line for line in [f"{operation_level}窗口：{label}" if label else None, description] if line]
     if dynamic_grade_label:
         lines.append(f"{operation_level}判级：{dynamic_grade_label}")
+    if small_to_large_status_label:
+        lines.append(f"小转大：{small_to_large_status_label}")
     return {
         "title": f"{operation_level}区间套窗口",
         "label": label,
         "description": description,
         "dynamic_grade": dynamic_grade,
         "dynamic_grade_label": dynamic_grade_label,
+        "small_to_large_status": small_to_large_status,
+        "small_to_large_status_label": small_to_large_status_label,
         "lines": lines,
     }
 
@@ -1684,6 +1703,27 @@ def _grade_by_higher_drift(drift: str | None, side: str) -> str | None:
     return None
 
 
+def _build_small_to_large_status(
+    higher_signals: dict[str, object],
+    signal_points: list[dict[str, object]],
+    *,
+    side: str,
+) -> str | None:
+    """小转大只暴露候选/必要条件，不在此层直接给出大级别已确认结论。"""
+    route = str(higher_signals.get("post_divergence_route") or "").strip()
+    if route not in {"higher_level_reverse_trend", "higher_level_range"}:
+        return None
+
+    required_point = "buy3" if side == "buy" else "sell3"
+    has_required_third_class = any(
+        entry.get("active") and str(entry.get("point") or "").replace("_", "") == required_point
+        for entry in signal_points
+    )
+    if has_required_third_class:
+        return SmallToLargeStatus.THIRD_CLASS_CONFIRMED.value
+    return SmallToLargeStatus.CANDIDATE.value
+
+
 def build_lower_timeframe_precision_entry(
     higher_signals: dict[str, object],
     lower_signals: dict[str, object],
@@ -1795,6 +1835,10 @@ def build_lower_timeframe_precision_entry(
         note = f"{lower_timeframe_label} 已出现盘整背驰，等待回抽确认后再作为区间套精确点。{window_basis_note}"
 
     higher_consumption_level = str(higher_signals.get("same_level_consumption_level") or "").strip()
+    if not higher_consumption_level:
+        higher_structure_state = higher_signals.get("structure_state")
+        if isinstance(higher_structure_state, dict):
+            higher_consumption_level = _build_same_level_consumption_level(higher_structure_state)
     higher_consumption_level_label = format_consumption_level_label(higher_consumption_level)
     if higher_consumption_level in {"auxiliary", "pending"} and status == "actionable":
         status = "watch"
@@ -1807,6 +1851,9 @@ def build_lower_timeframe_precision_entry(
     higher_drift = _higher_level_drift(higher_signals)
     dynamic_grade = _grade_by_higher_drift(higher_drift, side)
     dynamic_grade_label = PRECISION_DYNAMIC_GRADE_LABELS.get(dynamic_grade) if dynamic_grade else None
+    small_to_large_status = _build_small_to_large_status(higher_signals, signal_points, side=side)
+    small_to_large_status_label = format_small_to_large_status_label(small_to_large_status)
+    small_to_large_status_note = describe_small_to_large_status(small_to_large_status)
 
     return {
         "timeframe": lower_timeframe,
@@ -1826,6 +1873,9 @@ def build_lower_timeframe_precision_entry(
         "higher_consumption_level_label": higher_consumption_level_label,
         "dynamic_grade": dynamic_grade,
         "dynamic_grade_label": dynamic_grade_label,
+        "small_to_large_status": small_to_large_status,
+        "small_to_large_status_label": small_to_large_status_label,
+        "small_to_large_status_note": small_to_large_status_note or None,
         "window_basis_label": window_basis_label,
         "window_basis_description": window_basis_note,
         "nested_from": {

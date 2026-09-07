@@ -281,9 +281,12 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
         "title": "5M区间套窗口",
         "label": "中枢到锚点窗口",
         "description": "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+        "small_to_large_status": "candidate",
+        "small_to_large_status_label": "小转大候选",
         "lines": [
           "5M窗口：中枢到锚点窗口",
-          "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。"
+          "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+          "小转大：小转大候选"
         ]
       }
     },
@@ -323,7 +326,7 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
 | `cards.technical.conclusion` | 技术面摘要文案 | `pending_or_confirmed_text` | 不能仅凭一句“偏强，持有为主”就打 confirmed。 |
 | `cards.technical.suggestion` | 技术面建议文案 | `action_text_optional` | 不得反推严格结构结论。 |
 | `cards.technical.precision_note` | 执行层说明 | `auxiliary_or_pending` | 只能解释区间套和执行层，不得覆盖主级别结构。 |
-| `cards.technical.precision_window_display` | 执行层展示块 | `auxiliary_or_pending` | `5M` 执行窗口不得单独升级为主结论 confirmed。 |
+| `cards.technical.precision_window_display` | 执行层展示块 | `auxiliary_or_pending` | `5M` 执行窗口不得单独升级为主结论 confirmed；其中 `small_to_large_status` 只允许表达“小转大候选”或“必要条件已具备”。 |
 | `cards.capital_flow.*` | 资金面摘要 | `separate_axis` | 不得与缠论结构确认混写为同一状态。 |
 | `comment` 或同类组合摘要文案 | 组合摘要 | `display_only` | 只作扫读，不作 machine-readable 状态。 |
 
@@ -385,9 +388,12 @@ c:/sinba/stock/venv/Scripts/python.exe scripts/refresh_holdings_publish_to_cloud
         "title": "5M区间套窗口",
         "label": "中枢到锚点窗口",
         "description": "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+        "small_to_large_status": "candidate",
+        "small_to_large_status_label": "小转大候选",
         "lines": [
           "5M窗口：中枢到锚点窗口",
-          "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。"
+          "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+          "小转大：小转大候选"
         ]
       },
       "overview": [

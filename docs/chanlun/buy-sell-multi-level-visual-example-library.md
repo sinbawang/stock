@@ -90,6 +90,7 @@ flowchart TD
 图注模板：
 
 - 必填：高级别、操作级别、执行级别。
+- 必填：`small_to_large_status = candidate | third_class_confirmed`，只表达“小转大候选”或“必要条件已具备”，不得越权写成高级别已确认。
 - 红线：低级别信号不得单独推翻高级别未完成结构。
 
 ## 6. 实盘案例卡片模板
@@ -115,7 +116,10 @@ flowchart TD
 - 高级别：
 - 操作级别：
 - 执行级别：
-- 当前状态：观察 | 候选 | 已确认
+- `precision_entry.status`：`standby` | `watch` | `actionable`
+- `precision_entry.small_to_large_status`：`candidate` | `third_class_confirmed`
+- 展示文案：`小转大候选` | `小转大必要条件已具备`
+- 红线：即使出现 `third_class_confirmed`，也只代表最后一个次级别中枢已出现对应三类买卖点，不等于高级别主结论已确认。
 
 ## 7. 案例 -> 回归锚点映射表
 

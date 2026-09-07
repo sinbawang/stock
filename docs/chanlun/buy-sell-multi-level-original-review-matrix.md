@@ -23,7 +23,7 @@
 | --- | --- | --- | --- | --- |
 | 20 | 第三类买卖点强调离开中枢后的首次回抽/回试约束。 | [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) 已明确 3B/3S 核心语义。 | 基本一致 | 补“首次回试失败不得二次补写”为负例模板。 |
 | 21 | 三类买卖点完备性；2类与3类在特定条件下可能重合。 | [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) 已保留 2/3 类重合关系。 | 基本一致 | 补“2B/3B 重合”标准案例卡片。 |
-| 44 | 小背驰-大转折定理：小级别顶/底背驰引发大级别转折的必要条件是最后一个次级别中枢出现第三类卖/买点（只有必要条件、无充分条件）。 | [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) §4 小转大已要求“低级别先转折、高级别确认”。 | 基本一致（必要条件未显式） | 补“小背驰后未出现三卖则不判大级别转折”反例；补必要条件模板。 |
+| 44 | 小背驰-大转折定理：小级别顶/底背驰引发大级别转折的必要条件是最后一个次级别中枢出现第三类卖/买点（只有必要条件、无充分条件）。 | [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) §4 小转大已要求“低级别先转折、高级别确认”。 | 显式映射 | `precision_entry.small_to_large_status` 已区分“小转大候选”与“必要条件已具备”，并补“未出三类点不得升级大级别转折”的反例回归。 |
 | 53 | 2买用于补足小转大；级别切换必须明确高低级别关系。 | [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) 已保留小转大与多级别分工。 | 基本一致 | 补“低级别转折已出现，但高级别尚未确认”的降级模板。 |
 | 61 | 区间套定位：围绕同一中枢的任意两段都可比较力度；背驰段内逐级定位（多重背驰段）；第二类卖点可与某中枢第三类卖点重合。 | [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) §3 区间套 + `precision_entry.nested_from`。 | 基本一致 | 补“2/3 类重合”标准卡（与第21课呼应）；补多重背驰段定位图示。 |
 

@@ -1021,6 +1021,70 @@ def test_real_day_range_divergence_replay_sample_000591_down_strict() -> None:
     assert payload["same_level_consumption_level"] == "pending"
 
 
+def test_real_day_range_divergence_replay_sample_000591_only_marks_small_to_large_candidate_without_buy3() -> None:
+    """真实 000591 day 严格盘整底背驰样本：未见次级别三买前，只能标记为小转大候选。"""
+    rows = probe_module._load_rows("000591", "day")
+    payload = probe_module._replay("000591", "太阳能", "2026-08-03", rows)
+
+    assert payload["post_divergence_route"] == "higher_level_range"
+    assert payload["same_level_consumption_level"] == "pending"
+    assert payload["buy_points"] == []
+    assert payload["sell_points"] == []
+
+    higher_signals = {
+        "post_divergence_route": payload["post_divergence_route"],
+        "same_level_consumption_level": payload["same_level_consumption_level"],
+        "structure_state": {"current_ongoing": {"type": payload["ongoing_type"]}},
+        "divergence": {
+            "trend": {"active": False},
+            "range": {
+                "active": payload["divergence_range_active"],
+                "direction": payload["divergence_range_direction"],
+                "time": payload["cutoff"],
+            },
+        },
+    }
+    lower_signals = {
+        "buy_points": ["buy_2"],
+        "sell_points": [],
+        "signal_points": [
+            {
+                "point": "buy2",
+                "active": True,
+                "time": payload["cutoff"],
+                "price": 5.12,
+                "basis": "buy1_pullback_confirmation",
+            }
+        ],
+        "signal_catalog": [
+            {
+                "point": "buy2",
+                "active": True,
+                "time": payload["cutoff"],
+                "price": 5.12,
+                "basis": "buy1_pullback_confirmation",
+            }
+        ],
+        "structure_state": {"current_ongoing": {"type": "down"}},
+        "divergence": {"trend": {"active": False}, "range": {"active": False}},
+    }
+
+    entry = build_lower_timeframe_precision_entry(
+        higher_signals,
+        lower_signals,
+        lower_timeframe="60m",
+        lower_timeframe_label="60M",
+        pending_reverse_mode="effective_only",
+    )
+
+    assert entry["status"] == "watch"
+    assert entry["higher_consumption_level"] == "pending"
+    assert entry["small_to_large_status"] == "candidate"
+    assert entry["small_to_large_status_label"] == "小转大候选"
+    assert "最后一个次级别中枢" in entry["small_to_large_status_note"]
+    assert "不按严格区间套执行" in entry["note"]
+
+
 def test_real_day_range_divergence_replay_sample_601328_up_strict() -> None:
     # 严格盘整顶背驰真实样本（day 级）：601328 交通银行 2025-06-24。
     # 连续中枢区间不重叠但波动区间回探重叠（中枢扩张），按第20课归入盘整，
@@ -2751,6 +2815,43 @@ def test_build_lower_timeframe_precision_entry_downgrades_pending_higher_level()
     assert "不按严格区间套执行" in entry["note"]
 
 
+def test_build_lower_timeframe_precision_entry_downgrades_legacy_pending_higher_level() -> None:
+    """旧上级别 payload 仅带 structure_state 时，也要沿兼容路径降级次级别买卖点。"""
+    higher_signals = {
+        "buy_points": ["buy_1"],
+        "current_zs": SimpleNamespace(end_ts=datetime(2026, 5, 10, 14, 0), zs_id=9, exit_bi_id=33, is_terminated=False),
+        "signal_points": [
+            {"point": "buy1", "active": True, "time": "2026-05-10T14:30:00", "price": 10.2, "basis": "bottom_divergence_near_zs_low"}
+        ],
+        "divergence": {"trend": {"active": False}, "range": {"active": False}},
+        "structure_state": {
+            "current_structure_status": "candidate_completed_waiting_stability",
+            "current_ongoing": {"type": "down", "confirmation_basis": "single_active_zhongshu"},
+        },
+    }
+    lower_signals = {
+        "buy_points": ["buy_2"],
+        "sell_points": [],
+        "signal_points": [{"point": "buy2", "active": True, "time": "2026-05-10T14:25:00", "price": 10.25, "basis": "buy1_pullback_confirmation"}],
+        "signal_catalog": [{"point": "buy2", "active": True, "time": "2026-05-10T14:25:00", "price": 10.25, "basis": "buy1_pullback_confirmation"}],
+        "structure_state": {"current_ongoing": {"type": "down"}},
+        "divergence": {"trend": {"active": False}, "range": {"active": False}},
+    }
+
+    entry = build_lower_timeframe_precision_entry(
+        higher_signals,
+        lower_signals,
+        lower_timeframe="5m",
+        lower_timeframe_label="5M",
+        pending_reverse_mode="effective_only",
+    )
+
+    assert entry["status"] == "watch"
+    assert entry["higher_consumption_level"] == "pending"
+    assert entry["higher_consumption_level_label"] == "待确认消费"
+    assert "不按严格区间套执行" in entry["note"]
+
+
 def test_build_lower_timeframe_precision_entry_keeps_actionable_when_higher_confirmed() -> None:
     """上级别同级别结构已确认（confirmed）时，次级别买卖点保持 actionable。"""
     higher_signals = {
@@ -2841,6 +2942,63 @@ def test_build_lower_timeframe_precision_entry_dynamic_grade(
     assert entry["dynamic_grade_label"] == expected_label
 
 
+def test_build_lower_timeframe_precision_entry_marks_small_to_large_candidate_without_buy3_sell3() -> None:
+    entry = build_lower_timeframe_precision_entry(
+        {
+            **_precision_higher_signals_with_drift("buy", "down"),
+            "post_divergence_route": "higher_level_reverse_trend",
+        },
+        _precision_lower_signals("buy"),
+        lower_timeframe="5m",
+        lower_timeframe_label="5M",
+        pending_reverse_mode="effective_only",
+    )
+
+    assert entry["small_to_large_status"] == "candidate"
+    assert entry["small_to_large_status_label"] == "小转大候选"
+    assert "最后一个次级别中枢" in entry["small_to_large_status_note"]
+
+
+def test_build_lower_timeframe_precision_entry_marks_small_to_large_necessary_condition_when_buy3_sell3_exists() -> None:
+    lower_signals = {
+        **_precision_lower_signals("buy"),
+        "buy_points": ["buy3"],
+        "signal_points": [
+            {
+                "point": "buy3",
+                "active": True,
+                "time": "2026-05-10T14:25:00",
+                "price": 10.25,
+                "basis": "leave_zs_then_pullback_holds_upper_edge",
+            }
+        ],
+        "signal_catalog": [
+            {
+                "point": "buy3",
+                "active": True,
+                "time": "2026-05-10T14:25:00",
+                "price": 10.25,
+                "basis": "leave_zs_then_pullback_holds_upper_edge",
+            }
+        ],
+    }
+
+    entry = build_lower_timeframe_precision_entry(
+        {
+            **_precision_higher_signals_with_drift("buy", "down"),
+            "post_divergence_route": "higher_level_reverse_trend",
+        },
+        lower_signals,
+        lower_timeframe="5m",
+        lower_timeframe_label="5M",
+        pending_reverse_mode="effective_only",
+    )
+
+    assert entry["small_to_large_status"] == "third_class_confirmed"
+    assert entry["small_to_large_status_label"] == "小转大必要条件已具备"
+    assert "不等于高级别转折充分确认" in entry["small_to_large_status_note"]
+
+
 def test_build_precision_window_display_includes_dynamic_grade() -> None:
     display = build_precision_window_display(
         {
@@ -2855,6 +3013,20 @@ def test_build_precision_window_display_includes_dynamic_grade() -> None:
     assert display["dynamic_grade"] == "warning"
     assert display["dynamic_grade_label"] == "警戒"
     assert "5M判级：警戒" in display["lines"]
+
+
+def test_build_precision_window_display_includes_small_to_large_status() -> None:
+    display = build_precision_window_display(
+        {
+            "operation_level": "5M",
+            "small_to_large_status": "candidate",
+            "small_to_large_status_label": "小转大候选",
+        }
+    )
+
+    assert display["small_to_large_status"] == "candidate"
+    assert display["small_to_large_status_label"] == "小转大候选"
+    assert "小转大：小转大候选" in display["lines"]
 
 
 def test_build_precision_window_display_omits_grade_when_absent() -> None:

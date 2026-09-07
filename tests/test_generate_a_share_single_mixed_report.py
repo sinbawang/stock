@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import sys
 from pathlib import Path
@@ -126,6 +127,22 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
         "extract_signals",
         lambda *args, **kwargs: {
             "bucket": "watch",
+            "buy_points": ["buy_1"],
+            "signal_points": [
+                {
+                    "point": "buy1",
+                    "active": True,
+                    "time": "2026-05-29T14:30:00",
+                    "price": 10.7,
+                    "basis": "bottom_divergence_near_zs_low",
+                }
+            ],
+            "current_zs": SimpleNamespace(
+                end_ts=datetime.fromisoformat("2026-05-01T10:30:00"),
+                zs_id=1,
+                exit_bi_id=13,
+                is_terminated=True,
+            ),
             "structure_state": {"current_ongoing": {"type": "range"}},
             "same_level_decomposition_mode": "dual_interpretation_pending",
             "same_level_consumption_level": "pending",
@@ -196,6 +213,8 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
     assert payload["timeframe"] == "30m"
     assert payload["precision_entry"]["timeframe"] == "5m"
     assert payload["precision_entry"]["pending_reverse_mode"] == "effective_only"
+    assert payload["precision_entry"]["small_to_large_status"] == "candidate"
+    assert payload["precision_entry"]["small_to_large_status_label"] == "小转大候选"
     assert payload["summary"]["precision_entry"]["operation_level"] == "5M"
     assert "区间套定位：" in payload["advice_text"]
     window_basis_label = payload["precision_entry"].get("window_basis_label")
@@ -203,6 +222,10 @@ def test_save_technical_report_writes_chart_artifacts(tmp_path: Path, monkeypatc
         assert f"区间套窗口：{window_basis_label}" in payload["advice_text"]
         assert payload["precision_window_display"]["label"] == window_basis_label
         assert payload["summary"]["precision_window_display"]["label"] == window_basis_label
+        assert payload["precision_window_display"]["small_to_large_status"] == "candidate"
+        assert payload["precision_window_display"]["small_to_large_status_label"] == "小转大候选"
+        assert "小转大：小转大候选" in payload["precision_window_display"]["lines"]
+        assert payload["summary"]["precision_window_display"]["small_to_large_status"] == "candidate"
     else:
         assert payload["precision_window_display"] is None
         assert payload["summary"]["precision_window_display"] is None

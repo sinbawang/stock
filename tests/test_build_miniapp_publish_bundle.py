@@ -249,6 +249,9 @@ def test_generate_bundle_writes_index_groups_and_stock_payloads(tmp_path: Path) 
                             "status": "actionable",
                             "window_basis_label": "中枢到锚点窗口",
                             "window_basis_description": "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+                            "small_to_large_status": "candidate",
+                            "small_to_large_status_label": "小转大候选",
+                            "small_to_large_status_note": "次级别转折已出现，但最后一个次级别中枢尚未见对应三类买卖点，当前只能按小转大候选观察。",
                             "note": "5M 已出现二买，可按 effective_only 口径用于区间套精确定位。窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
                             "signal_descriptions": ["二买，一买后回抽确认，参考价 10.25"],
                         },
@@ -371,9 +374,12 @@ Generated at: 2026-05-30T20:05:52
     assert summary_payload["cards"]["technical"]["precision_window_display"]["title"] == "5M区间套窗口"
     assert summary_payload["cards"]["technical"]["precision_window_display"]["label"] == "中枢到锚点窗口"
     assert summary_payload["cards"]["technical"]["precision_window_display"]["description"] == "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。"
+    assert summary_payload["cards"]["technical"]["precision_window_display"]["small_to_large_status"] == "candidate"
+    assert summary_payload["cards"]["technical"]["precision_window_display"]["small_to_large_status_label"] == "小转大候选"
     assert summary_payload["cards"]["technical"]["precision_window_display"]["lines"] == [
         "5M窗口：中枢到锚点窗口",
         "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+        "小转大：小转大候选",
     ]
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["mode"] == "same_level_decomposition"
     assert summary_payload["cards"]["technical"]["same_level_decomposition"]["is_strict_theory_equivalent"] is True
@@ -435,9 +441,12 @@ Generated at: 2026-05-30T20:05:52
     assert detail_payload["sections"][1]["precision_window_basis_label"] == "中枢到锚点窗口"
     assert detail_payload["sections"][1]["precision_window_basis_description"] == "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。"
     assert detail_payload["sections"][1]["precision_window_display"]["title"] == "5M区间套窗口"
+    assert detail_payload["sections"][1]["precision_window_display"]["small_to_large_status"] == "candidate"
+    assert detail_payload["sections"][1]["precision_window_display"]["small_to_large_status_label"] == "小转大候选"
     assert detail_payload["sections"][1]["precision_window_display"]["lines"] == [
         "5M窗口：中枢到锚点窗口",
         "窗口依据：上级别离开笔尚未单独解析，当前先按中枢结束至触发锚点限制区间套窗口。",
+        "小转大：小转大候选",
     ]
     assert detail_payload["sections"][1]["same_level_decomposition"]["mode"] == "same_level_decomposition"
     assert detail_payload["sections"][1]["same_level_decomposition"]["is_strict_theory_equivalent"] is True
@@ -1561,6 +1570,17 @@ def test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample(t
                     "zs_monitor_alert": replay_payload["zs_monitor_alert"],
                     "zs_monitor_midline": replay_payload["zs_monitor_midline"],
                     "zs_monitor_bias": replay_payload["zs_monitor_bias"],
+                    "precision_entry": {
+                        "operation_level": "5M",
+                        "timeframe": "5m",
+                        "pending_reverse_mode": "effective_only",
+                        "status": "watch",
+                        "small_to_large_status": "candidate",
+                        "small_to_large_status_label": "小转大候选",
+                        "small_to_large_status_note": "次级别转折已出现，但最后一个次级别中枢尚未见对应三类买卖点，当前只能按小转大候选观察。",
+                        "note": "5M 已绑定上级别背驰窗口，但最后一个次级别中枢尚未见三买，当前仅作小转大候选观察。",
+                        "signal_descriptions": [],
+                    },
                 },
             },
             ensure_ascii=False,
@@ -1580,11 +1600,19 @@ def test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample(t
     assert technical_card["conclusion"] == "震荡，等待方向选择。"
     assert technical_card["oscillation_rhythm_state"] == "up_bias"
     assert any("消费等级：待确认消费" in line for line in technical_card["same_level_decomposition"]["lines"])
+    assert technical_card["precision_entry"]["small_to_large_status"] == "candidate"
+    assert technical_card["precision_window_display"]["small_to_large_status"] == "candidate"
+    assert technical_card["precision_window_display"]["small_to_large_status_label"] == "小转大候选"
+    assert "小转大：小转大候选" in technical_card["precision_window_display"]["lines"]
     assert any("中枢口径" in line for line in technical_card["technical_focus_lines"])
     assert technical_section["timeframe"] == "1m"
     assert technical_section["conclusion"] == "震荡，等待方向选择。"
     assert technical_section["oscillation_rhythm_state"] == "up_bias"
     assert any("消费等级：待确认消费" in line for line in technical_section["same_level_decomposition"]["lines"])
+    assert technical_section["precision_entry"]["small_to_large_status"] == "candidate"
+    assert technical_section["precision_window_display"]["small_to_large_status"] == "candidate"
+    assert technical_section["precision_window_display"]["small_to_large_status_label"] == "小转大候选"
+    assert "小转大：小转大候选" in technical_section["precision_window_display"]["lines"]
     assert any("中枢口径" in line for line in technical_section["technical_focus_lines"])
 
 
@@ -1667,6 +1695,17 @@ def test_build_summary_and_detail_payload_preserve_real_03690_1m_pre_breakout_sa
                     "zs_monitor_alert": replay_payload["zs_monitor_alert"],
                     "zs_monitor_midline": replay_payload["zs_monitor_midline"],
                     "zs_monitor_bias": replay_payload["zs_monitor_bias"],
+                    "precision_entry": {
+                        "operation_level": "5M",
+                        "timeframe": "5m",
+                        "pending_reverse_mode": "effective_only",
+                        "status": "watch",
+                        "small_to_large_status": "candidate",
+                        "small_to_large_status_label": "小转大候选",
+                        "small_to_large_status_note": "次级别转折已出现，但最后一个次级别中枢尚未见对应三类买卖点，当前只能按小转大候选观察。",
+                        "note": "5M 已绑定上级别背驰窗口，但最后一个次级别中枢尚未见三买，当前仅作小转大候选观察。",
+                        "signal_descriptions": [],
+                    },
                 },
             },
             ensure_ascii=False,
@@ -1686,11 +1725,19 @@ def test_build_summary_and_detail_payload_preserve_real_03690_1m_pre_breakout_sa
     assert technical_card["conclusion"] == "震荡，等待方向选择。"
     assert technical_card["oscillation_rhythm_state"] == "up_bias"
     assert any("消费等级：待确认消费" in line for line in technical_card["same_level_decomposition"]["lines"])
+    assert technical_card["precision_entry"]["small_to_large_status"] == "candidate"
+    assert technical_card["precision_window_display"]["small_to_large_status"] == "candidate"
+    assert technical_card["precision_window_display"]["small_to_large_status_label"] == "小转大候选"
+    assert "小转大：小转大候选" in technical_card["precision_window_display"]["lines"]
     assert any("中枢口径" in line for line in technical_card["technical_focus_lines"])
     assert technical_section["timeframe"] == "1m"
     assert technical_section["conclusion"] == "震荡，等待方向选择。"
     assert technical_section["oscillation_rhythm_state"] == "up_bias"
     assert any("消费等级：待确认消费" in line for line in technical_section["same_level_decomposition"]["lines"])
+    assert technical_section["precision_entry"]["small_to_large_status"] == "candidate"
+    assert technical_section["precision_window_display"]["small_to_large_status"] == "candidate"
+    assert technical_section["precision_window_display"]["small_to_large_status_label"] == "小转大候选"
+    assert "小转大：小转大候选" in technical_section["precision_window_display"]["lines"]
     assert any("中枢口径" in line for line in technical_section["technical_focus_lines"])
 
 
@@ -1773,6 +1820,17 @@ def test_build_summary_and_detail_payload_preserve_real_600900_1m_pre_breakout_s
                     "zs_monitor_alert": replay_payload["zs_monitor_alert"],
                     "zs_monitor_midline": replay_payload["zs_monitor_midline"],
                     "zs_monitor_bias": replay_payload["zs_monitor_bias"],
+                    "precision_entry": {
+                        "operation_level": "5M",
+                        "timeframe": "5m",
+                        "pending_reverse_mode": "effective_only",
+                        "status": "watch",
+                        "small_to_large_status": "candidate",
+                        "small_to_large_status_label": "小转大候选",
+                        "small_to_large_status_note": "次级别转折已出现，但最后一个次级别中枢尚未见对应三类买卖点，当前只能按小转大候选观察。",
+                        "note": "5M 已绑定上级别背驰窗口，但最后一个次级别中枢尚未见三买，当前仅作小转大候选观察。",
+                        "signal_descriptions": [],
+                    },
                 },
             },
             ensure_ascii=False,
@@ -1793,12 +1851,20 @@ def test_build_summary_and_detail_payload_preserve_real_600900_1m_pre_breakout_s
     assert technical_card["oscillation_rhythm_state"] == "up_bias"
     assert any("中枢预警：向下预警，当前不构成确认三卖（中线 28.78，节奏偏弱）" in line for line in technical_card["technical_focus_lines"])
     assert any("消费等级：待确认消费" in line for line in technical_card["same_level_decomposition"]["lines"])
+    assert technical_card["precision_entry"]["small_to_large_status"] == "candidate"
+    assert technical_card["precision_window_display"]["small_to_large_status"] == "candidate"
+    assert technical_card["precision_window_display"]["small_to_large_status_label"] == "小转大候选"
+    assert "小转大：小转大候选" in technical_card["precision_window_display"]["lines"]
     assert not any("最近买点：三买" in line for line in technical_card["technical_focus_lines"])
     assert technical_section["timeframe"] == "1m"
     assert technical_section["conclusion"] == "观察，等待确认。"
     assert technical_section["oscillation_rhythm_state"] == "up_bias"
     assert any("中枢预警：向下预警，当前不构成确认三卖（中线 28.78，节奏偏弱）" in line for line in technical_section["technical_focus_lines"])
     assert any("消费等级：待确认消费" in line for line in technical_section["same_level_decomposition"]["lines"])
+    assert technical_section["precision_entry"]["small_to_large_status"] == "candidate"
+    assert technical_section["precision_window_display"]["small_to_large_status"] == "candidate"
+    assert technical_section["precision_window_display"]["small_to_large_status_label"] == "小转大候选"
+    assert "小转大：小转大候选" in technical_section["precision_window_display"]["lines"]
     assert not any("最近买点：三买" in line for line in technical_section["technical_focus_lines"])
 
 
@@ -2131,7 +2197,8 @@ def test_build_summary_and_detail_payload_preserve_real_01024_1m_up_warning_samp
     assert source_payload["timeframe"] == "1m"
     assert source_payload["summary"]["conclusion"] == "观察，等待确认。"
     assert source_payload["summary"]["same_level_consumption_level"] == "pending"
-    assert source_payload["summary"]["sell_points"] == ["sell3"]
+    assert source_payload["summary"]["buy_points"] == []
+    assert source_payload["summary"]["sell_points"] == []
 
     holding = module.Holding(symbol="01024", name="快手", market="HK")
 
@@ -2143,18 +2210,21 @@ def test_build_summary_and_detail_payload_preserve_real_01024_1m_up_warning_samp
 
     assert technical_card["timeframe"] == "1m"
     assert technical_card["conclusion"] == "观察，等待确认。"
-    assert technical_card["oscillation_rhythm_state"] == "up_bias"
-    assert technical_card["latest_signal_summary"]["latest_sell"] is not None
-    assert technical_card["latest_signal_summary"]["latest_sell"]["point"] == "sell3"
-    assert any("最近卖点：三卖" in line for line in technical_card["technical_focus_lines"])
+    assert technical_card["oscillation_rhythm_state"] == "down_bias"
+    assert technical_card["latest_signal_summary"]["latest_buy"] is None
+    assert technical_card["latest_signal_summary"]["latest_sell"] is None
+    assert not any("最近卖点：三卖" in line for line in technical_card["technical_focus_lines"])
     assert any("消费等级：待确认消费" in line for line in technical_card["same_level_decomposition"]["lines"])
-    assert any("中枢预警：向下预警，当前不构成确认三卖（中线 34.94，节奏偏弱）" in line for line in technical_card["technical_focus_lines"])
+    assert any("中枢预警：向上预警，当前不构成确认三买（中线 33.67，节奏偏强）" in line for line in technical_card["technical_focus_lines"])
+    assert any("去向候选：更大级别盘整（1m -> 5m），当前只按观察态处理" in line for line in technical_card["technical_focus_lines"])
     assert technical_section["timeframe"] == "1m"
     assert technical_section["conclusion"] == "观察，等待确认。"
-    assert technical_section["latest_signal_summary"]["latest_sell"] is not None
-    assert any("最近卖点：三卖" in line for line in technical_section["technical_focus_lines"])
+    assert technical_section["latest_signal_summary"]["latest_buy"] is None
+    assert technical_section["latest_signal_summary"]["latest_sell"] is None
+    assert not any("最近卖点：三卖" in line for line in technical_section["technical_focus_lines"])
     assert any("消费等级：待确认消费" in line for line in technical_section["same_level_decomposition"]["lines"])
-    assert any("中枢预警：向下预警，当前不构成确认三卖（中线 34.94，节奏偏弱）" in line for line in technical_section["technical_focus_lines"])
+    assert any("中枢预警：向上预警，当前不构成确认三买（中线 33.67，节奏偏强）" in line for line in technical_section["technical_focus_lines"])
+    assert any("去向候选：更大级别盘整（1m -> 5m），当前只按观察态处理" in line for line in technical_section["technical_focus_lines"])
 
 
 def test_build_summary_and_detail_payload_preserve_real_002555_1m_buy3_and_sell2like_sample(tmp_path: Path) -> None:
@@ -2173,10 +2243,10 @@ def test_build_summary_and_detail_payload_preserve_real_002555_1m_buy3_and_sell2
     (stock_dir / "1m" / "tech.json").write_text(json.dumps(source_payload, ensure_ascii=False), encoding="utf-8")
 
     assert source_payload["timeframe"] == "1m"
-    assert source_payload["summary"]["conclusion"] == "偏多，允许轻仓试错。"
-    assert source_payload["summary"]["same_level_consumption_level"] == "confirmed"
-    assert source_payload["summary"]["buy_points"] == ["buy3"]
-    assert source_payload["summary"]["sell_points"] == ["sell2like"]
+    assert source_payload["summary"]["conclusion"] == "震荡，等待方向选择。"
+    assert source_payload["summary"]["same_level_consumption_level"] == "pending"
+    assert source_payload["summary"]["buy_points"] == []
+    assert source_payload["summary"]["sell_points"] == []
 
     holding = module.Holding(symbol="002555", name="三七互娱", market="CN")
 
@@ -2187,19 +2257,21 @@ def test_build_summary_and_detail_payload_preserve_real_002555_1m_buy3_and_sell2
     technical_section = detail_payload["sections"][1]
 
     assert technical_card["timeframe"] == "1m"
-    assert technical_card["conclusion"] == "偏多，允许轻仓试错。"
-    assert technical_card["latest_signal_summary"]["latest_buy"] is not None
-    assert technical_card["latest_signal_summary"]["latest_buy"]["point"] == "buy3"
-    assert technical_card["latest_signal_summary"]["latest_sell"]["point"] == "sell2like"
-    assert any("最近买点：三买" in line for line in technical_card["technical_focus_lines"])
-    assert any("最近卖点：类二卖" in line for line in technical_card["technical_focus_lines"])
-    assert any("消费等级：已确认消费" in line for line in technical_card["same_level_decomposition"]["lines"])
+    assert technical_card["conclusion"] == "震荡，等待方向选择。"
+    assert technical_card["oscillation_rhythm_state"] == "down_bias"
+    assert technical_card["latest_signal_summary"]["latest_buy"] is None
+    assert technical_card["latest_signal_summary"]["latest_sell"] is None
+    assert not any("最近买点：三买" in line for line in technical_card["technical_focus_lines"])
+    assert not any("最近卖点：类二卖" in line for line in technical_card["technical_focus_lines"])
+    assert any("消费等级：待确认消费" in line for line in technical_card["same_level_decomposition"]["lines"])
     assert any("中枢口径" in line for line in technical_card["technical_focus_lines"])
     assert technical_section["timeframe"] == "1m"
-    assert technical_section["conclusion"] == "偏多，允许轻仓试错。"
-    assert technical_section["latest_signal_summary"]["latest_buy"]["point"] == "buy3"
-    assert any("最近买点：三买" in line for line in technical_section["technical_focus_lines"])
-    assert any("消费等级：已确认消费" in line for line in technical_section["same_level_decomposition"]["lines"])
+    assert technical_section["conclusion"] == "震荡，等待方向选择。"
+    assert technical_section["oscillation_rhythm_state"] == "down_bias"
+    assert technical_section["latest_signal_summary"]["latest_buy"] is None
+    assert technical_section["latest_signal_summary"]["latest_sell"] is None
+    assert not any("最近买点：三买" in line for line in technical_section["technical_focus_lines"])
+    assert any("消费等级：待确认消费" in line for line in technical_section["same_level_decomposition"]["lines"])
     assert any("中枢口径" in line for line in technical_section["technical_focus_lines"])
 
 

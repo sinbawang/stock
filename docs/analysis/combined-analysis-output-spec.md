@@ -161,7 +161,7 @@
 其中：
 
 - `precision_entry` 表达 5M 执行层的状态、信号、背驰与绑定来源
-- `precision_window_display` 是面向消费层的展示块，当前结构为 `{title, label, description, lines}`
+- `precision_window_display` 是面向消费层的展示块，当前结构为 `{title, label, description, dynamic_grade?, dynamic_grade_label?, small_to_large_status?, small_to_large_status_label?, lines}`
 
 当前 `precision_entry` 常见字段包括：
 
@@ -169,6 +169,9 @@
 - `timeframe`: 当前为 `5m`
 - `pending_reverse_mode`: 当前默认 `effective_only`
 - `status`: `standby`、`watch`、`actionable`
+- `small_to_large_status`: `candidate`、`third_class_confirmed`
+- `small_to_large_status_label`: `小转大候选`、`小转大必要条件已具备`
+- `small_to_large_status_note`
 - `note`
 - `signal_descriptions`
 - `window_basis_label`
@@ -194,6 +197,7 @@
 - 联合文本和小程序发布层可以稳定依赖 `summary.conclusion`、`summary.suggestion`、`analysis_text`、`advice_text`
 - 对 `source`、`artifacts`、`stats` 与更细的 `summary` 字段，必须按“有则用、无则降级”处理
 - 对 `precision_entry` 与 `precision_window_display`，当前可在 mixed 报告主链路中稳定依赖，但在其他旧入口仍应按 optional 处理
+- 对 `small_to_large_status`，只能表达“小转大候选”或“必要条件已具备”，不得被消费端反推为高级别 confirmed。
 
 若要判断这些字段在发布层应落到 `confirmed`、`pending` 还是 `auxiliary`，统一参考 [../chanlun/theory-implementation-consumer-diff-matrix.md](../chanlun/theory-implementation-consumer-diff-matrix.md) 的字段级消费映射。
 
