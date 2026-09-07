@@ -1162,6 +1162,24 @@ def test_real_1m_confirmed_buy2like_replay_sample_01024() -> None:
     assert payload["post_divergence_route"] is None
 
 
+def test_real_1m_confirmed_buy2like_replay_sample_00175() -> None:
+    # 第二个真实 1m confirmed 买侧样本：00175 吉利汽车 2026-08-05 10:43。
+    # 该窗口同样进入 single_confirmed + confirmed，且仅保留 buy2like，
+    # 可作为 01024 之外的第二个买侧 replay 对照，降低单标偏置。
+    rows = probe_module._load_rows("00175", "1m")
+    payload = probe_module._replay("00175", "吉利汽车", "2026-08-05 10:43", rows)
+
+    assert payload["cutoff"] == "2026-08-05 10:43"
+    assert payload["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["same_level_consumption_level"] == "confirmed"
+    assert payload["buy_points"] == ["buy_2like"]
+    assert payload["sell_points"] == []
+    assert payload["conclusion"] == "偏多，允许轻仓试错。"
+    assert payload["zs_monitor_alert"] == "pre_breakout"
+    assert payload["oscillation_rhythm_state"] == "down_bias"
+    assert payload["ongoing_type"] == "down"
+
+
 def test_build_signal_summary_fields_preserves_catalog_slots() -> None:
     payload = build_signal_summary_fields(
         {

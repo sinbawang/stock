@@ -41,9 +41,9 @@
 
 当前重点：
 
-1. 测试：找到真实 `1m pre_breakout` 样本，并补齐 `tech.json` 与 publish 双 gate。
-2. 代码：优先推进 `ZS2` 完成 / 扩张 / 新中枢状态机，以及 `ZS3` reclaim / gap 交界统一。
-3. 文档：把 `1m pre_breakout` 与 confirmed live 卡片接到第 92 课 review 主链路。
+1. 测试：继续补 `1m confirmed` 买侧样本链，优先把 replay 锚点升级成稳定 live 样本。
+2. 数据 / 工具：继续用扫描器补 `candidate_new_type` 与 `1m confirmed` 买侧历史窗口，避免单标偏置。
+3. 文档：把新增买侧 confirmed 锚点同步接到 review / consumer / publish 对照入口。
 
 ### 文档任务
 
@@ -740,21 +740,21 @@
 
 | 缺口类别 | 当前现状 | 还缺什么 | 优先级 | 下一动作 |
 | --- | --- | --- | --- | --- |
-| 已有消费锚点 | 当前已有 5 个真实 `1m` 主锚点，外加真实 `600900 1m confirmed 3S`、真实 `00700 5m confirmed buy2like`、真实 replay `01024 1m confirmed buy2like` 与 1 个 confirmed regression reference，可覆盖 watch/pending、completed_then_new_type、正式 `pre_breakdown`、正式 `pre_breakout`、confirmed 买/卖点与 pre-warning proxy 最小闭环 | 还缺稳定的 `1m confirmed` 买点 live 样本与更多 confirmed / pending 多案例对照 | 中 | 当前先维持主链稳定，再按 ROI 补更多 pending 反例或补一条稳定的 `1m confirmed` 买点 live 样本。 |
+| 已有消费锚点 | 当前已有 5 个真实 `1m` 主锚点，外加真实 `600900 1m confirmed 3S`、真实 `00700 5m confirmed buy2like`、真实 replay `01024 1m confirmed buy2like`、真实 replay `00175 1m confirmed buy2like` 与 1 个 confirmed regression reference，可覆盖 watch/pending、completed_then_new_type、正式 `pre_breakdown`、正式 `pre_breakout`、confirmed 买/卖点与 pre-warning proxy 最小闭环 | 还缺稳定的 `1m confirmed` 买点 live 样本与更多 confirmed / pending 多案例对照 | 中 | 当前先维持主链稳定，再按 ROI 补更多 pending 反例或补一条稳定的 `1m confirmed` 买点 live 样本。 |
 | 正式 `1m pre_breakdown` 落盘样本 | `data/reports/000651/1m/tech.json` 已出现真实 `zs_monitor_alert=pre_breakdown`，`SH.601328 1m` 继续保留为预警前态代理 | 补一条与之配套的 review 主卡片，并继续补更多同类样本 | 最高 | 先以 `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakdown_sample` 锁住真实 `tech.json -> summary/detail` 链。 |
 | 正式 `1m pre_breakout` 落盘样本 | 当前最新 `data/reports/<symbol>/1m/tech.json` 仍未保留 `pre_breakout` 终态快照，但历史回放已确认多组真实 `1m pre_breakout` cutoff | 至少 1 个真实 `1m` `zs_monitor_alert=pre_breakout` 样本进入正式 gate 链 | 最高 | 已把 `002555 2026-08-04 13:35` 这类“向上预警但未确认三买”的历史窗口固化成 analysis + publish replay gate，并移除 `_replay` 内 synthetic fallback。 |
-| `1m` 预警未确认 -> confirmed 对照链 | 当前已有真实 `1m pre_breakdown` 落盘样本 + 真实 replay `1m pre_breakout` 样本 + 真实 `600900 1m confirmed 3S` live 样本；买侧另有真实 replay `01024 1m buy2like/confirmed` 与真实 `00700 5m buy2like/confirmed` 可作补充，reference gate 继续保留作兜底 | 一组“正式 `pre_break*` -> 回中枢未确认”与“一组 `pre_break*` 后确认链闭合”的 `1m` 对照 | 高 | `1m` 主链角色已补齐；下一步优先转回更高优先 blocker，或专门补一条稳定的 `1m confirmed` 买点 live 对照。 |
+| `1m` 预警未确认 -> confirmed 对照链 | 当前已有真实 `1m pre_breakdown` 落盘样本 + 真实 replay `1m pre_breakout` 样本 + 真实 `600900 1m confirmed 3S` live 样本；买侧另有真实 replay `01024 1m buy2like/confirmed`、真实 replay `00175 1m buy2like/confirmed` 与真实 `00700 5m buy2like/confirmed` 可作补充，reference gate 继续保留作兜底 | 一组“正式 `pre_break*` -> 回中枢未确认”与“一组 `pre_break*` 后确认链闭合”的 `1m` 对照 | 高 | `1m` 主链角色已补齐；下一步优先转回更高优先 blocker，或专门补一条稳定的 `1m confirmed` 买点 live 对照。 |
 | 发布产物锚点 | 文档已确认 `30m pre_breakdown/pre_breakout -> published summary/detail` 有回归锚点；`1m pre_breakdown` 也已有真实样本 publish regression，`1m pre_breakout` 仍缺真实锚点 | `1m summary/detail/miniapp` 的双边正式预警字段核验 | 高 | 对称补齐 `1m pre_breakout` 的真实 `tech.json -> publish summary/detail` 核验链。 |
 | 自动化测试锚点 | `1m pre_breakdown` 已有独立真实 `tech.json` gate + 真实 publish regression，`1m pre_breakout` 仍只有 synthetic gate | 至少再补一条真实 `1m pre_breakout` regression / publish gate | 高 | 测试侧继续按一上/一下对称补齐真实样本锚点。 |
 | review 卡片锚点 | 真实 `SZ.000651 1m pre_breakdown`、真实 replay `002555 1m pre_breakout` 与真实 `600900 1m confirmed 3S` 已接管第 92 课主位，`SH.601328 1m` 已降为代理说明卡片 | 更多 confirmed / pending 多案例对照 | 中高 | 主链卡片已齐，后续只在需要时扩样本广度。 |
 
 按任务拆分的推进顺序：
 
-1. `ZS5.3.a` 先锁定“当前 4 个 `1m` 锚点各自负责哪一类状态”，避免后续补样本时把既有锚点职责打乱。
-2. `ZS5.3.b` 已先用真实 `000651 1m pre_breakdown` 样本补上正式落盘缺口，后续把它升级进 review 主卡片。
-3. `ZS5.3.c` 继续对称补正式 `1m pre_breakout` 落盘样本，避免只有单边预警链；当前缓存里 `00981 / 00728 / 06088` 首轮高优先窗口已回放否定。
-4. `ZS5.3.d` 在 `pre_breakdown` 已有真实 publish regression 的基础上，再把 `pre_breakout` 的 `tech.json`、`summary/detail`、小程序消费标签补齐到同等状态。
-5. `ZS5.3.e` 最后补 review 卡片和 regression 映射，把代理样本降级成“过渡态说明”，不再充当正式预警链主锚点。
+1. `ZS5.3.a-e` 已收口：`1m pre_breakdown` / `pre_breakout` 的 real replay gate、publish gate、review 卡片和 consumer 对照已全部接线完成。
+2. 新的第一优先级是补稳定的 `1m confirmed` 买侧 live 样本；当前已先找到两个真实 replay 锚点 `01024 2026-08-03 15:33`、`00175 2026-08-05 10:43`，但它们仍不是当前 live `tech.json` 样本。
+3. 在 live 样本缺失期间，先用 replay 锚点 + `5m` live 锚点维持买侧 confirmed 对照链：`01024 1m buy2like`、`00175 1m buy2like`、`00700 5m buy2like`。
+4. `candidate_new_type` 继续由扫描器和历史 cutoff 回放补样本广度；这项仍是当前中枢模块的主要数据缺口之一。
+5. 若新的 `1m confirmed` 买侧 live 样本仍找不到，则转去补更高 ROI 的 confirmed 多案例对照或 `candidate_new_type` 真实窗口，而不是重复围绕同一标的人工试错。
 
 `ZS5.3` 分任务 checklist：
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 from dataclasses import dataclass
 from datetime import datetime
@@ -18,6 +19,16 @@ if str(SCRIPTS) not in sys.path:
 
 import run_cn_60m_chanlun_report as cn_report
 from batch_prepare_chanlun_reports import build_advice, build_technical_summary
+
+
+PROBE_SPEC = importlib.util.spec_from_file_location(
+    "probe_intraday_prebreak_sample",
+    ROOT / "build" / "probe_intraday_prebreak_sample.py",
+)
+if PROBE_SPEC is None or PROBE_SPEC.loader is None:
+    raise RuntimeError("failed to load probe_intraday_prebreak_sample.py for tests")
+probe_module = importlib.util.module_from_spec(PROBE_SPEC)
+PROBE_SPEC.loader.exec_module(probe_module)
 
 
 @dataclass
@@ -206,6 +217,41 @@ def test_real_600900_1m_sell3_live_sample_keeps_current_state() -> None:
     assert "预警状态 向下预警" in payload["advice_text"]
     assert "三卖" in payload["advice_text"]
     assert "三买" not in payload["advice_text"]
+
+
+def test_real_01024_1m_confirmed_buy2like_replay_sample_keeps_current_state() -> None:
+    rows = probe_module._load_rows("01024", "1m")
+    payload = probe_module._replay("01024", "快手", "2026-08-03 15:33", rows)
+
+    assert payload["cutoff"] == "2026-08-03 15:33"
+    assert payload["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["same_level_consumption_level"] == "confirmed"
+    assert payload["buy_points"] == ["buy_2like"]
+    assert payload["sell_points"] == []
+    assert payload["conclusion"] == "偏多，允许轻仓试错。"
+    assert "结论：偏多，允许轻仓试错。" in payload["advice_text"]
+    assert "出现 类二买，结构上已有缠论买点雏形。" in payload["advice_text"]
+    assert "参考价 44.52，关联中枢 ZS1。" in payload["advice_text"]
+    assert "预警状态 无预警。" in payload["advice_text"]
+    assert "节奏偏强，当前只作辅助观察，不单独升级主结论。" in payload["advice_text"]
+
+
+def test_real_00175_1m_confirmed_buy2like_replay_sample_keeps_current_state() -> None:
+    rows = probe_module._load_rows("00175", "1m")
+    payload = probe_module._replay("00175", "吉利汽车", "2026-08-05 10:43", rows)
+
+    assert payload["cutoff"] == "2026-08-05 10:43"
+    assert payload["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["same_level_consumption_level"] == "confirmed"
+    assert payload["buy_points"] == ["buy_2like"]
+    assert payload["sell_points"] == []
+    assert payload["conclusion"] == "偏多，允许轻仓试错。"
+    assert "结论：偏多，允许轻仓试错。" in payload["advice_text"]
+    assert "出现 类二买，结构上已有缠论买点雏形。" in payload["advice_text"]
+    assert "参考价 18.93，关联中枢 ZS1。" in payload["advice_text"]
+    assert "预警状态 向上预警。" in payload["advice_text"]
+    assert "节奏偏弱，当前只作辅助观察，不单独升级主结论。" in payload["advice_text"]
+    assert "补充：已有顶背驰迹象，若后续反弹无力，应优先考虑保护利润。" in payload["advice_text"]
 
 
 def test_build_advice_downgrades_buy_signal_when_same_level_decomposition_is_pending() -> None:
