@@ -312,17 +312,17 @@
 
 最小消费结论：这个 `1m` 例子用于说明“上一段已完成”只能推出结构切换，不足以直接推出当前新段的确认买卖点，是 `1m` 中间态的主锚点。
 
-#### 7.5.1 `candidate_new_type` 历史 cutoff 原型
+#### 7.5.1 `candidate_new_type` 真实 `1m` cutoff 锚点
 
 对应案例： [zhongshu-visual-example-library.md](zhongshu-visual-example-library.md) 第 1.3.1 节。
 
 | 展示位 | 推荐写法 | 绝对红线 |
 | --- | --- | --- |
-| `tech.json` / cutoff replay payload | 保留 `last_completed.type=down`、`current_ongoing.type=range`、`relationship.kind=completed_then_new_type_ongoing`、`transition_state=candidate_new_type`、`current_structure_status=candidate_completed_waiting_stability` 与 `same_level_consumption_level=pending` | 不得把“前段已完成 + 当前单中枢候选”写成 `completed_then_new_type`、`ongoing_new_type` 或任意 confirmed 结论 |
-| 报告 | `上一段同级别下跌已结束，当前新段仅形成 1 个中枢，先按候选待确认观察。` | 不得写成 `新一轮盘整已确认`、`趋势已重新稳定` 或 `买卖点已确认` |
+| `tech.json` / cutoff replay payload | 保留 `last_completed.type=range`、`current_ongoing.type=range`、`relationship.kind=completed_then_new_type_ongoing`、`transition_state=candidate_new_type`、`current_structure_status=candidate_completed_waiting_stability` 与 `same_level_consumption_level=pending` | 不得把“前段已完成 + 当前单中枢候选”写成 `completed_then_new_type`、`ongoing_new_type` 或任意 confirmed 结论 |
+| 报告 | `上一段同级别盘整已结束，当前新段仅形成 1 个中枢，先按候选待确认观察。` | 不得写成 `新一轮盘整已确认`、`趋势已重新稳定` 或 `买卖点已确认` |
 | 小程序/图表 | 可显示“新段候选”或 `pending/watch` 标签，并保留“候选完成待确认”说明 | 不得给这个 `1m` cutoff 卡片贴 `confirmed`，也不得与 `completed_then_new_type` 或单中枢未定场景混成同一种说明 |
 
-最小消费结论：这类 `1m` cutoff 原型用于说明“上一段已完成 + 当前只有 1 个新中枢”应稳定落在 `candidate_new_type`；当前 live 数据里的具体锚点需用 `build/scan_real_candidate_new_type_samples.py` 重新扫描。
+最小消费结论：这条真实 `1m` cutoff 锚点（`00175 2026-08-26 10:51`）用于说明“上一段已完成 + 当前只有 1 个新中枢”应稳定落在 `candidate_new_type`；当前已不再只是语义原型，而是可直接回链到 `scan_real_candidate_new_type_samples_latest.json` 的 exact match。
 
 ### 7.6 `002555 1m` pre_breakout replay anchor
 

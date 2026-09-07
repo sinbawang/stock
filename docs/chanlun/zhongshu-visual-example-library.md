@@ -105,11 +105,11 @@ flowchart LR
 - `current_structure_status=completed_then_new_type` 应被解释成结构切换已发生、当前新段仍在展开，而不是直接输出交易动作型确认。
 - 最终文案可固定为：`上一段同级别走势已结束，当前新段运行中，继续观察是否形成有效确认。`
 
-#### 1.3.1 补充对照：`candidate_new_type` 历史 cutoff 单中枢原型
+#### 1.3.1 补充对照：`candidate_new_type` 真实 `1m` cutoff 锚点
 
-- 标的/级别/时间窗：历史 `1m` cutoff 原型（旧 `06088 1m` 窗口曾出现，当前 live 数据需重新扫描）
-- 当前中枢数量：`3`
-- 上一个已完成走势类型：`down`
+- 标的/级别/时间窗：`00175` / `1m` / 截止 `2026-08-26 10:51`
+- 当前中枢数量：`2`（前段 completed + 当前单中枢 ongoing）
+- 上一个已完成走势类型：`range`
 - 当前进行结构：`range`
 - `relationship.kind`：`completed_then_new_type_ongoing`
 - `transition_state`：`candidate_new_type`
@@ -130,7 +130,7 @@ flowchart LR
 - 这个真实 `1m` cutoff 比 `1.3` 更早一步：它已经有 `last_completed`，但当前新段只有 1 个同级别中枢，因此只能落在 `candidate_new_type`。
 - `transition_state=candidate_new_type` 与 `same_level_consumption_level=pending` 必须成对解释，不能只因为前段已完成，就把当前新段包装成已确认趋势延续。
 - 它正好补齐 `1.2` 单中枢未定、`1.3` 新段进行中之外的第三档：前段完成后，新段候选但尚未形成第 2 个同级别中枢。
-- 当前 live 数据中的具体锚点需通过 `build/scan_real_candidate_new_type_samples.py` 重扫；本节保留作语义原型卡片。
+- 当前这张卡已不再只是语义原型，而是直接绑定 `build/scan_real_candidate_new_type_samples_latest.json` 中的真实 exact-match：`00175 1m @ 2026-08-26 10:51`。
 
 ### 1.4 进入段 / 本体 / 离开段分层图（ZS6.1）
 
