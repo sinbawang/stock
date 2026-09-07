@@ -59,7 +59,7 @@
 - [x] 线段终结、`stop_reason`、theory/practical 双模式已有契约和说明。
 - [x] 发布/分析消费端已有主辅冲突与降级语义的基本约束。
 - [x] 已沉淀样例包、图文化示例库、节奏回放模板。
-- [x] 已为中枢沉淀 `1m / 5m / 30m / day映射` 优先的 review 与消费示例链，其中 `HK.02357 1m` 已作为 watch/pending 场景锚点接入，`HK.01339 1m` 已作为 completed_then_new_type 场景锚点接入，真实 `SZ.000651 1m` 已作为正式 `pre_breakdown` 场景锚点接入，`SH.601328 1m` 已作为预警前态代理锚点接入，`1m confirmed 3S` 当前由 regression reference gate 保留；后续优先缺口收敛为真实 `1m pre_breakout` 样本与真实 confirmed 页内卡片。
+- [x] 已为中枢沉淀 `1m / 5m / 30m / day映射` 优先的 review 与消费示例链，其中 `HK.02357 1m` 已作为 watch/pending 场景锚点接入，`HK.01339 1m` 已作为 completed_then_new_type 场景锚点接入，真实 `SZ.000651 1m` 已作为正式 `pre_breakdown` 场景锚点接入，`SH.601328 1m` 已作为预警前态代理锚点接入，真实 `600900 1m confirmed 3S` 与真实 `00700 5m confirmed buy2like` 已分别补齐卖侧/买侧 confirmed live 锚点；后续优先缺口收敛为稳定的 `1m confirmed` 买点样本与更多 confirmed 多案例对照。
 - [x] `zhongshu-tasks.md` 已补 `ZS5.3.e + ZS6.3` 首版文档-测试映射：`30m pre_breakdown` / `pre_breakout`、`5m down_bias` 已回链到具名 pytest；`1m-confirmed-3s-reference-gate` 与 `1m-proxy-negative-transition-gate` 已落地具名 pytest；`1m pre_breakdown` 已同时补到真实 `tech.json` gate 与真实样本 publish regression，`1m pre_breakout` 仍待真实样本驱动。
 
 ## 3. 待完成任务
@@ -202,7 +202,7 @@
 
 - [zhongshu-review-entry.md](zhongshu-review-entry.md)
 - 用途：统一原文定义、页内真实卡片、`tech.json` / 报告 / 小程序消费红线，以及 `1m / 5m / 30m / day映射` 的示例优先级。
-- 当前进展：`zhongshu-visual-example-library.md` 第 1 至第 4 节均已进入页内可审状态；`zhongshu-consumer-display-examples.md` 已补同案三栏对照，当前主锚点包括 `HK.02357 1m range ongoing`、`HK.01339 1m completed_then_new_type`、真实 `SZ.000651 1m pre_breakdown`、`SH.601328 1m pre-warning proxy`、`1m confirmed 3S` regression reference、`SH.601318 5m down_bias`、`SZ.000651 30m -> day`、`SZ.002594 30m pre_breakout`。其中 `SH.601328 1m` 目前仅作 `1m` 预警前态代理锚点；真实 `SZ.000651 1m` 已接管向下预警主入口，当前主要缺口收敛为真实 `1m pre_breakout` 与真实 confirmed 页内卡片。
+- 当前进展：`zhongshu-visual-example-library.md` 第 1 至第 4 节均已进入页内可审状态；`zhongshu-consumer-display-examples.md` 已补同案三栏对照，当前主锚点包括 `HK.02357 1m range ongoing`、`HK.01339 1m completed_then_new_type`、真实 `SZ.000651 1m pre_breakdown`、`SH.601328 1m pre-warning proxy`、真实 `600900 1m confirmed 3S`、真实 `00700 5m confirmed buy2like`、`1m confirmed 3S` regression reference、`SH.601318 5m down_bias`、`SZ.000651 30m -> day`、`SZ.002594 30m pre_breakout`。其中 `SH.601328 1m` 目前仅作 `1m` 预警前态代理锚点；真实 `SZ.000651 1m` 已接管向下预警主入口，当前主要缺口收敛为稳定的 `1m confirmed` 买点样本与更多 confirmed 多案例对照。
 - 当前进展补充：已新增 `build/probe_intraday_prebreak_sample.py` 作为 `1m pre_break*` 历史 cutoff 回放工具，并已用它首轮回放否定 `00981 / 00728 / 06088` 三组高优先 `1m pre_breakout` 窗口；下一步应扩历史窗口或换新标的，不再重复把这三组首轮窗口当主候选。
 - 当前进展补充：`zhongshu-tasks.md` 的 `ZS6.3` 已把 `30m pre_breakout`、`30m pre_breakdown/route`、`5m down_bias` 收口到具名 pytest；`1m-confirmed-3s-reference-gate` 与 `1m-proxy-negative-transition-gate` 也已落到 `tests/test_build_miniapp_publish_bundle.py`；正式 `1m pre_breakdown` 现已同时具备真实样本 `tech.json` gate 与 publish regression，`1m pre_breakout` 仍停留在 synthetic gate 与样本缺口阶段。
 

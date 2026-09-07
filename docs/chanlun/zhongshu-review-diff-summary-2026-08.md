@@ -6,7 +6,7 @@
 2. 哪些样例页已经从“模板集合”推进成“可直接进入 review 的案例入口”。
 3. 当前还缺什么，下一步最值得补哪里。
 
-本轮示例级别策略：尽可能优先使用 `1m / 5m / 30m / day` 这条链。当前已稳定落地的是 `1m / 5m / 30m / day映射`，其中 `HK.02357 1m` 已补为 watch/pending 场景锚点，`HK.01339 1m` 已补为 completed_then_new_type 场景锚点，真实 `SZ.000651 1m` 已补为正式 `pre_breakdown` 场景锚点，`SH.601328 1m` 已补为预警前态代理锚点；`1m confirmed 3S` 当前仍主要由 regression reference gate 承担。后续优先缺口已收敛为正式 `1m pre_breakout` 样本与真实 confirmed 页内卡片。
+本轮示例级别策略：尽可能优先使用 `1m / 5m / 30m / day` 这条链。当前已稳定落地的是 `1m / 5m / 30m / day映射`，其中 `HK.02357 1m` 已补为 watch/pending 场景锚点，`HK.01339 1m` 已补为 completed_then_new_type 场景锚点，真实 `SZ.000651 1m` 已补为正式 `pre_breakdown` 场景锚点，`SH.601328 1m` 已补为预警前态代理锚点，真实 `600900 1m confirmed 3S` 与真实 `00700 5m confirmed buy2like` 已分别补为卖侧/买侧 confirmed live 锚点；后续优先缺口已收敛为稳定的 `1m confirmed` 买点样本与更多 confirmed 页内对照。
 
 ## 1. 本轮新增内容
 
@@ -29,7 +29,7 @@
 1. 第18/20课中枢定理与扩张示例，已回链到 `sample-case-pack-2026-08-v1/v2` 的 30m 样例，并内嵌 `SZ.000651 30m` 中枢扩张候选真实卡片。
 2. 第29课背驰后三级去向示例，已回链到 `higher_level_range`、`higher_level_reverse_trend` 与“候选回退”样例；当前优先锚点是 `SZ.000651 30m -> day`，`HK.00700 60m` 保留作补充对照。
 3. 第39课节奏示例，已回链到两批样例包和两份阈值回放记录；当前优先锚点是 `SH.601318 5m down_bias`，`HK.01024 15m balanced` 暂作补充对照。
-4. 第92课监视器预警与确认链对照示例，已回链到 `pre_breakout/pre_breakdown` 回中枢与确认失败案例；当前优先锚点是 `SZ.002594 30m pre_breakout` 与真实 `SZ.000651 1m pre_breakdown`，`HK.01024 60m pre_breakdown` 暂作补充对照，`SH.601328 1m` 仅保留作 `1m` 预警前态代理样本，`1m confirmed 3S` 则继续由 regression reference gate 承担对照角色。
+4. 第92课监视器预警与确认链对照示例，已回链到 `pre_breakout/pre_breakdown` 回中枢与确认失败案例；当前优先锚点是 `SZ.002594 30m pre_breakout`、真实 `SZ.000651 1m pre_breakdown` 与真实 `600900 1m confirmed 3S`，`SH.601328 1m` 仅保留作 `1m` 预警前态代理样本，`1m confirmed 3S` regression reference 继续承担兜底对照角色。
 
 ### 1.3 review 路径层
 
