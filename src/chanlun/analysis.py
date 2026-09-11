@@ -280,22 +280,23 @@ def _has_reverse_turn_after(signal_bi: Bi | None, *, direction: str, bis: list[B
 
 
 def _is_first_reverse_hold(anchor: Bi, candidate: Bi, bis: list[Bi]) -> bool:
-    """candidate 是否是 anchor 之后第一个「不破 anchor 极值」的反向 bi。
+    """candidate 是否落在 anchor 之后「第一次确认性回抽 / 反抽」窗口内（spec §2.3）。
 
-    用于二类点「首次回抽锁定」：二类点只能建立在第一类点之后的第一次确认性回抽上，
-    后续再次回抽即使同样不破前低 / 前高，也不得重复标记为二类点。
+    二类点只能建立在一类点之后的第一次回试上：
+    - 窗口：candidate 必须是 anchor 之后第一个同向回试笔（回抽 / 反抽）。
+    - 失败 / 失效：若 anchor 之后、candidate 之前已出现更早的同向回试笔——无论它是否跌破 /
+      升破 anchor 极值——首次回抽窗口都已被占用（更早那次已成或已破位失败），candidate 不再是
+      「首次确认性回抽」，不得重复标二类点。这把原先仅「不破前低 / 前高」的判定扩到含破位失败态。
+    candidate 自身不破 anchor 极值仍由调用方（`low > anchor.low` / `high < anchor.high`）校验。
     """
     for other in bis:
         if other.bi_id <= anchor.bi_id or other.bi_id >= candidate.bi_id:
             continue
-        if anchor.is_down():
-            # 一买锚点是向下的笔；反向 bi 是向下回抽，须不破前低
-            if other.is_down() and other.low > anchor.low:
-                return False
-        else:
-            # 一卖锚点是向上的笔；反向 bi 是向上反抽，须不破前高
-            if other.is_up() and other.high < anchor.high:
-                return False
+        # anchor 向下 -> 首个向下回抽即占用窗口；anchor 向上 -> 首个向上反抽即占用窗口。
+        if anchor.is_down() and other.is_down():
+            return False
+        if anchor.is_up() and other.is_up():
+            return False
     return True
 
 

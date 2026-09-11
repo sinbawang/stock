@@ -17,7 +17,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from chanlun.analysis import _build_zs_monitor_state, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
+from chanlun.analysis import _build_zs_monitor_state, _is_first_reverse_hold, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
 
@@ -1471,6 +1471,51 @@ def test_analyze_chanlun_signals_does_not_reflag_buy2_on_second_pullback() -> No
     signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
 
     assert "buy_2" not in signals["buy_points"]
+
+
+def test_is_first_reverse_hold_accepts_immediate_first_pullback() -> None:
+    """RS3 二类首次回抽窗口：anchor 之后第一个向下回抽（不破前低）落在窗口内。"""
+    anchor = _bi(3, BiDirection.DOWN, high=11.0, low=10.0, day=12)
+    up = _bi(4, BiDirection.UP, high=11.3, low=10.3, day=13)
+    candidate = _bi(5, BiDirection.DOWN, high=11.1, low=10.4, day=14)
+
+    assert _is_first_reverse_hold(anchor, candidate, [anchor, up, candidate]) is True
+
+
+def test_is_first_reverse_hold_rejects_later_pullback_after_earlier_hold() -> None:
+    """RS3 窗口占用：更早已出现一次不破前低回抽，后续回抽不再是首次确认性回抽。"""
+    anchor = _bi(3, BiDirection.DOWN, high=11.0, low=10.0, day=12)
+    up1 = _bi(4, BiDirection.UP, high=11.3, low=10.3, day=13)
+    first_pullback = _bi(5, BiDirection.DOWN, high=11.1, low=10.4, day=14)  # 不破前低
+    up2 = _bi(6, BiDirection.UP, high=11.2, low=10.5, day=15)
+    candidate = _bi(7, BiDirection.DOWN, high=11.15, low=10.45, day=16)
+
+    bis = [anchor, up1, first_pullback, up2, candidate]
+    assert _is_first_reverse_hold(anchor, candidate, bis) is False
+
+
+def test_is_first_reverse_hold_rejects_later_pullback_after_earlier_break_failure() -> None:
+    """RS3 首次回抽破位失败：更早那次回抽已跌破前低（首次窗口失败），后续即便不破前低也不得补二类点。"""
+    anchor = _bi(3, BiDirection.DOWN, high=11.0, low=10.0, day=12)
+    up1 = _bi(4, BiDirection.UP, high=11.3, low=10.3, day=13)
+    broken_pullback = _bi(5, BiDirection.DOWN, high=11.0, low=9.7, day=14)  # 首次回抽跌破前低 -> 失败
+    up2 = _bi(6, BiDirection.UP, high=11.2, low=10.5, day=15)
+    candidate = _bi(7, BiDirection.DOWN, high=11.15, low=10.45, day=16)  # 后续回抽不破前低
+
+    bis = [anchor, up1, broken_pullback, up2, candidate]
+    assert _is_first_reverse_hold(anchor, candidate, bis) is False
+
+
+def test_is_first_reverse_hold_symmetric_for_up_anchor_break_failure() -> None:
+    """RS3 二卖对称：一卖后首次反抽已升破前高（失败），后续反抽不破前高也不得补二卖。"""
+    anchor = _bi(3, BiDirection.UP, high=10.8, low=10.0, day=12)
+    down1 = _bi(4, BiDirection.DOWN, high=10.5, low=9.8, day=13)
+    broken_rebound = _bi(5, BiDirection.UP, high=11.1, low=10.1, day=14)  # 首次反抽升破前高 -> 失败
+    down2 = _bi(6, BiDirection.DOWN, high=10.6, low=9.9, day=15)
+    candidate = _bi(7, BiDirection.UP, high=10.7, low=10.0, day=16)  # 后续反抽不破前高
+
+    bis = [anchor, down1, broken_rebound, down2, candidate]
+    assert _is_first_reverse_hold(anchor, candidate, bis) is False
 
 
 def test_analyze_chanlun_signals_does_not_reflag_sell2_on_second_rebound() -> None:
