@@ -98,6 +98,7 @@ def test_small_to_large_status_enum_is_stable_and_complete() -> None:
     assert {member.value for member in SmallToLargeStatus} == {
         "candidate",
         "third_class_confirmed",
+        "higher_level_confirmed",
     }
 
 
@@ -166,5 +167,7 @@ def test_signal_lifecycle_state_labels_and_notes_are_stable() -> None:
 def test_small_to_large_status_labels_and_notes_are_stable() -> None:
     assert SMALL_TO_LARGE_STATUS_LABELS[SmallToLargeStatus.CANDIDATE.value] == "小转大候选"
     assert SMALL_TO_LARGE_STATUS_LABELS[SmallToLargeStatus.THIRD_CLASS_CONFIRMED.value] == "小转大必要条件已具备"
+    assert SMALL_TO_LARGE_STATUS_LABELS[SmallToLargeStatus.HIGHER_LEVEL_CONFIRMED.value] == "小转大已确认转折"
     assert "最后一个次级别中枢" in SMALL_TO_LARGE_STATUS_NOTES[SmallToLargeStatus.CANDIDATE.value]
     assert "不等于高级别转折充分确认" in SMALL_TO_LARGE_STATUS_NOTES[SmallToLargeStatus.THIRD_CLASS_CONFIRMED.value]
+    assert "高级别已确认转折" in SMALL_TO_LARGE_STATUS_NOTES[SmallToLargeStatus.HIGHER_LEVEL_CONFIRMED.value]

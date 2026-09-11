@@ -84,9 +84,23 @@ invalidation 是跨帧概念：单帧 `analyze_chanlun_signals` 恒按最新结�
 ## 5. 多级别双向联立（RS2）
 
 - 现状单向：`build_lower_timeframe_precision_entry` 依上级别 `same_level_consumption_level` 降级。
-- 补升级方向：当 `small_to_large_status == 必要条件已具备`（最后一个次级别中枢出现对应三类点）
+- 补升级方向（已落地）：当 `small_to_large_status == 必要条件已具备`（最后一个次级别中枢出现对应三类点）
   且高级别结构闭环时，把高级别「小转大候选」升级为「已确认转折」；未闭环只标候选。
 - 红线（第 35 / 43 / 44 课）：必要 ≠ 充分；低级别信号不得单独推翻高级别未完成结构。
+
+实现落点（`src/chanlun/analysis.py`）：
+
+- `_higher_level_structure_closed(higher_signals, side)`：高级别结构闭环 = `current_structure_status ==
+  completed_then_new_type` + `same_level_consumption_level == confirmed` + 新走势方向与 `side` 一致
+  （buy→up / sell→down）。三者缺一不升级，兜住「必要 ≠ 充分」与「不得推翻未完成结构」两条红线。
+- `_build_small_to_large_status`：候选 → 必要条件已具备（`third_class_confirmed`）→ 结构闭环后
+  升级为 `higher_level_confirmed`（契约新增枚举，label「小转大已确认转折」）。
+- 区间套反向确认：`_build_small_to_large_reverse_confirm` 仅在升级为 `higher_level_confirmed` 时回填
+  `small_to_large_reverse_confirm = {active, basis=lower_third_class_and_higher_structure_closed,
+  higher_structure_status, note}`，并把 note 追加进精确入场 `note`，表达「次级别三类点 + 高级别闭环」
+  的双向确认链。
+- 回归：`tests/test_chanlun_analysis.py`（buy/sell 升级正例 + 结构未闭环反例）、
+  `tests/test_analysis_contract.py`（新增枚举完整性与 label/note）。
 
 ## 6. 契约字段草案（待评审）
 
@@ -120,7 +134,7 @@ invalidation 是跨帧概念：单帧 `analyze_chanlun_signals` 恒按最新结�
 1. RS0 契约 + 状态机 + repaint 回归护栏（横切前置）。
 2. RS1 预备态（复用 RS0 状态机）。
 3. RS5 消费交付：发布包透传 + 小程序「买卖点」页面渲染（随 RS0/RS1，确保用户可见）。
-4. RS2 多级别升级方向。
+4. RS2 多级别升级方向（已落地：小转大自动升级 + 区间套反向确认）。
 5. RS3 收口工程近似（与 RS0 失效条件联动）。
 6. RS4 增量重算稳健性（数据层，独立可并行）。
 

@@ -86,10 +86,16 @@ class PrecisionDynamicGrade(str, Enum):
 
 
 class SmallToLargeStatus(str, Enum):
-    """小转大状态：仅区分候选与必要条件已具备，不直接宣称大级别已确认。"""
+    """小转大状态：候选 -> 必要条件已具备 -> 高级别结构闭环后升级为已确认转折。
+
+    `HIGHER_LEVEL_CONFIRMED` 是 RS2 双向联立的升级方向：仅当次级别必要条件已具备
+    且高级别结构真正闭环（切入新走势 + 同级别消费已确认）时，才把小转大候选反向确认为
+    高级别已确认转折；未闭环时不得越级，只能停在候选 / 必要条件已具备。
+    """
 
     CANDIDATE = "candidate"
     THIRD_CLASS_CONFIRMED = "third_class_confirmed"
+    HIGHER_LEVEL_CONFIRMED = "higher_level_confirmed"
 
 
 SIGNAL_POINT_LABELS = {
@@ -174,12 +180,14 @@ PRECISION_DYNAMIC_GRADE_NOTES = {
 SMALL_TO_LARGE_STATUS_LABELS = {
     SmallToLargeStatus.CANDIDATE.value: "小转大候选",
     SmallToLargeStatus.THIRD_CLASS_CONFIRMED.value: "小转大必要条件已具备",
+    SmallToLargeStatus.HIGHER_LEVEL_CONFIRMED.value: "小转大已确认转折",
 }
 
 
 SMALL_TO_LARGE_STATUS_NOTES = {
     SmallToLargeStatus.CANDIDATE.value: "次级别转折已出现，但最后一个次级别中枢尚未见对应三类买卖点，当前只能按小转大候选观察。",
     SmallToLargeStatus.THIRD_CLASS_CONFIRMED.value: "最后一个次级别中枢已出现对应三类买卖点，仅说明小转大的必要条件已具备，仍不等于高级别转折充分确认。",
+    SmallToLargeStatus.HIGHER_LEVEL_CONFIRMED.value: "次级别必要条件已具备，且高级别结构已闭环切入同向新走势、同级别消费已确认，小转大候选反向确认为高级别已确认转折。",
 }
 
 

@@ -3398,6 +3398,97 @@ def test_build_lower_timeframe_precision_entry_marks_small_to_large_necessary_co
     assert entry["small_to_large_status"] == "third_class_confirmed"
     assert entry["small_to_large_status_label"] == "小转大必要条件已具备"
     assert "不等于高级别转折充分确认" in entry["small_to_large_status_note"]
+    assert entry["small_to_large_reverse_confirm"] is None
+
+
+def _precision_lower_third_class_signals(side: str) -> dict[str, object]:
+    point = f"{side}3"
+    basis = (
+        "leave_zs_then_pullback_holds_upper_edge"
+        if side == "buy"
+        else "leave_zs_then_rebound_fails_lower_edge"
+    )
+    return {
+        **_precision_lower_signals(side),
+        "buy_points": [point] if side == "buy" else [],
+        "sell_points": [point] if side == "sell" else [],
+        "signal_points": [
+            {"point": point, "active": True, "time": "2026-05-10T14:25:00", "price": 10.25, "basis": basis}
+        ],
+        "signal_catalog": [
+            {"point": point, "active": True, "time": "2026-05-10T14:25:00", "price": 10.25, "basis": basis}
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    ("side", "new_type", "third_class_label"),
+    [("buy", "up", "三买"), ("sell", "down", "三卖")],
+)
+def test_build_lower_timeframe_precision_entry_promotes_small_to_large_when_higher_structure_closed(
+    side: str,
+    new_type: str,
+    third_class_label: str,
+) -> None:
+    """RS2 小转大自动升级：必要条件已具备 + 高级别结构闭环切入同向新走势 -> 已确认转折 + 区间套反向确认。"""
+    higher_signals = {
+        **_precision_higher_signals_with_drift(side, new_type),
+        "post_divergence_route": "higher_level_reverse_trend",
+        "same_level_consumption_level": "confirmed",
+        "structure_state": {
+            "current_ongoing": {"type": new_type},
+            "current_structure_status": "completed_then_new_type",
+        },
+    }
+
+    entry = build_lower_timeframe_precision_entry(
+        higher_signals,
+        _precision_lower_third_class_signals(side),
+        lower_timeframe="5m",
+        lower_timeframe_label="5M",
+        pending_reverse_mode="effective_only",
+    )
+
+    assert entry["small_to_large_status"] == "higher_level_confirmed"
+    assert entry["small_to_large_status_label"] == "小转大已确认转折"
+    assert "高级别已确认转折" in entry["small_to_large_status_note"]
+
+    reverse_confirm = entry["small_to_large_reverse_confirm"]
+    assert reverse_confirm is not None
+    assert reverse_confirm["active"] is True
+    assert reverse_confirm["basis"] == "lower_third_class_and_higher_structure_closed"
+    assert reverse_confirm["higher_structure_status"] == "completed_then_new_type"
+    assert third_class_label in reverse_confirm["note"]
+    assert reverse_confirm["note"] in entry["note"]
+
+
+@pytest.mark.parametrize("side", ["buy", "sell"])
+def test_build_lower_timeframe_precision_entry_does_not_promote_when_higher_structure_not_closed(
+    side: str,
+) -> None:
+    """RS2 红线：必要条件已具备但高级别结构未闭环（消费未确认）时不得越级升级。"""
+    new_type = "up" if side == "buy" else "down"
+    higher_signals = {
+        **_precision_higher_signals_with_drift(side, new_type),
+        "post_divergence_route": "higher_level_reverse_trend",
+        "same_level_consumption_level": "pending",
+        "structure_state": {
+            "current_ongoing": {"type": new_type},
+            "current_structure_status": "completed_then_new_type",
+        },
+    }
+
+    entry = build_lower_timeframe_precision_entry(
+        higher_signals,
+        _precision_lower_third_class_signals(side),
+        lower_timeframe="5m",
+        lower_timeframe_label="5M",
+        pending_reverse_mode="effective_only",
+    )
+
+    assert entry["small_to_large_status"] == "third_class_confirmed"
+    assert entry["small_to_large_reverse_confirm"] is None
+
 
 
 def test_build_precision_window_display_includes_dynamic_grade() -> None:

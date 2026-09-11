@@ -24,6 +24,7 @@ from .analysis_contract import (
     SignalInvalidatedReason,
     SignalLifecycleState,
     SmallToLargeStatus,
+    StructureStatus,
 )
 
 
@@ -2049,13 +2050,34 @@ def _grade_by_higher_drift(drift: str | None, side: str) -> str | None:
     return None
 
 
+def _higher_level_structure_closed(higher_signals: dict[str, object], *, side: str) -> bool:
+    """RS2：高级别结构是否已闭环（前段走势完成、切入同向新走势且同级别消费已确认）。
+
+    红线（第35/43/44课）：低级别信号不得单独推翻高级别未完成结构，故只有高级别自身
+    结构闭环时才允许把小转大候选升级为已确认转折。
+    """
+    structure_state = higher_signals.get("structure_state")
+    if not isinstance(structure_state, dict):
+        return False
+    if str(structure_state.get("current_structure_status") or "").strip() != StructureStatus.COMPLETED_THEN_NEW_TYPE.value:
+        return False
+    consumption = str(higher_signals.get("same_level_consumption_level") or "").strip()
+    if not consumption:
+        consumption = _build_same_level_consumption_level(structure_state)
+    if consumption != "confirmed":
+        return False
+    new_type = str((structure_state.get("current_ongoing") or {}).get("type") or "").strip()
+    expected_type = "up" if side == "buy" else "down"
+    return new_type == expected_type
+
+
 def _build_small_to_large_status(
     higher_signals: dict[str, object],
     signal_points: list[dict[str, object]],
     *,
     side: str,
 ) -> str | None:
-    """小转大只暴露候选/必要条件，不在此层直接给出大级别已确认结论。"""
+    """小转大 RS2 双向联立：候选 -> 必要条件已具备 -> 高级别结构闭环后升级为已确认转折。"""
     route = str(higher_signals.get("post_divergence_route") or "").strip()
     if route not in {"higher_level_reverse_trend", "higher_level_range"}:
         return None
@@ -2065,9 +2087,39 @@ def _build_small_to_large_status(
         entry.get("active") and str(entry.get("point") or "").replace("_", "") == required_point
         for entry in signal_points
     )
-    if has_required_third_class:
-        return SmallToLargeStatus.THIRD_CLASS_CONFIRMED.value
-    return SmallToLargeStatus.CANDIDATE.value
+    if not has_required_third_class:
+        return SmallToLargeStatus.CANDIDATE.value
+    if _higher_level_structure_closed(higher_signals, side=side):
+        return SmallToLargeStatus.HIGHER_LEVEL_CONFIRMED.value
+    return SmallToLargeStatus.THIRD_CLASS_CONFIRMED.value
+
+
+def _build_small_to_large_reverse_confirm(
+    status: str | None,
+    *,
+    side: str,
+    higher_signals: dict[str, object],
+) -> dict[str, object] | None:
+    """区间套反向确认：仅当小转大升级为高级别已确认转折时，回填反向确认依据。"""
+    if status != SmallToLargeStatus.HIGHER_LEVEL_CONFIRMED.value:
+        return None
+    structure_state = higher_signals.get("structure_state")
+    higher_structure_status = (
+        str(structure_state.get("current_structure_status") or "").strip()
+        if isinstance(structure_state, dict)
+        else None
+    )
+    direction_label = "向上" if side == "buy" else "向下"
+    third_class_label = "三买" if side == "buy" else "三卖"
+    return {
+        "active": True,
+        "basis": "lower_third_class_and_higher_structure_closed",
+        "higher_structure_status": higher_structure_status or None,
+        "note": (
+            f"次级别最后一个中枢已出现{third_class_label}，且高级别结构已闭环切入{direction_label}新走势，"
+            f"区间套反向确认小转大升级为高级别已确认转折。"
+        ),
+    }
 
 
 def build_lower_timeframe_precision_entry(
@@ -2200,6 +2252,11 @@ def build_lower_timeframe_precision_entry(
     small_to_large_status = _build_small_to_large_status(higher_signals, signal_points, side=side)
     small_to_large_status_label = format_small_to_large_status_label(small_to_large_status)
     small_to_large_status_note = describe_small_to_large_status(small_to_large_status)
+    small_to_large_reverse_confirm = _build_small_to_large_reverse_confirm(
+        small_to_large_status, side=side, higher_signals=higher_signals
+    )
+    if small_to_large_reverse_confirm is not None:
+        note = f"{note} {small_to_large_reverse_confirm['note']}"
 
     return {
         "timeframe": lower_timeframe,
@@ -2222,6 +2279,7 @@ def build_lower_timeframe_precision_entry(
         "small_to_large_status": small_to_large_status,
         "small_to_large_status_label": small_to_large_status_label,
         "small_to_large_status_note": small_to_large_status_note or None,
+        "small_to_large_reverse_confirm": small_to_large_reverse_confirm,
         "window_basis_label": window_basis_label,
         "window_basis_description": window_basis_note,
         "nested_from": {
