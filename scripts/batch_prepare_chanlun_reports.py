@@ -49,6 +49,7 @@ from chanlun.data.kline_fetcher import fetch_kline, get_last_fetch_metadata, sav
 from chanlun.data.local_bar_store import infer_incremental_start, load_local_rows, tail_rows, upsert_local_rows
 from chanlun.data.source_profiles import describe_source_chain, resolve_a_share_intraday_source_label, resolve_hk_minute_source_selection
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
+from chanlun.models import Bar
 from chanlun.normalize import normalize_bars
 from chanlun.segment import identify_segments
 from chanlun.zhongshu import identify_zhongshu
@@ -471,6 +472,39 @@ def save_rows(security: Security, timeframe: str, rows: list[dict], path: Path) 
         save_hk_minute_csv(rows, str(path))
     else:
         save_kline_csv(rows, str(path))
+
+
+def _parse_bar_timestamp(value: object) -> datetime:
+    if isinstance(value, datetime):
+        return value
+
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError("K 线时间戳不能为空")
+
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+    raise ValueError(f"无法解析 K 线时间戳: {value}")
+
+
+def _rows_to_bars(rows: list[dict]) -> list[Bar]:
+    return [
+        Bar(
+            ts=_parse_bar_timestamp(row.get("ts")),
+            open=float(row["open"]),
+            high=float(row["high"]),
+            low=float(row["low"]),
+            close=float(row["close"]),
+            volume=int(float(row.get("volume") or 0)),
+        )
+        for row in rows
+    ]
 
 
 def _fetch_with_optional_local_store(
@@ -999,7 +1033,7 @@ def export_case(
     report_path = layout.root_dir / "report.txt"
     tech_json_path = layout.technical_report_json
     save_rows(security, timeframe, rows, raw_csv)
-    raw_bars = clean_bars(read_bars_from_csv(str(raw_csv)))
+    raw_bars = clean_bars(_rows_to_bars(rows))
     normalized_bars = normalize_bars(raw_bars)
     write_normalized_csv(normalized_csv, normalized_bars)
     fractals = filter_consecutive_fractals(identify_fractals(normalized_bars))

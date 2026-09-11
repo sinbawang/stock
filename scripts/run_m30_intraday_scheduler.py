@@ -19,11 +19,10 @@ DEFAULT_POLL_SECONDS = 30
 SchedulerProfile = Literal["intraday", "m5_intraday", "eod"]
 DEFAULT_INTRADAY_COMMAND = (
     "python",
-    str(ROOT / "scripts" / "refresh_holdings_publish_to_cloudbase.py"),
+    str(ROOT / "scripts" / "run_scheduled_technical_refresh.py"),
+    "--refresh-mode",
+    "m30_intraday",
     "--latest-only",
-    "--sync-kline-cache-restore-before-regenerate",
-    "--skip-gen-base",
-    "--skip-gen-fund",
     "--tech-timeframes",
     "30m",
     "5m",
@@ -33,6 +32,8 @@ DEFAULT_INTRADAY_COMMAND = (
     "5m",
     "1m",
     "day",
+    "--publish-json-only",
+    "--no-export-structure-images",
 )
 DEFAULT_EOD_COMMAND = (
     "python",
@@ -51,6 +52,8 @@ DEFAULT_M5_INTRADAY_COMMAND = (
     "--publish-timeframes",
     "5m",
     "1m",
+    "--publish-json-only",
+    "--no-export-structure-images",
 )
 DEFAULT_INTRADAY_SLOTS = (
     time(9, 30),

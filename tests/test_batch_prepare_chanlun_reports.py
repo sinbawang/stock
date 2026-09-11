@@ -4,6 +4,7 @@ import importlib.util
 import json
 import sys
 from concurrent.futures import Future
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,6 +25,82 @@ assert module_spec and module_spec.loader
 module = importlib.util.module_from_spec(module_spec)
 sys.modules[module_spec.name] = module
 module_spec.loader.exec_module(module)
+
+
+def test_export_case_uses_in_memory_rows_instead_of_csv_reread(monkeypatch, tmp_path: Path) -> None:
+    security = module.Security("03690", "美团", "HK")
+    rows = [
+        {"ts": "2026-08-14 15:20:00", "open": 1.0, "high": 1.1, "low": 0.9, "close": 1.0, "volume": 1},
+        {"ts": "2026-08-14 15:25:00", "open": 1.0, "high": 1.2, "low": 0.95, "close": 1.1, "volume": 2},
+    ]
+    root_dir = tmp_path / "03690" / "5m"
+    analyze_dir = root_dir / "analyze"
+    analyze_dir.mkdir(parents=True, exist_ok=True)
+    layout = SimpleNamespace(
+        root_dir=root_dir,
+        raw_csv=analyze_dir / "raw.csv",
+        normalized_csv=analyze_dir / "normalized.csv",
+        fractals_csv=analyze_dir / "fractals.csv",
+        confirmed_fractals_csv=analyze_dir / "confirmed_fractals.csv",
+        bis_csv=analyze_dir / "bis.csv",
+        segments_csv=analyze_dir / "segments.csv",
+        zhongshu_csv=analyze_dir / "zhongshu.csv",
+        macd_csv=analyze_dir / "macd.csv",
+        chart_svg=root_dir / "structure.svg",
+        chart_png=root_dir / "structure.png",
+        chart_jpg=root_dir / "structure.jpg",
+        technical_report_json=root_dir / "tech.json",
+    )
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(module, "timeframe_report_paths", lambda symbol, timeframe, bars: layout)
+    monkeypatch.setattr(module, "save_rows", lambda *args, **kwargs: captured.setdefault("saved", True))
+
+    def fake_clean_bars(raw_bars):
+        captured["raw_bars"] = raw_bars
+        return raw_bars
+
+    monkeypatch.setattr(module, "clean_bars", fake_clean_bars)
+    monkeypatch.setattr(module, "normalize_bars", lambda raw_bars: [])
+    monkeypatch.setattr(module, "write_normalized_csv", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "identify_fractals", lambda normalized_bars: [])
+    monkeypatch.setattr(module, "filter_consecutive_fractals", lambda fractals: fractals)
+    monkeypatch.setattr(module, "identify_bis", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "identify_segments", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "identify_zhongshu", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "calculate_macd", lambda raw_bars: [])
+    monkeypatch.setattr(module, "export_fractals", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_confirmed_fractals", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_bis", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_segments", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_zhongshus", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "export_macd", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "analyze_current_state", lambda *args, **kwargs: "analysis")
+    monkeypatch.setattr(module, "extract_signals", lambda *args, **kwargs: {})
+    monkeypatch.setattr(module, "build_advice", lambda *args, **kwargs: "advice")
+    monkeypatch.setattr(module, "build_technical_summary", lambda *args, **kwargs: {})
+    monkeypatch.setattr(module, "serialize_zhongshu", lambda zs: {"zs": True})
+    monkeypatch.setattr(module, "serialize_zhongshus", lambda zs_list: [])
+    monkeypatch.setattr(module, "compute_tech_report_fingerprint", lambda: "test-fp")
+    monkeypatch.setattr(module, "write_json", lambda path, payload: path.write_text(json.dumps(payload, ensure_ascii=False, default=str), encoding="utf-8"))
+    monkeypatch.setattr(module, "prune_analyze_csv_families", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "read_bars_from_csv", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("CSV reread should not be used")))
+
+    outputs = module.export_case(
+        security,
+        "5m",
+        rows,
+        "03690 美团 5m",
+        export_structure_images=False,
+    )
+
+    raw_bars = captured["raw_bars"]
+    assert captured["saved"] is True
+    assert len(raw_bars) == 2
+    assert all(isinstance(item, module.Bar) for item in raw_bars)
+    assert raw_bars[0].ts == datetime(2026, 8, 14, 15, 20)
+    assert raw_bars[1].close == 1.1
+    assert outputs["tech_json"] == layout.technical_report_json
 
 
 def test_reuse_existing_hk_5m_case_rejects_legacy_bi_payload(monkeypatch, tmp_path: Path) -> None:

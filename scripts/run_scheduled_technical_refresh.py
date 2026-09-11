@@ -34,7 +34,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-build", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--skip-upload", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--latest-only", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--publish-json-only", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--publish-json-only", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--export-structure-images", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--upload-dry-run", action=argparse.BooleanOptionalAction, default=False)
     return parser.parse_args()
 
@@ -50,6 +51,7 @@ def build_request(args: argparse.Namespace) -> TechnicalRefreshRequest:
         "skip_upload": args.skip_upload,
         "latest_only": args.latest_only,
         "publish_json_only": args.publish_json_only,
+        "export_structure_images": args.export_structure_images,
         "upload_dry_run": args.upload_dry_run,
     }
     if args.holdings_file:

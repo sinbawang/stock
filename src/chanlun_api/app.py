@@ -114,6 +114,7 @@ def _build_intraday_request_from_publish(request: "PublishRefreshRequest") -> "T
         tech_timeframes=_expand_precision_timeframes(request.tech_timeframes),
         publish_timeframes=request.publish_timeframes,
         publish_json_only=request.publish_json_only,
+        export_structure_images=request.export_structure_images,
         cloud_prefix=request.cloud_prefix,
         env_id=request.env_id,
         region=request.region,
@@ -203,7 +204,8 @@ class TechnicalRefreshRequest(BaseModel):
     refresh_mode: TechnicalRefreshMode = "m30_intraday"
     tech_timeframes: list[Timeframe] | None = None
     publish_timeframes: list[Timeframe] | None = None
-    publish_json_only: bool = False
+    publish_json_only: bool = True
+    export_structure_images: bool = False
     cloud_prefix: str = "miniapp-publish/latest"
     env_id: str | None = None
     region: str | None = None
@@ -466,6 +468,7 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             pending_reverse_mode=request.pending_reverse_mode,
             zhongshu_level=request.zhongshu_level,
             timeframes=tuple(tech_timeframes),
+            export_structure_images=bool(request.export_structure_images),
         )
         publish_args = _build_publish_namespace(
             holdings_file=str(filtered_holdings_path),

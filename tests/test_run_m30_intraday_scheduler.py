@@ -87,11 +87,18 @@ def test_build_command_for_intraday_profile_requests_30m_generation(monkeypatch)
     command = module.build_command(args)
 
     assert "--local-store-read-only" not in command
+    assert command[1].endswith("run_scheduled_technical_refresh.py")
+    assert "--refresh-mode" in command
+    assert command[command.index("--refresh-mode") + 1] == "m30_intraday"
+    assert "--sync-kline-cache-restore-before-regenerate" not in command
+    assert "--publish-json-only" in command
+    assert "--no-export-structure-images" in command
     assert "--tech-timeframes" in command
     tech_index = command.index("--tech-timeframes")
     publish_index = command.index("--publish-timeframes")
+    publish_json_only_index = command.index("--publish-json-only")
     assert command[tech_index + 1 : publish_index] == ["30m", "5m", "1m"]
-    assert command[publish_index + 1 :] == ["30m", "5m", "1m", "day"]
+    assert command[publish_index + 1 : publish_json_only_index] == ["30m", "5m", "1m", "day"]
 
 
 def test_build_command_for_eod_profile_allows_fresh_fetch(monkeypatch) -> None:
@@ -106,3 +113,19 @@ def test_build_command_for_eod_profile_allows_fresh_fetch(monkeypatch) -> None:
     command = module.build_command(args)
 
     assert "--local-store-read-only" not in command
+
+
+def test_build_command_for_m5_profile_disables_structure_images(monkeypatch) -> None:
+    monkeypatch.delenv("M5_INTRADAY_SCHEDULER_EXTRA_ARGS", raising=False)
+    monkeypatch.delenv("INTRADAY_SCHEDULER_PYTHON", raising=False)
+
+    args = argparse.Namespace(
+        command=None,
+        profile="m5_intraday",
+    )
+
+    command = module.build_command(args)
+
+    assert command[1].endswith("run_scheduled_technical_refresh.py")
+    assert "--publish-json-only" in command
+    assert "--no-export-structure-images" in command

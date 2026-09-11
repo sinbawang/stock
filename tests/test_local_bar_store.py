@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from chanlun.data.local_bar_store import MergeStats, infer_incremental_start, merge_rows, tail_rows
+from datetime import datetime, timedelta
+
+from chanlun.data.local_bar_store import MergeStats, apply_retention_limit, infer_incremental_start, merge_rows, tail_rows, upsert_local_rows
 
 
 def test_infer_incremental_start_for_day_and_intraday() -> None:
@@ -32,3 +34,48 @@ def test_tail_rows_returns_last_n_rows() -> None:
     rows = [{"ts": f"2026-07-01 09:{idx:02d}"} for idx in range(10)]
     assert len(tail_rows(rows, 3)) == 3
     assert tail_rows(rows, 3)[0]["ts"] == "2026-07-01 09:07"
+
+
+def test_apply_retention_limit_trims_supported_timeframes() -> None:
+    base = datetime(2026, 7, 1, 9, 30)
+    rows = [{"ts": (base + timedelta(minutes=idx)).strftime("%Y-%m-%d %H:%M")} for idx in range(5000)]
+
+    trimmed = apply_retention_limit(rows, "1m")
+
+    assert len(trimmed) == 4500
+    assert trimmed[0]["ts"] == "2026-07-01 17:50"
+
+
+def test_upsert_local_rows_applies_retention_limit(tmp_path) -> None:
+    first_base = datetime(2026, 7, 1, 9, 30)
+    second_base = datetime(2026, 7, 3, 9, 30)
+    first_batch = [
+        {
+            "ts": (first_base + timedelta(minutes=idx)).strftime("%Y-%m-%d %H:%M"),
+            "open": 1.0,
+            "high": 1.0,
+            "low": 1.0,
+            "close": 1.0,
+            "volume": idx,
+        }
+        for idx in range(3000)
+    ]
+    second_batch = [
+        {
+            "ts": (second_base + timedelta(minutes=idx)).strftime("%Y-%m-%d %H:%M"),
+            "open": 2.0,
+            "high": 2.0,
+            "low": 2.0,
+            "close": 2.0,
+            "volume": idx,
+        }
+        for idx in range(2000)
+    ]
+
+    upsert_local_rows("03690", "HK", "1m", first_batch, root=tmp_path)
+    merged_rows, stats, _store_path = upsert_local_rows("03690", "HK", "1m", second_batch, root=tmp_path)
+
+    assert len(merged_rows) == 4500
+    assert stats.total == 4500
+    assert merged_rows[0]["ts"] == "2026-07-01 15:50"
+    assert merged_rows[-1]["ts"] == "2026-07-04 18:49"

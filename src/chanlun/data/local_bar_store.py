@@ -16,6 +16,13 @@ _INTRADAY_MINUTES = {
     "1m": 1,
 }
 
+_RETENTION_LIMITS = {
+    "day": 1200,
+    "30m": 1400,
+    "5m": 2500,
+    "1m": 4500,
+}
+
 
 @dataclass(frozen=True)
 class MergeStats:
@@ -86,6 +93,14 @@ def _write_rows(path: Path, rows: list[dict]) -> None:
         writer.writerows(rows)
 
 
+def apply_retention_limit(rows: list[dict], timeframe: str) -> list[dict]:
+    normalized_timeframe = timeframe.strip().lower()
+    limit = _RETENTION_LIMITS.get(normalized_timeframe)
+    if limit is None or len(rows) <= limit:
+        return list(rows)
+    return list(rows[-limit:])
+
+
 def merge_rows(existing_rows: list[dict], new_rows: list[dict]) -> tuple[list[dict], MergeStats]:
     by_ts: dict[str, dict] = {}
     for row in existing_rows:
@@ -133,6 +148,8 @@ def upsert_local_rows(
 ) -> tuple[list[dict], MergeStats, Path]:
     existing_rows = load_local_rows(symbol, market, timeframe, root=root)
     merged_rows, stats = merge_rows(existing_rows, new_rows)
+    merged_rows = apply_retention_limit(merged_rows, timeframe)
+    stats = MergeStats(added=stats.added, updated=stats.updated, total=len(merged_rows))
     store_path = local_kline_store_path(symbol, market, timeframe, root=root)
     _write_rows(store_path, merged_rows)
     return merged_rows, stats, store_path

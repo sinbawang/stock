@@ -60,6 +60,8 @@ def test_technical_refresh_request_defaults_to_5m_2000_and_1m_3500() -> None:
     assert request.m15_bars == 1200
     assert request.m5_bars == 2000
     assert request.m1_bars == 3500
+    assert request.publish_json_only is True
+    assert request.export_structure_images is False
 
 
 def test_run_technical_refresh_passes_parallelism_to_batch_prepare(monkeypatch, tmp_path) -> None:
@@ -67,6 +69,7 @@ def test_run_technical_refresh_passes_parallelism_to_batch_prepare(monkeypatch, 
 
     def fake_run_batch_prepare(**kwargs):
         captured["parallelism"] = kwargs["parallelism"]
+        captured["export_structure_images"] = kwargs["export_structure_images"]
         return SimpleNamespace(
             security_count=1,
             selected_timeframes=("5m", "1m"),
@@ -101,6 +104,7 @@ def test_run_technical_refresh_passes_parallelism_to_batch_prepare(monkeypatch, 
     )
 
     assert captured["parallelism"] == 3
+    assert captured["export_structure_images"] is False
     assert captured["upload_include_stock_meta"] is True
     assert captured["upload_include_index_groups"] is True
     assert result["generated_timeframes"] == ["5m", "1m"]
@@ -139,6 +143,47 @@ def test_run_publish_refresh_reroutes_intraday_only_request(monkeypatch) -> None
     assert rerouted.m30_bars == 1200
     assert rerouted.m5_bars == 2000
     assert rerouted.m1_bars == 3500
+    assert rerouted.export_structure_images is True
+
+
+def test_run_technical_refresh_honors_explicit_structure_image_export(monkeypatch, tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_batch_prepare(**kwargs):
+        captured["export_structure_images"] = kwargs["export_structure_images"]
+        return SimpleNamespace(
+            security_count=1,
+            selected_timeframes=("30m", "5m", "1m"),
+            manifest_path=tmp_path / "manifest.txt",
+            summary_path=None,
+            timeframe_diagnostics=[],
+        )
+
+    monkeypatch.setattr(module, "run_batch_prepare", fake_run_batch_prepare)
+    monkeypatch.setattr(
+        module,
+        "_publish_build_and_upload",
+        lambda args: {
+            "publish_root": args.publish_root,
+            "latest_dir": "latest",
+            "cloud_prefix": args.cloud_prefix,
+            "published_timeframes": None,
+        },
+    )
+
+    module._run_technical_refresh(
+        module.TechnicalRefreshRequest(
+            market="HK",
+            symbols=["03690"],
+            refresh_mode="m30_intraday",
+            tech_timeframes=["30m", "5m", "1m"],
+            skip_build=True,
+            skip_upload=True,
+            export_structure_images=True,
+        )
+    )
+
+    assert captured["export_structure_images"] is True
 
 
 def test_run_publish_refresh_keeps_full_path_when_primary_timeframe_requested(monkeypatch) -> None:
