@@ -102,15 +102,15 @@
 - `--m60-bars 1200`
 - `--m30-bars 1200`
 - `--m15-bars 1200`
-- `--m5-bars 1500`
-- `--m1-bars 3000`
+- `--m5-bars 2000`
+- `--m1-bars 3500`
 - `--skip-build`
 - `--skip-upload`
 
 示例：
 
 ```powershell
-bin\runone.bat 000591 --zhongshu-level segment --pending-reverse-mode tail_mixed --day-bars 1200 --m30-bars 1200 --m5-bars 1500 --m1-bars 3000 --skip-build --skip-upload
+bin\runone.bat 000591 --zhongshu-level segment --pending-reverse-mode tail_mixed --day-bars 1200 --m30-bars 1200 --m5-bars 2000 --m1-bars 3500 --skip-build --skip-upload
 ```
 
 ## 当前目录约定
