@@ -1096,6 +1096,9 @@ def analyze_chanlun_signals(
     buy_points: list[str] = []
     sell_points: list[str] = []
     use_segment_divergence = current_zs is not None and current_zs.structure_level == "segment" and bool(segments)
+    # RS3 级别收敛：标准一/二类点是操作级别信号，须依附段级中枢；笔级中枢比线段级低半级，
+    # 仅供执行级别/区间套次级别定位，不冒充操作级别点。故一/二类发点统一门控在 use_segment_divergence，
+    # 段级中枢未成型（笔级中枢兜底）时操作级别只观察、不发一/二类点。
     buy_divergence = segment_bottom_divergence if use_segment_divergence else bottom_divergence
     sell_divergence = segment_top_divergence if use_segment_divergence else top_divergence
 
@@ -1112,6 +1115,7 @@ def analyze_chanlun_signals(
                 sell_signal_bi = exit_end_bi
     if (
         current_zs
+        and use_segment_divergence
         and ongoing_type == "down"
         and buy_signal_bi
         and buy_signal_bi.is_confirmed
@@ -1122,6 +1126,7 @@ def analyze_chanlun_signals(
         buy_points.append("buy_1")
     if (
         current_zs
+        and use_segment_divergence
         and ongoing_type == "up"
         and sell_signal_bi
         and sell_signal_bi.is_confirmed
@@ -1142,6 +1147,7 @@ def analyze_chanlun_signals(
     buy2_anchor = buy_signal_bi if use_segment_divergence else latest_confirmed_down
     if (
         current_zs
+        and use_segment_divergence
         and ongoing_type == "down"
         and buy2_precursor
         and latest_up
@@ -1184,6 +1190,7 @@ def analyze_chanlun_signals(
     sell2_anchor = sell_signal_bi if use_segment_divergence else latest_confirmed_up
     if (
         current_zs
+        and use_segment_divergence
         and ongoing_type == "up"
         and sell2_precursor
         and latest_up
