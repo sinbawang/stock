@@ -151,6 +151,36 @@ tests: tests/test_chanlun_analysis.py
 - 若最近中枢语义不清，买卖点不能给严格确认，只能给观察提示。
 - 类中枢路径不得单独提升为严格确认买卖点。
 
+### 2.8 信号生命周期与实时预备态
+
+> 覆盖标准一 / 二 / 三类点与类一 / 类二类点。设计与失效条件落地细节见
+> [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md)，任务见
+> [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md) RS0-RS5。
+
+每个买卖点具备生命周期状态 `forming（预备 / 观察）→ confirmed（确认）→ invalidated（失效）`：
+
+- `forming`：核心背驰 / 离开 / 隔段力度衰减条件已成立，但反向转折尚未确认。只作 watch 档观察态，
+  不得升为 confirmed，也不得被下游二次摘要成确认买卖点。
+- `confirmed`：反向转折已确认。必须锚定已确认笔 / 线段（`is_confirmed=True`），是可操作确认态
+  （仍受多级别降级约束）。
+- `invalidated`：确认后其成立前提被后续走势破坏。保留原信号锚点与 `invalidated_reason`，供撤单 /
+  失效提示消费，不再作可操作确认态。
+
+Repaint 红线：
+
+- `confirmed` 只能锚定已确认笔 / 线段；未确认笔只能承载 `forming`。
+- 同一信号锚点（`signal_bi_id`）的 `confirmed` 在后续帧只能保持或转 `invalidated`，禁止凭空消失或
+  方向翻转。
+
+各点类型的 `confirmed → invalidated` 失效条件（买卖两侧对称）：
+
+- 一买 / 一卖：离开段极值被后续有效跌破 / 升破（背驰构成的转折被否定）。
+- 二买 / 二卖：回抽 / 反抽破前低 / 前高（首次确认性回抽失败）。
+- 三买 / 三卖：首次回试 / 反抽重新跌回 / 站回中枢（离开中枢的「不回归」前提被破坏）。
+- 类一买 / 类一卖（LB1 / LS1）：盘整背驰前提消失（离开段 vs 进入段力度关系反转）或 range 门控退出。
+- 类二买 / 类二卖（LB2 / LS2）：隔段背驰前提消失（A_{i+2} 力度不再弱于 A_i）或同级别分解退出
+  `single_confirmed`。
+
 ## 3. 区间套
 
 区间套的作用是：

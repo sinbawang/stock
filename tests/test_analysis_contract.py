@@ -11,6 +11,9 @@ from chanlun.analysis_contract import (
     PRECISION_DYNAMIC_GRADE_LABELS,
     PRECISION_DYNAMIC_GRADE_NOTES,
     SIGNAL_BASIS_LABELS,
+    SIGNAL_INVALIDATED_REASON_LABELS,
+    SIGNAL_LIFECYCLE_STATE_LABELS,
+    SIGNAL_LIFECYCLE_STATE_NOTES,
     SIGNAL_POINT_LABELS,
     SMALL_TO_LARGE_STATUS_LABELS,
     SMALL_TO_LARGE_STATUS_NOTES,
@@ -18,6 +21,8 @@ from chanlun.analysis_contract import (
     STRUCTURE_STATUS_NOTES,
     PrecisionDynamicGrade,
     SignalBasis,
+    SignalInvalidatedReason,
+    SignalLifecycleState,
     SignalPoint,
     SmallToLargeStatus,
     StructureStatus,
@@ -55,6 +60,24 @@ def test_signal_basis_enum_is_stable_and_complete() -> None:
     }
 
 
+def test_signal_lifecycle_state_enum_is_stable_and_complete() -> None:
+    assert {member.value for member in SignalLifecycleState} == {
+        "forming",
+        "confirmed",
+        "invalidated",
+    }
+
+
+def test_signal_invalidated_reason_enum_is_stable_and_complete() -> None:
+    assert {member.value for member in SignalInvalidatedReason} == {
+        "first_class_extreme_broken",
+        "second_class_pullback_failed",
+        "third_class_reentered_zs",
+        "consolidation_divergence_lost",
+        "gap_divergence_lost",
+    }
+
+
 def test_structure_status_enum_is_stable_and_complete() -> None:
     assert {member.value for member in StructureStatus} == {
         "ongoing_same_type",
@@ -82,6 +105,7 @@ def test_analysis_consumes_the_same_label_and_note_objects() -> None:
     """analysis.py 的展示字典必须直接来自契约模块，不得维护第二份拷贝。"""
     assert analysis.SIGNAL_POINT_LABELS is SIGNAL_POINT_LABELS
     assert analysis.SIGNAL_BASIS_LABELS is SIGNAL_BASIS_LABELS
+    assert analysis.SIGNAL_LIFECYCLE_STATE_LABELS is SIGNAL_LIFECYCLE_STATE_LABELS
     assert analysis.STRUCTURE_STATUS_LABELS is STRUCTURE_STATUS_LABELS
     assert analysis.STRUCTURE_STATUS_NOTES is STRUCTURE_STATUS_NOTES
 
@@ -92,6 +116,8 @@ def test_contract_projection_covers_all_codes_with_non_empty_labels() -> None:
     assert set(contract) == {
         "signal_point",
         "signal_basis",
+        "signal_lifecycle_state",
+        "signal_invalidated_reason",
         "structure_status",
         "precision_dynamic_grade",
         "small_to_large_status",
@@ -102,8 +128,14 @@ def test_contract_projection_covers_all_codes_with_non_empty_labels() -> None:
         for code, (label, note) in entries.items():
             assert code, f"{family} 存在空 code"
             assert label, f"{family}.{code} label 为空"
-            # structure_status / precision_dynamic_grade 必须带 note；signal_point / signal_basis 暂允许 note 为空。
-            if family in {"structure_status", "precision_dynamic_grade", "small_to_large_status"}:
+            # structure_status / precision_dynamic_grade / small_to_large_status / signal_lifecycle_state 必须带 note；
+            # signal_point / signal_basis / signal_invalidated_reason 暂允许 note 为空。
+            if family in {
+                "structure_status",
+                "precision_dynamic_grade",
+                "small_to_large_status",
+                "signal_lifecycle_state",
+            }:
                 assert note, f"{family}.{code} note 为空"
 
 
@@ -118,6 +150,17 @@ def test_signal_point_labels_follow_buy_sell_semantics() -> None:
     assert SIGNAL_POINT_LABELS[SignalPoint.SELL_2_LIKE.value] == "类二卖"
     assert SIGNAL_POINT_LABELS[SignalPoint.BUY_1_LIKE.value] == "类一买"
     assert SIGNAL_POINT_LABELS[SignalPoint.SELL_1_LIKE.value] == "类一卖"
+
+
+def test_signal_lifecycle_state_labels_and_notes_are_stable() -> None:
+    assert SIGNAL_LIFECYCLE_STATE_LABELS[SignalLifecycleState.FORMING.value] == "预备"
+    assert SIGNAL_LIFECYCLE_STATE_LABELS[SignalLifecycleState.CONFIRMED.value] == "确认"
+    assert SIGNAL_LIFECYCLE_STATE_LABELS[SignalLifecycleState.INVALIDATED.value] == "已失效"
+    assert "反向转折待确认" in SIGNAL_LIFECYCLE_STATE_NOTES[SignalLifecycleState.FORMING.value]
+    assert (
+        SIGNAL_INVALIDATED_REASON_LABELS[SignalInvalidatedReason.THIRD_CLASS_REENTERED_ZS.value]
+        == "首次回试/反抽重新跌回/站回中枢"
+    )
 
 
 def test_small_to_large_status_labels_and_notes_are_stable() -> None:

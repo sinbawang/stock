@@ -52,6 +52,16 @@ SEGMENT_SAFETY_GATES = [
             "tests/test_segment_consumer_mode_smoke.py",
         ],
     ),
+    SafetyGate(
+        name="signal-lifecycle",
+        command=[
+            "python",
+            "-m",
+            "pytest",
+            "-q",
+            "tests/test_signal_repaint_gate.py",
+        ],
+    ),
 ]
 
 
@@ -62,7 +72,7 @@ def _parse_args() -> argparse.Namespace:
         "--only",
         nargs="*",
         default=None,
-        help="Optional gate names to run. Choices: core regression consumer",
+        help="Optional gate names to run. Choices: core regression consumer signal-lifecycle",
     )
     return parser.parse_args()
 

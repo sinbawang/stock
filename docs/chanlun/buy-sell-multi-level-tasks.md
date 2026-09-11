@@ -362,3 +362,175 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 1. 先做 BS1，把“现状 vs 严格理论”差异表写清楚。
 2. 再做 BS2-BS4，按一类点 -> 二类点 -> 三类点顺序收口。
 3. 最后做 BS5-BS6，把多级别联立、消费降级和案例回归补齐。
+
+---
+
+## 下一批高 ROI 任务（待评审 backlog）
+
+> 状态：**待评审（proposed）**。本节是「提升买卖点准确性与实时性」的下一批候选任务，
+> 目标覆盖标准一 / 二 / 三类点与类一 / 类二类点。**尚未进入实现阶段**：按仓库
+> [spec-change-protocol.md](spec-change-protocol.md) 五步流程，评审通过后再落 spec（应然）→ 契约 →
+> 测试（红）→ 实现（绿）→ changelog。设计层细节见
+> [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md)（草案）。
+
+### 现状快照（实然）
+
+- 标准一 / 二 / 三类点与类一 / 类二类点判定链已落地（BS1-BS8 完成），锚定「已确认笔 + 反向转折」，
+  段级中枢背驰用严格「离开段 vs 进入段」口径。
+- 信号只有「不发 / 确认发」两态：无中间「预备态」，也无「确认后失效」回路——一个买卖点一旦写入
+  报告，直到下一次全量重算前不会被撤销，即使价格随后创新低 / 新高破坏其前提。
+- 多级别联立目前是**单向降级**（上级别 pending/auxiliary → 下级别降 watch）；缺**下级别 → 上级别
+  的升级 / 确认**（小转大候选自动升级、区间套反向确认）。
+- 每轮增量重算全量重跑信号，无「同一确认信号跨帧不得消失 / 翻转」的 repaint 回归护栏。
+
+### 排序原则
+
+- ROI = 覆盖点类型广度 × 误报 / 漏报下降幅度 ÷ 实现风险。跨所有点类型受益的横切项优先。
+- 实时性与准确性同权：既要更早给出可操作信号，又不能引入 repaint（信号闪烁 / 事后撤销）。
+
+### 看板（P0 最高）
+
+| ID | 任务 | 类别 | 优先级 | 覆盖点类型 | ROI 理由 | 状态 |
+| --- | --- | --- | --- | --- | --- | --- |
+| RS0 | 信号生命周期与 repaint 安全契约 | 准确性 + 实时 | P0 | 1/2/3 + 类一 / 类二 | 横切全部点类型；补「确认→失效」回路 + 跨帧不翻转护栏，直接降低事后被打脸的假信号 | 完成（契约 + confirmed + 跨帧 invalidated/repaint + 管道 + 发布前闸门） |
+| RS1 | 实时「预备态」（imminent / forming）分层 | 实时 | P1 | 1/2/3 + 类一 / 类二 | 把「背驰已现、待转折确认」升级为 watch 档可操作提示，盘中更早预警且不 repaint | 基本完成（1/2/3 + 类一 / 类二 均已落地） |
+| RS2 | 多级别双向联立（小转大自动升级 + 区间套反向确认） | 准确性 | P2 | 1/2/3（尤其 3 类 / 类二） | 现只单向降级；补下级别→上级别确认，减少高级别转折漏报 | 待评审 |
+| RS3 | 收口既有「工程近似」（笔级中枢力度 / 二类首次回抽窗口 / 三类回中枢失效） | 准确性 | P3 | 1/2/3 | 关闭 BS1 差异表遗留近似，降低边界假信号 | 待评审 |
+| RS4 | 增量重算稳健性（跳空 / 停牌 / overlap 失配） | 实时 / 性能 | P3 | 全部（数据层） | 保证极端行情下缓存不污染信号，避免全量回退降级 | 待评审 |
+| RS5 | 消费交付：发布包透传 + 小程序「买卖点」页面渲染 | 交付 | P1（随 RS0/RS1） | 1/2/3 + 类一 / 类二 | RS0/RS1 若不透传到发布包与前端，页面上看不到任何变化；此项确保改动真正落到用户可见面 | 基本完成（发布包 + 前端已落地，invalidated 待帧序） |
+
+### RS0 信号生命周期与 repaint 安全契约（P0）
+
+- 目标（应然，待写入 spec）：为每个买卖点定义状态机 `forming(观察) → confirmed(确认) → invalidated(失效)`，
+  并给出各点类型的**失效条件**（如：一买 confirmed 后离开段低点被有效跌破、二买回抽破前低、
+  三买回试重新跌回中枢、类一 / 类二对应背驰前提被破坏）。
+- 实时红线：`confirmed` 只允许锚定在已确认笔 / 线段上；同一 `signal_bi_id` 的 `confirmed` 信号在后续
+  帧不得凭空消失或翻转方向，只能进入 `invalidated`（并保留证据字段）。
+- 交付物：契约枚举（`SignalLifecycleState` 或等价）+ `analyze_chanlun_signals` 输出附带每点
+  `lifecycle_state` / `invalidated_reason`；bar-by-bar replay 回归护栏。
+- 验收：重放真实样本（1m/5m/30m/day）时，confirmed 信号集合单调（只增或转 invalidated），无闪烁。
+
+进展（增量1，2026-09-11）：
+
+- 契约已落地：`analysis_contract.py` 新增 `SignalLifecycleState`（forming/confirmed/invalidated）与
+  `SignalInvalidatedReason`（5 类失效原因）枚举 + label/note 投影 + `get_analysis_contract` 两个新字段族；
+  回归 `tests/test_analysis_contract.py`（新增枚举完整性 + label 稳定性 + 投影覆盖）。
+- confirmed 基线已落地：`_build_signal_point_detail` 追加 `lifecycle_state` / `invalidated_reason`
+  两个字段（additive，不破坏既有 catalog 索引与消费）；已确认 active 点统一带 `lifecycle_state=confirmed`。
+- 待续：`invalidated` 状态发射（§3.2 各点失效条件的实际判定）+ 跨帧 bar-by-bar repaint 回归护栏
+  （需回放帧序列 / 前帧状态）。这两项为 RS0 增量2。
+
+进展（增量2，2026-09-11）：
+
+- invalidation 定性为跨帧概念并落地回放护栏：`analysis.py::replay_confirmed_signal_lifecycle(frames)`
+  按时间序比较多帧 confirmed 集合，产出 `invalidated`（附 `invalidated_reason`）、`repaint_violations`
+  与 `timeline`。单帧快照恒按最新结构判定，前提破坏时确认点自然不发，故失效态由多帧比较得出，
+  同时兜住「confirmed 只能保持或转 invalidated、不得凭空消失」的 spec §2.8 repaint 红线。
+- 各点失效前提 `_signal_premise_broken` 按 §3.2 分族：一 / 二 / 类一 / 类二用「买点新低跌破 / 卖点新高
+  升破信号价」；三类用「回抽 / 反抽重新回到中枢（买三回落 zs_high 之下、卖三反抽 zs_low 之上）」。
+- 回归：`tests/test_chanlun_analysis.py` 新增 4 用例（一买新低失效、repaint 违规兜底、confirmed 跨帧保持、
+  三买回中枢失效）。
+- 待续：把回放护栏接入真实 1m/5m/30m/day 帧序列的自动化闸门（当前为纯 synthetic 帧单元测试）。
+
+进展（增量3 real-frame 管道落盘，2026-09-11）：
+
+- 采用「逐次运行 / 刷新为相邻帧」模型（而非单运行 O(n²) 前缀回放）：`analysis.py::to_lifecycle_frame`
+  从单帧输出提取可持久化压缩帧（confirmed 锦点 + 前提比较标量）；`derive_signal_lifecycle_transitions`
+  跨相邻两帧推导 `invalidated_points` 与 `repaint_violations`。
+- `build_signal_summary_fields(signals, *, previous_frame=None)` 新增 `invalidated_points` /
+  `signal_repaint_violations` / `lifecycle_frame`（本帧压缩帧写回 tech.json.summary，供下一运行对比）。
+- 管道：`batch_prepare_chanlun_reports.py` 写 tech.json 前读上一份 tech.json.summary.lifecycle_frame
+  作 previous_frame 传入 `build_technical_summary`（tech.json 即帧存，无新增 store）。
+- 发布包 + 前端：`build_latest_signal_summary` 透出 invalidated 列表 + 「买卖点失效：…」文本行；
+  两处技术卡透出 `invalidated_points`；westock buyPoints 页枚举 invalidated 成行并渲染「已失效」角标。
+- 回归：`tests/test_chanlun_analysis.py` 4 新用例（to_lifecycle_frame / derive 跨帧失效 / 首帧空 /
+  summary 透出）+ `tests/test_build_miniapp_publish_bundle.py` invalidated 文本行用例；共 210 用例回绿。
+- 发布前闸门已落地：`tests/test_signal_repaint_gate.py` 扫描 `data/reports/**` 全部 tech.json，断言
+  `summary.signal_repaint_violations` 恒空（spec §2.8 repaint 红线）；注册为 `run_segment_safety_gates.py`
+  的 `signal-lifecycle` 闸门（无本地报告时跳过，与 segment regression 一致）。
+
+### RS1 实时「预备态」分层（P1）
+
+- 目标（应然，待写入 spec）：把现有 `zs_monitor_alert`（pre_breakout / pre_breakdown）泛化为**每类买卖点**
+  的 `forming` 预备态：满足「背驰 / 离开 / 隔段力度衰减」但尚未出现反向转折确认时，给 `forming`
+  档（watch），明确标注「待转折确认，非确认点」。
+- 覆盖：一类（背驰已现待转折）、二类（回抽未破前低但未再走强）、三类（离开中枢首次回试进行中）、
+  类一 / 类二（盘整 / 隔段背驰已现待反向转折）。
+- 红线：`forming` 不得被下游二次摘要成 confirmed；与 RS0 的状态机同源。
+- 验收：盘中样本能在 confirmed 前 N 根给出 `forming`，且 `forming → confirmed / invalidated` 转移可回溯。
+
+进展（增量1，2026-09-11）：
+
+- 已落地一类 / 类一预备态：`analyze_chanlun_signals` 在「背驰 + 离开成立但 `_has_reverse_turn_after`
+  未成立」时产出 `forming`，写入独立 `forming_points`（不进 buy_points/sell_points/signal_points/
+  signal_catalog，保持既有 confirmed 消费与 catalog 索引契约不变）。覆盖 buy_1/sell_1（趋势门控）与
+  buy_1like/sell_1like（range 单中枢盘整背驰）；反向转折确认后自动升 confirmed 且不重复计数。
+- 回归：`tests/test_chanlun_analysis.py` 新增 confirmed 生命周期用例 + buy_1/sell_1/buy_1like 三个
+  forming 正例（spec §2.8）。
+- 待续：二类 / 三类回抽预备态（回抽进行中）+ 类二（隔段背驰待反向转折）预备态为 RS1 增量2；
+  发布包透传 + 小程序渲染为 RS5。
+
+### RS2 多级别双向联立（P2）
+
+- 目标（应然，待写入 spec §3/§4/§5 增补）：在现有单向降级基础上补**升级 / 确认**方向——
+  当最后一个次级别中枢出现对应三类买卖点（`small_to_large_status == 必要条件已具备`）且高级别结构
+  闭环时，把高级别「小转大候选」升级为「已确认转折」；区间套支持低级别执行确认反向标注高级别时机。
+- 红线（第35 / 43 / 44 课）：必要条件 ≠ 充分条件；高级别未闭环前只标候选，不得越级确认。
+- 验收：跨级别样本（如 30m 主结构 + 5m/1m 执行）中，升级只在必要条件 + 高级别闭环双满足时发生。
+
+### RS3 收口既有工程近似（P3）
+
+- 笔级中枢（类中枢辅助链路）力度衰减：从 `macd_sum_abs` 近似切到与段级一致的严格背驰口径。
+- 二类点首次回抽窗口：`_is_first_reverse_hold` 增补「首次确认性回抽」的窗口 / 失败 / 失效条件，
+  而非仅「不破前低 / 前高」。
+- 三类点回中枢失效：回试中途重新跌回 / 站回中枢时自动置 `invalidated`（与 RS0 状态机联动）。
+- 验收：BS1 差异表对应行从「工程近似」收敛为「严格一致」，并补易混淆反例回归。
+
+### RS4 增量重算稳健性（P3）
+
+- 目标：`infer_incremental_start` / `_fetch_with_optional_local_store` 在跳空 / 停牌 / overlap 失配时，
+  检测本地缓存与增量窗口不连续并安全回退，避免污染下游信号。
+- 验收：构造跳空 / 停牌 fixture，断言缓存不连续时触发受控全量回补且信号一致。
+
+### RS5 消费交付：发布包透传 + 小程序「买卖点」页面渲染（P1，随 RS0/RS1）
+
+> RS0/RS1 的计算层字段若不经此项交付，用户在小程序「买卖点」页面看不到任何变化。买卖点
+> 主要展示面就是该页面，故此项与 RS0/RS1 同优先级并行。
+
+- **发布包透传层**（本仓库 `scripts/build_miniapp_publish_bundle.py`）：`normalize_signal_point`
+  （现仅透出 `point/label/time/price/active/basis`）与 `build_latest_signal_summary` 增补
+  `lifecycle_state` / `invalidated_reason` / `forming` 字段；`forming` 预备态点也要进入 bundle
+  （现被 `active` 过滤丢弃）。初期可先复用现有 `zs_monitor_alert` 文本行样式，把预备态以
+  「买卖点预备：…待转折确认」文本行快速透出，再逐步做成结构化字段。
+- **前端渲染层**（`c:/sandbox/sinba/westock/`，**独立仓库，不在当前工作区**）：「买卖点」页面
+  按 `lifecycle_state` 渲染三态——`forming` 显「预备 / 观察」角标（watch）、`confirmed` 正常展示、
+  `invalidated` 显「已失效」标记并带 `invalidated_reason`；红线：`forming` 不得渲染成确认点。
+- 依赖：RS0（`lifecycle_state` 契约）、RS1（`forming` 语义）先定型；发布包与前端按同一契约对齐。
+- 验收：同一真实样本在分析层、发布包、前端「买卖点」页面三处状态语义一致；`forming → confirmed /
+  invalidated` 转移在页面上可见且不 repaint；回归覆盖发布包透传（`tests/test_build_miniapp_publish_bundle.py`）。
+
+进展（发布包透传已落地，2026-09-11）：
+
+- `scripts/build_miniapp_publish_bundle.py`：`normalize_signal_point` 现透出 `lifecycle_state` /
+  `invalidated_reason`；`build_latest_signal_summary` 新增 `forming` 列表 + 「买卖点预备：…（待转折
+  确认，非确认点）」文本行；两处技术卡（`build_technical_section` 与摘要卡）透出 `forming_points`。
+  报告 JSON 侧 `summary` 由 `build_signal_summary_fields` 带出 `forming_points` 与生命周期标签的
+  `signal_points`，全链贯通。
+- 回归：`tests/test_build_miniapp_publish_bundle.py` 新增 forming 文本行 + `normalize_signal_point`
+  生命周期字段两用例；报告生成 / 分析 / 契约 / 发布包共 198 用例回绿。
+- 待续（westock 独立仓库）：「买卖点」页面按 `lifecycle_state` 渲染 forming（预备 / 观察角标）、
+  confirmed（正常）、invalidated（已失效 + `invalidated_reason`）三态；红线：forming 不得渲染成确认点。
+
+进展（前端已落地，2026-09-11）：
+
+- `westock/miniprogram/services/publishViewService.js`：`buildSectionBuyPoints` / `buildSectionSellPoints`
+  新增枚举 `forming_points`（与已确认点同类型去重）；`buildPointRowFromEntry` 透出 `lifecycleState` /
+  `lifecycleLabel` / `invalidatedReason` / `isLike`；`loadBuyPointView` 把这些字段带入 buyRows/sellRows。
+  顺手补 类一买 / 类一卖（B1L/S1L）类型映射（之前 `buy_1like` 会误归为一买）。
+- `westock/miniprogram/pages/buyPoints/index.wxml` + `index.wxss`：类型列渲染生命周期角标
+  （forming=预备、invalidated=已失效），`.lifecycle-badge-*` 样式；invalidated 行加删除线弱化。
+- 验证：node 语法检查 + `buildSectionBuyPoints/Sell` 逻辑烟雾（forming/confirmed/去重/B1L/S1L）均通过。
+- 待续：invalidated 行需 RS0 回放护栏把失效点写回 bundle（当前单帧 tech.json 无 invalidated 集）后才会在页面出现。
+
+> 评审出口：请 reviewer 就 (1) P0/P1 是否值得优先于继续收口 BS5/BS6，(2) 状态机的失效条件口径，
+> (3) 预备态是否单列契约字段，三点确认后再进入实现阶段。

@@ -728,6 +728,7 @@ def build_technical_summary(
     *,
     raw_bars=None,
     precision_entry: dict[str, object] | None = None,
+    previous_frame: dict[str, object] | None = None,
 ) -> dict[str, object]:
     conclusion = _extract_prefixed_value_from_text(advice_text, "结论：") or None
     route_fields = _build_route_level_fields(timeframe_label, signals)
@@ -737,7 +738,7 @@ def build_technical_summary(
         "conclusion": conclusion,
         "suggestion": _extract_prefixed_value_from_text(advice_text, "建议：") or None,
         **build_technical_score_summary(raw_bars, signals, conclusion=conclusion, precision_entry=precision_entry),
-        **build_signal_summary_fields(signals),
+        **build_signal_summary_fields(signals, previous_frame=previous_frame),
         **route_fields,
         **transition_fields,
     }
@@ -1097,11 +1098,20 @@ def export_case(
         analysis_text = analysis_text.replace("60M", timeframe_label)
     signals = extract_signals(bis, zhongshus, macd_points, raw_bars=raw_bars, segments=segments)
     advice_text = build_advice(security.name, timeframe_label, raw_bars, signals)
+    # 上一次运行的压缩生命周期帧（若存在）用于跨帧推导 invalidated（spec §2.8 RS0）。
+    previous_frame = None
+    try:
+        if tech_json_path.exists():
+            _prev_tech = json.loads(tech_json_path.read_text(encoding="utf-8"))
+            previous_frame = (_prev_tech.get("summary") or {}).get("lifecycle_frame")
+    except (OSError, ValueError):
+        previous_frame = None
     summary_payload = build_technical_summary(
         timeframe_label,
         signals,
         advice_text,
         raw_bars=raw_bars,
+        previous_frame=previous_frame,
     )
     report_text = analysis_text + "\n\n" + advice_text + "\n"
     latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None

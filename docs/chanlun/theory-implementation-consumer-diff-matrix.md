@@ -103,6 +103,8 @@
 | `precision_entry.nested_from` | 区间套绑定层 | `auxiliary_context` | 解释低级别信号绑定来源。 | 低级别窗口反向覆盖高级别结构。 | 只做来源解释，不改变主级别确认状态。 |
 | `zhongshus` | 标准中枢主口径 | `confirmed_or_pending_main` | 主口径来源。 | 与 `lei_zhongshus` 混写为同一层。 | 对外主结论默认引用它。 |
 | `lei_zhongshus` | 类中枢辅助口径 | `auxiliary` | 只能作辅助，不得单独升级。 | 文案里直接简称“中枢”。 | 明示“类中枢/辅助”，不得单独产出 confirmed signal。 |
+| `signal_points[].lifecycle_state` | 信号生命周期层（spec §2.8） | `forming_or_confirmed_or_invalidated` | 值域 `forming | confirmed | invalidated`。当前 `signal_points`/`signal_catalog` 内已随每点透出；active 确认点为 `confirmed`。 | 把 `forming` 当成确认买卖点直接展示。 | `confirmed` 才允许按主结构确认口径输出；`invalidated` 按失效处理。 |
+| `forming_points` | 实时预备态层（spec §2.8，RS1） | `pending_or_auxiliary` | 独立列表，已覆盖一 / 二 / 三类与类一 / 类二（buy_1/2/3 + buy_1like/2like 及卖侧对称）背驰 / 离开 / 隔段已现待转折。**不进** `signal_points`/`buy_points`。 | 把预备态点计入确认买卖点或写进 `signal_points`。 | 一律 watch 档展示（如「买卖点预备：…待转折确认」）。 |
 
 #### 3.4.2 报告文本字段映射
 

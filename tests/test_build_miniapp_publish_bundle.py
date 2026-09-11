@@ -776,6 +776,76 @@ def test_build_latest_signal_summary_includes_pending_zs_monitor_line() -> None:
     assert any("节奏监视：节奏偏弱，当前只作辅助观察" in line for line in summary["lines"])
 
 
+def test_build_latest_signal_summary_surfaces_forming_pre_signal_line() -> None:
+    """RS5：forming 预备态（spec §2.8）透出到买卖点摘要文本与 forming 列表，标注非确认点。"""
+    summary = module.build_latest_signal_summary(
+        {
+            "summary": {
+                "signal_points": [],
+                "signal_catalog": [],
+                "forming_points": [
+                    {
+                        "point": "buy1",
+                        "time": "2026-05-05T14:30:00",
+                        "price": 9.8,
+                        "active": False,
+                        "basis": "bottom_divergence_near_zs_low",
+                        "lifecycle_state": "forming",
+                        "invalidated_reason": None,
+                    }
+                ],
+            }
+        }
+    )
+
+    assert [item["point"] for item in summary["forming"]] == ["buy1"]
+    assert summary["forming"][0]["lifecycle_state"] == "forming"
+    assert any("买卖点预备：" in line and "待转折确认，非确认点" in line for line in summary["lines"])
+
+
+def test_build_latest_signal_summary_surfaces_invalidated_line() -> None:
+    """RS0：invalidated 失效态（spec §2.8）透出到买卖点摘要文本与 invalidated 列表，带失效原因。"""
+    summary = module.build_latest_signal_summary(
+        {
+            "summary": {
+                "signal_points": [],
+                "signal_catalog": [],
+                "invalidated_points": [
+                    {
+                        "point": "buy1",
+                        "price": 9.8,
+                        "active": False,
+                        "lifecycle_state": "invalidated",
+                        "invalidated_reason": "first_class_extreme_broken",
+                    }
+                ],
+            }
+        }
+    )
+
+    assert [item["point"] for item in summary["invalidated"]] == ["buy1"]
+    assert summary["invalidated"][0]["lifecycle_state"] == "invalidated"
+    assert any("买卖点失效：" in line and "离开段极值被有效跌破" in line for line in summary["lines"])
+
+
+def test_normalize_signal_point_carries_lifecycle_fields() -> None:
+    """RS5：确认点归一化后带 lifecycle_state / invalidated_reason，供买卖点页面按三态渲染。"""
+    normalized = module.normalize_signal_point(
+        {
+            "point": "buy1",
+            "time": "2026-05-06T14:30:00",
+            "price": 10.1,
+            "active": True,
+            "basis": "bottom_divergence_near_zs_low",
+            "lifecycle_state": "confirmed",
+            "invalidated_reason": None,
+        }
+    )
+
+    assert normalized["lifecycle_state"] == "confirmed"
+    assert normalized["invalidated_reason"] is None
+
+
 def test_build_summary_and_detail_payload_preserve_30m_pre_breakdown_publish_anchor(tmp_path: Path) -> None:
     stock_dir = tmp_path / "601328"
     (stock_dir / "30m").mkdir(parents=True)

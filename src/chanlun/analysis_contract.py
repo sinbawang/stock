@@ -46,6 +46,29 @@ class SignalBasis(str, Enum):
     CONSOLIDATION_DIVERGENCE_REVERSE_HIGH = "consolidation_divergence_reverse_high"
 
 
+class SignalLifecycleState(str, Enum):
+    """买卖点信号生命周期状态（spec §2.8）。
+
+    `forming`：核心背驰 / 离开条件已成立、反向转折尚未确认，仅 watch 观察态，不得升 confirmed。
+    `confirmed`：反向转折已确认，锚定已确认笔 / 线段，可操作确认态。
+    `invalidated`：确认后成立前提被后续走势破坏，保留锚点与 `invalidated_reason`。
+    """
+
+    FORMING = "forming"
+    CONFIRMED = "confirmed"
+    INVALIDATED = "invalidated"
+
+
+class SignalInvalidatedReason(str, Enum):
+    """`confirmed → invalidated` 失效原因枚举（spec §2.8，买卖两侧对称）。"""
+
+    FIRST_CLASS_EXTREME_BROKEN = "first_class_extreme_broken"
+    SECOND_CLASS_PULLBACK_FAILED = "second_class_pullback_failed"
+    THIRD_CLASS_REENTERED_ZS = "third_class_reentered_zs"
+    CONSOLIDATION_DIVERGENCE_LOST = "consolidation_divergence_lost"
+    GAP_DIVERGENCE_LOST = "gap_divergence_lost"
+
+
 class StructureStatus(str, Enum):
     """当前结构切分状态枚举。"""
 
@@ -94,6 +117,29 @@ SIGNAL_BASIS_LABELS = {
     SignalBasis.GAP_SEGMENT_DIVERGENCE_REBOUND_END.value: "同级别隔段背驰，反抽结束即生成（无需前置一卖、不破前高）",
     SignalBasis.CONSOLIDATION_DIVERGENCE_REVERSE_LOW.value: "盘整背驰（离开段 vs 进入段），离开段结束向上转折即生成（趋势门控缺席时补点）",
     SignalBasis.CONSOLIDATION_DIVERGENCE_REVERSE_HIGH.value: "盘整背驰（离开段 vs 进入段），离开段结束向下转折即生成（趋势门控缺席时补点）",
+}
+
+
+SIGNAL_LIFECYCLE_STATE_LABELS = {
+    SignalLifecycleState.FORMING.value: "预备",
+    SignalLifecycleState.CONFIRMED.value: "确认",
+    SignalLifecycleState.INVALIDATED.value: "已失效",
+}
+
+
+SIGNAL_LIFECYCLE_STATE_NOTES = {
+    SignalLifecycleState.FORMING.value: "背驰/离开条件已成立、反向转折待确认，仅按 watch 观察，不构成确认买卖点。",
+    SignalLifecycleState.CONFIRMED.value: "反向转折已确认、锚定已确认笔/线段，可操作确认态（仍受多级别降级约束）。",
+    SignalLifecycleState.INVALIDATED.value: "确认后成立前提被后续走势破坏，按失效/撤单处理，不再作可操作确认态。",
+}
+
+
+SIGNAL_INVALIDATED_REASON_LABELS = {
+    SignalInvalidatedReason.FIRST_CLASS_EXTREME_BROKEN.value: "离开段极值被有效跌破/升破",
+    SignalInvalidatedReason.SECOND_CLASS_PULLBACK_FAILED.value: "回抽/反抽破前低/前高，首次确认性回抽失败",
+    SignalInvalidatedReason.THIRD_CLASS_REENTERED_ZS.value: "首次回试/反抽重新跌回/站回中枢",
+    SignalInvalidatedReason.CONSOLIDATION_DIVERGENCE_LOST.value: "盘整背驰前提消失或 range 门控退出",
+    SignalInvalidatedReason.GAP_DIVERGENCE_LOST.value: "隔段背驰前提消失或同级别分解退出 single_confirmed",
 }
 
 
@@ -150,6 +196,14 @@ def get_analysis_contract() -> dict[str, dict[str, tuple[str, str]]]:
         "signal_basis": {
             member.value: (SIGNAL_BASIS_LABELS[member.value], "")
             for member in SignalBasis
+        },
+        "signal_lifecycle_state": {
+            member.value: (SIGNAL_LIFECYCLE_STATE_LABELS[member.value], SIGNAL_LIFECYCLE_STATE_NOTES[member.value])
+            for member in SignalLifecycleState
+        },
+        "signal_invalidated_reason": {
+            member.value: (SIGNAL_INVALIDATED_REASON_LABELS[member.value], "")
+            for member in SignalInvalidatedReason
         },
         "structure_status": {
             member.value: (STRUCTURE_STATUS_LABELS[member.value], STRUCTURE_STATUS_NOTES[member.value])

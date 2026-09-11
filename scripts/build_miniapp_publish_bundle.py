@@ -27,6 +27,7 @@ from chanlun.analysis import (
     format_structure_status_label,
     format_transition_state_label,
 )
+from chanlun.analysis_contract import SIGNAL_INVALIDATED_REASON_LABELS
 from chanlun.models import Bi, BiDirection
 from chanlun.segment import (
     build_segment_tail_interpretations,
@@ -699,6 +700,8 @@ def normalize_signal_point(signal: dict[str, Any] | None) -> dict[str, Any] | No
         "price": maybe_float(signal.get("price")),
         "active": bool(signal.get("active", True)),
         "basis": signal.get("basis"),
+        "lifecycle_state": signal.get("lifecycle_state"),
+        "invalidated_reason": signal.get("invalidated_reason"),
     }
 
 
@@ -907,6 +910,21 @@ def build_latest_signal_summary(tech_payload: dict[str, Any]) -> dict[str, Any]:
         sell_price = f"，价格 {latest_sell['price']:.2f}" if latest_sell.get("price") is not None else ""
         lines.append(f"最近卖点：{latest_sell['label']} {safe_text(latest_sell.get('time'))}{sell_price}")
 
+    # RS1 预备态（spec §2.8）：背驰已现、待转折确认，仅 watch 观察，不构成确认买卖点。
+    forming_points = [normalize_signal_point(item) for item in (summary.get("forming_points") or [])]
+    forming_points = [item for item in forming_points if item and item.get("point")]
+    for item in forming_points:
+        forming_price = f"，价格 {item['price']:.2f}" if item.get("price") is not None else ""
+        lines.append(f"买卖点预备：{item['label']} {safe_text(item.get('time'))}{forming_price}（待转折确认，非确认点）")
+
+    # RS0 失效态（spec §2.8）：确认后成立前提被后续走势破坏，按撤单 / 失效处理。
+    invalidated_points = [normalize_signal_point(item) for item in (summary.get("invalidated_points") or [])]
+    invalidated_points = [item for item in invalidated_points if item and item.get("point")]
+    for item in invalidated_points:
+        reason_label = SIGNAL_INVALIDATED_REASON_LABELS.get(safe_text(item.get("invalidated_reason")), "成立前提被破坏")
+        inv_price = f"，价格 {item['price']:.2f}" if item.get("price") is not None else ""
+        lines.append(f"买卖点失效：{item['label']}{inv_price}（{reason_label}，按撤单 / 失效处理）")
+
     zs_monitor_alert = safe_text(summary.get("zs_monitor_alert")).lower()
     if zs_monitor_alert in {"pre_breakout", "pre_breakdown"}:
         direction = "向上预警" if zs_monitor_alert == "pre_breakout" else "向下预警"
@@ -952,6 +970,8 @@ def build_latest_signal_summary(tech_payload: dict[str, Any]) -> dict[str, Any]:
         "latest_sell": latest_sell,
         "latest_overall": latest_overall,
         "recent_active": deduped[:3],
+        "forming": forming_points,
+        "invalidated": invalidated_points,
         "lines": lines,
     }
 
@@ -1103,6 +1123,8 @@ def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
         "sell_point_labels": format_signal_point_labels(summary.get("sell_points") or []),
         "signal_points": summary.get("signal_points") or [],
         "signal_catalog": summary.get("signal_catalog") or [],
+        "forming_points": summary.get("forming_points") or [],
+        "invalidated_points": summary.get("invalidated_points") or [],
         "signal_descriptions": build_signal_explanation_lines(signal_context),
         "same_level_decomposition": same_level_decomposition,
         "oscillation_rhythm_state": summary.get("oscillation_rhythm_state") or tech_payload.get("oscillation_rhythm_state"),
@@ -1780,6 +1802,8 @@ def build_summary_payload(
             "sell_point_labels": format_signal_point_labels(tech_summary.get("sell_points") or []),
             "signal_points": tech_summary.get("signal_points") or [],
             "signal_catalog": tech_summary.get("signal_catalog") or [],
+            "forming_points": tech_summary.get("forming_points") or [],
+            "invalidated_points": tech_summary.get("invalidated_points") or [],
             "signal_descriptions": build_signal_explanation_lines(
                 {
                     "signal_points": tech_summary.get("signal_points") or [],

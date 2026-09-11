@@ -17,7 +17,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from chanlun.analysis import _build_zs_monitor_state, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths
+from chanlun.analysis import _build_zs_monitor_state, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
 
@@ -2355,6 +2355,371 @@ def test_analyze_chanlun_signals_no_sell_1like_without_consolidation_divergence(
 
     assert signals["top_divergence"] is False
     assert "sell_1like" not in signals["sell_points"]
+
+
+def test_analyze_chanlun_signals_confirmed_points_carry_lifecycle_state() -> None:
+    """RS0：已确认买卖点带 lifecycle_state=confirmed 与 invalidated_reason=None（spec §2.8）。"""
+    current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)
+    bis = _lb1_range_bis()
+    macd_points = _lb1_divergence_macd(bis)
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert "buy_1like" in signals["buy_points"]
+    # 确认点带 confirmed 生命周期；反向转折已确认时不重复产出 forming 预备态（避免重复计数）。
+    assert signals["forming_points"] == []
+    confirmed = next(p for p in signals["signal_points"] if p["point"] == "buy1like")
+    assert confirmed["lifecycle_state"] == "confirmed"
+    assert confirmed["invalidated_reason"] is None
+
+
+def test_analyze_chanlun_signals_forming_buy_1_when_divergence_without_reverse_turn() -> None:
+    """RS1 一买预备（spec §2.8）：趋势下跌 + 底背驰 + 跌破下沿，但反向转折未确认 -> forming（非 confirmed）。"""
+    prev_zs = _zhongshu(0, zs_low=11.6, zs_high=12.2, day=1)
+    current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)  # 两中枢下移 -> down
+    bis = _lb1_range_bis()[:5]  # 去掉向上反向转折 bi6
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-2.5, dif=-0.6),
+        SimpleNamespace(ts=bis[4].end_ts, macd=-1.0, dif=-0.4),  # 离开末笔力度衰减 -> 底背驰
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [prev_zs, current_zs], macd_points)
+
+    assert signals["structure_state"]["current_ongoing"]["type"] == "down"
+    assert signals["buy_points"] == []
+    forming = signals["forming_points"]
+    assert [p["point"] for p in forming] == ["buy1"]
+    assert forming[0]["lifecycle_state"] == "forming"
+    assert forming[0]["active"] is False
+    assert forming[0]["invalidated_reason"] is None
+    assert forming[0]["basis"] == "bottom_divergence_near_zs_low"
+    assert forming[0]["signal_bi_id"] == 5
+    assert forming[0]["price"] == 9.8
+
+
+def test_analyze_chanlun_signals_forming_sell_1_when_divergence_without_reverse_turn() -> None:
+    """RS1 一卖预备（对称）：趋势上涨 + 顶背驰 + 越上沿，反向转折未确认 -> forming。"""
+    prev_zs = _zhongshu(1, zs_low=8.2, zs_high=8.8, day=1)
+    current_zs = _zhongshu(2, zs_low=10.0, zs_high=10.8, day=10)  # 两中枢上移 -> up
+    bis = [
+        _bi(1, BiDirection.UP, high=10.6, low=10.1, day=10),
+        _bi(2, BiDirection.DOWN, high=10.5, low=10.0, day=11),
+        _bi(3, BiDirection.UP, high=11.2, low=10.3, day=12),  # 越上沿的确认 up 离开笔，无后续向下转折
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=5.0, dif=1.2),
+        SimpleNamespace(ts=bis[2].end_ts, macd=3.0, dif=0.8),  # 顶背驰
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [prev_zs, current_zs], macd_points)
+
+    assert signals["structure_state"]["current_ongoing"]["type"] == "up"
+    assert signals["sell_points"] == []
+    forming = signals["forming_points"]
+    assert [p["point"] for p in forming] == ["sell1"]
+    assert forming[0]["lifecycle_state"] == "forming"
+    assert forming[0]["basis"] == "top_divergence_near_zs_high"
+    assert forming[0]["signal_bi_id"] == 3
+
+
+def test_analyze_chanlun_signals_forming_buy_1like_when_range_divergence_without_reverse_turn() -> None:
+    """RS1 类一买预备（spec §2.8）：range 单中枢盘整背驰 + 跌破下沿，反向转折未确认 -> forming。"""
+    current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)  # 单中枢 -> range + ongoing_same_type
+    bis = _lb1_range_bis()[:5]  # 去掉向上反向转折 bi6
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-2.5, dif=-0.6),
+        SimpleNamespace(ts=bis[4].end_ts, macd=-1.0, dif=-0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["structure_state"]["current_structure_status"] == "ongoing_same_type"
+    assert signals["structure_state"]["current_ongoing"]["type"] == "range"
+    assert signals["buy_points"] == []
+    forming = signals["forming_points"]
+    assert [p["point"] for p in forming] == ["buy1like"]
+    assert forming[0]["lifecycle_state"] == "forming"
+    assert forming[0]["basis"] == "consolidation_divergence_reverse_low"
+    assert forming[0]["signal_bi_id"] == 5
+
+
+def test_analyze_chanlun_signals_forming_buy_2_when_pullback_holds_without_renew() -> None:
+    """RS1 二买预备（spec §2.8）：一买前置 + 首次回抽不破前低已成立，待再度走强确认 -> forming buy_2。"""
+    prev_zs = _zhongshu(3, zs_low=11.6, zs_high=12.2, day=1)
+    current_zs = _zhongshu(4, zs_low=10.2, zs_high=10.8, day=10)
+    bis = [
+        _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=10),
+        _bi(2, BiDirection.UP, high=10.9, low=10.4, day=11),
+        _bi(3, BiDirection.DOWN, high=11.0, low=10.0, day=12),  # 一买离开（confirmed down）
+        _bi(4, BiDirection.UP, high=11.3, low=10.3, day=13),
+        Bi(
+            bi_id=5,
+            direction=BiDirection.DOWN,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 14, 10, 30),
+            end_ts=datetime(2026, 5, 14, 14, 30),
+            high=11.1,
+            low=10.4,  # 首次回抽不破前低 10.0，未再度走强
+            norm_bar_range=(5, 6),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-2.0, dif=-0.6),  # 底背驰
+        SimpleNamespace(ts=bis[4].end_ts, macd=-1.0, dif=-0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [prev_zs, current_zs], macd_points)
+
+    assert signals["structure_state"]["current_ongoing"]["type"] == "down"
+    assert "buy_2" not in signals["buy_points"]
+    fp = next((p for p in signals["forming_points"] if p["point"] == "buy2"), None)
+    assert fp is not None
+    assert fp["lifecycle_state"] == "forming"
+    assert fp["basis"] == "buy1_pullback_confirmation"
+    assert fp["signal_bi_id"] == 5
+
+
+def test_analyze_chanlun_signals_forming_buy_3_when_pullback_holds_without_renew() -> None:
+    """RS1 三买预备（spec §2.8）：向上离开中枢 + 首次回踩守住上沿，待再度走强确认（尚未 renew）-> forming buy_3。"""
+    current_zs = _zhongshu(3, zs_low=10.0, zs_high=10.8, day=20)
+    bis = [
+        _bi(1, BiDirection.UP, high=10.7, low=10.2, day=20),
+        _bi(2, BiDirection.DOWN, high=10.6, low=10.1, day=21),
+        _bi(3, BiDirection.UP, high=11.5, low=10.9, day=22),  # 向上离开（越上沿）
+        _bi(4, BiDirection.DOWN, high=11.2, low=11.0, day=23),  # 首次回踩守住上沿，未 renew
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=3.0, dif=1.0),
+        SimpleNamespace(ts=bis[1].end_ts, macd=-1.0, dif=-0.5),
+        SimpleNamespace(ts=bis[2].end_ts, macd=3.0, dif=1.0),
+        SimpleNamespace(ts=bis[3].end_ts, macd=-1.0, dif=-0.5),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert "buy_3" not in signals["buy_points"]
+    fp = next((p for p in signals["forming_points"] if p["point"] == "buy3"), None)
+    assert fp is not None
+    assert fp["lifecycle_state"] == "forming"
+    assert fp["basis"] == "leave_zs_then_pullback_holds_upper_edge"
+    assert fp["signal_bi_id"] == 4
+
+
+def test_analyze_chanlun_signals_forming_buy_2like_when_gap_divergence_without_reverse_turn() -> None:
+    """RS1 类二买预备（spec §2.8）：同级别隔段背驰已现但反向转折未确认 -> forming buy_2like。"""
+    segments = _lb2_gap_segments()
+    zhongshus = _down_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(22, BiDirection.UP, high=11.0, low=10.4, day=3),
+        _bi(32, BiDirection.DOWN, high=10.9, low=9.8, day=5),  # A_{i+2} 回踩末笔
+        Bi(
+            bi_id=33,
+            direction=BiDirection.UP,
+            start_fx_id=33,
+            end_fx_id=34,
+            start_ts=datetime(2026, 5, 6, 10, 30),
+            end_ts=datetime(2026, 5, 6, 14, 30),
+            high=10.5,
+            low=9.9,
+            norm_bar_range=(33, 34),
+            is_confirmed=False,  # 反向转折尚未确认 -> 预备态
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=-5.0, dif=-1.0),  # A_i 力度强
+        SimpleNamespace(ts=segments[2].end_ts, macd=-1.0, dif=-0.4),  # A_{i+2} 力度衰减
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "buy_2like" not in signals["buy_points"]
+    fp = next((p for p in signals["forming_points"] if p["point"] == "buy2like"), None)
+    assert fp is not None
+    assert fp["lifecycle_state"] == "forming"
+    assert fp["basis"] == "gap_segment_divergence_pullback_end"
+    assert fp["signal_bi_id"] == 32
+
+
+def _lifecycle_frame(
+    signal_points: list[dict[str, object]],
+    *,
+    latest_down: Bi | None = None,
+    latest_confirmed_up: Bi | None = None,
+    current_zs: Zhongshu | None = None,
+) -> dict[str, object]:
+    return {
+        "signal_points": signal_points,
+        "latest_down": latest_down,
+        "latest_confirmed_up": latest_confirmed_up,
+        "current_zs": current_zs,
+    }
+
+
+def _confirmed_point(point: str, signal_bi_id: int, price: float) -> dict[str, object]:
+    return {"point": point, "signal_bi_id": signal_bi_id, "price": price, "lifecycle_state": "confirmed"}
+
+
+def test_replay_marks_buy_1_invalidated_when_departure_low_broken() -> None:
+    """RS0 增量2：一买 confirmed 后，后续帧新低跌破离开段极值 -> invalidated（first_class_extreme_broken）。"""
+    frame_a = _lifecycle_frame(
+        [_confirmed_point("buy1", 5, 9.8)],
+        latest_down=_bi(5, BiDirection.DOWN, high=11.0, low=9.8, day=5),
+    )
+    frame_b = _lifecycle_frame(
+        [],  # 一买从 confirmed 集合消失
+        latest_down=_bi(7, BiDirection.DOWN, high=10.4, low=9.5, day=7),  # 新低跌破 9.8
+    )
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["repaint_violations"] == []
+    assert len(result["invalidated"]) == 1
+    inv = result["invalidated"][0]
+    assert inv["point"] == "buy1"
+    assert inv["signal_bi_id"] == 5
+    assert inv["invalidated_reason"] == "first_class_extreme_broken"
+    assert inv["invalidated_frame"] == 1
+
+
+def test_replay_flags_repaint_violation_when_confirmed_vanishes_without_break() -> None:
+    """RS0 增量2 repaint 红线：confirmed 消失但成立前提未破坏 -> repaint 违规（不得凭空消失）。"""
+    frame_a = _lifecycle_frame(
+        [_confirmed_point("buy1", 5, 9.8)],
+        latest_down=_bi(5, BiDirection.DOWN, high=11.0, low=9.8, day=5),
+    )
+    frame_b = _lifecycle_frame(
+        [],  # 消失
+        latest_down=_bi(5, BiDirection.DOWN, high=11.0, low=10.5, day=6),  # 未跌破 9.8
+    )
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["invalidated"] == []
+    assert len(result["repaint_violations"]) == 1
+    assert result["repaint_violations"][0]["kind"] == "vanished_without_break"
+
+
+def test_replay_keeps_confirmed_persisting_without_invalidation() -> None:
+    """RS0 增量2：confirmed 信号跨帧保持 -> 既不失效也不违规（单调保持）。"""
+    frame_a = _lifecycle_frame(
+        [_confirmed_point("buy1", 5, 9.8)],
+        latest_down=_bi(5, BiDirection.DOWN, high=11.0, low=9.8, day=5),
+    )
+    frame_b = _lifecycle_frame(
+        [_confirmed_point("buy1", 5, 9.8)],  # 仍确认
+        latest_down=_bi(5, BiDirection.DOWN, high=11.0, low=9.8, day=6),
+    )
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["invalidated"] == []
+    assert result["repaint_violations"] == []
+    assert [t["transition"] for t in result["timeline"]] == ["confirmed"]
+
+
+def test_replay_marks_buy_3_invalidated_when_pullback_reenters_zs() -> None:
+    """RS0 增量2：三买 confirmed 后回抽重新跌回中枢上沿之下 -> invalidated（third_class_reentered_zs）。"""
+    zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)
+    frame_a = _lifecycle_frame(
+        [_confirmed_point("buy3", 6, 11.0)],
+        current_zs=zs,
+        latest_down=_bi(6, BiDirection.DOWN, high=11.4, low=11.0, day=5),  # 回踩守住上沿
+    )
+    frame_b = _lifecycle_frame(
+        [],
+        current_zs=zs,
+        latest_down=_bi(8, BiDirection.DOWN, high=11.0, low=10.5, day=7),  # 回落到 zs_high=10.8 之下
+    )
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["repaint_violations"] == []
+    assert len(result["invalidated"]) == 1
+    assert result["invalidated"][0]["invalidated_reason"] == "third_class_reentered_zs"
+
+
+def test_to_lifecycle_frame_extracts_confirmed_anchors_and_scalars() -> None:
+    """RS0 real-frame：to_lifecycle_frame 只保留 confirmed 锚点 + 前提比较标量（可持久化压缩帧）。"""
+    current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)
+    bis = _lb1_range_bis()
+    macd_points = _lb1_divergence_macd(bis)
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    frame = to_lifecycle_frame(signals)
+
+    assert frame["zs_high"] == 10.8
+    assert frame["zs_low"] == 10.0
+    assert all(p["lifecycle_state"] == "confirmed" for p in frame["signal_points"])
+    assert any(p["point"] == "buy1like" for p in frame["signal_points"])
+
+
+def test_derive_signal_lifecycle_transitions_marks_invalidated_across_runs() -> None:
+    """RS0 real-frame：上次运行 confirmed 一买，本次运行新低跌破 -> invalidated（first_class_extreme_broken）。"""
+    previous_frame = {
+        "signal_points": [{"point": "buy1", "signal_bi_id": 5, "price": 9.8, "lifecycle_state": "confirmed"}],
+        "latest_down_low": 9.8,
+        "latest_up_high": None,
+        "zs_high": None,
+        "zs_low": None,
+    }
+    current_signals = {
+        "signal_points": [],  # 一买不再确认
+        "latest_down": _bi(7, BiDirection.DOWN, high=10.4, low=9.5, day=7),  # 新低跌破 9.8
+        "latest_confirmed_up": None,
+        "current_zs": None,
+    }
+
+    result = derive_signal_lifecycle_transitions(previous_frame, current_signals)
+
+    assert result["repaint_violations"] == []
+    assert len(result["invalidated_points"]) == 1
+    inv = result["invalidated_points"][0]
+    assert inv["point"] == "buy1"
+    assert inv["lifecycle_state"] == "invalidated"
+    assert inv["invalidated_reason"] == "first_class_extreme_broken"
+    assert inv["active"] is False
+
+
+def test_derive_signal_lifecycle_transitions_empty_on_first_frame() -> None:
+    """RS0 real-frame：首帧（无上一帧）不产出 invalidated / repaint。"""
+    result = derive_signal_lifecycle_transitions(None, {"signal_points": []})
+    assert result == {"invalidated_points": [], "repaint_violations": []}
+
+
+def test_build_signal_summary_fields_includes_invalidated_points_with_previous_frame() -> None:
+    """RS0 real-frame：带上一帧时 summary 透出 invalidated_points；无上一帧时为空（向后兼容）。"""
+    previous_frame = {
+        "signal_points": [{"point": "buy1", "signal_bi_id": 5, "price": 9.8, "lifecycle_state": "confirmed"}],
+        "latest_down_low": 9.8,
+        "latest_up_high": None,
+        "zs_high": None,
+        "zs_low": None,
+    }
+    signals = {
+        "buy_points": [],
+        "sell_points": [],
+        "signal_points": [],
+        "signal_catalog": [],
+        "forming_points": [],
+        "latest_down": _bi(7, BiDirection.DOWN, high=10.4, low=9.5, day=7),
+        "latest_confirmed_up": None,
+        "current_zs": None,
+        "same_level_consumption_level": None,
+        "structure_state": {},
+    }
+
+    with_prev = build_signal_summary_fields(signals, previous_frame=previous_frame)
+    assert len(with_prev["invalidated_points"]) == 1
+    assert with_prev["invalidated_points"][0]["invalidated_reason"] == "first_class_extreme_broken"
+
+    without_prev = build_signal_summary_fields(signals)
+    assert without_prev["invalidated_points"] == []
 
 
 def test_analyze_chanlun_signals_flags_third_buy_after_leave_zs_and_pullback_holds_upper_edge() -> None:

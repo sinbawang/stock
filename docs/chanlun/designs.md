@@ -26,6 +26,10 @@
 - [trend-type-decomposition.md](trend-type-decomposition.md)：同级别走势类型自动分解主链（TD1）。
 - [trend-ambiguity-combination-law.md](trend-ambiguity-combination-law.md)：走势多义性与结合律（允许/禁止重组、中枢选择）。
 
+### 买卖点 / 实时化
+
+- [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md)：买卖点信号生命周期状态机（forming/confirmed/invalidated）、实时预备态与多级别双向联立（草案，对应任务 RS0-RS4）。
+
 ## 关联
 
 - 规格层总入口：[chanlun-rule-spec.md](chanlun-rule-spec.md)、[chanlun-strict-theory-spec.md](chanlun-strict-theory-spec.md)

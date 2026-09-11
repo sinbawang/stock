@@ -14,12 +14,15 @@ from .zhongshu_contract import (
 from .analysis_contract import (
     PRECISION_DYNAMIC_GRADE_LABELS,
     SIGNAL_BASIS_LABELS,
+    SIGNAL_LIFECYCLE_STATE_LABELS,
     SIGNAL_POINT_LABELS,
     SMALL_TO_LARGE_STATUS_LABELS,
     SMALL_TO_LARGE_STATUS_NOTES,
     STRUCTURE_STATUS_LABELS,
     STRUCTURE_STATUS_NOTES,
     PrecisionDynamicGrade,
+    SignalInvalidatedReason,
+    SignalLifecycleState,
     SmallToLargeStatus,
 )
 
@@ -423,16 +426,27 @@ def _build_signal_point_detail(
     basis: str | None,
     related_zs_id: int | None,
     related_bi_ids: list[int] | None,
+    lifecycle_state: str | None = None,
+    invalidated_reason: str | None = None,
 ) -> dict[str, object]:
+    # 生命周期（spec §2.8）：active 点未显式给状态时按 confirmed；forming/invalidated 由调用方显式传入。
+    if lifecycle_state is None and active:
+        lifecycle_state = SignalLifecycleState.CONFIRMED.value
+    populated = active or lifecycle_state in (
+        SignalLifecycleState.FORMING.value,
+        SignalLifecycleState.INVALIDATED.value,
+    )
     return {
         "point": _format_signal_point_name(point),
         "active": active,
+        "lifecycle_state": lifecycle_state,
+        "invalidated_reason": invalidated_reason,
         "signal_bi_id": signal_bi.bi_id if signal_bi else None,
         "time": _isoformat_ts(signal_bi.end_ts) if signal_bi else None,
         "price": round(float(price), 2) if price is not None else None,
-        "basis": basis if active else None,
-        "related_zs_id": related_zs_id if active else None,
-        "related_bi_ids": list(related_bi_ids or []) if active else [],
+        "basis": basis if populated else None,
+        "related_zs_id": related_zs_id if populated else None,
+        "related_bi_ids": list(related_bi_ids or []) if populated else [],
     }
 
 
@@ -1139,19 +1153,24 @@ def analyze_chanlun_signals(
     ):
         buy_points.append("buy_2")
     buy3_signal_bi: Bi | None = None
+    buy3_hold_bi: Bi | None = None
     if current_zs and latest_up:
         if use_segment_divergence and segments:
             _leave_seg, hold_seg = _find_buy3_segment_leave_hold(segments, current_zs, current_zs.zs_high)
             if hold_seg is not None:
                 hold_bi = _bi_by_id(hold_seg.end_bi_id, bis) or _bi_by_id(hold_seg.start_bi_id, bis)
-                if hold_bi is not None and latest_up.bi_id > hold_bi.bi_id:
-                    buy3_signal_bi = hold_bi
-                    buy_points.append("buy_3")
+                if hold_bi is not None:
+                    buy3_hold_bi = hold_bi
+                    if latest_up.bi_id > hold_bi.bi_id:
+                        buy3_signal_bi = hold_bi
+                        buy_points.append("buy_3")
         else:
             _leave_bi, hold_bi = _find_buy3_bi_leave_hold(bis, current_zs.zs_high)
-            if hold_bi is not None and latest_up.bi_id > hold_bi.bi_id:
-                buy3_signal_bi = hold_bi
-                buy_points.append("buy_3")
+            if hold_bi is not None:
+                buy3_hold_bi = hold_bi
+                if latest_up.bi_id > hold_bi.bi_id:
+                    buy3_signal_bi = hold_bi
+                    buy_points.append("buy_3")
     previous_sell1_active = (
         current_zs is not None
         and latest_confirmed_up is not None
@@ -1176,19 +1195,24 @@ def analyze_chanlun_signals(
     ):
         sell_points.append("sell_2")
     sell3_signal_bi: Bi | None = None
+    sell3_hold_bi: Bi | None = None
     if current_zs and latest_down:
         if use_segment_divergence and segments:
             _leave_seg, hold_seg = _find_sell3_segment_leave_hold(segments, current_zs, current_zs.zs_low)
             if hold_seg is not None:
                 hold_bi = _bi_by_id(hold_seg.end_bi_id, bis) or _bi_by_id(hold_seg.start_bi_id, bis)
-                if hold_bi is not None and latest_down.bi_id > hold_bi.bi_id:
-                    sell3_signal_bi = hold_bi
-                    sell_points.append("sell_3")
+                if hold_bi is not None:
+                    sell3_hold_bi = hold_bi
+                    if latest_down.bi_id > hold_bi.bi_id:
+                        sell3_signal_bi = hold_bi
+                        sell_points.append("sell_3")
         else:
             _leave_bi, hold_bi = _find_sell3_bi_leave_hold(bis, current_zs.zs_low)
-            if hold_bi is not None and latest_down.bi_id > hold_bi.bi_id:
-                sell3_signal_bi = hold_bi
-                sell_points.append("sell_3")
+            if hold_bi is not None:
+                sell3_hold_bi = hold_bi
+                if latest_down.bi_id > hold_bi.bi_id:
+                    sell3_signal_bi = hold_bi
+                    sell_points.append("sell_3")
 
     # 三买与三卖针对同一中枢互斥：若两者同时触发，仅保留更晚的「离开-回试」，
     # 较新的信号覆盖较早的信号（例如先向上离开成三买、随后反转向下跌破成三卖）。
@@ -1208,6 +1232,8 @@ def analyze_chanlun_signals(
     # （单/无确认中枢、候选待定）只作观察，不发机械点（spec §2.5/§2.6）。
     buy2like_signal_bi: Bi | None = None
     sell2like_signal_bi: Bi | None = None
+    buy2like_anchor_bi: Bi | None = None
+    sell2like_anchor_bi: Bi | None = None
     if (
         current_zs is not None
         and segments
@@ -1218,16 +1244,20 @@ def analyze_chanlun_signals(
             lb2_seg = _find_lb2_gap_divergence(segments, like_segment_strengths)
             if lb2_seg is not None:
                 anchor = _bi_by_id(lb2_seg.end_bi_id, bis)
-                if anchor is not None and _has_reverse_turn_after(anchor, direction="down", bis=bis):
-                    buy2like_signal_bi = anchor
-                    buy_points.append("buy_2like")
+                if anchor is not None:
+                    buy2like_anchor_bi = anchor
+                    if _has_reverse_turn_after(anchor, direction="down", bis=bis):
+                        buy2like_signal_bi = anchor
+                        buy_points.append("buy_2like")
         if "sell_2" not in sell_points:
             ls2_seg = _find_ls2_gap_divergence(segments, like_segment_strengths)
             if ls2_seg is not None:
                 anchor = _bi_by_id(ls2_seg.end_bi_id, bis)
-                if anchor is not None and _has_reverse_turn_after(anchor, direction="up", bis=bis):
-                    sell2like_signal_bi = anchor
-                    sell_points.append("sell_2like")
+                if anchor is not None:
+                    sell2like_anchor_bi = anchor
+                    if _has_reverse_turn_after(anchor, direction="up", bis=bis):
+                        sell2like_signal_bi = anchor
+                        sell_points.append("sell_2like")
 
     # 类一类买卖点（LB1/LS1）：盘整背驰（离开段 vs 进入段，range 门控）+ 反向转折即生成，
     # 补标准一类点因趋势门控（ongoing_type==down/up）缺席的场景（spec §2.5，第27/65课）。
@@ -1263,6 +1293,108 @@ def analyze_chanlun_signals(
         ):
             sell1like_signal_bi = sell_signal_bi
             sell_points.append("sell_1like")
+
+    # RS1 实时预备态（spec §2.8）：背驰 / 离开条件已成立但反向转折尚未确认时，给 forming 观察态。
+    # 当前覆盖一类 / 类一（背驰构成的转折点，早预警价值最高）；二 / 三类回抽预备态后续增量补。
+    # forming 只进入独立 `forming_points`，不写入 buy_points/sell_points/signal_points/signal_catalog，
+    # 保持既有 confirmed 消费与 catalog 索引契约不变（spec §2.8 repaint 红线：forming 不得升 confirmed）。
+    forming_points: list[dict[str, object]] = []
+    forming_zs_id = current_zs.zs_id if current_zs else None
+    forming_bi_ids = list(current_zs.bi_ids) if current_zs else []
+    forming_same_type_range = (
+        ongoing_type == "range"
+        and str(structure_state.get("current_structure_status") or "") == "ongoing_same_type"
+    )
+
+    def _append_forming(point: str, signal_bi: Bi | None, price: float | None, basis: str) -> None:
+        forming_points.append(
+            _build_signal_point_detail(
+                point,
+                signal_bi,
+                price,
+                active=False,
+                basis=basis,
+                related_zs_id=forming_zs_id,
+                related_bi_ids=forming_bi_ids,
+                lifecycle_state=SignalLifecycleState.FORMING.value,
+            )
+        )
+
+    if current_zs is not None:
+        buy_break = (
+            buy_signal_bi is not None
+            and buy_signal_bi.is_confirmed
+            and buy_divergence
+            and buy_signal_bi.low <= current_zs.zs_low
+            and not _has_reverse_turn_after(buy_signal_bi, direction="down", bis=bis)
+        )
+        sell_break = (
+            sell_signal_bi is not None
+            and sell_signal_bi.is_confirmed
+            and sell_divergence
+            and sell_signal_bi.high >= current_zs.zs_high
+            and not _has_reverse_turn_after(sell_signal_bi, direction="up", bis=bis)
+        )
+        if "buy_1" not in buy_points and ongoing_type == "down" and buy_break:
+            _append_forming(
+                "buy_1", buy_signal_bi, getattr(buy_signal_bi, "low", None), "bottom_divergence_near_zs_low"
+            )
+        if "sell_1" not in sell_points and ongoing_type == "up" and sell_break:
+            _append_forming(
+                "sell_1", sell_signal_bi, getattr(sell_signal_bi, "high", None), "top_divergence_near_zs_high"
+            )
+        if "buy_1like" not in buy_points and forming_same_type_range and buy_break:
+            _append_forming(
+                "buy_1like", buy_signal_bi, getattr(buy_signal_bi, "low", None), "consolidation_divergence_reverse_low"
+            )
+        if "sell_1like" not in sell_points and forming_same_type_range and sell_break:
+            _append_forming(
+                "sell_1like", sell_signal_bi, getattr(sell_signal_bi, "high", None), "consolidation_divergence_reverse_high"
+            )
+
+        # 二类预备：一类前置 + 首次回抽不破前低 / 前高已成立，待「再度走强 / 走弱创新高 / 新低」确认。
+        if (
+            "buy_2" not in buy_points
+            and ongoing_type == "down"
+            and buy2_precursor
+            and latest_down is not None
+            and buy2_anchor is not None
+            and latest_down.bi_id != buy2_anchor.bi_id
+            and latest_down.low > buy2_anchor.low
+            and _is_first_reverse_hold(buy2_anchor, latest_down, bis)
+        ):
+            _append_forming("buy_2", latest_down, getattr(latest_down, "low", None), "buy1_pullback_confirmation")
+        if (
+            "sell_2" not in sell_points
+            and ongoing_type == "up"
+            and sell2_precursor
+            and latest_up is not None
+            and sell2_anchor is not None
+            and latest_up.bi_id != sell2_anchor.bi_id
+            and latest_up.high < sell2_anchor.high
+            and _is_first_reverse_hold(sell2_anchor, latest_up, bis)
+        ):
+            _append_forming("sell_2", latest_up, getattr(latest_up, "high", None), "sell1_rebound_confirmation")
+
+        # 三类预备：离开中枢后首次回踩 / 反抽守住边界已成立，待「再度走强 / 走弱」确认（尚未 renew）。
+        if "buy_3" not in buy_points and "sell_3" not in sell_points and buy3_signal_bi is None and buy3_hold_bi is not None:
+            _append_forming(
+                "buy_3", buy3_hold_bi, getattr(buy3_hold_bi, "low", None), "leave_zs_then_pullback_holds_upper_edge"
+            )
+        if "sell_3" not in sell_points and "buy_3" not in buy_points and sell3_signal_bi is None and sell3_hold_bi is not None:
+            _append_forming(
+                "sell_3", sell3_hold_bi, getattr(sell3_hold_bi, "high", None), "leave_zs_then_rebound_fails_lower_edge"
+            )
+
+        # 类二预备：同级别隔段背驰已现，待反向转折确认（single_confirmed 门控下捕获的 anchor）。
+        if "buy_2like" not in buy_points and buy2like_signal_bi is None and buy2like_anchor_bi is not None:
+            _append_forming(
+                "buy_2like", buy2like_anchor_bi, getattr(buy2like_anchor_bi, "low", None), "gap_segment_divergence_pullback_end"
+            )
+        if "sell_2like" not in sell_points and sell2like_signal_bi is None and sell2like_anchor_bi is not None:
+            _append_forming(
+                "sell_2like", sell2like_anchor_bi, getattr(sell2like_anchor_bi, "high", None), "gap_segment_divergence_rebound_end"
+            )
 
     same_level_decomposition_mode = _build_same_level_decomposition_mode(structure_state)
     same_level_consumption_level = _build_same_level_consumption_level(structure_state)
@@ -1317,6 +1449,7 @@ def analyze_chanlun_signals(
         "sell_points": sell_points,
         "signal_points": signal_points,
         "signal_catalog": signal_catalog,
+        "forming_points": forming_points,
         "structure_state": structure_state,
         "same_level_decomposition_mode": same_level_decomposition_mode,
         "same_level_consumption_level": same_level_consumption_level,
@@ -1484,14 +1617,23 @@ def build_signal_point_payloads(
     return signal_points, signal_catalog
 
 
-def build_signal_summary_fields(signals: dict[str, object]) -> dict[str, object]:
+def build_signal_summary_fields(
+    signals: dict[str, object],
+    *,
+    previous_frame: dict[str, object] | None = None,
+) -> dict[str, object]:
     # spec_id: SPEC.BUY_SELL.CORE（见 docs/chanlun/buy-sell-multi-level-spec.md）
     same_level_consumption_level = signals.get("same_level_consumption_level")
+    transitions = derive_signal_lifecycle_transitions(previous_frame, signals)
     return {
         "buy_points": [_format_signal_point_name(str(point)) for point in signals.get("buy_points", [])],
         "sell_points": [_format_signal_point_name(str(point)) for point in signals.get("sell_points", [])],
         "signal_points": list(signals.get("signal_points", [])),
         "signal_catalog": list(signals.get("signal_catalog", [])),
+        "forming_points": list(signals.get("forming_points", [])),
+        "invalidated_points": list(transitions.get("invalidated_points", [])),
+        "signal_repaint_violations": list(transitions.get("repaint_violations", [])),
+        "lifecycle_frame": to_lifecycle_frame(signals),
         "structure_state": signals.get("structure_state"),
         "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
         "same_level_consumption_level": same_level_consumption_level,
@@ -1504,6 +1646,210 @@ def build_signal_summary_fields(signals: dict[str, object]) -> dict[str, object]
         "zs_monitor_midline": signals.get("zs_monitor_midline"),
         "zs_monitor_bias": signals.get("zs_monitor_bias"),
     }
+
+
+# --- RS0 增量2：信号生命周期跨帧回放（invalidation 发射 + repaint 安全护栏，spec §2.8） ---
+# invalidation 本质是跨帧概念：单帧快照恒按最新结构判定，前提被破坏时确认点自然不再发射，
+# 故失效态由「按时间序的多帧 confirmed 集合」比较得出，同时作为「confirmed 不得凭空消失」的护栏。
+
+_SIGNAL_INVALIDATION_REASON_BY_POINT = {
+    "buy1": SignalInvalidatedReason.FIRST_CLASS_EXTREME_BROKEN.value,
+    "sell1": SignalInvalidatedReason.FIRST_CLASS_EXTREME_BROKEN.value,
+    "buy2": SignalInvalidatedReason.SECOND_CLASS_PULLBACK_FAILED.value,
+    "sell2": SignalInvalidatedReason.SECOND_CLASS_PULLBACK_FAILED.value,
+    "buy3": SignalInvalidatedReason.THIRD_CLASS_REENTERED_ZS.value,
+    "sell3": SignalInvalidatedReason.THIRD_CLASS_REENTERED_ZS.value,
+    "buy1like": SignalInvalidatedReason.CONSOLIDATION_DIVERGENCE_LOST.value,
+    "sell1like": SignalInvalidatedReason.CONSOLIDATION_DIVERGENCE_LOST.value,
+    "buy2like": SignalInvalidatedReason.GAP_DIVERGENCE_LOST.value,
+    "sell2like": SignalInvalidatedReason.GAP_DIVERGENCE_LOST.value,
+}
+
+
+def _signal_point_side(point: str) -> str | None:
+    if point.startswith("buy"):
+        return "buy"
+    if point.startswith("sell"):
+        return "sell"
+    return None
+
+
+def _frame_latest_low(frame: dict[str, object]) -> float | None:
+    if "latest_down_low" in frame:
+        value = frame.get("latest_down_low")
+        return float(value) if value is not None else None
+    latest_down = frame.get("latest_down")
+    return float(latest_down.low) if latest_down is not None else None
+
+
+def _frame_latest_high(frame: dict[str, object]) -> float | None:
+    if "latest_up_high" in frame:
+        value = frame.get("latest_up_high")
+        return float(value) if value is not None else None
+    latest_up = frame.get("latest_confirmed_up")
+    return float(latest_up.high) if latest_up is not None else None
+
+
+def _frame_zs_high(frame: dict[str, object]) -> float | None:
+    if "zs_high" in frame:
+        value = frame.get("zs_high")
+        return float(value) if value is not None else None
+    current_zs = frame.get("current_zs")
+    return float(current_zs.zs_high) if current_zs is not None else None
+
+
+def _frame_zs_low(frame: dict[str, object]) -> float | None:
+    if "zs_low" in frame:
+        value = frame.get("zs_low")
+        return float(value) if value is not None else None
+    current_zs = frame.get("current_zs")
+    return float(current_zs.zs_low) if current_zs is not None else None
+
+
+def _signal_premise_broken(point: str, price: float, frame: dict[str, object]) -> bool:
+    """判定某确认点在给定帧里成立前提是否已被破坏（spec §2.8 §3.2）。
+
+    一 / 二 / 类一 / 类二：买点被后续新低跌破（`latest_down.low < price`）、卖点被新高升破；
+    三类：回抽 / 反抽重新回到中枢（买三回落到 `zs_high` 之下、卖三反抽到 `zs_low` 之上）。
+    帧可为 `analyze_chanlun_signals` 输出（对象）或 `to_lifecycle_frame` 压缩帧（标量，供持久化）。
+    """
+    side = _signal_point_side(point)
+    if side is None:
+        return False
+    if point in ("buy3", "sell3"):
+        if side == "buy":
+            zs_high = _frame_zs_high(frame)
+            low = _frame_latest_low(frame)
+            return zs_high is not None and low is not None and low < zs_high
+        zs_low = _frame_zs_low(frame)
+        high = _frame_latest_high(frame)
+        return zs_low is not None and high is not None and high > zs_low
+    if side == "buy":
+        low = _frame_latest_low(frame)
+        return low is not None and low < float(price)
+    high = _frame_latest_high(frame)
+    return high is not None and high > float(price)
+
+
+def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[str, object]:
+    """按时间序回放多帧 `analyze_chanlun_signals` 输出，产出 confirmed 信号的生命周期时间线。
+
+    - `invalidated`：某帧曾 confirmed 的信号锚点（`point` + `signal_bi_id`）在后续帧从 confirmed 集合
+      消失，且该帧成立前提已被破坏（`_signal_premise_broken`）→ 记为失效，附 `invalidated_reason`。
+    - `repaint_violations`：confirmed 信号消失但成立前提未破坏 → 违反 spec §2.8 repaint 红线
+      （confirmed 只能保持或转 invalidated，不得凭空消失 / 翻转）。
+    """
+    timeline: list[dict[str, object]] = []
+    invalidated: list[dict[str, object]] = []
+    repaint_violations: list[dict[str, object]] = []
+    history: dict[tuple[str, object], dict[str, object]] = {}
+
+    for idx, frame in enumerate(frames):
+        current: dict[tuple[str, object], dict[str, object]] = {}
+        for point_payload in frame.get("signal_points", []) or []:
+            if point_payload.get("lifecycle_state") != SignalLifecycleState.CONFIRMED.value:
+                continue
+            key = (str(point_payload.get("point")), point_payload.get("signal_bi_id"))
+            current[key] = point_payload
+
+        for key, payload in current.items():
+            record = history.get(key)
+            if record is None:
+                history[key] = {
+                    "point": key[0],
+                    "signal_bi_id": key[1],
+                    "price": payload.get("price"),
+                    "status": "confirmed",
+                }
+                timeline.append({"frame": idx, "point": key[0], "signal_bi_id": key[1], "transition": "confirmed"})
+            elif record["status"] == "invalidated":
+                # 同锚点在失效后不应重新 confirmed；出现即视为 repaint 违规。
+                repaint_violations.append({"frame": idx, "point": key[0], "signal_bi_id": key[1], "kind": "reconfirm_after_invalidated"})
+
+        for key, record in history.items():
+            if record["status"] != "confirmed" or key in current:
+                continue
+            point = str(record["point"])
+            price = record["price"]
+            if price is not None and _signal_premise_broken(point, float(price), frame):
+                reason = _SIGNAL_INVALIDATION_REASON_BY_POINT.get(point)
+                record["status"] = "invalidated"
+                invalidated.append(
+                    {
+                        "point": point,
+                        "signal_bi_id": key[1],
+                        "price": price,
+                        "lifecycle_state": SignalLifecycleState.INVALIDATED.value,
+                        "invalidated_reason": reason,
+                        "invalidated_frame": idx,
+                    }
+                )
+                timeline.append(
+                    {"frame": idx, "point": point, "signal_bi_id": key[1], "transition": "invalidated", "invalidated_reason": reason}
+                )
+            else:
+                record["status"] = "repaint_violation"
+                repaint_violations.append({"frame": idx, "point": point, "signal_bi_id": key[1], "kind": "vanished_without_break"})
+                timeline.append({"frame": idx, "point": point, "signal_bi_id": key[1], "transition": "repaint_violation"})
+
+    return {"timeline": timeline, "invalidated": invalidated, "repaint_violations": repaint_violations}
+
+
+def to_lifecycle_frame(signals: dict[str, object]) -> dict[str, object]:
+    """从 `analyze_chanlun_signals` 输出提取可持久化的压缩生命周期帧（spec §2.8）。
+
+    只保留跨帧回放所需字段（confirmed 锚点 + 前提比较标量），便于逐次运行 / 逐次刷新之间落盘对比。
+    """
+    latest_down = signals.get("latest_down")
+    latest_confirmed_up = signals.get("latest_confirmed_up")
+    current_zs = signals.get("current_zs")
+    confirmed = [
+        {
+            "point": payload.get("point"),
+            "signal_bi_id": payload.get("signal_bi_id"),
+            "price": payload.get("price"),
+            "time": payload.get("time"),
+            "lifecycle_state": payload.get("lifecycle_state"),
+        }
+        for payload in signals.get("signal_points", []) or []
+        if payload.get("lifecycle_state") == SignalLifecycleState.CONFIRMED.value
+    ]
+    return {
+        "signal_points": confirmed,
+        "latest_down_low": getattr(latest_down, "low", None),
+        "latest_up_high": getattr(latest_confirmed_up, "high", None),
+        "zs_high": getattr(current_zs, "zs_high", None),
+        "zs_low": getattr(current_zs, "zs_low", None),
+    }
+
+
+def derive_signal_lifecycle_transitions(
+    previous_frame: dict[str, object] | None,
+    signals: dict[str, object],
+) -> dict[str, object]:
+    """跨相邻两帧（上一次运行 / 刷新 vs 当前）推导 invalidated 点与 repaint 违规（spec §2.8 RS0）。
+
+    `previous_frame` 为 `to_lifecycle_frame` 压缩帧；缺失（首帧）时返回空结果。invalidated 点补成
+    可被下游归一化的信号载荷（`lifecycle_state=invalidated` + `invalidated_reason`）。
+    """
+    if not previous_frame:
+        return {"invalidated_points": [], "repaint_violations": []}
+    current_frame = to_lifecycle_frame(signals)
+    lifecycle = replay_confirmed_signal_lifecycle([previous_frame, current_frame])
+    invalidated_points = [
+        {
+            "point": entry.get("point"),
+            "active": False,
+            "lifecycle_state": SignalLifecycleState.INVALIDATED.value,
+            "invalidated_reason": entry.get("invalidated_reason"),
+            "signal_bi_id": entry.get("signal_bi_id"),
+            "price": entry.get("price"),
+            "time": None,
+            "basis": None,
+        }
+        for entry in lifecycle.get("invalidated", [])
+    ]
+    return {"invalidated_points": invalidated_points, "repaint_violations": lifecycle.get("repaint_violations", [])}
 
 
 def _parse_signal_time(value: object) -> datetime | None:
