@@ -177,3 +177,18 @@ def tail_rows(rows: list[dict], limit: int | None) -> list[dict]:
     if len(rows) <= limit:
         return list(rows)
     return list(rows[-limit:])
+
+
+def detect_incremental_discontinuity(local_rows: list[dict], remote_rows: list[dict]) -> bool:
+    """增量窗口是否与本地缓存不连续（跳空 / 停牌 / 数据源漂移）。
+
+    增量抓取按 `infer_incremental_start` 从 `last_ts - overlap` 回抓，正常时远端会覆盖本地末尾一段；
+    若远端返回的最早一根严格晚于本地缓存最后一根，两段之间就出现空洞——直接按时间戳合并会在序列里
+    留下隐藏缺口，污染下游缠论笔 / 线段 / 中枢切分。返回 True 表示应回退到全量窗口重抓，避免污染。
+    """
+    if not local_rows or not remote_rows:
+        return False
+    local_last = str(local_rows[-1]["ts"])
+    remote_earliest = min(str(row["ts"]) for row in remote_rows)
+    return remote_earliest > local_last
+

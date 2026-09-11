@@ -2,12 +2,39 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from chanlun.data.local_bar_store import MergeStats, apply_retention_limit, infer_incremental_start, merge_rows, tail_rows, upsert_local_rows
+from chanlun.data.local_bar_store import MergeStats, apply_retention_limit, detect_incremental_discontinuity, infer_incremental_start, merge_rows, tail_rows, upsert_local_rows
 
 
 def test_infer_incremental_start_for_day_and_intraday() -> None:
     assert infer_incremental_start("2026-07-01", "day", overlap_bars=10) == "2026-06-21"
     assert infer_incremental_start("2026-07-01 10:00", "5m", overlap_bars=6) == "2026-07-01 09:30"
+
+
+def test_detect_incremental_discontinuity_flags_forward_gap() -> None:
+    """RS4：远端增量最早一根晚于本地缓存末根 -> 跳空 / 停牌不连续，需回退全量。"""
+    local = [
+        {"ts": "2026-07-01 09:30"},
+        {"ts": "2026-07-01 10:00"},
+    ]
+    # 远端最早 10:30 > 本地末根 10:00 -> 两段之间存在空洞
+    gap_remote = [{"ts": "2026-07-01 10:30"}, {"ts": "2026-07-01 10:45"}]
+    assert detect_incremental_discontinuity(local, gap_remote) is True
+
+
+def test_detect_incremental_discontinuity_allows_overlapping_or_gapfilling_window() -> None:
+    """RS4 反例：远端回抓覆盖 / 填补本地末尾（最早一根不晚于本地末根）-> 连续，不回退。"""
+    local = [
+        {"ts": "2026-07-01 09:30"},
+        {"ts": "2026-07-01 09:45"},
+        {"ts": "2026-07-01 10:00"},
+    ]
+    # 远端 09:55 填补缺口 + 10:05 新增，最早 09:55 <= 本地末根 10:00 -> 连续
+    healthy_remote = [{"ts": "2026-07-01 09:55"}, {"ts": "2026-07-01 10:05"}]
+    assert detect_incremental_discontinuity(local, healthy_remote) is False
+    # 空缓存 / 空远端一律视为连续（无可比较基准）
+    assert detect_incremental_discontinuity([], healthy_remote) is False
+    assert detect_incremental_discontinuity(local, []) is False
+
 
 
 def test_merge_rows_deduplicates_and_prefers_new_values() -> None:

@@ -666,3 +666,61 @@ def test_fetch_with_optional_local_store_backfills_when_local_short(monkeypatch,
 
     # 本地仅 2 根 < 目标 3 根 → 不从 last_ts 增量，而是从 requested_start 全量抓取
     assert captured["start"] == "2026-06-20 09:30"
+
+
+def test_fetch_with_optional_local_store_falls_back_to_full_on_incremental_gap(monkeypatch, tmp_path: Path) -> None:
+    """RS4 增量重算稳健性：增量窗口与缓存不连续（远端最早根晚于缓存末根，跳空 / 停牌）时，
+    回退到 requested_start 全量窗口重抓再合并，避免把带隐藏缺口的序列喂给下游切分。"""
+    security = module.Security("00700", "腾讯", "HK")
+    local_rows = [
+        {"ts": "2026-07-01 09:30", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+        {"ts": "2026-07-01 09:45", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+        {"ts": "2026-07-01 10:00", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+    ]
+    gap_rows = [
+        {"ts": "2026-07-01 10:30", "open": 2.0, "high": 2.1, "low": 1.9, "close": 2.0, "volume": 5},
+        {"ts": "2026-07-01 10:45", "open": 2.1, "high": 2.2, "low": 2.0, "close": 2.1, "volume": 6},
+    ]
+    full_rows = [
+        {"ts": "2026-07-01 09:45", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+        {"ts": "2026-07-01 10:00", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+        {"ts": "2026-07-01 10:15", "open": 1.5, "high": 1.6, "low": 1.4, "close": 1.5, "volume": 4},
+        {"ts": "2026-07-01 10:30", "open": 2.0, "high": 2.1, "low": 1.9, "close": 2.0, "volume": 5},
+    ]
+    calls: list[str] = []
+    captured_upsert: dict[str, object] = {}
+
+    def fake_remote_fetcher(start: str, _min_rows: int = 1):
+        calls.append(start)
+        # 第一次（增量）返回跳空数据；第二次（回退全量）返回连续全窗。
+        return (gap_rows if len(calls) == 1 else full_rows), {"source": "xueqiu", "actual_bar_count": 2}
+
+    def fake_upsert(symbol, market, timeframe, rows, *, root=None):
+        captured_upsert["rows"] = rows
+        by_ts = {r["ts"]: r for r in local_rows}
+        for r in rows:
+            by_ts[r["ts"]] = r
+        merged = [by_ts[k] for k in sorted(by_ts)]
+        return merged, SimpleNamespace(added=len(rows), updated=0, total=len(merged)), tmp_path / "kline.csv"
+
+    monkeypatch.setattr(module, "load_local_rows", lambda *args, **kwargs: local_rows)
+    monkeypatch.setattr(module, "upsert_local_rows", fake_upsert)
+
+    rows, payload = module._fetch_with_optional_local_store(
+        security,
+        timeframe="5m",
+        requested_start="2026-06-20 09:30",
+        bar_count=3,
+        overlap_bars=2,
+        use_local_store=True,
+        local_store_read_only=False,
+        local_store_root=tmp_path,
+        remote_fetcher=fake_remote_fetcher,
+    )
+
+    assert len(calls) == 2  # 增量 + 回退全量各一次
+    assert calls[1] == "2026-06-20 09:30"  # 回退到 requested_start 全量窗口
+    assert payload["local_store"]["incremental_fallback"] is True
+    assert payload["local_store"]["effective_start"] == "2026-06-20 09:30"
+    # 合并用的是全量重抓的连续数据，而非跳空增量
+    assert captured_upsert["rows"] == full_rows

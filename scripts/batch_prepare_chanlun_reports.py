@@ -46,7 +46,7 @@ from chanlun.data.cleaner import clean_bars
 from chanlun.data.hk_fetcher import fetch_hk_daily, save_to_csv as save_hk_daily_csv
 from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, get_last_fetch_metadata as get_last_hk_fetch_metadata, save_to_csv as save_hk_minute_csv
 from chanlun.data.kline_fetcher import fetch_kline, get_last_fetch_metadata, save_to_csv as save_kline_csv
-from chanlun.data.local_bar_store import infer_incremental_start, load_local_rows, tail_rows, upsert_local_rows
+from chanlun.data.local_bar_store import detect_incremental_discontinuity, infer_incremental_start, load_local_rows, tail_rows, upsert_local_rows
 from chanlun.data.source_profiles import describe_source_chain, resolve_a_share_intraday_source_label, resolve_hk_minute_source_selection
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.models import Bar
@@ -236,6 +236,7 @@ def _build_timeframe_diagnostic(
             "updated_rows": local_store.get("updated_rows"),
             "analysis_rows": local_store.get("analysis_rows"),
             "effective_start": local_store.get("effective_start"),
+            "incremental_fallback": bool(local_store.get("incremental_fallback")),
             "store_path": local_store.get("store_path"),
         },
     }
@@ -571,6 +572,17 @@ def _fetch_with_optional_local_store(
     if not use_local_store:
         return rows, fetch_meta
 
+    # RS4 增量重算稳健性：增量窗口若与本地缓存不连续（跳空 / 停牌 / 源漂移导致远端最早一根晚于缓存末根），
+    # 直接合并会在序列里留下隐藏缺口污染下游切分；此时回退到 requested_start 全量窗口重抓再合并。
+    incremental_fallback = False
+    if local_covers_target and detect_incremental_discontinuity(local_rows, rows):
+        incremental_fallback = True
+        effective_start = requested_start
+        if len(remote_fetcher_params) <= 1:
+            rows, fetch_meta = remote_fetcher(requested_start)
+        else:
+            rows, fetch_meta = remote_fetcher(requested_start, bar_count)
+
     merged_rows, merge_stats, store_path = upsert_local_rows(
         security.symbol,
         security.market,
@@ -586,6 +598,7 @@ def _fetch_with_optional_local_store(
         "requested_start": requested_start,
         "effective_start": effective_start,
         "overlap_bars": overlap_bars,
+        "incremental_fallback": incremental_fallback,
         "local_rows_before": local_before,
         "remote_rows": len(rows),
         "merged_total_rows": merge_stats.total,

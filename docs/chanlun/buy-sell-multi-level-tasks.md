@@ -396,7 +396,7 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 | RS1 | 实时「预备态」（imminent / forming）分层 | 实时 | P1 | 1/2/3 + 类一 / 类二 | 把「背驰已现、待转折确认」升级为 watch 档可操作提示，盘中更早预警且不 repaint | 完成（1/2/3 + 类一 / 类二 forming 均已落地并双边回归） |
 | RS2 | 多级别双向联立（小转大自动升级 + 区间套反向确认） | 准确性 | P2 | 1/2/3（尤其 3 类 / 类二） | 现只单向降级；补下级别→上级别确认，减少高级别转折漏报 | 完成（小转大升级 higher_level_confirmed + 区间套反向确认 + 回归） |
 | RS3 | 收口既有「工程近似」（笔级中枢级别收敛 / 二类首次回抽窗口 / 三类回中枢失效） | 准确性 | P3 | 1/2/3 | 关闭 BS1 差异表遗留近似，降低边界假信号 | 完成（item1 级别收敛 + item2 首次回抽窗口均已落地 / item3 由 RS0 覆盖） |
-| RS4 | 增量重算稳健性（跳空 / 停牌 / overlap 失配） | 实时 / 性能 | P3 | 全部（数据层） | 保证极端行情下缓存不污染信号，避免全量回退降级 | 待评审 |
+| RS4 | 增量重算稳健性（跳空 / 停牌 / overlap 失配） | 实时 / 性能 | P3 | 全部（数据层） | 保证极端行情下缓存不污染信号，避免全量回退降级 | 完成（跨帧不连续检测 + 回退全量重抓 + 回归） |
 | RS5 | 消费交付：发布包透传 + 小程序「买卖点」页面渲染 | 交付 | P1（随 RS0/RS1） | 1/2/3 + 类一 / 类二 | RS0/RS1 若不透传到发布包与前端，页面上看不到任何变化；此项确保改动真正落到用户可见面 | 完成（发布包 + 前端 + invalidated 帧序管道全链已落地并回归；invalidated 仅在真实跨帧失效事件时非空） |
 
 ### RS0 信号生命周期与 repaint 安全契约（P0）
@@ -539,6 +539,17 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 - 目标：`infer_incremental_start` / `_fetch_with_optional_local_store` 在跳空 / 停牌 / overlap 失配时，
   检测本地缓存与增量窗口不连续并安全回退，避免污染下游信号。
 - 验收：构造跳空 / 停牌 fixture，断言缓存不连续时触发受控全量回补且信号一致。
+
+进展（2026-09-11）：
+
+- 已落地：`local_bar_store.detect_incremental_discontinuity(local_rows, remote_rows)` —— 远端增量最早一根
+  严格晚于本地缓存末根时判定为跳空 / 停牌 / 源漂移不连续（两段之间有空洞）。
+- `_fetch_with_optional_local_store`：仅在增量档（`local_covers_target`）且检测到不连续时，回退到
+  `requested_start` 全量窗口重抓再合并，并在 `local_store.incremental_fallback` 与 tech.json summary 透出该标记；
+  正常回抽 / 填缺（远端最早根 ≤ 本地末根）不受影响，无误回退。
+- 回归：`tests/test_local_bar_store.py`（跳空正例 + 连续 / 填缺 / 空集反例）、
+  `tests/test_batch_prepare_chanlun_reports.py::test_fetch_with_optional_local_store_falls_back_to_full_on_incremental_gap`
+  （跨帧跳空触发全量回抓3合并用全量数据）；现有健康增量用例不回退（无假阳性）。
 
 ### RS5 消费交付：发布包透传 + 小程序「买卖点」页面渲染（P1，随 RS0/RS1）
 
