@@ -27,6 +27,8 @@ ALWAYS_UPLOAD_PATTERNS = (
     "stocks/*/base.json",
     "stocks/*/detail.json",
     "stocks/*/summary.json",
+    # 图表 JSON 必须随最新 K 线刷新，不能依赖 manifest 哈希（manifest 与云端易漂移导致图表长期不更新）。
+    "stocks/*/charts/*.json",
 )
 INCREMENTAL_INDEX_GROUP_PATTERNS = (
     "index.json",

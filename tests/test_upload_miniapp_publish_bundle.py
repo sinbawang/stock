@@ -25,7 +25,47 @@ def test_file_should_always_upload_matches_entry_points() -> None:
     assert module.file_should_always_upload("stocks/00700/base.json") is True
     assert module.file_should_always_upload("stocks/00700/detail.json") is True
     assert module.file_should_always_upload("stocks/00700/summary.json") is True
+    # 图表数据 JSON 必须每次上传（云端与 manifest 易漂移，否则图表长期不更新）。
+    assert module.file_should_always_upload("stocks/00700/charts/30m.json") is True
+    assert module.file_should_always_upload("stocks/00700/charts/1m.json") is True
+    # 图表图片资产（svg/png/jpg）仍走增量哈希跳过，不进 always-upload。
     assert module.file_should_always_upload("stocks/00700/charts/30m.svg") is False
+
+
+def test_plan_uploads_always_reuploads_chart_json_even_when_hash_unchanged(tmp_path: Path) -> None:
+    """RS/上传闸门：charts/*.json 命中 always-upload，即使 sha256 与上次 manifest 相同也重新上传。"""
+    chart_path = tmp_path / "stocks" / "00700" / "charts"
+    chart_path.mkdir(parents=True, exist_ok=True)
+    chart_file = chart_path / "1m.json"
+    chart_file.write_text('{"bars": [1, 2, 3]}', encoding="utf-8")
+
+    files = module.iter_local_files(tmp_path, "miniapp-publish/latest")
+    chart_sha = next(item.sha256 for item in files if item.relative_path == "stocks/00700/charts/1m.json")
+    previous_manifest = {
+        "env_id": "env-1",
+        "region": "ap-guangzhou",
+        "cloud_prefix": "miniapp-publish/latest",
+        "files": [
+            {
+                "relative_path": "stocks/00700/charts/1m.json",
+                "cloud_path": "miniapp-publish/latest/stocks/00700/charts/1m.json",
+                "file_id": "cloud://chart-json",
+                "sha256": chart_sha,  # 与本地一致：旧逻辑会跳过
+            }
+        ],
+    }
+
+    upload_plan, skipped = module.plan_uploads(
+        files,
+        previous_manifest,
+        env_id="env-1",
+        region="ap-guangzhou",
+        cloud_prefix="miniapp-publish/latest",
+    )
+
+    planned_paths = {item.relative_path for item in upload_plan}
+    assert "stocks/00700/charts/1m.json" in planned_paths
+    assert all(item.get("relative_path") != "stocks/00700/charts/1m.json" for item in skipped)
 
 
 def test_plan_uploads_skips_unchanged_noncritical_files_but_keeps_critical_files(tmp_path: Path) -> None:
