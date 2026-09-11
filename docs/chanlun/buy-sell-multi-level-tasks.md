@@ -394,7 +394,7 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 | --- | --- | --- | --- | --- | --- | --- |
 | RS0 | 信号生命周期与 repaint 安全契约 | 准确性 + 实时 | P0 | 1/2/3 + 类一 / 类二 | 横切全部点类型；补「确认→失效」回路 + 跨帧不翻转护栏，直接降低事后被打脸的假信号 | 完成（契约 + confirmed + 跨帧 invalidated/repaint + 管道 + 发布前闸门） |
 | RS1 | 实时「预备态」（imminent / forming）分层 | 实时 | P1 | 1/2/3 + 类一 / 类二 | 把「背驰已现、待转折确认」升级为 watch 档可操作提示，盘中更早预警且不 repaint | 基本完成（1/2/3 + 类一 / 类二 均已落地） |
-| RS2 | 多级别双向联立（小转大自动升级 + 区间套反向确认） | 准确性 | P2 | 1/2/3（尤其 3 类 / 类二） | 现只单向降级；补下级别→上级别确认，减少高级别转折漏报 | 待评审 |
+| RS2 | 多级别双向联立（小转大自动升级 + 区间套反向确认） | 准确性 | P2 | 1/2/3（尤其 3 类 / 类二） | 现只单向降级；补下级别→上级别确认，减少高级别转折漏报 | 完成（小转大升级 higher_level_confirmed + 区间套反向确认 + 回归） |
 | RS3 | 收口既有「工程近似」（笔级中枢力度 / 二类首次回抽窗口 / 三类回中枢失效） | 准确性 | P3 | 1/2/3 | 关闭 BS1 差异表遗留近似，降低边界假信号 | 待评审 |
 | RS4 | 增量重算稳健性（跳空 / 停牌 / overlap 失配） | 实时 / 性能 | P3 | 全部（数据层） | 保证极端行情下缓存不污染信号，避免全量回退降级 | 待评审 |
 | RS5 | 消费交付：发布包透传 + 小程序「买卖点」页面渲染 | 交付 | P1（随 RS0/RS1） | 1/2/3 + 类一 / 类二 | RS0/RS1 若不透传到发布包与前端，页面上看不到任何变化；此项确保改动真正落到用户可见面 | 基本完成（发布包 + 前端已落地，invalidated 待帧序） |
@@ -477,6 +477,18 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
   闭环时，把高级别「小转大候选」升级为「已确认转折」；区间套支持低级别执行确认反向标注高级别时机。
 - 红线（第35 / 43 / 44 课）：必要条件 ≠ 充分条件；高级别未闭环前只标候选，不得越级确认。
 - 验收：跨级别样本（如 30m 主结构 + 5m/1m 执行）中，升级只在必要条件 + 高级别闭环双满足时发生。
+
+进展（2026-09-11）：
+
+- 已落地升级方向：`analysis.py::_build_small_to_large_status` 新增 `higher_level_confirmed` 档，
+  仅当次级别必要条件已具备（最后中枢对应三类点）+ 高级别结构闭环（`_higher_level_structure_closed`：
+  `current_structure_status == completed_then_new_type` + `same_level_consumption_level == confirmed`
+  + 新走势方向与 side 一致）双满足时升级，未闭环停在候选 / 必要条件已具备，兜住「必要≠充分」红线。
+- 区间套反向确认：`_build_small_to_large_reverse_confirm` 仅在 `higher_level_confirmed` 时回填
+  `small_to_large_reverse_confirm = {active, basis, higher_structure_status, note}` 并把 note 追加进
+  精确入场 `note`；契约 `SmallToLargeStatus.HIGHER_LEVEL_CONFIRMED`（label「小转大已确认转折」）。
+- 回归：`tests/test_chanlun_analysis.py`（buy/sell 升级正例 + 结构未闭环反例）、
+  `tests/test_analysis_contract.py`（新增枚举完整性 + label/note）。
 
 ### RS3 收口既有工程近似（P3）
 
