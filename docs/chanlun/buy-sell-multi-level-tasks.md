@@ -397,7 +397,7 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 | RS2 | 多级别双向联立（小转大自动升级 + 区间套反向确认） | 准确性 | P2 | 1/2/3（尤其 3 类 / 类二） | 现只单向降级；补下级别→上级别确认，减少高级别转折漏报 | 完成（小转大升级 higher_level_confirmed + 区间套反向确认 + 回归） |
 | RS3 | 收口既有「工程近似」（笔级中枢级别收敛 / 二类首次回抽窗口 / 三类回中枢失效） | 准确性 | P3 | 1/2/3 | 关闭 BS1 差异表遗留近似，降低边界假信号 | 完成（item1 级别收敛 + item2 首次回抽窗口均已落地 / item3 由 RS0 覆盖） |
 | RS4 | 增量重算稳健性（跳空 / 停牌 / overlap 失配） | 实时 / 性能 | P3 | 全部（数据层） | 保证极端行情下缓存不污染信号，避免全量回退降级 | 待评审 |
-| RS5 | 消费交付：发布包透传 + 小程序「买卖点」页面渲染 | 交付 | P1（随 RS0/RS1） | 1/2/3 + 类一 / 类二 | RS0/RS1 若不透传到发布包与前端，页面上看不到任何变化；此项确保改动真正落到用户可见面 | 基本完成（发布包 + 前端已落地，invalidated 待帧序） |
+| RS5 | 消费交付：发布包透传 + 小程序「买卖点」页面渲染 | 交付 | P1（随 RS0/RS1） | 1/2/3 + 类一 / 类二 | RS0/RS1 若不透传到发布包与前端，页面上看不到任何变化；此项确保改动真正落到用户可见面 | 完成（发布包 + 前端 + invalidated 帧序管道全链已落地并回归；invalidated 仅在真实跨帧失效事件时非空） |
 
 ### RS0 信号生命周期与 repaint 安全契约（P0）
 
@@ -578,7 +578,12 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 - `westock/miniprogram/pages/buyPoints/index.wxml` + `index.wxss`：类型列渲染生命周期角标
   （forming=预备、invalidated=已失效），`.lifecycle-badge-*` 样式；invalidated 行加删除线弱化。
 - 验证：node 语法检查 + `buildSectionBuyPoints/Sell` 逻辑烟雾（forming/confirmed/去重/B1L/S1L）均通过。
-- 待续：invalidated 行需 RS0 回放护栏把失效点写回 bundle（当前单帧 tech.json 无 invalidated 集）后才会在页面出现。
+- invalidated 帧序管道已全链贯通（2026-09-11 核验）：`batch_prepare_chanlun_reports.py` 写 tech.json 前读上一份
+  `summary.lifecycle_frame` 作 `previous_frame` 传入 `build_signal_summary_fields` → 跨相邻帧推导
+  `invalidated_points`；`build_miniapp_publish_bundle.py::build_latest_signal_summary` 透出 `invalidated` 列表 +
+  「买卖点失效：…」文本行，`normalize_signal_point` 带 `lifecycle_state` / `invalidated_reason`；前端 buyPoints
+  页渲染「已失效」角标。invalidated 集仅在真实跨帧失效事件（confirmed 点前提被后续走势破坏）时非空，
+  故页面平时不显示失效行属正常。回归：`tests/test_build_miniapp_publish_bundle.py::test_build_latest_signal_summary_surfaces_invalidated_line`。
 
 > 评审出口：请 reviewer 就 (1) P0/P1 是否值得优先于继续收口 BS5/BS6，(2) 状态机的失效条件口径，
 > (3) 预备态是否单列契约字段，三点确认后再进入实现阶段。
