@@ -2668,6 +2668,107 @@ def test_analyze_chanlun_signals_forming_buy_2like_when_gap_divergence_without_r
     assert fp is not None
     assert fp["lifecycle_state"] == "forming"
     assert fp["basis"] == "gap_segment_divergence_pullback_end"
+
+
+def test_analyze_chanlun_signals_forming_sell_2_when_rebound_holds_without_renew() -> None:
+    """RS1 二卖预备（spec §2.8，对称）：一卖前置 + 首次反抽不破前高已成立，待再度走弱确认 -> forming sell_2。"""
+    prev_zs = _zhongshu(0, zs_low=8.2, zs_high=8.8, day=1)
+    current_zs = _zhongshu(5, zs_low=10.2, zs_high=10.8, day=10)
+    bis = [
+        _bi(1, BiDirection.UP, high=10.4, low=9.8, day=10),
+        _bi(2, BiDirection.DOWN, high=10.3, low=9.9, day=11),
+        _bi(3, BiDirection.UP, high=11.0, low=10.0, day=12),  # 一卖离开（confirmed up, 顶背驰）
+        _bi(4, BiDirection.DOWN, high=10.7, low=10.2, day=13),
+        Bi(
+            bi_id=5,
+            direction=BiDirection.UP,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 14, 10, 30),
+            end_ts=datetime(2026, 5, 14, 14, 30),
+            high=10.6,  # 首次反抽不破前高 11.0，未再度走弱
+            low=10.3,
+            norm_bar_range=(5, 6),
+            is_confirmed=False,
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=5.0, dif=1.0),
+        SimpleNamespace(ts=bis[2].end_ts, macd=2.0, dif=0.6),  # 顶背驰
+        SimpleNamespace(ts=bis[4].end_ts, macd=1.0, dif=0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [prev_zs, current_zs], macd_points)
+
+    assert signals["structure_state"]["current_ongoing"]["type"] == "up"
+    assert "sell_2" not in signals["sell_points"]
+    fp = next((p for p in signals["forming_points"] if p["point"] == "sell2"), None)
+    assert fp is not None
+    assert fp["lifecycle_state"] == "forming"
+    assert fp["basis"] == "sell1_rebound_confirmation"
+    assert fp["signal_bi_id"] == 5
+
+
+def test_analyze_chanlun_signals_forming_sell_3_when_rebound_holds_without_renew() -> None:
+    """RS1 三卖预备（spec §2.8，对称）：向下离开中枢 + 首次反抽守住下沿，待再度走弱确认（尚未 renew）-> forming sell_3。"""
+    current_zs = _zhongshu(3, zs_low=10.0, zs_high=10.8, day=20)
+    bis = [
+        _bi(1, BiDirection.DOWN, high=10.6, low=10.1, day=20),
+        _bi(2, BiDirection.UP, high=10.7, low=10.2, day=21),
+        _bi(3, BiDirection.DOWN, high=10.1, low=9.3, day=22),  # 向下离开（跌破下沿）
+        _bi(4, BiDirection.UP, high=9.9, low=9.4, day=23),  # 首次反抽守住下沿（high < zs_low），未 renew
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=-3.0, dif=-1.0),
+        SimpleNamespace(ts=bis[1].end_ts, macd=1.0, dif=0.5),
+        SimpleNamespace(ts=bis[2].end_ts, macd=-3.0, dif=-1.0),
+        SimpleNamespace(ts=bis[3].end_ts, macd=1.0, dif=0.5),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert "sell_3" not in signals["sell_points"]
+    fp = next((p for p in signals["forming_points"] if p["point"] == "sell3"), None)
+    assert fp is not None
+    assert fp["lifecycle_state"] == "forming"
+    assert fp["basis"] == "leave_zs_then_rebound_fails_lower_edge"
+    assert fp["signal_bi_id"] == 4
+
+
+def test_analyze_chanlun_signals_forming_sell_2like_when_gap_divergence_without_reverse_turn() -> None:
+    """RS1 类二卖预备（spec §2.8，对称）：同级别隔段顶背驰已现但反向转折未确认 -> forming sell_2like。"""
+    segments = _ls2_gap_segments()
+    zhongshus = _up_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.UP, high=10.6, low=9.9, day=1),
+        _bi(22, BiDirection.DOWN, high=10.4, low=9.6, day=3),
+        _bi(32, BiDirection.UP, high=11.2, low=10.3, day=5),  # A_{i+2} 反抽末笔
+        Bi(
+            bi_id=33,
+            direction=BiDirection.DOWN,
+            start_fx_id=33,
+            end_fx_id=34,
+            start_ts=datetime(2026, 5, 6, 10, 30),
+            end_ts=datetime(2026, 5, 6, 14, 30),
+            high=11.1,
+            low=10.5,
+            norm_bar_range=(33, 34),
+            is_confirmed=False,  # 反向转折尚未确认 -> 预备态
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=5.0, dif=1.0),  # A_i 力度强
+        SimpleNamespace(ts=segments[2].end_ts, macd=1.0, dif=0.4),  # A_{i+2} 力度衰减
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "sell_2like" not in signals["sell_points"]
+    fp = next((p for p in signals["forming_points"] if p["point"] == "sell2like"), None)
+    assert fp is not None
+    assert fp["lifecycle_state"] == "forming"
+    assert fp["basis"] == "gap_segment_divergence_rebound_end"
+
     assert fp["signal_bi_id"] == 32
 
 

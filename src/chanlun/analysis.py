@@ -1304,7 +1304,7 @@ def analyze_chanlun_signals(
             sell_points.append("sell_1like")
 
     # RS1 实时预备态（spec §2.8）：背驰 / 离开条件已成立但反向转折尚未确认时，给 forming 观察态。
-    # 当前覆盖一类 / 类一（背驰构成的转折点，早预警价值最高）；二 / 三类回抽预备态后续增量补。
+    # 覆盖一类 / 类一 / 二类 / 三类 / 类二（背驰 / 离开 / 隔段力度衰减已现、反向转折待确认）。
     # forming 只进入独立 `forming_points`，不写入 buy_points/sell_points/signal_points/signal_catalog，
     # 保持既有 confirmed 消费与 catalog 索引契约不变（spec §2.8 repaint 红线：forming 不得升 confirmed）。
     forming_points: list[dict[str, object]] = []

@@ -393,7 +393,7 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 | ID | 任务 | 类别 | 优先级 | 覆盖点类型 | ROI 理由 | 状态 |
 | --- | --- | --- | --- | --- | --- | --- |
 | RS0 | 信号生命周期与 repaint 安全契约 | 准确性 + 实时 | P0 | 1/2/3 + 类一 / 类二 | 横切全部点类型；补「确认→失效」回路 + 跨帧不翻转护栏，直接降低事后被打脸的假信号 | 完成（契约 + confirmed + 跨帧 invalidated/repaint + 管道 + 发布前闸门） |
-| RS1 | 实时「预备态」（imminent / forming）分层 | 实时 | P1 | 1/2/3 + 类一 / 类二 | 把「背驰已现、待转折确认」升级为 watch 档可操作提示，盘中更早预警且不 repaint | 基本完成（1/2/3 + 类一 / 类二 均已落地） |
+| RS1 | 实时「预备态」（imminent / forming）分层 | 实时 | P1 | 1/2/3 + 类一 / 类二 | 把「背驰已现、待转折确认」升级为 watch 档可操作提示，盘中更早预警且不 repaint | 完成（1/2/3 + 类一 / 类二 forming 均已落地并双边回归） |
 | RS2 | 多级别双向联立（小转大自动升级 + 区间套反向确认） | 准确性 | P2 | 1/2/3（尤其 3 类 / 类二） | 现只单向降级；补下级别→上级别确认，减少高级别转折漏报 | 完成（小转大升级 higher_level_confirmed + 区间套反向确认 + 回归） |
 | RS3 | 收口既有「工程近似」（笔级中枢级别收敛 / 二类首次回抽窗口 / 三类回中枢失效） | 准确性 | P3 | 1/2/3 | 关闭 BS1 差异表遗留近似，降低边界假信号 | 完成（item1 级别收敛 + item2 首次回抽窗口均已落地 / item3 由 RS0 覆盖） |
 | RS4 | 增量重算稳健性（跳空 / 停牌 / overlap 失配） | 实时 / 性能 | P3 | 全部（数据层） | 保证极端行情下缓存不污染信号，避免全量回退降级 | 待评审 |
@@ -469,6 +469,17 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
   forming 正例（spec §2.8）。
 - 待续：二类 / 三类回抽预备态（回抽进行中）+ 类二（隔段背驰待反向转折）预备态为 RS1 增量2；
   发布包透传 + 小程序渲染为 RS5。
+
+进展（增量2，2026-09-11）：
+
+- 二类 / 三类 / 类二预备态已落地：`analyze_chanlun_signals` 的 forming 块补 buy_2/sell_2（一类前置 +
+  首次回抽 / 反抽不破前低 / 前高、待再度走强 / 走弱）、buy_3/sell_3（离开中枢 + 首次回踩 / 反抽守边界、
+  尚未 renew）、buy_2like/sell_2like（同级别隔段背驰 anchor、反向转折待确认）；均只进 `forming_points`，
+  不写 buy_points/sell_points/catalog，反向转折确认后自动升 confirmed。
+- 回归：`tests/test_chanlun_analysis.py` forming 正例现覆盖双边——一类（buy_1/sell_1）、类一（buy_1like）、
+  二类（buy_2/sell_2）、三类（buy_3/sell_3）、类二（buy_2like/sell_2like），共 9 个 forming 用例。
+- 注：级别收敛后 bi-level 中枢的一 / 二类 forming 仍作「仅观察」保留（forming = 观察态，非确认点，
+  与 RS3 item1「无点 / 仅观察」口径一致）。发布包透传 + 小程序渲染仍归 RS5。
 
 ### RS2 多级别双向联立（P2）
 
