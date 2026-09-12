@@ -32,6 +32,11 @@
 - **2026-09-12 核对订正**：对照 `zhongshu-tasks.md` / `trend-divergence-tasks.md` 的 epic 看板与
   代码实际输出，确认 3 项此前记为「进行中」的分项其实已落地（见 §3.1 / §3.2 对应行的证据），
   同时修正 1 处同页状态自相矛盾。分项行是权威源，本页百分比只是聚合。
+- **2026-09-12 新增下游闸门**：以一次性探针对全部冻结真实窗口核查了「线段 → 标准中枢 →
+  笔级类中枢 → 买卖点」各层的推进程度，**未发现静默停滞**（最差 `segment → 标准中枢`
+  lag 比例 8/22 = 0.36）；随后把该不变量固化为 `tests/test_downstream_chain_integrity.py`
+  并注册进 `scripts/run_segment_safety_gates.py` 的 `regression` 闸门，见
+  [segment-safety-checklist.md](segment-safety-checklist.md)。
 
 ## 2. 已完成任务
 

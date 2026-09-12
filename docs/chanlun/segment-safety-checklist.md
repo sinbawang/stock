@@ -45,7 +45,17 @@ python -m pytest -q tests/test_segment_chain_integrity.py
 该闸门对全部冻结真实窗口断言段链非空、覆盖率与段间跳空在阈值内、且 `practical / theory`
 段数不塌陷；用于拦截「段链静默截断、安静少给结构」这一类不报错但丢数据的缺陷。
 
-4. 发布产物一致性（对照脚本）
+4. 下游链完整性（中枢 / 类中枢停滞类缺陷）
+
+```powershell
+python -m pytest -q tests/test_downstream_chain_integrity.py
+```
+
+该闸门对全部冻结真实窗口断言「段 → 标准中枢」与「确认笔 → 笔级类中枢」的推进程度：
+段链/确认笔足够多时下游层不得为空，且覆盖位置不得离尾部过远（lag 比例阈值）。
+用于拦截「中枢只建在头部几段」这类同样不报错、只是安静少给结构的退化。
+
+5. 发布产物一致性（对照脚本）
 
 ```powershell
 python build/compare_json_segments.py
