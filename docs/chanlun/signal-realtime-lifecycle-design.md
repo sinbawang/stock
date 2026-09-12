@@ -311,6 +311,32 @@ cutoff 2588→2628（**+2 bi**，笔 152→154）段数由 **19 骤降到 6**，
 **未决（段层课题）**：为何 +2 bi 会让 `identify_segments` 把已能确认的中段整体退回一根未确认巨型段？
 `stop=exhausted_confirmed_bis` 提示是「可用已确认笔耗尽 → 退回临时段」路径；根因待深挖。
 
+#### 4.2.13 塌缩根因已定位：非首段关闭 `gap_false_defer` 致扩张对尾部敏感（2026-09-12）
+
+逐调用追踪（`build/probe_trace_identify.py`）：两个 cutoff 下主循环都调用
+`_extend_segment(start=33, anchor=33, gapdefer=False, weak=True)`，但结果不同：
+
+| cutoff | `_extend_segment(33)` | 后续 |
+| --- | --- | --- |
+| 2588 | `end=35`（小段，未确认） | 恢复种子找到 bi39 → 继续 → **19 段** |
+| 2628（+2 bi） | `end=151`（**118-bi 巨型**，未确认） | `_resolve_later_confirmed_seed(151)` 其后无确认种子 → `break` → **6 段** |
+
+关键对照（`build/probe_extend_segment_diff.py`）：同一 seed 在 cutoff 2628 下
+`gapdefer=True` → `end=39` **已确认**小段；`gapdefer=False` → `end=151` 未确认巨型。
+即 **`gap_false_defer` 打开时扩张对尾部稳定，关闭时对尾部敏感、可跑飞**。
+主循环对非首段用 `current_enable_gap_false_defer = enable_gap_false_defer and not segments`（即**非首段关闭**）
+→ 这正是塌缩根因。
+
+**但显式修法「非首段也开 `gap_false_defer`」过于侵入**（`build/probe_gapdefer_fix_impact.py`）：
+可修好 `000651`（跌幅 12→0，段 17→33），但**同时改动 20 个 fixture 中 7 个的分段**
+（`00700_30m` 15→17、`03690_1m` 22→24、`300124_day` 15→19、`300124_30m` 22→20、`03690_5m` 18→16 等）。
+这是对分段算法的**全局改动**，需重新基线整套段回归并逐一对照理论 / 课程 fixture，属独立工程项，
+非一处定点修复。故当前**保留 `000651-1m` strict xfail 钉住**，不贸然改 `identify_segments`。
+
+**更聚焦的候选（待评估）**：改 `_resolve_later_confirmed_seed` —— 当扩张产出异常长的未确认段
+且其后无确认种子时，从**巨型段内部**（而非其末端之后）重新寻种，让内部本可确认的子段
+（bi39->43、bi44->50…）浮现。此路只在跑飞时触发，理论上不扰动正常 fixture，但需实测验证。
+
 ## 4. 实时预备态（RS1）
 
 - 复用现有背驰量（`segment_bottom/top_divergence`、隔段 / 盘整背驰）与离开 / 回试判定，当
