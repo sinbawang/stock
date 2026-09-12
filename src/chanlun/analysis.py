@@ -1318,115 +1318,13 @@ def analyze_chanlun_signals(
             sell1like_signal_bi = sell_signal_bi
             sell_points.append("sell_1like")
 
-    # RS1 实时预备态（spec §2.8）：背驰 / 离开条件已成立但反向转折尚未确认时，给 forming 观察态。
-    # 覆盖一类 / 类一 / 二类 / 三类 / 类二（背驰 / 离开 / 隔段力度衰减已现、反向转折待确认）。
-    # forming 只进入独立 `forming_points`，不写入 buy_points/sell_points/signal_points/signal_catalog，
-    # 保持既有 confirmed 消费与 catalog 索引契约不变（spec §2.8 repaint 红线：forming 不得升 confirmed）。
+    # RS1 实时预备态（forming）已下架（2026-09-12，见 signal-realtime-lifecycle-design.md §4.1）。
+    # 真实链路上恒为空（287 帧冻结窗口 0 次）：confirmed / forming 共用同一判别式，历史锚点之后必已有
+    # 后续笔，判别式恒真 → confirmed 永远先赢、forming 被同类型去重遮蔽；背驰又只在已终结中枢可算，
+    # 与「未终结中枢待转折」互斥。合取构造不可达，故删除生产逻辑，保留空 `forming_points` 契约槽。
+    # 注：`SignalLifecycleState.FORMING` 仍保留 —— 它是 §3.3 锚点门控兜底（active 点锚在未确认笔时
+    # 降级为 forming）的载体，与本 RS1 独立列表无关。
     forming_points: list[dict[str, object]] = []
-    forming_zs_id = current_zs.zs_id if current_zs else None
-    forming_bi_ids = list(current_zs.bi_ids) if current_zs else []
-    forming_same_type_range = (
-        ongoing_type == "range"
-        and str(structure_state.get("current_structure_status") or "") == "ongoing_same_type"
-    )
-
-    def _append_forming(point: str, signal_bi: Bi | None, price: float | None, basis: str) -> None:
-        forming_points.append(
-            _build_signal_point_detail(
-                point,
-                signal_bi,
-                price,
-                active=False,
-                basis=basis,
-                related_zs_id=forming_zs_id,
-                related_bi_ids=forming_bi_ids,
-                lifecycle_state=SignalLifecycleState.FORMING.value,
-            )
-        )
-
-    if current_zs is not None:
-        # forming（实时预备态）的锚点必须是**实时尾部**，而不是已完成的离开段末笔。
-        # 离开段既已确认，其后必然还有后续笔（笔严格交替且已确认），于是
-        # `_has_reverse_turn_after(离开段末笔)` 恒为 True —— forming 在真实链路上永不可达，
-        # 只在「把离开笔截成链尾」的构造输入下成立（RS1 原单测正是这样截的）。
-        # 尾部口径：最新同向笔仍停在离开极值一侧、且其后尚无已确认反向笔 = 待转折确认。
-        # 这两个变量只服务 forming，不影响任何 confirmed 发点（confirmed 仍以离开段末笔为准）。
-        buy_forming_bi = (
-            latest_down if latest_down is not None and latest_down.low <= current_zs.zs_low else None
-        )
-        sell_forming_bi = (
-            latest_up if latest_up is not None and latest_up.high >= current_zs.zs_high else None
-        )
-        buy_break = (
-            buy_forming_bi is not None
-            and buy_divergence
-            and not _has_reverse_turn_after(buy_forming_bi, direction="down", bis=bis)
-        )
-        sell_break = (
-            sell_forming_bi is not None
-            and sell_divergence
-            and not _has_reverse_turn_after(sell_forming_bi, direction="up", bis=bis)
-        )
-        if "buy_1" not in buy_points and ongoing_type == "down" and buy_break:
-            _append_forming(
-                "buy_1", buy_forming_bi, getattr(buy_forming_bi, "low", None), "bottom_divergence_near_zs_low"
-            )
-        if "sell_1" not in sell_points and ongoing_type == "up" and sell_break:
-            _append_forming(
-                "sell_1", sell_forming_bi, getattr(sell_forming_bi, "high", None), "top_divergence_near_zs_high"
-            )
-        if "buy_1like" not in buy_points and forming_same_type_range and buy_break:
-            _append_forming(
-                "buy_1like", buy_forming_bi, getattr(buy_forming_bi, "low", None), "consolidation_divergence_reverse_low"
-            )
-        if "sell_1like" not in sell_points and forming_same_type_range and sell_break:
-            _append_forming(
-                "sell_1like", sell_forming_bi, getattr(sell_forming_bi, "high", None), "consolidation_divergence_reverse_high"
-            )
-
-        # 二类预备：一类前置 + 首次回抽不破前低 / 前高已成立，待「再度走强 / 走弱创新高 / 新低」确认。
-        if (
-            "buy_2" not in buy_points
-            and ongoing_type == "down"
-            and buy2_precursor
-            and latest_down is not None
-            and buy2_anchor is not None
-            and latest_down.bi_id != buy2_anchor.bi_id
-            and latest_down.low > buy2_anchor.low
-            and _is_first_reverse_hold(buy2_anchor, latest_down, bis)
-        ):
-            _append_forming("buy_2", latest_down, getattr(latest_down, "low", None), "buy1_pullback_confirmation")
-        if (
-            "sell_2" not in sell_points
-            and ongoing_type == "up"
-            and sell2_precursor
-            and latest_up is not None
-            and sell2_anchor is not None
-            and latest_up.bi_id != sell2_anchor.bi_id
-            and latest_up.high < sell2_anchor.high
-            and _is_first_reverse_hold(sell2_anchor, latest_up, bis)
-        ):
-            _append_forming("sell_2", latest_up, getattr(latest_up, "high", None), "sell1_rebound_confirmation")
-
-        # 三类预备：离开中枢后首次回踩 / 反抽守住边界已成立，待「再度走强 / 走弱」确认（尚未 renew）。
-        if "buy_3" not in buy_points and "sell_3" not in sell_points and buy3_signal_bi is None and buy3_hold_bi is not None:
-            _append_forming(
-                "buy_3", buy3_hold_bi, getattr(buy3_hold_bi, "low", None), "leave_zs_then_pullback_holds_upper_edge"
-            )
-        if "sell_3" not in sell_points and "buy_3" not in buy_points and sell3_signal_bi is None and sell3_hold_bi is not None:
-            _append_forming(
-                "sell_3", sell3_hold_bi, getattr(sell3_hold_bi, "high", None), "leave_zs_then_rebound_fails_lower_edge"
-            )
-
-        # 类二预备：同级别隔段背驰已现，待反向转折确认（single_confirmed 门控下捕获的 anchor）。
-        if "buy_2like" not in buy_points and buy2like_signal_bi is None and buy2like_anchor_bi is not None:
-            _append_forming(
-                "buy_2like", buy2like_anchor_bi, getattr(buy2like_anchor_bi, "low", None), "gap_segment_divergence_pullback_end"
-            )
-        if "sell_2like" not in sell_points and sell2like_signal_bi is None and sell2like_anchor_bi is not None:
-            _append_forming(
-                "sell_2like", sell2like_anchor_bi, getattr(sell2like_anchor_bi, "high", None), "gap_segment_divergence_rebound_end"
-            )
 
     same_level_decomposition_mode = _build_same_level_decomposition_mode(structure_state)
     same_level_consumption_level = _build_same_level_consumption_level(structure_state)

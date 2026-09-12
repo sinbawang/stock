@@ -345,7 +345,16 @@ cutoff 2588→2628（**+2 bi**，笔 152→154）段数由 **19 骤降到 6**，
 无就地聚焦修法；修它须改 theory 终结逻辑，属高回归风险的分段算法工程，需专项 + 全套段回归红→绿。
 故**保留 `000651-1m` strict xfail 钉住**，不贸然改 `identify_segments`。
 
-## 4. 实时预备态（RS1）
+## 4. 实时预备态（RS1）—— **已下架（2026-09-12）**
+
+> **决定：RS1 forming 下架，标为不做。** 真实链路恒不可达（287 帧冻结窗口 0 次，见 §4.1），
+> 且合取「背驰已现 ∧ 待转折确认」构造互斥、无法在不改分段/中枢层的前提下修复。已删除
+> `analyze_chanlun_signals` 的 forming 生产逻辑（保留空 `forming_points` 契约槽 + `SignalLifecycleState.FORMING`
+> 枚举，后者是 §3.3 锚点门控兜底的载体，与本 RS1 无关）。原可达性 strict xfail
+> （`tests/test_signal_forming_reachability.py`）改为「下架后恒空」正向断言：真实窗口 `forming_points`
+> 必须恒空，若有人重新引入非空 forming 即失败、强制回到本节重新决策。下方 §4.1 保留原分析证据备查。
+
+### 4.0 下架前的历史设想（备查）
 
 - 复用现有背驰量（`segment_bottom/top_divergence`、隔段 / 盘整背驰）与离开 / 回试判定，当
   「背驰 / 离开成立但 `_has_reverse_turn_after` 尚未成立」时，产出 `forming` 而非静默丢弃。
