@@ -1677,6 +1677,18 @@ def build_signal_point_payloads(
             related_bi_ids=related_bi_ids,
         )
     )
+    # RS0 增量7：为每个点固化「其所属中枢」的上下沿。
+    # 三类点的价格前提是「回试是否重新回到中枢」，而原先取的是**当前** `zhongshus[-1]`
+    # 的边沿 —— 但 `zhongshus[-1]` 会随尾部重切而换人（design §4.2.10），
+    # 于是会拿一个**不属于该点**的中枢去比 → 假阳性失效。
+    # 中枢边沿在前三笔确定后即固定（见 zhongshu.py「中枢区间固定为前三笔重叠」），
+    # 固化到点上即可跨帧稳定比较。
+    if current_zs is not None:
+        for payload in signal_points:
+            if payload.get("related_zs_id") is None:
+                continue
+            payload["related_zs_low"] = current_zs.zs_low
+            payload["related_zs_high"] = current_zs.zs_high
     return signal_points, signal_catalog
 
 
@@ -1857,12 +1869,23 @@ def classify_confirmed_disappearance(
     return None
 
 
-def _signal_premise_broken(point: str, price: float, frame: dict[str, object]) -> bool:
+def _signal_premise_broken(
+    point: str,
+    price: float,
+    frame: dict[str, object],
+    *,
+    anchor_zs_low: object = None,
+    anchor_zs_high: object = None,
+) -> bool:
     """判定某确认点在给定帧里成立前提是否已被破坏（spec §2.8 §3.2）—— **价格前提**。
 
     一 / 二 / 类一 / 类二：买点被后续新低跌破（`latest_down.low < price`）、卖点被新高升破；
-    三类：回抽 / 反抽重新回到中枢（买三回落到 `zs_high` 之下、卖三反抽到 `zs_low` 之上）。
+    三类：回抽 / 反抽重新回到中枢（买三回落到中枢上沿之下、卖三反抽到中枢下沿之上）。
     帧可为 `analyze_chanlun_signals` 输出（对象）或 `to_lifecycle_frame` 压缩帧（标量，供持久化）。
+
+    三类点的中枢参考**必须用该点自己的中枢边沿**（`anchor_zs_low` / `anchor_zs_high`，确认时固化），
+    而不是当前 `zhongshus[-1]` —— 后者会随尾部重切换人（design §4.2.10），比错参考会造出
+    假阳性失效。仅在拿不到固化边沿（旧帧）时才回退到当前中枢，以保持向后兼容。
 
     本函数只管**价格**前提；类二 / 三类还另有一条**结构**前提，见
     `_structural_premise_broken`。
@@ -1872,12 +1895,12 @@ def _signal_premise_broken(point: str, price: float, frame: dict[str, object]) -
         return False
     if point in ("buy3", "sell3"):
         if side == "buy":
-            zs_high = _frame_zs_high(frame)
+            reference = anchor_zs_high if anchor_zs_high is not None else _frame_zs_high(frame)
             low = _frame_latest_low(frame)
-            return zs_high is not None and low is not None and low < zs_high
-        zs_low = _frame_zs_low(frame)
+            return reference is not None and low is not None and low < float(reference)
+        reference = anchor_zs_low if anchor_zs_low is not None else _frame_zs_low(frame)
         high = _frame_latest_high(frame)
-        return zs_low is not None and high is not None and high > zs_low
+        return reference is not None and high is not None and high > float(reference)
     if side == "buy":
         low = _frame_latest_low(frame)
         return low is not None and low < float(price)
@@ -1966,6 +1989,9 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
                     "point": key[0],
                     "signal_bi_id": key[1],
                     "price": payload.get("price"),
+                    # RS0 增量7：三类点价格前提的固定参考（确认时固化），跨帧不随 zhongshus[-1] 漂移。
+                    "anchor_zs_low": payload.get("related_zs_low"),
+                    "anchor_zs_high": payload.get("related_zs_high"),
                     "status": "confirmed",
                 }
                 timeline.append({"frame": idx, "point": key[0], "signal_bi_id": key[1], "transition": "confirmed"})
@@ -1990,7 +2016,13 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
             point = str(record["point"])
             price = record["price"]
             reason = _SIGNAL_INVALIDATION_REASON_BY_POINT.get(point)
-            price_broken = price is not None and _signal_premise_broken(point, float(price), frame)
+            price_broken = price is not None and _signal_premise_broken(
+                point,
+                float(price),
+                frame,
+                anchor_zs_low=record.get("anchor_zs_low"),
+                anchor_zs_high=record.get("anchor_zs_high"),
+            )
             evidence: str | None = None
             if not price_broken and not window_changed:
                 evidence = classify_confirmed_disappearance(
@@ -2096,6 +2128,9 @@ def to_lifecycle_frame(signals: dict[str, object], *, data_window: str | None = 
             "price": payload.get("price"),
             "time": payload.get("time"),
             "lifecycle_state": payload.get("lifecycle_state"),
+            # RS0 增量7：三类点价格前提的**固定参考**（确认时所属中枢的上下沿）。
+            "related_zs_low": payload.get("related_zs_low"),
+            "related_zs_high": payload.get("related_zs_high"),
         }
         for payload in signals.get("signal_points", []) or []
         if payload.get("lifecycle_state") == SignalLifecycleState.CONFIRMED.value

@@ -17,7 +17,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from chanlun.analysis import _build_zs_monitor_state, _is_first_reverse_hold, _structural_premise_broken, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
+from chanlun.analysis import _build_zs_monitor_state, _is_first_reverse_hold, _signal_premise_broken, _structural_premise_broken, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
 
@@ -3249,6 +3249,75 @@ def test_replay_reports_reconfirm_once_per_event_not_per_frame() -> None:
     result = replay_confirmed_signal_lifecycle([frame_a, frame_b, frame_c, frame_d])
 
     assert [v["kind"] for v in result["repaint_violations"]] == ["reconfirm_after_invalidated"]
+
+
+def test_third_class_premise_uses_anchored_zs_edge_not_current_zs() -> None:
+    """RS0 增量7：三类点的价格前提必须比**它自己所属中枢**的边沿，而非当前 `zhongshus[-1]`。
+
+    design §4.2.10：`zhongshus[-1]` 会随尾部重切而换人，拿它去比会造出**假阳性失效**。
+    """
+    frame = _lifecycle_frame(
+        [],
+        current_zs=_zhongshu(3, zs_low=105.7, zs_high=107.0, day=9),
+        latest_confirmed_up=_bi(120, BiDirection.UP, high=106.4, low=100.0, day=9),
+    )
+
+    # 卖三锚定中枢下沿 108.6：反抽高点 106.4 并未回到该中枢之内 -> 前提未破坏
+    assert _signal_premise_broken("sell3", 107.0, frame, anchor_zs_low=108.6) is False
+    # 不给固化边沿时回退到当前中枢（105.7）-> 误判为破坏，即改动前的行为
+    assert _signal_premise_broken("sell3", 107.0, frame) is True
+
+
+def test_replay_uses_anchored_zs_edge_from_frame_payload() -> None:
+    """RS0 增量7：压缩帧里点自带的 related_zs_low / related_zs_high 会被用于前提判定。
+
+    即「价格前提被破坏」不再因 `zhongshus[-1]` 换人而假阳性触发。
+    """
+    frame_a = _lifecycle_frame(
+        [
+            {
+                "point": "sell3",
+                "signal_bi_id": 117,
+                "price": 107.0,
+                "lifecycle_state": "confirmed",
+                "related_zs_low": 108.6,
+                "related_zs_high": 109.3,
+            }
+        ],
+        current_zs=_zhongshu(2, zs_low=108.6, zs_high=109.3, day=1),
+    )
+    frame_b = _lifecycle_frame(
+        [],
+        current_zs=_zhongshu(3, zs_low=105.7, zs_high=107.0, day=9),  # 瞬时的另一个中枢
+        latest_confirmed_up=_bi(120, BiDirection.UP, high=106.4, low=100.0, day=9),
+    )
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["invalidated"] == []  # 未按「价格失效」误判
+    assert [p["evidence"] for p in result["superseded"]] == ["zs_superseded"]
+    assert result["repaint_violations"] == []
+
+
+def test_to_lifecycle_frame_persists_point_reference_levels() -> None:
+    """RS0 增量7：压缩帧逐点持久化 related_zs_low / related_zs_high（三类价格前提的固定参考）。"""
+    signals = {
+        "signal_points": [
+            {
+                "point": "sell3",
+                "signal_bi_id": 7,
+                "price": 1.0,
+                "lifecycle_state": "confirmed",
+                "related_zs_low": 10.0,
+                "related_zs_high": 11.0,
+            }
+        ],
+    }
+
+    frame = to_lifecycle_frame(signals)
+
+    assert frame["signal_points"][0]["related_zs_low"] == 10.0
+    assert frame["signal_points"][0]["related_zs_high"] == 11.0
 
 
 def test_derive_signal_lifecycle_transitions_reports_invalidated_premise() -> None:
