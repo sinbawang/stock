@@ -16,14 +16,22 @@
 | 严格理论规格整理 | 术语、结构、review 路径是否成体系可读 | 82% |
 | 原文逐课复核 | 是否已有逐课对照与差异记录 | 92% |
 | 当前工程口径沉淀 | 现状实现、契约、样例是否可追踪 | 86% |
-| 严格理论自动化实现 | 代码是否已按严格理论完整落地 | 58% |
-| 综合进度 | 文档、复核、实现三者合并后的总体估算 | 68% |
+| 严格理论自动化实现 | §3.1–§3.4 跟踪项完成度的算术平均（可复算） | 82% |
+| 综合进度 | 上表四个维度的算术平均 | 86% |
 
 说明：
 
 - 文档层完成度高于实现层。
 - 当前项目“能跑”不等于“已严格按原文完成”。
 - 低于 50% 的模块，通常不是缺样例，而是缺严格自动判定链路。
+- **口径（2026-09-12 起）**：`严格理论自动化实现` = §3.1–§3.4 全部跟踪项完成度的算术平均（20 项，
+  合计 1638，均值 81.90 → 82%）；`综合进度` = 上表四个维度的算术平均（(82+92+86+82)/4 = 85.5 → 86%）。
+  此前该两行为人工估算（58% / 68%），与分项明显脱节，且无法复算；改为可复算口径后为 82% / 86%。
+  复算：`python scripts/check_spec_progress.py`（返回码非 0 表示口径不自洽）；
+  自检：`python scripts/check_spec_progress.py --selftest`。
+- **2026-09-12 核对订正**：对照 `zhongshu-tasks.md` / `trend-divergence-tasks.md` 的 epic 看板与
+  代码实际输出，确认 3 项此前记为「进行中」的分项其实已落地（见 §3.1 / §3.2 对应行的证据），
+  同时修正 1 处同页状态自相矛盾。分项行是权威源，本页百分比只是聚合。
 
 ## 2. 已完成任务
 
@@ -51,7 +59,7 @@
 - [x] 明确中枢主口径为线段级，类中枢为笔级辅助口径。
 - [x] 新增课程可追溯矩阵 [lesson-traceability-matrix.md](lesson-traceability-matrix.md)，把第 24/25/27/33/35/37/40/43/44/61/86/102 课映射到 spec/design/tasks/tests/code 五层，并区分“显式映射 / 部分覆盖 / 缺口”。
 
-口径说明：本页“严格理论自动化实现 58% / 综合 68%”面向代码落地；“首轮 12 课复核闭环”面向文档层，二者不矛盾，详细澄清见 [lesson-traceability-matrix.md](lesson-traceability-matrix.md) 的“口径澄清”。
+口径说明：本页“严格理论自动化实现 82% / 综合 86%”面向代码落地（2026-09-12 起改为 §3.1–§3.4 分项算术平均，可复算）；“首轮 12 课复核闭环”面向文档层，二者不矛盾，详细澄清见 [lesson-traceability-matrix.md](lesson-traceability-matrix.md) 的“口径澄清”。
 
 ### 2.3 工程现状沉淀层
 
@@ -115,10 +123,10 @@
 
 | 任务 | 优先级 | 当前重点 | 当前状态 | 完成度 | 执行入口 | 说明 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 标准线段级中枢主实现 | 高 | 转向 `candidate_new_type` 真实窗口回放与 confirmed 对照扩样本 | 进行中 | 93% | [状态机](zhongshu-tasks.md#zs2-state-machine) / [重写交界](zhongshu-tasks.md#zs3-rewrite-gap) | `ZS2.3a` 已完成首版转场字段与消费契约；`ZS3` 已补 synthetic + real fixture 两层 regression，当前新增锁住了 `00700 30m` 单活跃中枢与 `000591 60m long` 空集真值，并补了 `build/find_segment_reabsorbed_zhongshu_cases.py` 作为真实重吸收窗口探针。`2026-09-06` 补齐了弱同向笔紧邻创新极值时的线段延伸规则（含 bootstrap 保护网），线段延伸逻辑现已涵盖"即使当前同向笔未创新高/低，只要紧邻下一根同向笔立即创出段内新极值，就继续延伸"（仅非首段放开），进一步提高线段判定完整性；`1m pre_breakout` 扩样本（01024/09988/00700）已关门回归 `6/6`。`candidate_new_type` 根因已确认：不是结构逻辑失真，而是 coarse scan 以大步长前缀遍历跳过短 strict 窗口；已修复为 coarse + fine-grained fallback，并新增针对 `scan_real_candidate_new_type_samples.py` 的 regression，当前严格 probe 结果已在 `002555 5m`、`00981 1m`、`03690 5m`、`06088 1m`、`01024 5m` 上稳定命中 `matches=5`。 |
+| 标准线段级中枢主实现 | 高 | 转向 `candidate_new_type` 真实窗口回放与 confirmed 对照扩样本 | 完成 | 94% | [状态机](zhongshu-tasks.md#zs2-state-machine) / [重写交界](zhongshu-tasks.md#zs3-rewrite-gap) | `ZS2.3a` 已完成首版转场字段与消费契约；`ZS3` 已补 synthetic + real fixture 两层 regression，当前新增锁住了 `00700 30m` 单活跃中枢与 `000591 60m long` 空集真值，并补了 `build/find_segment_reabsorbed_zhongshu_cases.py` 作为真实重吸收窗口探针。`2026-09-06` 补齐了弱同向笔紧邻创新极值时的线段延伸规则（含 bootstrap 保护网），线段延伸逻辑现已涵盖"即使当前同向笔未创新高/低，只要紧邻下一根同向笔立即创出段内新极值，就继续延伸"（仅非首段放开），进一步提高线段判定完整性；`1m pre_breakout` 扩样本（01024/09988/00700）已关门回归 `6/6`。`candidate_new_type` 根因已确认：不是结构逻辑失真，而是 coarse scan 以大步长前缀遍历跳过短 strict 窗口；已修复为 coarse + fine-grained fallback，并新增针对 `scan_real_candidate_new_type_samples.py` 的 regression，当前严格 probe 结果已在 `002555 5m`、`00981 1m`、`03690 5m`、`06088 1m`、`01024 5m` 上稳定命中 `matches=5`。 |
 | 严格同级别走势类型自动分解 | 高 | 维持主链稳定并继续补真实样本 / 展示回归 | 阶段性完成 | 88% | [TD1 主链](trend-divergence-tasks.md#td1-route-chain) | TD1 主链、publish/miniapp 消费、`type_chain` 透传与核心回归已闭环，并已补 `09988 1m` / `03690 5m` 真实窗口 gate；`candidate_new_type` 当前转由扫描工具持续搜当前 live cutoff，剩余主要是更多真实窗口覆盖、图示/案例绑定与前端展示细化。 |
 | `tech.json` / 报告 / 小程序口径统一 | 高 | 维持主消费口径稳定并继续补真实样本 / 卡片广度 | 阶段性完成 | 88%-92% | [中枢消费](zhongshu-tasks.md#zs43-consumer-output) / [中枢三态](zhongshu-tasks.md#zs52-tristate-output) / [多级别降级](buy-sell-multi-level-tasks.md#bs5-multi-level-consumer) | `same_level_consumption_level` / `transition_state` / `lifecycle_state`、forming / invalidated、区间套 `dynamic_grade` / `small_to_large_status` 与买卖点降级文案已贯通 `signals`、`tech.json`、报告、小程序与 publish bundle；剩余重点转为真实 `1m pre_breakout`、confirmed live 卡片与样本广度。 |
-| 趋势背驰 / 盘整背驰严格自动判定 | 中 | 把工程化 divergence 收口成严格判定链 | 进行中 | 65% | [趋势背驰](trend-divergence-tasks.md#td2-trend-divergence) / [盘整背驰](trend-divergence-tasks.md#td3-range-divergence) | 严格判定字段（TD2/TD3）与消费措辞（TD4）均已收口，案例回归归 TD5。 |
+| 趋势背驰 / 盘整背驰严格自动判定 | 中 | 把工程化 divergence 收口成严格判定链 | 完成 | 98% | [趋势背驰](trend-divergence-tasks.md#td2-trend-divergence) / [盘整背驰](trend-divergence-tasks.md#td3-range-divergence) | 2026-09-12 核对：严格判定字段（TD2/TD3）、消费措辞（TD4）、案例回归（TD5）均已收口，与 §3.1 两行改为一致口径。剩余只有真实样本与易混淆反例广度。 |
 | 一二三类买卖点严格确认 | 中 | 转向样例广度、review 资料与跨级别对照 | 完成 | 98% | [一类点](buy-sell-multi-level-tasks.md#bs2-buy1) / [二类点](buy-sell-multi-level-tasks.md#bs3-buy2) / [三类点](buy-sell-multi-level-tasks.md#bs4-buy3) | 一二三类点已在段级中枢链路上按最近中枢 + 离开段 / 回抽 + 转折确认收口；一 / 二类的 bi-level 中枢回退已收敛为「仅观察 / 执行级别用途」，不再冒充操作级别确认点；剩余主要是案例广度与跨级别 review 资料。 |
 
 ### 3.1 P0 严格理论主链路
@@ -127,8 +135,8 @@
 | --- | --- | --- | --- |
 | 标准线段级中枢主实现 | 完成 | 94% | 当前已完成 `segment` 主口径锁定、仅已确认线段参与标准中枢、reclaim/吸收字段下沉、bootstrap / gap / reclaim / reverse_break 多条边界修正，以及多组真实 fixture regression 锁定；`2026-09-06` 新增弱同向笔延伸规则（含 bootstrap 保护），进一步完善线段延伸判定链；`1m pre_breakdown` / `1m pre_breakout`（002555/03690/600900）与 confirmed 3S/3B live 样本均已补真实回归；`transition_state` / `consumption_level` 转场字段已贯通消费层；复杂 reclaim/重写与 gap 交界、中枢完成/扩张/新中枢切换、标准中枢与后续买卖点绑定（买卖点段级化）均已收口。`candidate_new_type` 的实质问题已被确认并修正：粗扫描步长错误导致短 strict 窗口被跳过；现细粒度 fallback 已落地并通过 `tests/test_scan_real_candidate_new_type_samples.py` 回归。当前仅剩真实样本广度与文档同步，不再阻塞主实现。 |
 | 严格同级别走势类型自动分解 | 阶段性完成 | 88% | 同级别分解 spec、TD1 主链、`type_chain` / `transition_state` / `same_level_consumption_level` 字段与 publish/miniapp 消费链已收口，并已补 `09988 1m` / `03690 5m` 真实窗口 gate；`candidate_new_type` 当前转由扫描工具持续搜当前 live cutoff，剩余主要是样例库、真实窗口广度与前端展示细化，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
-| 趋势背驰严格自动判定 | 进行中 | 55% | TD2 已落地 `divergence.trend` 的 `strict / reference_zs_id / departure_confirmed / strength_comparison`；消费端按 `strict` 措辞归 TD4，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
-| 盘整背驰严格自动判定 | 进行中 | 50% | TD3 已落地 `divergence.range` 的 `strict / reference_zs_id / touches_boundary / strength_comparison`；消费端措辞归 TD4，执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
+| 趋势背驰严格自动判定 | 完成 | 98% | 2026-09-12 核对：`src/chanlun/analysis.py` 的 `divergence.trend` 实际输出 `strict / reference_zs_id / departure_confirmed / strength_comparison`（L1008-1011），TD2 严格判定链已落地；消费端按 `strict` 措辞已在 TD4 收口，TD5 案例回归完成，`trend-divergence-tasks.md` epic 看板 TD2 亦为「完成」。剩余只剩真实样本广度（另见 §3.3 案例库行）。 |
+| 盘整背驰严格自动判定 | 完成 | 98% | 2026-09-12 核对：`src/chanlun/analysis.py` 的 `divergence.range` 实际输出 `strict / reference_zs_id / touches_boundary / strength_comparison`（L1022-1025），TD3 已与趋势背驰分轨独立判定；消费端措辞归 TD4、案例归 TD5，两者均完成。剩余只剩真实样本与易混淆反例广度（另见 §3.3）。 |
 | 一类买卖点严格确认 | 完成 | 98% | buy_1/sell_1 已落地“确认离开 + 反向转折 + 段级「离开段 vs 进入段」力度、边界、转折均以离开段末笔为基准”（信号锚点 `_bi_by_id(exit_segment.end_bi_id)`）；RS3 后 bi-level 中枢不再发操作级别一类点，仅保留观察 / 执行级别用途；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
 | 二类买卖点严格确认 | 完成 | 98% | 已落地「绑定一买/一卖 + 不破前低/前高 + 首次回抽锁定 + 再度走强/走弱（创新高/新低）」，段级链路上前置/不破前低以离开段末笔为锚点；`_is_first_reverse_hold` 已补首次窗口占用 / 破位失败口径，且 RS3 后 bi-level 中枢不再发操作级别二类点；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
 | 三类买卖点严格确认 | 完成 | 97% | 已落地「离开 + 不回归 + 首次回试锁定 + 回试后重新向上/向下」，段级链路上离开以向上/向下离开段为锚点、信号价格锚定在首次回试/反抽极值（不强制创新高/新低，贴合第20课）；RS0 已补跨帧回中枢 invalidated 护栏；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
@@ -140,14 +148,14 @@
 | `chanlun-rule-spec` 与严格版差异标注 | 进行中 | 55% | 当前仍有部分段落把“现状”和“目标”写在一起；后续需按模块任务页逐项回写。 |
 | 理论/实现/消费三层总差异表 | 进行中 | 95% | 字段级矩阵已大体成型；`1m pre_breakdown` 与 `1m pre_breakout` 的真实样本、`tech.json` gate、文案、发布链和 review 主锚点均已收口（`pre_breakout` 已补 `002555` + `03690` + `600900` 三真实锚点），剩余主要是 confirmed 页内卡片广度、工程近似阈值和少量未落主产物字段，详见 [zhongshu-tasks.md](zhongshu-tasks.md) 与 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | `src/chanlun/analysis.py` 买卖点逻辑差异表 | 完成 | 95% | BS1 差异表已逐条标记 buy_1/2/3、sell_1/2/3 的严格一致 / 工程近似 / 待实现，并回写了 RS2 多级别联立、RS3 级别收敛与首次回抽窗口收口结果；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
-| 类中枢与标准中枢字段完全拆分 | 进行中 | 45% | 文档已拆，输出字段与消费端仍需继续收敛；执行拆解见 [zhongshu-tasks.md](zhongshu-tasks.md)。 |
+| 类中枢与标准中枢字段完全拆分 | 完成 | 98% | 2026-09-12 核对：`src/chanlun/zhongshu_contract.py` 落实 `SPEC.ZHONGSHU.DUAL_TRACK`；`Zhongshu.structure_level` 区分 `segment`（标准）与类中枢；主产物分列 `latest_zhongshu` / `latest_lei_zhongshu`，analyze 侧产出独立 `*_normalized_zhongshu_lei.csv`；消费端（summary / 报告 / 小程序）与图表 `lei_zhongshus` 分轨均已贯通。`zhongshu-tasks.md` 的 ZS4（含 ZS4.1-ZS4.3）均为「完成」。剩余为样例广度。 |
 | 主辅冲突样例库 | 进行中 | 50% | 已有框架，还缺足量正反例；优先围绕中枢主辅冲突和买卖点降级补样例。 |
 
 ### 3.3 P1 review 资料层
 
 | 任务 | 当前状态 | 完成度 | 说明 |
 | --- | --- | --- | --- |
-| 中枢严格定义图示库 | 进行中 | 82% | 已有 review 入口、页内真实卡片与消费对照；真实 `SZ.000651 1m pre_breakdown` 已接管 `1m` 向下预警主位，且 `1m pre_break*` 历史 cutoff 回放工具已补齐。剩余案例任务见 [zhongshu-tasks.md](zhongshu-tasks.md)。 |
+| 中枢严格定义图示库 | 进行中 | 87% | 2026-09-12 核对：与 §3.0A 同名行百分比不一致（此处 82% 来自 2026-08-20 的 `72598775`，§3.0A 的 87% 来自 2026-08-23 的 `f0e0654b`，以后者为准）。已有 review 入口、页内真实卡片与消费对照；真实 `SZ.000651 1m pre_breakdown` 已接管 `1m` 向下预警主位，`1m pre_breakout` 已有 `002555` + `03690` + `600900` 三真实 replay 样本可作卡片主锚点，`1m pre_break*` 历史 cutoff 回放工具已补齐。剩余案例任务见 [zhongshu-tasks.md](zhongshu-tasks.md)。 |
 | 线段严格定义案例库 | 进行中 | 58% | 已补复核矩阵与图示库骨架，仍需补 67/71 课正反例和 R1-R6 映射；执行拆解见 [segment-tasks.md](segment-tasks.md)。 |
 | 背驰与盘整背驰标准案例包 | 进行中 | 45% | 已有复核矩阵与图示库骨架，仍需补统一正例、反例、易混淆例；执行拆解见 [trend-divergence-tasks.md](trend-divergence-tasks.md)。 |
 | 一二三类买卖点标准案例包 | 进行中 | 48% | 已有复核矩阵与图示库骨架，仍需按最近中枢和级别填充案例；执行拆解见 [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md)。 |
@@ -233,5 +241,6 @@
 - `41%-60%`: 文档、样例、实现已具备两项，但仍有主链路缺口。
 - `61%-80%`: 主链路基本明确，可做稳定 review，但仍未彻底统一。
 - `81%-100%`: 文档、样例、实现、消费口径都已收敛。
+- 例外：§1 的 `严格理论自动化实现` 与 `综合进度` 是 §3.1–§3.4 分项完成度的**算术平均**，按可复算口径计算，不使用上述档位；分项行始终是权威源。改动分项后请同步跑 `scripts/check_spec_progress.py`。
 
 若后续实现或复核推进，优先更新本文件，再回写对应专题文档，避免进度信息散落在多个说明页。
