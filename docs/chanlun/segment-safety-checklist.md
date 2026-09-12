@@ -55,6 +55,17 @@ python -m pytest -q tests/test_downstream_chain_integrity.py
 段链/确认笔足够多时下游层不得为空，且覆盖位置不得离尾部过远（lag 比例阈值）。
 用于拦截「中枢只建在头部几段」这类同样不报错、只是安静少给结构的退化。
 
+4b. 买卖点案例库锚点（真实窗口发点）
+
+```powershell
+python -m pytest -q tests/test_example_library_real_cases.py
+```
+
+该闸门把 [buy-sell-multi-level-example-cases.md](buy-sell-multi-level-example-cases.md) 中的 7 张真实卡片钉成
+锚点（`signal_bi_id` / `related_zs_id` / `price` / `basis` / cutoff 序列）。用于拦截「段链变了、但没人发现
+文档里写明的真实买卖点样本已经不再复现」：卡片失效时测试会指名失败并打印该 cutoff 的实际发点。
+卡片口径与各安全闸门共用 `tests/real_fixture_support.py::analysis_cutoffs`。
+
 5. 发布产物一致性（对照脚本）
 
 ```powershell

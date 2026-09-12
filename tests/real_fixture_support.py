@@ -20,6 +20,26 @@ FIXTURES_ROOT = ROOT / "tests" / "fixtures" / "real"
 
 _FREEZE_HINT = "运行 `python scripts/freeze_real_fixtures.py` 重新冻结 tests/fixtures/real。"
 
+# 案例卡 / 回放的标准 cutoff 口径（与 build/ 探针一致）。
+CASE_FRAMES = 12
+CASE_MIN_BARS = 60
+
+
+def analysis_cutoffs(total: int, *, frames: int = CASE_FRAMES, min_bars: int = CASE_MIN_BARS) -> list[int]:
+    """冻结窗口上的标准回放 cutoff 序列。
+
+    案例库卡片与自动化锚点必须共用本函数：否则「文档里的样例」与「测试里的锚点」
+    会各自挑不同 cutoff，改规则时容易只在一边失效。
+    """
+    start = min(min_bars, max(20, total // 3))
+    if total - start < 5:
+        return []
+    step = max(1, (total - start) // frames)
+    cutoffs = list(range(start, total + 1, step))
+    if cutoffs[-1] != total:
+        cutoffs.append(total)
+    return cutoffs
+
 
 def frozen_csv(symbol: str, timeframe: str) -> Path:
     """`<symbol>_<timeframe>` 的冻结原始 K 线 CSV（排除 `_normalized` 伴生文件）。"""

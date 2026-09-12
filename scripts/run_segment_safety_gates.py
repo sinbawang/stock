@@ -56,6 +56,7 @@ SEGMENT_SAFETY_GATES = [
             "-q",
             "tests/test_segment_consumer_mode_smoke.py",
             "tests/test_multilevel_downgrade_invariant.py",
+            "tests/test_example_library_real_cases.py",
         ],
     ),
     SafetyGate(
