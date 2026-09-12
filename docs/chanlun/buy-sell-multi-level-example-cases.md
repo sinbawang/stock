@@ -234,12 +234,12 @@
      该用例会失败并要求同步本页。
    - 缩小缺口的最直接办法是扩大冻结样本（更多标的 / 更长窗口），属 T3 范围。
 2. **两张卡片位于末帧**（§3.2 类一买、§3.6 三卖），未观察到退场轨迹。需要更长窗口才能补全。
-3. **区间套 / 小转大高位档覆盖不全**：详见 §7.3。`third_class_confirmed` **可达**且已有真实卡片
-   （S1/S2，但仅来自非生产组合 `5m→1m`）；`actionable` 与 `higher_level_confirmed` 在
-   2812 帧（生产口径 2293）上仍未观测到，其中 `actionable` 的卡点已定位为
-   「窗口内有点」与「上级别消费等级=`confirmed`」从未同时成立。
-   ❗ 先前把 `third_class_confirmed` 也列为「未观测到」的结论**已订正**——那是 `analysis_cutoffs`
-   网格取样太稀疏造成的假象，不是功能缺口。
+3. **区间套 / 小转大高位档覆盖**：详见 §7.3。
+   - `third_class_confirmed`（S1/S2）与 `actionable`（A1）**均已证实可达**并有真实卡片；
+     两者都仅来自非生产级别组合（`5m→1m` 与 `1m→5m`）——生产三组合上的覆盖仍为空。
+   - `higher_level_confirmed` 与 `small_to_large_reverse_confirm` 仍未观测到（需前者基础上再满足结构闭环）。
+   - ❗ 本页曾**两次**误判「不可达」：先 `third_class_confirmed`，再 `actionable`，
+     两次都是**语料覆盖不足**（126 帧 → 2812 帧 → 16 标的 4665 帧）。判定口径已写入 §7.3 末尾教训。
 4. **`precision_entry` 在已冻结的仓库产物中不存在**：4 个冻结 `tech.json` 的 `summary.precision_entry`
    均为 `None`。原因已定性（**不是**功能死链）：冻结快照取自 `data/reports/<sym>/<tf>/tech.json`，
    而该文件由 `scripts/batch_prepare_chanlun_reports.py` 产出，其 `build_technical_summary(...)` 调用
@@ -289,8 +289,17 @@
 ## 6. 维护与验收
 
 - BS6 验收第 1 条（「重点样例可被自动化回归支撑」）由 `tests/test_example_library_real_cases.py` 承担：
-  标准点 / 类比点 7 张卡片（§3）+ 区间套 / 小转大 7 张卡片（§7 P 组 5 + S 组 2）+ 三个非空转守卫 +
-  两个清单同步守卫，共 **19 个用例，约 52s**。
+  标准点 / 类比点 7 张卡片（§3）+ 区间套 / 小转大 8 张卡片（§7 P 组 5 + S 组 2 + A 组 1）+
+  四个非空转守卫 + 两个清单同步守卫，共 **21 个用例，约 52s**。
+
+  区间套三组的 fixture 来源不同，重建时必须分组：
+
+  | 组 | fixture 目录 | 数据源 | 重建命令 |
+  | --- | --- | --- | --- |
+  | P | `tests/fixtures/real/`（根，`frozen_csv`） | `data/reports/**/analyze` | 完整重建（慎用） |
+  | S | 同根 | 同根 | 同根 |
+  | A | `tests/fixtures/real/precision/` | `data/cache/kline` | `--only precision` |
+  | （replay） | `tests/fixtures/real/replay/` | `data/stock-kline-cache` | `--only replay` |
 - BS6 验收第 2 条（「新增规则能及时暴露行为变化」）由同一闸门承担：卡片钉住
   `signal_bi_id` / `related_zs_id` / `price` / `basis` / cutoff 序列（§3），
   `status` / `small_to_large_status` / `window_basis_label` / `nested_from.side` /
@@ -303,6 +312,8 @@
   - 把任一区间套卡片的 `dynamic_grade` 改错，**只有该卡片**失败。
   - 把 S 组卡片的 `small_to_large_status` 改成 `candidate`，或把窗口内点集合多写一个，
     **只有该卡片**失败。
+  - 把 A 组卡片的 `higher_consumption_level` 改成 `pending`，**只有该卡片**失败；
+    把 `status` 改成 `watch`，则该卡片**与**可达性守卫同时失败（守卫直接读卡片清单，符合预期）。
   - 把已观测到的 `candidate` 错误地列入「应缺席」清单，§7.3 的守卫会失败并报出实际计数——
     证明缺席断言确实在读实测计数，不是形同虚设。
 - 两个「清单同步守卫」的作用：`test_zero_real_coverage_types_are_still_absent`（§5 缺口 1）与
@@ -327,14 +338,14 @@
 | `status = standby`（上级别无窗口） | ✅ | ✅ P4 |
 | `status = watch`（窗口已绑定、次级别未出点） | ✅ | ✅ P1 / P2 / P3 / P5 |
 | `status = watch`（次级别已出点但被上级别消费等级降级） | ✅ | ✅ S1 / S2 |
-| `status = actionable`（次级别已出点且未被降级） | ✅ | ❌ **未观测到**（见 §7.4 卡点分析） |
-| `small_to_large_status = null` | ✅ | ✅ P4 / P5 |
+| `status = actionable`（次级别已出点且未被降级） | ✅ | ✅ **A1** |
+| `small_to_large_status = null` | ✅ | ✅ P4 / P5 / A1 |
 | `small_to_large_status = candidate` | ✅ | ✅ P1 / P2 / P3 |
 | `small_to_large_status = third_class_confirmed` | ✅ | ✅ S1 / S2 |
-| `small_to_large_status = higher_level_confirmed` | ✅ | ❌ **未观测到** |
+| `small_to_large_status = higher_level_confirmed` | ✅ | ❌ **未观测到**（需 S 档基础上再满足结构闭环） |
 | `small_to_large_reverse_confirm`（区间套反向确认） | ✅ | ❌ **未观测到**（仅在上一档成立时才会产出） |
 
-`window_basis_label` 三档都已取到真实样本：`中枢到锚点窗口`（P1/P3/S1/S2）、`离开笔窗口`（P2）、
+`window_basis_label` 三档都已取到真实样本：`中枢到锚点窗口`（P1/P3/S1/S2）、`离开笔窗口`（P2/A1）、
 `锚点跟踪窗口`（P5）。
 
 > **口径订正**：§7 初版用 `analysis_cutoffs`（每窗 13–14 帧，共 126 帧）测量，得出
@@ -362,6 +373,14 @@
 | **S1** | `300124` 5m→1m | 1820 / `2026-09-08 10:30` | `watch` | **`third_class_confirmed`** | 中枢到锚点窗口 | sell / `sell3` | `sell3`@`2026-09-07 09:56`（59.78，ZS2） | `pending` |
 | **S2** | `300124` 5m→1m | 1956 / `2026-09-11 09:50` | `watch` | **`third_class_confirmed`** | 中枢到锚点窗口 | sell / `sell3` | `sell3` + `sell2like`@`2026-09-10 10:39`（54.81，ZS3） | `pending` |
 
+**A 组**：**precision 分组口径**（fixture 在 `tests/fixtures/real/precision/`，`cutoff` 同样是杆数下标）。
+这组钉住最高档 `actionable`——已冻结的 5 个多级别标的在 2812 帧上从未产出该档，故单独冻结
+2 个窗口（重建：`python scripts/freeze_real_fixtures.py --only precision`）。
+
+| 卡片 | 组合 | 杆 / 末杆时间 | status | 窗口依据 | 侧 / 触发 | dynamic_grade | 上级别消费等级 | 窗口内点 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **A1** | `000651` 1m→5m | 2160 / `2026-08-31 10:39` | **`actionable`** | 离开笔窗口 | sell / `sell3` | `no_operational_value`（无操作价值） | `confirmed` | `sell3`@`2026-08-27 14:35`（39.33，ZS2） |
+
 逐卡要点：
 
 - **P1**：生产口径（`30m` 操作 + `5m` 执行）。上级别路线为 `higher_level_range`（盘整背驰），
@@ -378,11 +397,16 @@
 - **P5**：上级别路线为 `last_zs_extension`（既非趋势背驰也非盘整背驰），
   故 `small_to_large_status = null` 但窗口仍然激活（`锚点跟踪窗口`）——
   用于锁「窗口激活」与「小转大候选」是**两个独立条件**，不得混为一谈。
-- **S1 / S2**：**本批最重要的两张卡**——它们是全库唯一把 `small_to_large_status` 推到
-  `third_class_confirmed` 的真实样本（「最后一个次级别中枢已出现对应三类卖点」），
-  且同时展示该档**不会**自动升为可执行：`status` 仍是 `watch`、上位档依然被上级别
-  `pending` 消费等级降级。注意两张卡用的是**非生产组合** `5m→1m`；生产三组合
-  （`30m/day/1m → 5m`）在 2293 帧上仍未取到该档。
+- **S1 / S2**：**本批重要**——全库唯一把 `small_to_large_status` 推到 `third_class_confirmed` 的真实样本
+  （「最后一个次级别中枢已出现对应三类卖点」），且同时展示该档**不会**自动升为可执行：
+  `status` 仍是 `watch`、上位档依然被上级别 `pending` 消费等级降级。注意两张卡用的是**非生产组合**
+  `5m→1m`；生产三组合（`30m/day/1m → 5m`）在 2812 帧上未取到该档。
+- **A1**：全库唯一把 `status` 推到 `actionable` 的真实锚点。上级别消费等级为 `confirmed`（未被降级），
+  且 5M 窗口 `2026-08-27 14:33 → 08-28 10:42` 内确有同向三类卖点。
+  ❗ 该卡片同时暴露一个**待 review 的组合**：`status = actionable` 与
+  `dynamic_grade = no_operational_value` 同时出现。两者是不同轴（前者回答「有没有可用的精确点」，
+  后者是 86 课的大级别中枢漂移判级），但消费端会把它们并排展示，容易被读成「可执行但也无操作价值」。
+  **这里只记录现象，未判定为缺陷**——需人工复核后再决定是否收口。
 
 ### 7.3 密集网格实测：漏斗与卡点
 
@@ -414,11 +438,10 @@
 漏斗 F 级 13 帧，但还需上级别路线 ∈ {`higher_level_reverse_trend`, `higher_level_range`}
 且未升级到 `higher_level_confirmed`）。§7 初版的「未观测到」是取样假象。
 
-**结论二**：`actionable` 在 2812 帧（含生产 2293 帧）上仍然为 0，且**卡点已定位**。
-`status` 与 `higher_consumption_level` 的联合分布是单边的
-（`build/probe_precision_actionable_blocker.py`）：
+**结论二（已二次订正）**：在**已冻结的 5 个多级别标的**上，`actionable` 在 2812 帧里确实为 0，
+且当时的联合分布看起来是单边的（`build/probe_precision_actionable_blocker.py`）：
 
-| 窗口内有点（`signal_descriptions`） | 上级别消费等级 | → 最终 `status` | 帧数 |
+| 窗口内有点（`signal_descriptions`） | 上级别消费等级 | → 最终 `status` | 帧数（5 标的语料） |
 | --- | --- | --- | --- |
 | 否 | `None`（standby 早返回） | `standby` | 1125 |
 | 否 | `auxiliary` | `watch` | 96 |
@@ -426,14 +449,30 @@
 | 否 | `pending` | `watch` | 1186 |
 | **是** | **`pending`** | **`watch`（被降级）** | **109** |
 
-即：`actionable` 的两个前置条件**各自都可达**（「窗口内有点」109 帧；「消费等级=`confirmed`」
-296 帧），但在整个语料里**从未同时成立**——凡是窗口内有同向点的帧，上级别消费等级**恰好全是
-`pending`**，于是被 `if higher_consumption_level in {"auxiliary", "pending"} and status == "actionable"` 一律降级为
-`watch`（`note` 追加「次级别买卖点仅作观察提示，不按严格区间套执行」）。
+按此曾写下「两个前置条件从未同时成立」的卡点结论。**该结论同样是语料覆盖不足造成的**——
+把语料从 5 标的扩到本地全部 **16 标的**（`data/cache/kline`，4 个级别组合，4665 帧，
+`build/probe_actionable_wide.py`）后：
 
-**这是量测事实，不是缺陷判定**：语料只有 5 标的 × 6 组合，且 `pending` 与「窗口足够宽以致
-次级别点能落进来」很可能正相关（上级别结构未确认时中枢/锚点窗口更松）。要定性需要更大的
-多标的语料，或专门的构造样本。
+| 窗口内有点 | 上级别消费等级 | → 最终 `status` | 帧数（16 标的语料） |
+| --- | --- | --- | --- |
+| 否 | `auxiliary` | `watch` | 128 |
+| 否 | `confirmed` | `watch` | 556 |
+| 否 | `pending` | `watch` | 2309 |
+| 是 | `auxiliary` | `watch`（被降级） | 1 |
+| **是** | **`confirmed`** | **`actionable`** | **32** |
+| 是 | `pending` | `watch`（被降级） | 151 |
+
+即 **`actionable` 可达**（32 帧），且「有窗口内点却恰好全是 `pending`」只是 5 标的语料下的偶合。
+降级规则本身工作正常：`desc=True` 且等级为 `auxiliary`/`pending` 的帧（1 + 151）确实被降级，
+`confirmed` 的 32 帧则保持 `actionable`。
+
+错失方向（同向点存在但未落窗口）在 16 标的语料上是**双向**的：晚于窗口终点 245 帧、
+早于窗口起点 182 帧——不存在单一方向的结构性解释。
+
+> **两次订正的方法论教训**：`third_class_confirmed` 与 `actionable` 都曾被判为「不可达 / 未观测到」，
+> 两次都是**语料覆盖不足**（先 126 帧，再 5 标的 2812 帧），而不是功能缺口。
+> 判「状态不可达」前必须先确认：① 该分支有构造回归且非空转；② 语料规模与事件稀疏度匹配。
+> 本项目目前的稳妥做法是：**每个可达状态都配一张独立 fixture 的真实卡片**（§7.2 的 P/S/A 三组）。
 
 该清单由 `test_precision_unreached_states_stay_unreached_on_real_windows` 盯住（含空转守卫：
 该清单由 `test_precision_unreached_states_stay_unreached_on_real_windows` 盯住（含空转守卫：

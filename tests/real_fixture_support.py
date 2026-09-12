@@ -104,3 +104,26 @@ def replay_fixture_csv(symbol: str, timeframe: str) -> Path:
             "（可用 `python scripts/freeze_real_fixtures.py --only replay` 只重建该组）"
         )
     return candidates[-1]
+
+
+PRECISION_FIXTURES_ROOT = FIXTURES_ROOT / "precision"
+
+
+def precision_fixture_csv(symbol: str, timeframe: str) -> Path:
+    """`precision/` 下的区间套高位档 fixture。
+
+    只有 `actionable` 样本需要这一组：该状态要求「上级别消费等级 = confirmed」与「次级别有落在
+    窗口内的同向点」同时成立，而已冻结的 5 个多级别标的在 2812 帧上一次都不出现（属语料覆盖
+    不足，不是功能缺口）。样本来自 `data/cache/kline`，因此单独分组、单独重建：
+
+        python scripts/freeze_real_fixtures.py --only precision
+
+    同样放在独立子目录，避免与 `frozen_csv` / `replay_fixture_csv` 的 glob 相撞。
+    """
+    candidates = sorted(PRECISION_FIXTURES_ROOT.glob(f"{symbol}_{timeframe}_*.csv"))
+    if not candidates:
+        raise FileNotFoundError(
+            f"缺少 precision fixture：{symbol} {timeframe}。{_FREEZE_HINT}"
+            "（可用 `python scripts/freeze_real_fixtures.py --only precision` 只重建该组）"
+        )
+    return candidates[-1]

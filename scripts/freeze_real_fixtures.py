@@ -132,8 +132,23 @@ REPLAY_FIXTURES: tuple[tuple[str, str, str], ...] = (
 )
 REPLAY_FIXTURES_ROOT = FIXTURES_ROOT / "replay"
 
+# 区间套 `actionable` 样本所需的窗口。
+#
+# 背景：`actionable` 需要同时满足「上级别消费等级 = confirmed」与「次级别有落在窗口内的同向点」。
+# 实测（见 tests/test_example_library_real_cases.py 的 A 组卡片与案例库 §7.5）：已冻结的 5 个多级别
+# 标的 × 2812 帧上**一次都不出现**，而在本地全部 16 标的的语料上会出现——属**语料覆盖不足**，
+# 不是功能缺口（该分支的构造回归一直绿）。本组就是为把该档钉成真实锚点而单独冻结的。
+PRECISION_FIXTURES: tuple[tuple[str, str, str], ...] = (
+    # (symbol, timeframe, market)
+    ("000651", "1m", "A"),
+    ("000651", "5m", "A"),
+)
+PRECISION_FIXTURES_ROOT = FIXTURES_ROOT / "precision"
+
 # 早期 1m 窗口所在的本地仓库（与 KLINE_CACHE_DIR 不同：后者只保留尾部 4500 根）。
 STOCK_KLINE_CACHE_ROOT = ROOT / "data" / "stock-kline-cache"
+# 当前 K 线仓库（保留尾部窗口；precision 组的来源）。
+KLINE_CACHE_ROOT = ROOT / "data" / "cache" / "kline"
 
 _FIELDS = ["ts", "open", "high", "low", "close", "volume"]
 
@@ -193,23 +208,50 @@ def _write_replay_fixtures() -> None:
         print(f"[replay] {symbol} {timeframe}: {target.name} ({len(window)} bars)")
 
 
+def _write_group(root: Path, fixtures: tuple[tuple[str, str, str], ...], tag: str, store: Path) -> None:
+    """把一个 fixture 分组写到独立子目录（幂等，不影响其它分组）。"""
+    root.mkdir(parents=True, exist_ok=True)
+    for stale in root.glob("*.csv"):
+        stale.unlink()
+    for symbol, timeframe, market in fixtures:
+        rows = load_local_rows(symbol, market, timeframe, root=store)
+        window = [row for row in rows if str(row["ts"])[:10] <= CUTOFF]
+        if not window:
+            print(f"[{tag}] {symbol} {timeframe}: NO STORE DATA")
+            continue
+        start = str(window[0]["ts"])[:10].replace("-", "")
+        end = str(window[-1]["ts"])[:10].replace("-", "")
+        target = root / f"{symbol}_{timeframe}_{start}_to_{end}.csv"
+        with target.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=_FIELDS)
+            writer.writeheader()
+            for row in window:
+                writer.writerow({field: row[field] for field in _FIELDS})
+        print(f"[{tag}] {symbol} {timeframe}: {target.name} ({len(window)} bars)")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="只校验冻结 fixture 是否齐全，不重建")
     parser.add_argument(
         "--only",
-        choices=("replay",),
+        choices=("replay", "precision"),
         default=None,
         help=(
             "只重建指定分组。注意：无 --only 的完整重建会先清空 FIXTURES_ROOT 根下的全部 CSV "
-            "并按当前 data/ 重算，可能改变已提交窗口；只补 replay 窗口时请用 --only replay。"
+            "并按当前 data/ 重算，可能改变已提交窗口；只补子目录分组时请用 --only。"
         ),
     )
     args = parser.parse_args()
 
     if args.only == "replay":
         FIXTURES_ROOT.mkdir(parents=True, exist_ok=True)
-        _write_replay_fixtures()
+        _write_group(REPLAY_FIXTURES_ROOT, REPLAY_FIXTURES, "replay", STOCK_KLINE_CACHE_ROOT)
+        return 0
+
+    if args.only == "precision":
+        FIXTURES_ROOT.mkdir(parents=True, exist_ok=True)
+        _write_group(PRECISION_FIXTURES_ROOT, PRECISION_FIXTURES, "precision", KLINE_CACHE_ROOT)
         return 0
 
     FIXTURES_ROOT.mkdir(parents=True, exist_ok=True)
@@ -277,7 +319,8 @@ def main() -> int:
                 writer.writerow({field: row[field] for field in _FIELDS})
         print(f"[halt] {symbol} {timeframe}: {target.name} ({len(window)} bars)")
 
-    _write_replay_fixtures()
+    _write_group(REPLAY_FIXTURES_ROOT, REPLAY_FIXTURES, "replay", STOCK_KLINE_CACHE_ROOT)
+    _write_group(PRECISION_FIXTURES_ROOT, PRECISION_FIXTURES, "precision", KLINE_CACHE_ROOT)
 
     total = sum(path.stat().st_size for path in FIXTURES_ROOT.rglob("*.csv"))
     total += sum(path.stat().st_size for path in FIXTURES_ROOT.rglob("*.json"))

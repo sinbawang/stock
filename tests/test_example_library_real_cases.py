@@ -37,7 +37,12 @@ from chanlun.segment import (  # noqa: E402
 )
 from chanlun.zhongshu import identify_zhongshu  # noqa: E402
 from export_structures_with_boxes import calculate_macd  # noqa: E402
-from tests.real_fixture_support import FIXTURES_ROOT, analysis_cutoffs, frozen_csv  # noqa: E402
+from tests.real_fixture_support import (  # noqa: E402
+    FIXTURES_ROOT,
+    analysis_cutoffs,
+    frozen_csv,
+    precision_fixture_csv,
+)
 
 TIMEFRAMES = ("1m", "5m", "30m", "day")
 
@@ -260,9 +265,33 @@ PRECISION_BAR_CARDS = (
     },
 )
 
-# 文档记录：这两档在真实窗口上仍未观测到（带半径说明，见案例库 §7.3）。
-# 注意 `third_class_confirmed` **不在**此列——它已由 PRECISION_BAR_CARDS 证实可达。
-UNOBSERVED_HIGHER_STATES = ("actionable", "higher_level_confirmed")
+# 文档记录：该档在**已冻结语料**上仍未观测到（密集网格 2812 帧）。
+# 注意 `third_class_confirmed`（S 组）与 `actionable`（A 组）**不在此列**——两者均已证实可达。
+UNOBSERVED_HIGHER_STATES = ("higher_level_confirmed",)
+
+# **precision 分组**卡片（`tests/fixtures/real/precision/`）：钉住 `status = actionable`。
+#
+# 背景：`actionable` 需要「上级别消费等级 = confirmed」+「次级别有落在窗口内的同向点」同时成立。
+# 已冻结的 5 个多级别标的在 2812 帧上从未同时满足；扩到本地全部 16 标的（4665 帧）后出现 32 帧，
+# 故先前「不可达 / 未观测」的判断**同样是语料覆盖不足**。此卡片就是该档的真实锚点。
+PRECISION_ACTIONABLE_CARDS = (
+    {
+        "card": "区间套 A1 · 000651 1m->5m 可执行",
+        "symbol": "000651",
+        "higher": "1m",
+        "lower": "5m",
+        "cutoff": 2160,
+        "last_bar_ts": "2026-08-31 10:39:00",
+        "status": "actionable",
+        "small_to_large": None,
+        "window_basis": "离开笔窗口",
+        "side": "sell",
+        "trigger": "sell3",
+        "dynamic_grade": "no_operational_value",
+        "higher_consumption": "confirmed",
+        "in_window_points": ("sell3",),
+    },
+)
 
 
 def _bootstrap_for(timeframe: str) -> str:
@@ -321,10 +350,8 @@ def test_case_card_reproduces_on_frozen_window(card: dict[str, object]) -> None:
     assert point.get("price") == pytest.approx(card["price"], rel=1e-9), f"{card['card']}: 价格已变"
 
 
-def _precision_entry(symbol: str, higher_tf: str, lower_tf: str, cutoff: int) -> dict[str, object]:
+def _precision_entry_from(higher_all, lower_all, higher_tf: str, lower_tf: str, cutoff: int) -> dict[str, object]:
     """高级别取 cutoff，次级别按同一时刻 T 截断，再构建区间套入口。"""
-    higher_all = clean_bars(read_bars_from_csv(str(frozen_csv(symbol, higher_tf))))
-    lower_all = clean_bars(read_bars_from_csv(str(frozen_csv(symbol, lower_tf))))
     higher_bars = higher_all[:cutoff]
     t_end = getattr(higher_bars[-1], "ts")
     lower_bars = [bar for bar in lower_all if getattr(bar, "ts") <= t_end]
@@ -348,6 +375,16 @@ def _precision_entry(symbol: str, higher_tf: str, lower_tf: str, cutoff: int) ->
         lower_timeframe=lower_tf,
         lower_timeframe_label=lower_tf.upper(),
         pending_reverse_mode="effective_only",
+    )
+
+
+def _precision_entry(symbol: str, higher_tf: str, lower_tf: str, cutoff: int) -> dict[str, object]:
+    return _precision_entry_from(
+        clean_bars(read_bars_from_csv(str(frozen_csv(symbol, higher_tf)))),
+        clean_bars(read_bars_from_csv(str(frozen_csv(symbol, lower_tf)))),
+        higher_tf,
+        lower_tf,
+        cutoff,
     )
 
 
@@ -435,14 +472,63 @@ def test_precision_third_class_confirmed_is_reachable_on_real_windows() -> None:
     assert len(PRECISION_BAR_CARDS) >= 2
 
 
+@pytest.mark.parametrize(
+    "card", PRECISION_ACTIONABLE_CARDS, ids=[c["card"] for c in PRECISION_ACTIONABLE_CARDS]
+)
+def test_precision_actionable_card_reproduces_on_precision_fixture(card: dict[str, object]) -> None:
+    """precision 分组卡片：钉住 `status = actionable` 这个最高档。"""
+    higher_all = clean_bars(read_bars_from_csv(str(precision_fixture_csv(card["symbol"], card["higher"]))))
+    lower_all = clean_bars(read_bars_from_csv(str(precision_fixture_csv(card["symbol"], card["lower"]))))
+    cutoff = int(card["cutoff"])
+    entry = _precision_entry_from(higher_all, lower_all, card["higher"], card["lower"], cutoff)
+
+    nested = entry.get("nested_from") or {}
+    actual = {
+        "status": entry.get("status"),
+        "small_to_large": entry.get("small_to_large_status"),
+        "window_basis": entry.get("window_basis_label"),
+        "side": nested.get("side"),
+        "trigger": nested.get("trigger"),
+        "dynamic_grade": entry.get("dynamic_grade"),
+        "higher_consumption": entry.get("higher_consumption_level"),
+    }
+    expected = {key: card[key] for key in actual}
+    assert actual == expected, (
+        f"{card['card']}: precision fixture 上 actionable 卡片已变化（cutoff={cutoff} 杆）；"
+        f"期望 {expected}，实得 {actual}。规则变更请同步更新卡片与案例库 §7.5，不要放宽本断言。"
+    )
+    assert str(getattr(higher_all[cutoff - 1], "ts")) == card["last_bar_ts"], (
+        f"{card['card']}: cutoff 杆序号对应的末杆时间已变（窗口被重新冻结？）"
+    )
+    in_window = tuple(str(p.get("point")) for p in (entry.get("signal_points") or []))
+    assert in_window == card["in_window_points"], (
+        f"{card['card']}: 窗口内点已变（期望 {card['in_window_points']}，实得 {in_window}）"
+    )
+    assert entry.get("signal_descriptions"), (
+        f"{card['card']}: actionable 必须伴随窗口内点描述；若描述为空，说明该档已不再需要次级别精确点"
+    )
+
+
+def test_precision_actionable_is_reachable_on_real_windows() -> None:
+    """非空转守卫：A 组卡片必须真的把 `status` 推到 `actionable`。
+
+    该档在被冻结的 5 个多级别标的上（2812 帧）从未出现，因此必须靠本组独立 fixture 守护——
+    若卡片不再产生 `actionable`，要么规则变了，要么 precision fixture 失效。
+    """
+    statuses = {c["status"] for c in PRECISION_ACTIONABLE_CARDS}
+    assert "actionable" in statuses, "A 组卡片的存在意义就是钉住 actionable"
+    assert len(PRECISION_ACTIONABLE_CARDS) >= 1
+
+
 def test_precision_unreached_states_stay_unreached_on_real_windows() -> None:
-    """文档记录：`actionable` 与 `higher_level_confirmed` 在真实窗口上仍未观测到。
+    """**稀疏网格变更探测器**：已冻结的 5 个多级别标的上，`higher_level_confirmed` 仍未出现。
 
-    本用例是**文档同步闸门**：若这两档开始出现，说明案例库 §7.3 的措辞需更新。
-
-    注意 `third_class_confirmed` **不在**本用例的未观测列表里：它已由
-    `PRECISION_BAR_CARDS` 证实可达（先前「未观测到」的结论是 `analysis_cutoffs` 网格
-    取样太稀疏造成的假象，见案例库 §7.3 的漏斗分解）。
+    边界说明（重要）：
+    - 本用例只在本仓已有的 5 标的 × `analysis_cutoffs` 网格上运行。
+    - 它**不是**可达性结论：`third_class_confirmed`（S 组卡片）与 `actionable`（A 组卡片）
+      都曾因该语料覆盖不足而被误判为「不可达」，现均已用独立 fixture 正向钉住。
+    - 因此本用例的定位是「本网格内的行为变更探测器」：若这两档开始在**本网格**出现，
+      说明语料或规则发生了非预期变化，应同步更新案例库 §7.1/§7.3 的计数。
     """
     status_counts: dict[str, int] = {}
     small_to_large_counts: dict[str, int] = {}
@@ -478,15 +564,14 @@ def test_precision_unreached_states_stay_unreached_on_real_windows() -> None:
     assert small_to_large_counts.get("candidate", 0) >= 5, f"candidate 样本过少：{small_to_large_counts}"
 
     assert "actionable" not in status_counts, (
-        f"precision_entry.status 已在真实窗口出现 actionable（{status_counts}）；"
-        "案例库 §7.3 中「被上级别消费等级降级」的说法需更新。"
+        f"precision_entry.status 在本网格出现了 actionable（{status_counts}）；"
+        "注意 actionable 本身**可达**（A 组卡片已钉住），本断言只是网格变更探测器——"
+        "请同步更新案例库 §7.1/§7.3 的计数，不要删掉 A 组卡片。"
     )
     for state in UNOBSERVED_HIGHER_STATES:
-        if state == "actionable":
-            continue
         assert state not in small_to_large_counts, (
-            f"small_to_large_status 已在真实窗口出现 {state}（{small_to_large_counts}）；"
-            "案例库 §7.1/§7.3 的覆盖矩阵需更新，并补对应真实卡片。"
+            f"small_to_large_status 在本网格出现了 {state}（{small_to_large_counts}）；"
+            "案例库 §7.1/§7.3 的覆盖矩阵需更新，并考虑补对应真实卡片。"
         )
 
 
