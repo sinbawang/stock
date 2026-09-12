@@ -1630,10 +1630,11 @@ def build_signal_summary_fields(
     signals: dict[str, object],
     *,
     previous_frame: dict[str, object] | None = None,
+    data_window: str | None = None,
 ) -> dict[str, object]:
     # spec_id: SPEC.BUY_SELL.CORE（见 docs/chanlun/buy-sell-multi-level-spec.md）
     same_level_consumption_level = signals.get("same_level_consumption_level")
-    transitions = derive_signal_lifecycle_transitions(previous_frame, signals)
+    transitions = derive_signal_lifecycle_transitions(previous_frame, signals, data_window=data_window)
     return {
         "buy_points": [_format_signal_point_name(str(point)) for point in signals.get("buy_points", [])],
         "sell_points": [_format_signal_point_name(str(point)) for point in signals.get("sell_points", [])],
@@ -1642,7 +1643,9 @@ def build_signal_summary_fields(
         "forming_points": list(signals.get("forming_points", [])),
         "invalidated_points": list(transitions.get("invalidated_points", [])),
         "signal_repaint_violations": list(transitions.get("repaint_violations", [])),
-        "lifecycle_frame": to_lifecycle_frame(signals),
+        "lifecycle_rebased_points": list(transitions.get("rebased_points", [])),
+        "lifecycle_window_rebased": bool(transitions.get("window_rebased", False)),
+        "lifecycle_frame": to_lifecycle_frame(signals, data_window=data_window),
         "structure_state": signals.get("structure_state"),
         "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
         "same_level_consumption_level": same_level_consumption_level,
@@ -1747,13 +1750,29 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
       消失，且该帧成立前提已被破坏（`_signal_premise_broken`）→ 记为失效，附 `invalidated_reason`。
     - `repaint_violations`：confirmed 信号消失但成立前提未破坏 → 违反 spec §2.8 repaint 红线
       （confirmed 只能保持或转 invalidated，不得凭空消失 / 翻转）。
+    - `rebased`：相邻两帧的 `data_window` 不同（K 线窗口重基，如全量重抓 / 重算）时，笔编号会整体
+      重排，`signal_bi_id` 不再是同一坐标系，此时锚点消失记为 `rebased` 而非 repaint 违规。
     """
     timeline: list[dict[str, object]] = []
     invalidated: list[dict[str, object]] = []
     repaint_violations: list[dict[str, object]] = []
+    rebased: list[dict[str, object]] = []
     history: dict[tuple[str, object], dict[str, object]] = {}
+    window_rebased = False
 
     for idx, frame in enumerate(frames):
+        current_window = frame.get("data_window")
+        previous_window_known = idx > 0 and "data_window" in frames[idx - 1]
+        previous_window = frames[idx - 1].get("data_window") if idx > 0 else None
+        if idx == 0 or current_window is None:
+            window_changed = False
+        elif previous_window_known and current_window == previous_window:
+            window_changed = False
+        else:
+            # 上一帧无窗口标识（改动前的旧帧）或窗口已变化 → 笔编号坐标系不可比。
+            window_changed = True
+        if window_changed:
+            window_rebased = True
         current: dict[tuple[str, object], dict[str, object]] = {}
         for point_payload in frame.get("signal_points", []) or []:
             if point_payload.get("lifecycle_state") != SignalLifecycleState.CONFIRMED.value:
@@ -1796,18 +1815,32 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
                 timeline.append(
                     {"frame": idx, "point": point, "signal_bi_id": key[1], "transition": "invalidated", "invalidated_reason": reason}
                 )
+            elif window_changed:
+                # K 线窗口重基（全量重抓 / 重算导致笔编号重排）：锚点消失不构成 repaint 违规。
+                record["status"] = "rebased"
+                rebased.append({"frame": idx, "point": point, "signal_bi_id": key[1], "kind": "vanished_on_rebase"})
+                timeline.append({"frame": idx, "point": point, "signal_bi_id": key[1], "transition": "rebased"})
             else:
                 record["status"] = "repaint_violation"
                 repaint_violations.append({"frame": idx, "point": point, "signal_bi_id": key[1], "kind": "vanished_without_break"})
                 timeline.append({"frame": idx, "point": point, "signal_bi_id": key[1], "transition": "repaint_violation"})
 
-    return {"timeline": timeline, "invalidated": invalidated, "repaint_violations": repaint_violations}
+    return {
+        "timeline": timeline,
+        "invalidated": invalidated,
+        "repaint_violations": repaint_violations,
+        "rebased": rebased,
+        "window_rebased": window_rebased,
+    }
 
 
-def to_lifecycle_frame(signals: dict[str, object]) -> dict[str, object]:
+def to_lifecycle_frame(signals: dict[str, object], *, data_window: str | None = None) -> dict[str, object]:
     """从 `analyze_chanlun_signals` 输出提取可持久化的压缩生命周期帧（spec §2.8）。
 
     只保留跨帧回放所需字段（confirmed 锚点 + 前提比较标量），便于逐次运行 / 逐次刷新之间落盘对比。
+
+    `data_window` 标识本次分析所用 K 线窗口（实现取窗口起始 bar 时间戳）：增量追加时保持稳定，
+    全量重抓 / 重算会变化。跨帧比较据此区分「真 repaint」与「窗口重基导致锚点重编号」。
     """
     latest_down = signals.get("latest_down")
     latest_confirmed_up = signals.get("latest_confirmed_up")
@@ -1829,21 +1862,33 @@ def to_lifecycle_frame(signals: dict[str, object]) -> dict[str, object]:
         "latest_up_high": getattr(latest_confirmed_up, "high", None),
         "zs_high": getattr(current_zs, "zs_high", None),
         "zs_low": getattr(current_zs, "zs_low", None),
+        "data_window": data_window,
     }
 
 
 def derive_signal_lifecycle_transitions(
     previous_frame: dict[str, object] | None,
     signals: dict[str, object],
+    *,
+    data_window: str | None = None,
 ) -> dict[str, object]:
     """跨相邻两帧（上一次运行 / 刷新 vs 当前）推导 invalidated 点与 repaint 违规（spec §2.8 RS0）。
 
     `previous_frame` 为 `to_lifecycle_frame` 压缩帧；缺失（首帧）时返回空结果。invalidated 点补成
     可被下游归一化的信号载荷（`lifecycle_state=invalidated` + `invalidated_reason`）。
+
+    `data_window`（当前帧窗口标识）与 `previous_frame["data_window"]` 不同时，视为窗口重基：
+    锚点消失记入 `rebased_points` 而不再计入 `repaint_violations`（笔编号已整体重排，跨窗口比较
+    不成立）；前提被破坏的点仍正常计入 `invalidated_points`。
     """
     if not previous_frame:
-        return {"invalidated_points": [], "repaint_violations": []}
-    current_frame = to_lifecycle_frame(signals)
+        return {
+            "invalidated_points": [],
+            "repaint_violations": [],
+            "rebased_points": [],
+            "window_rebased": False,
+        }
+    current_frame = to_lifecycle_frame(signals, data_window=data_window)
     lifecycle = replay_confirmed_signal_lifecycle([previous_frame, current_frame])
     invalidated_points = [
         {
@@ -1858,7 +1903,20 @@ def derive_signal_lifecycle_transitions(
         }
         for entry in lifecycle.get("invalidated", [])
     ]
-    return {"invalidated_points": invalidated_points, "repaint_violations": lifecycle.get("repaint_violations", [])}
+    rebased_points = [
+        {
+            "point": entry.get("point"),
+            "signal_bi_id": entry.get("signal_bi_id"),
+            "window_rebased": True,
+        }
+        for entry in lifecycle.get("rebased", [])
+    ]
+    return {
+        "invalidated_points": invalidated_points,
+        "repaint_violations": lifecycle.get("repaint_violations", []),
+        "rebased_points": rebased_points,
+        "window_rebased": bool(lifecycle.get("window_rebased")),
+    }
 
 
 def _parse_signal_time(value: object) -> datetime | None:

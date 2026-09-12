@@ -24,7 +24,7 @@ def test_select_gates_returns_all_when_only_is_empty() -> None:
     gates = module._select_gates(None)
 
     assert len(gates) == len(module.SEGMENT_SAFETY_GATES)
-    assert {gate.name for gate in gates} == {"core", "regression", "consumer"}
+    assert {gate.name for gate in gates} == {"core", "regression", "consumer", "signal-lifecycle"}
 
 
 def test_select_gates_raises_for_unknown_name() -> None:

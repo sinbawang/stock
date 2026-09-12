@@ -2778,12 +2778,14 @@ def _lifecycle_frame(
     latest_down: Bi | None = None,
     latest_confirmed_up: Bi | None = None,
     current_zs: Zhongshu | None = None,
+    data_window: str | None = None,
 ) -> dict[str, object]:
     return {
         "signal_points": signal_points,
         "latest_down": latest_down,
         "latest_confirmed_up": latest_confirmed_up,
         "current_zs": current_zs,
+        "data_window": data_window,
     }
 
 
@@ -2913,9 +2915,180 @@ def test_derive_signal_lifecycle_transitions_marks_invalidated_across_runs() -> 
 
 
 def test_derive_signal_lifecycle_transitions_empty_on_first_frame() -> None:
-    """RS0 real-frame：首帧（无上一帧）不产出 invalidated / repaint。"""
+    """RS0 real-frame：首帧（无上一帧）不产出 invalidated / repaint / rebase。"""
     result = derive_signal_lifecycle_transitions(None, {"signal_points": []})
-    assert result == {"invalidated_points": [], "repaint_violations": []}
+    assert result == {
+        "invalidated_points": [],
+        "repaint_violations": [],
+        "rebased_points": [],
+        "window_rebased": False,
+    }
+
+
+def test_replay_marks_rebased_instead_of_repaint_when_data_window_changes() -> None:
+    """RS0 增量4：K 线窗口重基（笔编号整体重排）时锚点消失记为 rebased，不再误报 repaint 违规。"""
+    frame_a = _lifecycle_frame(
+        [_confirmed_point("sell3", 31, 36.02)],
+        latest_down=_bi(31, BiDirection.DOWN, high=36.5, low=31.3, day=5),
+        current_zs=_zhongshu(1, zs_low=44.22, zs_high=47.44, day=1),
+        data_window="2026-08-21T09:30:00",
+    )
+    frame_b = _lifecycle_frame(
+        [_confirmed_point("sell3", 89, 36.02)],  # 同一类点重锚到新编号
+        latest_down=_bi(89, BiDirection.DOWN, high=36.5, low=31.3, day=6),
+        current_zs=_zhongshu(1, zs_low=44.22, zs_high=47.44, day=1),
+        data_window="2026-08-28T09:30:00",
+    )
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["repaint_violations"] == []
+    assert result["window_rebased"] is True
+    assert len(result["rebased"]) == 1
+    assert result["rebased"][0]["point"] == "sell3"
+    assert result["rebased"][0]["signal_bi_id"] == 31
+    assert result["rebased"][0]["kind"] == "vanished_on_rebase"
+
+
+def test_replay_still_invalidates_on_premise_break_across_data_window_change() -> None:
+    """RS0 增量4：窗口重基不豁免失效判定 —— 前提被破坏的点仍计入 invalidated。"""
+    zs = _zhongshu(1, zs_low=44.22, zs_high=47.44, day=1)
+    frame_a = _lifecycle_frame(
+        [_confirmed_point("sell3", 31, 46.5)],
+        latest_confirmed_up=_bi(31, BiDirection.UP, high=46.5, low=41.0, day=5),
+        current_zs=zs,
+        data_window="2026-08-21T09:30:00",
+    )
+    frame_b = _lifecycle_frame(
+        [],
+        latest_confirmed_up=_bi(95, BiDirection.UP, high=52.0, low=47.0, day=6),  # 升破 zs_low=44.22
+        current_zs=zs,
+        data_window="2026-08-28T09:30:00",
+    )
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["repaint_violations"] == []
+    assert len(result["invalidated"]) == 1
+    assert result["invalidated"][0]["invalidated_reason"] == "third_class_reentered_zs"
+
+
+def test_replay_keeps_repaint_violation_within_same_data_window() -> None:
+    """RS0 增量4：窗口未变化时「confirmed 凭空消失」仍按 repaint 红线报违规（不回退既有语义）。"""
+    frame_a = _lifecycle_frame(
+        [_confirmed_point("buy1", 5, 9.8)],
+        latest_down=_bi(5, BiDirection.DOWN, high=11.0, low=9.8, day=5),
+        data_window="2026-08-21T09:30:00",
+    )
+    frame_b = _lifecycle_frame(
+        [],
+        latest_down=_bi(6, BiDirection.DOWN, high=11.0, low=10.5, day=6),  # 未跌破 9.8
+        data_window="2026-08-21T09:30:00",
+    )
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["window_rebased"] is False
+    assert result["rebased"] == []
+    assert len(result["repaint_violations"]) == 1
+    assert result["repaint_violations"][0]["kind"] == "vanished_without_break"
+
+
+def test_replay_treats_legacy_frame_without_window_identity_as_rebase() -> None:
+    """RS0 增量4：上一帧为改动前旧帧（无 data_window 键）→ 连续性不可验证，按重基处理不报违规。"""
+    legacy_frame = {
+        "signal_points": [{"point": "sell3", "signal_bi_id": 31, "price": 36.02, "lifecycle_state": "confirmed"}],
+        "latest_down_low": 31.3,
+        "latest_up_high": 34.1,
+        "zs_high": 47.44,
+        "zs_low": 44.22,
+    }  # 注意：无 data_window 键
+    current_frame = _lifecycle_frame(
+        [_confirmed_point("sell3", 89, 36.02)],
+        latest_down=_bi(89, BiDirection.DOWN, high=36.5, low=31.3, day=6),
+        current_zs=_zhongshu(1, zs_low=44.22, zs_high=47.44, day=1),
+        data_window="2026-08-28T09:30:00",
+    )
+
+    result = replay_confirmed_signal_lifecycle([legacy_frame, current_frame])
+
+    assert result["repaint_violations"] == []
+    assert result["window_rebased"] is True
+    assert [p["signal_bi_id"] for p in result["rebased"]] == [31]
+
+
+def test_to_lifecycle_frame_persists_data_window() -> None:
+    """RS0 增量4：压缩帧持久化 data_window，供下次运行判定是否窗口重基。"""
+    signals = {"signal_points": []}
+
+    frame = to_lifecycle_frame(signals, data_window="2026-08-21T09:30:00")
+
+    assert frame["data_window"] == "2026-08-21T09:30:00"
+    assert to_lifecycle_frame(signals)["data_window"] is None
+
+
+def test_derive_signal_lifecycle_transitions_reports_rebased_points() -> None:
+    """RS0 增量4：窗口变化时 derive 透出 rebased_points + window_rebased（不写 repaint_violations）。"""
+    previous_frame = {
+        "signal_points": [{"point": "sell3", "signal_bi_id": 31, "price": 36.02, "lifecycle_state": "confirmed"}],
+        "latest_down_low": 31.3,
+        "latest_up_high": 34.1,
+        "zs_high": 47.44,
+        "zs_low": 44.22,
+        "data_window": "2026-08-21T09:30:00",
+    }
+    current_signals = {
+        "signal_points": [{"point": "sell3", "signal_bi_id": 89, "price": 36.02, "lifecycle_state": "confirmed"}],
+        "latest_down": _bi(89, BiDirection.DOWN, high=36.5, low=31.3, day=6),
+        "latest_confirmed_up": _bi(88, BiDirection.UP, high=34.1, low=30.0, day=6),
+        "current_zs": _zhongshu(1, zs_low=44.22, zs_high=47.44, day=1),
+    }
+
+    result = derive_signal_lifecycle_transitions(
+        previous_frame,
+        current_signals,
+        data_window="2026-08-28T09:30:00",
+    )
+
+    assert result["repaint_violations"] == []
+    assert result["invalidated_points"] == []
+    assert result["window_rebased"] is True
+    assert [p["signal_bi_id"] for p in result["rebased_points"]] == [31]
+
+
+def test_build_signal_summary_fields_exposes_lifecycle_rebase_fields() -> None:
+    """RS0 增量4：summary 透出 rebased 观测字段（additive，不影响既有消费键）。"""
+    previous_frame = {
+        "signal_points": [{"point": "sell3", "signal_bi_id": 31, "price": 36.02, "lifecycle_state": "confirmed"}],
+        "latest_down_low": 31.3,
+        "latest_up_high": 34.1,
+        "zs_high": 47.44,
+        "zs_low": 44.22,
+        "data_window": "2026-08-21T09:30:00",
+    }
+    signals = {
+        "buy_points": [],
+        "sell_points": [],
+        "signal_points": [{"point": "sell3", "signal_bi_id": 89, "price": 36.02, "lifecycle_state": "confirmed"}],
+        "signal_catalog": [],
+        "forming_points": [],
+        "latest_down": _bi(89, BiDirection.DOWN, high=36.5, low=31.3, day=6),
+        "latest_confirmed_up": _bi(88, BiDirection.UP, high=34.1, low=30.0, day=6),
+        "current_zs": _zhongshu(1, zs_low=44.22, zs_high=47.44, day=1),
+        "same_level_consumption_level": None,
+        "structure_state": {},
+    }
+
+    payload = build_signal_summary_fields(
+        signals,
+        previous_frame=previous_frame,
+        data_window="2026-08-28T09:30:00",
+    )
+
+    assert payload["signal_repaint_violations"] == []
+    assert payload["lifecycle_window_rebased"] is True
+    assert [p["signal_bi_id"] for p in payload["lifecycle_rebased_points"]] == [31]
+    assert payload["lifecycle_frame"]["data_window"] == "2026-08-28T09:30:00"
 
 
 def test_build_signal_summary_fields_includes_invalidated_points_with_previous_frame() -> None:

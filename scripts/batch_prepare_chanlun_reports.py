@@ -734,6 +734,22 @@ def build_technical_score_summary(
     }
 
 
+def resolve_lifecycle_data_window(raw_bars) -> str | None:
+    """生命周期窗口标识：取 K 线窗口起始 bar 时间戳。
+
+    增量追加时窗口起点稳定（跨帧比较有意义）；全量重抓 / 重算会让起点变化，此时笔编号整体重排，
+    跨帧比较不成立，需按「窗口重基」处理而非 repaint 违规（spec §2.8）。
+    """
+    if not raw_bars:
+        return None
+    first_ts = getattr(raw_bars[0], "ts", None)
+    if first_ts is None:
+        return None
+    if hasattr(first_ts, "isoformat"):
+        return first_ts.isoformat(timespec="seconds")
+    return str(first_ts)
+
+
 def build_technical_summary(
     timeframe_label: str,
     signals: dict[str, object],
@@ -742,6 +758,7 @@ def build_technical_summary(
     raw_bars=None,
     precision_entry: dict[str, object] | None = None,
     previous_frame: dict[str, object] | None = None,
+    data_window: str | None = None,
 ) -> dict[str, object]:
     conclusion = _extract_prefixed_value_from_text(advice_text, "结论：") or None
     route_fields = _build_route_level_fields(timeframe_label, signals)
@@ -751,7 +768,7 @@ def build_technical_summary(
         "conclusion": conclusion,
         "suggestion": _extract_prefixed_value_from_text(advice_text, "建议：") or None,
         **build_technical_score_summary(raw_bars, signals, conclusion=conclusion, precision_entry=precision_entry),
-        **build_signal_summary_fields(signals, previous_frame=previous_frame),
+        **build_signal_summary_fields(signals, previous_frame=previous_frame, data_window=data_window),
         **route_fields,
         **transition_fields,
     }
@@ -1125,6 +1142,7 @@ def export_case(
         advice_text,
         raw_bars=raw_bars,
         previous_frame=previous_frame,
+        data_window=resolve_lifecycle_data_window(raw_bars),
     )
     report_text = analysis_text + "\n\n" + advice_text + "\n"
     latest_zhongshu = serialize_zhongshu(zhongshus[-1]) if zhongshus else None
