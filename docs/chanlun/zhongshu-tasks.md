@@ -707,6 +707,7 @@
 
 - `same_level_consumption_level` 已作为统一三态主字段贯通 `tech.json` / `summary` / miniapp 卡片 / index、group 聚合层；`build_advice(...)` / `analyze_current_state(...)` 已优先读该字段做 pending/confirmed 判定，`same_level_decomposition_mode` 仅作兼容回退。
 - 旧 payload fallback regression 与多端文案对照表已锁住缺字段时稳定回退，不再把 `pending` 二次摘要成 `confirmed`。
+- `2026-09-12` 硬化：三态契约原则第 5 条（「字段缺失时一律按 `unknown -> pending/auxiliary` 降级，不允许补脑成 `confirmed`」）此前只靠上层传参保证——共享兜底 `_build_same_level_consumption_level` 在缺 `current_structure_status` 与 `confirmation_basis` 时默认返回 `confirmed`，一旦有调用方传部分 `structure_state` 就会 fail open，击穿多级别降级闸门。现已在兜底处显式降级为 `pending`（见 `src/chanlun/analysis.py`），并由 `tests/test_multilevel_downgrade_invariant.py` 锁定；探针 `build/probe_consumption_default.py` 实测该分支在 21 个冻结窗口 + 4 个冻结 `tech.json` 上不可达，故该硬化在真实输出上行为中性。
 
 #### ZS5.3 补真实 `1m` 预警样本
 

@@ -37,6 +37,11 @@
   lag 比例 8/22 = 0.36）；随后把该不变量固化为 `tests/test_downstream_chain_integrity.py`
   并注册进 `scripts/run_segment_safety_gates.py` 的 `regression` 闸门，见
   [segment-safety-checklist.md](segment-safety-checklist.md)。
+- **2026-09-12 多级别降级 fail-open 修复**：共享兜底 `_build_same_level_consumption_level`
+  在缺证据时默认 `confirmed`，会击穿「高一级未确认时下游不得越级显示强确认」红线；
+  已按 ZS5.2 契约改为降级，并以全参数空间不变量闸门
+  `tests/test_multilevel_downgrade_invariant.py` 锁定。详见
+  [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md) T2 / C3 行。
 
 ## 2. 已完成任务
 

@@ -20,7 +20,7 @@
 | BS2 | 一类买卖点严格确认 | 完成 | `zhongshu`, `trend-divergence` 稳定 | 最近中枢、离开段、背驰绑定关系明确且可自动判定 |
 | BS3 | 二类买卖点严格确认 | 完成 | BS2 | 能严格绑定 1 类点后的首次确认性回抽 |
 | BS4 | 三类买卖点严格确认 | 完成 | BS2 | 能严格绑定最近中枢后的首次回抽与级别边界 |
-| BS5 | 多级别联立与消费降级规则 | 进行中 | BS2-BS4 | 高一级方向、操作级别、执行级别和 pending / auxiliary 降级文案一致 |
+| BS5 | 多级别联立与消费降级规则 | 完成 | BS2-BS4 | 高一级方向、操作级别、执行级别和 pending / auxiliary 降级文案一致 |
 | BS6 | 标准案例包与回归闸门 | 进行中 | BS1-BS5 | 一二三类点与区间套样例可 review、可回归、可下游消费 |
 | BS7 | 类二类买卖点（LB2 / LS2）严格确认 | 完成 | BS4（段级背驰口径稳定） | 同级别隔段背驰（A_i vs A_{i+2}）+ 回踩/反抽结束即生成，无前置一类点、不设破前低/前高 |
 | BS8 | 类一类买卖点（LB1 / LS1）严格确认 | 完成 | BS2（一类点段级背驰口径稳定） | 盘整背驰（单中枢 range + ongoing_same_type）+ 离开段 vs 进入段创新低/高 + 力度衰减 + 反向转折即生成，标准一类点趋势门控缺席时补点 |
@@ -46,14 +46,14 @@
 | --- | --- | --- | --- | --- | --- |
 | D1 | 当前实现 vs 严格理论差异表 | 高 | 逐条把 `buy_1/2/3`、`sell_1/2/3` 的现状与目标拆开 | 完成 | 差异表已落在 BS1 节，逐条绑定 `analysis.py::analyze_chanlun_signals` 行号，六条规则均标为「工程近似」并写出已严格绑定项与主要缺口。 |
 | D2 | 标准案例包与 review 模板 | 中 | 补一二三类点正反例、区间套、小转大与多级别共振样例 | 进行中 | 已有骨架；当前已补前端可见级别的区间套/小转大卡片（真实 `600900 1m confirmed 3S`、真实 `002555 1m -> 5m` 候选观察链、`5m buy3 -> third_class_confirmed` 对照卡），但整体仍不足以让 reviewer 快速判断每类点的严格程度。 |
-| D3 | 消费降级规范 | 中 | 统一 pending / auxiliary / confirmed 的文案分层 | 进行中 | 需要跟中枢、背驰两条上游链一起收口。 |
+| D3 | 消费降级规范 | 中 | 统一 pending / auxiliary / confirmed 的文案分层 | 进行中 | 三态字段与文案契约已在中枢侧收口（见 [zhongshu-tasks.md](zhongshu-tasks.md) ZS5.2），买卖点侧的多级别降级文案已落地并回归锁定（见本页 T2 / C3）；剩余是把中枢、背驰两条上游链的措辞与买卖点侧做一次全文对照。 |
 
 ### 测试任务
 
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
 | T1 | 一二三类点回归闸门 | 中 | 为每类点建立正例、反例、易混淆例最小回归集 | 进行中 | 已有 buy_2/sell_2 正例；`2026-08-23` 补齐一买/一卖/三买/三卖正例、一买「仅触边不背驰」反例、三买「回抽回中枢」反例、二买「中继震荡破前低」易混淆例（`tests/test_chanlun_analysis.py`，共 7 个新用例，spec_id SPEC.BUY_SELL.CORE）。 |
-| T2 | 多级别联立与降级核验 | 高 | 锁高一级未确认时下游不得越级显示强确认 | 进行中 | 这是消费层最容易误报强信号的区域。 |
+| T2 | 多级别联立与降级核验 | 高 | 锁高一级未确认时下游不得越级显示强确认 | 完成 | 降级闸门已落地（本页 BS5 节）并由不变量回归锁定：`tests/test_multilevel_downgrade_invariant.py` 以「触发路径 × 买卖侧 × 上级别消费等级（含缺失档）× 中枢漂移方向」全交叉空间断言“上级别未确认时不出现 `actionable`”，并含反空转守卫（`confirmed` 时必须仍能 `actionable`）。`2026-09-12` 核对时发现并修掉一个 **fail-open** 兜底：共享的 `_build_same_level_consumption_level` 在缺 `current_structure_status` 与 `confirmation_basis`（缺证据）时默认返回 `confirmed`，会直接击穿本红线；现改为按 ZS5.2 契约降级为 `pending`。可达性已实测：21 个冻结窗口 + 4 个冻结 `tech.json` 两字段均存在，且两个生产调用点都传完整载荷，故该缺陷是**潜在**的（未污染真实输出）；回退修复后新闸门 18 failed、恢复后 80 passed。 |
 | T3 | 区间套 / 小转大样例回归 | 中 | 给重点 review 样例绑定自动化锚点 | 进行中 | 依赖 BS2-BS5 的主实现逐步稳定。 |
 
 ### 代码任务
@@ -61,7 +61,7 @@
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
 | C1 | BS1 差异表对应到实现入口 | 高 | 把 `analysis.py` 中各类买卖点规则逐条映射出来 | 完成 | 六条 buy/sell 规则已逐条映射到 `analyze_chanlun_signals` 行号（L882-925），差异分类可溯源。 |
-| C3 | BS5 多级别联立与消费降级 | 高 | 统一高一级方向、操作级别、执行级别与降级文案 | 进行中 | 这是当前消费层主要的实现收口点。 |
+| C3 | BS5 多级别联立与消费降级 | 高 | 统一高一级方向、操作级别、执行级别与降级文案 | 完成 | 主实现已收口：区间套降级闸门（`higher_consumption_level` / `watch` + 「不按严格区间套执行」）、86课动态判级（`dynamic_grade` 六象限）、第44课小转大必要条件（`small_to_large_status` 三态）均已落地并贯通分析层 / mixed report / miniapp 三层，回归见本页 BS5 节。`2026-09-12` 补上共享消费等级的 fail-closed 硬化与全参数空间不变量闸门（见 T2 行）。剩余为案例广度（D2）。 |
 | C2 | BS2-BS4 一二三类点严格确认 | 中 | 先一类点，再二类点，再三类点逐级收口 | 进行中 | BS1 差异表已闭合；BS2 严格确认链（应然）已写入，且两个契约缺口（双边不对称、无转折确认）**均已收口**——同文件 BS2 段记「双边已对称」「`_has_reverse_turn_after` 反向转折确认」，总表 §3.0A「一二三类买卖点严格确认」为「完成 98%」。2026-09-12 订正：本行此前写「下一步做双边对称与转折确认代码收口」，属陈旧描述（属同一类「看板行落后于代码」缺陷）。剩余为案例广度与跨级别 review 资料。 |
 
 ## 任务拆分
@@ -171,6 +171,7 @@
 - 86课动态判级已落地：`build_lower_timeframe_precision_entry` 新增 `dynamic_grade` / `dynamic_grade_label` 字段，按上级别中枢漂移方向（`structure_state.current_ongoing.type` 的 up / down / range）对次级别买卖点分级——震荡=「震荡机会」、上移中的卖点 / 下移中的买点=「警戒」、上移中的买点 / 下移中的卖点=「无操作价值」。契约枚举 `PrecisionDynamicGrade` 落在 `analysis_contract.py`，回归见 `test_analysis_contract.py::test_precision_dynamic_grade_enum_is_stable_and_complete` 与 `test_chanlun_analysis.py::test_build_lower_timeframe_precision_entry_dynamic_grade`（六象限 parametrize）。
 - 第44课小转大必要条件已显式落地：`build_lower_timeframe_precision_entry` 新增 `small_to_large_status` / `small_to_large_status_label` / `small_to_large_status_note`，仅区分「小转大候选」与「最后一个次级别中枢已出现对应三类买卖点、必要条件已具备」，避免把必要条件误写成高级别已确认；`build_precision_window_display` 同步透出「小转大」行。回归见 `test_analysis_contract.py::test_small_to_large_status_enum_is_stable_and_complete`、`test_build_lower_timeframe_precision_entry_marks_small_to_large_candidate_without_buy3_sell3`、`test_build_lower_timeframe_precision_entry_marks_small_to_large_necessary_condition_when_buy3_sell3_exists`、`test_build_precision_window_display_includes_small_to_large_status`。
 - 消费展示已接入：`build_precision_window_display` 的 `lines` 增加「判级」与「小转大」行并透出 `dynamic_grade` / `dynamic_grade_label` / `small_to_large_status*`；A/H mixed report、HK compact 文案与 miniapp bundle 均已透出该状态。回归链已覆盖三层：分析层（`tests/test_chanlun_analysis.py`）、mixed report（`tests/test_generate_a_share_single_mixed_report.py` / `tests/test_generate_h_share_single_mixed_report.py`）以及 miniapp summary/detail（`tests/test_build_miniapp_publish_bundle.py`，含 `002555/03690/600900` 三个真实 replay 观察样本与全文件回绿）。
+- `2026-09-12` 核对与硬化：原有 4 个降级用例属**举例**覆盖，不足以代表「高一级未确认时下游不得越级显示强确认」这条不变量。新增 `tests/test_multilevel_downgrade_invariant.py`（80 项）以全交叉空间覆盖触发路径 × 买卖侧 × 上级别消费等级（含「字段缺失」档）× 中枢漂移方向，并补反空转守卫。核对时发现共享兜底 `_build_same_level_consumption_level` 属 **fail-open**：缺证据时返回 `confirmed`，与 ZS5.2 三态契约原则第 5 条相悖；已改为降级为 `pending`，并用探针实测该分支在 21 个冻结窗口 + 4 个冻结 `tech.json` 上不可达（真实输出行为中性）。
 
 <a id="bs6-case-gates"></a>
 ### BS6 标准案例包与回归闸门

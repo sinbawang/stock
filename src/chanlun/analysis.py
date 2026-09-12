@@ -724,6 +724,13 @@ def _build_same_level_consumption_level(structure_state: dict[str, object]) -> s
         return "pending"
     if confirmation_basis == "single_active_zhongshu":
         return "pending"
+    if not current_status and not confirmation_basis:
+        # ZS5.2 三态契约原则第 5 条：字段缺失时一律按 unknown -> pending/auxiliary 降级，
+        # 不允许补脑成 confirmed。此处是**共享**消费等级的唯一兜底，若默认 confirmed 会 fail open，
+        # 直接击穿 T2 红线（高一级未确认时下游不得越级显示强确认）的多级别降级闸门。
+        # 真实数据核查（21 个冻结窗口 + 4 个冻结 tech.json）两个字段均存在，本分支不可达，
+        # 故该硬化在真实输出上行为中性，见 build/probe_consumption_default.py。
+        return "pending"
     return "confirmed"
 
 
