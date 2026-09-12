@@ -52,7 +52,7 @@
 | 类型 ID | 任务 | 优先级 | 当前重点 | 当前状态 | 进展 |
 | --- | --- | --- | --- | --- | --- |
 | C1 | S1 线段成立与终结条件统一 | 高 | 锁首段 bootstrap、尾段确认与 stop_reason 解释 | 进行中 | 属于当前线段主实现的第一优先级。 |
-| C2 | S2 `pending_confirmation` 与 `confirmed` 统一 | 高 | 收口尾段状态机与 practical 主循环停扫规则 | 进行中 | 当前多个消费位点仍需要保持同一命名和同一结论。 |
+| C2 | S2 `pending_confirmation` 与 `confirmed` 统一 | 高 | 收口尾段状态机与 practical 主循环停扫规则 | 进行中 | 当前多个消费位点仍需要保持同一命名和同一结论。`2026-09-12` 修复了 practical 主循环的**中段 pending 停扫**缺陷：原先只试探 pending 段后的第一个候选种子，若该种子同样 pending 就 `break`，把其后所有笔整体丢弃（真实 `300124 30m` 1400 根窗口 116 笔只剩 2 段）。现改为持续向右搜索第一个可确认锚点（`_resolve_later_confirmed_seed`），仅当其后确实无可用锚点时停扫，未确认尾段语义保持不变；回归 `tests/test_segment.py` 两条 + 四道线段安全闸门全绿，详见 [segment-implementation-changelog.md](segment-implementation-changelog.md)。 |
 | C3 | S3 重写 / 吸收 / 复用输出口径稳定 | 高 | 统一 reclaim / overlap / restart / absorb 的事件顺序 | 进行中 | 是当前上游边界继续漂移的核心 blocker。 |
 
 ## 任务拆分

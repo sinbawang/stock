@@ -63,3 +63,61 @@
 
 - 表中计数为本轮执行时的通过数快照，后续以实时 CI/本地闸门为准。
 - 任务源看板见 [../analysis/chanlun-line-segment-original-and-comparison.md](../analysis/chanlun-line-segment-original-and-comparison.md)。
+
+## 2026-09-12 快照：practical 中段 pending 停扫缺陷
+
+### 症状
+
+`termination_mode="practical"` 下，若段链中段出现「未确认（pending）」段，主循环会尝试向右
+找回退锚点；但**只试探第一个候选种子**，一旦该种子同样 pending 就 `break`，把其后所有笔整体
+丢弃。
+
+真实复现：`300124 30m` 1400 根（116 笔）窗口 → practical 只产出 **2 段**，bi 18..114 被丢弃；
+同一窗口 `theory` 产出 22 段。
+
+### 根因
+
+`identify_segments` 主循环的 `if not is_confirmed:` 回退分支：
+
+```python
+later_seed = _find_later_initial_segment_window(bis, effective_end_idx, strict_segment_rules=True)
+if later_seed is not None:
+    later_probe = _extend_segment(bis, later_seed[0], anchor_idx=later_seed[0], ...)
+    if later_probe is not None and later_probe[1]:
+        index = later_seed[0]; continue
+break   # ← 首个候选 pending 即整体停扫
+```
+
+该窗口下首个候选种子为 bi 19（仍 pending），而其后共有 50 个候选、其中 44 个可确认
+（最近的 bi 20 即可确认）。旧的 `break` 使这 44 个可用锚点全部不可达。
+
+注：`strict_segment_rules=False` 时首个候选（bi 18）恰好可确认，因此该缺陷只在 strict（默认、
+且 pipeline 实际使用）下暴露。
+
+### 修复
+
+新增 `_resolve_later_confirmed_seed(...)`：从 pending 段之后持续向右寻找**第一个能形成已确认
+线段的种子**；仅当其后确实不存在可确认锚点（即正常「未确认尾段」）时返回 `None` → 仍走 `break`，
+保持既有尾段语义不变。
+
+未确认尾段仍保留为最后一段，不改动 `exhausted_confirmed_bis` / `same_direction_not_extending`
+等 pending 停靠口径。
+
+### 闭环记录
+
+| 任务 | 任务范围（代码/测试） | 回归结果 | 文档更新 |
+| --- | --- | --- | --- |
+| S2-practical 停扫 | `src/chanlun/segment.py` 新增 `_resolve_later_confirmed_seed` 并替换主循环回退分支；新增 `test_practical_recovers_past_pending_segment_to_later_confirmed_anchor`、`test_practical_segment_count_does_not_collapse_against_theory`（红→绿） | `run_segment_safety_gates.py` 四闸门全绿（core 108 / regression 73 / consumer 4 / signal-lifecycle 1） | 本 changelog + 任务看板 |
+
+### 变更说明（提交模板）
+
+```text
+Segment Scope: identify_segments 主循环 if not is_confirmed 回退分支（practical 专用路径）
+Expected Behavior Delta:
+  - 改变：中段 pending 后改为继续向右搜索可确认锚点 → 段数/覆盖笔数增加（真实窗口由 2 段恢复为 21 段）
+  - 不变：未确认尾段仍为最后一段；stop_reason 口径、theory 模式、bootstrap 与 strict 规则均未改动
+Safety Gates: python scripts/run_segment_safety_gates.py → all selected gates passed
+```
+
+配套：新增回归 fixture `tests/fixtures/real/segment_practical_halt/`（加宽窗口，专门复现该缺陷，
+见 `scripts/freeze_real_fixtures.py` 的 `HALT_FIXTURES`）。。

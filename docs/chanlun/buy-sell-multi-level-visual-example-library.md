@@ -236,8 +236,8 @@ flowchart LR
 | 三买正例（离开后首次回抽不回中枢上沿） | `test_analyze_chanlun_signals_flags_third_buy_after_leave_zs_and_pullback_holds_upper_edge` | `leave_zs_then_pullback_holds_upper_edge` |
 | 三卖正例（对称样例） | `test_analyze_chanlun_signals_flags_third_sell_after_leave_zs_and_rebound_fails_lower_edge` | `leave_zs_then_rebound_fails_lower_edge` |
 | 三买反例：首次回抽重入中枢 | `test_analyze_chanlun_signals_does_not_flag_buy3_when_first_pullback_reenters_zs` | 回抽回到中枢区间 -> 不成立 |
-| confirmed 消费真实对照：`600900 1m sell3` | `test_build_summary_and_detail_payload_preserve_real_600900_1m_down_warning_sample` | 真实 `1m` live 样本已形成 `sell3 + confirmed`，前端必须把它和 `watch/pending` 候选卡分层展示，不得降写回预警态 |
-| confirmed 买侧真实对照：`00700 5m buy2like` | `test_build_summary_and_detail_payload_preserve_real_00700_5m_confirmed_buy2like_sample` | 真实 `5m` live 样本已形成 `buy2like + confirmed`，前端买侧 confirmed 锚点不再为空；但它不能替代未来 `1m confirmed` 买点样本 |
+| confirmed 消费真实对照：`00700 5m sell3` | `test_build_summary_and_detail_payload_preserve_real_00700_5m_confirmed_sell3_sample` | 真实 `5m` live 样本已形成 `sell3 + confirmed`，前端必须把它和 `watch/pending` 候选卡分层展示，不得降写回预警态 |
+| pending 消费真实对照：`600900 1m buy3` | `test_build_summary_and_detail_payload_preserve_real_600900_1m_buy3_pending_sample` | 真实 `1m` live 样本已出现 `buy3` 雏形但消费等级仍为 `pending`，前端必须按待确认消费展示，不得越级升为已确认买点 |
 | confirmed 买侧真实 replay 对照：`01024 1m buy2like` | `test_real_1m_confirmed_buy2like_replay_sample_01024` / `test_build_summary_and_detail_payload_preserve_real_01024_1m_confirmed_buy2like_replay_sample` | 真实 `1m` 历史窗口 `2026-08-03 15:33` 已命中 `single_confirmed + confirmed + buy2like`，可作首个 `1m` 买侧 confirmed replay 锚点；当前仍缺稳定的 live 落盘样本 |
 | confirmed 买侧第二 replay 对照：`00175 1m buy2like` | `test_real_1m_confirmed_buy2like_replay_sample_00175` / `test_real_00175_1m_confirmed_buy2like_replay_sample_keeps_current_state` | 真实 `1m` 历史窗口 `2026-08-05 10:43` 同样命中 `single_confirmed + confirmed + buy2like`，可作第二个 `1m` 买侧 replay 锚点，降低单标偏置 |
 | 区间套/小转大必要条件已具备：5M `buy3` 对照卡 | `test_build_lower_timeframe_precision_entry_marks_small_to_large_necessary_condition_when_buy3_sell3_exists` | 次级别已出现 `buy3`，`small_to_large_status` 必须升级到 `third_class_confirmed`，但仍不得把“必要条件成立”偷换成高级别 confirmed |
