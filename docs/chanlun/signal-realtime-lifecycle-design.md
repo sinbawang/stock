@@ -318,24 +318,32 @@ cutoff 2588→2628（**+2 bi**，笔 152→154）段数由 **19 骤降到 6**，
 
 | cutoff | `_extend_segment(33)` | 后续 |
 | --- | --- | --- |
-| 2588 | `end=35`（小段，未确认） | 恢复种子找到 bi39 → 继续 → **19 段** |
-| 2628（+2 bi） | `end=151`（**118-bi 巨型**，未确认） | `_resolve_later_confirmed_seed(151)` 其后无确认种子 → `break` → **6 段** |
+| 2588 | `end=35`（小段，未确认） | 主循环 `index = end+1` → 继续分段 → **19 段** |
+| 2628（+2 bi） | `end=151`（**118-bi 巨型**，未确认） | `index = 152` 越过 `len-3` → 循环结束 → **6 段** |
 
-关键对照（`build/probe_extend_segment_diff.py`）：同一 seed 在 cutoff 2628 下
-`gapdefer=True` → `end=39` **已确认**小段；`gapdefer=False` → `end=151` 未确认巨型。
-即 **`gap_false_defer` 打开时扩张对尾部稳定，关闭时对尾部敏感、可跑飞**。
-主循环对非首段用 `current_enable_gap_false_defer = enable_gap_false_defer and not segments`（即**非首段关闭**）
-→ 这正是塌缩根因。
+**⚠ 修正上一轮措辞**：默认 `termination_mode = theory`（**非 practical**），故
+`practical_mode=False`、`enable_gap_false_defer / fallback_reverse_break / same_direction_fallback` **全部为 False**、
+`effective_strict=False`。未确认段走的是 theory 分支 `index = effective_end_idx + 1`，
+**`_resolve_later_confirmed_seed` 根本没被调用**（那是 practical 路径，上一轮归因错了）。
 
-**但显式修法「非首段也开 `gap_false_defer`」过于侵入**（`build/probe_gapdefer_fix_impact.py`）：
-可修好 `000651`（跌幅 12→0，段 17→33），但**同时改动 20 个 fixture 中 7 个的分段**
-（`00700_30m` 15→17、`03690_1m` 22→24、`300124_day` 15→19、`300124_30m` 22→20、`03690_5m` 18→16 等）。
-这是对分段算法的**全局改动**，需重新基线整套段回归并逐一对照理论 / 课程 fixture，属独立工程项，
-非一处定点修复。故当前**保留 `000651-1m` strict xfail 钉住**，不贸然改 `identify_segments`。
+**真实触发**（`probe`：`_resolve_execution_profile` + 逐 cutoff bi 尾部）：`bi151`（更深的新低 **38.3**）
+在 2588 时**未确认**、到 2628 **变为已确认**。theory 特征序列终结下，一个新确认的更深低点会
+**回溯性地**阻止「从 bi33 出发的下降段」提前终结（中间的顶分型被新低作废），于是该段一路扩张到 bi151，
+把原本 14 个中段并成一根。即**塌缩是 theory 特征序列终结对「新确认极值」的尾部敏感**。
 
-**更聚焦的候选（待评估）**：改 `_resolve_later_confirmed_seed` —— 当扩张产出异常长的未确认段
-且其后无确认种子时，从**巨型段内部**（而非其末端之后）重新寻种，让内部本可确认的子段
-（bi39->43、bi44->50…）浮现。此路只在跑飞时触发，理论上不扰动正常 fixture，但需实测验证。
+**两个修法假设均被实测证伪：**
+
+1. 「非首段也开 `gap_false_defer`」（`build/probe_gapdefer_fix_impact.py`）：可修 `000651`
+   （跌幅 12→0）但**同时改动 20 个 fixture 中 7 个的分段**（`00700_30m` 15→17、`300124_day` 15→19…）
+   → 全局改动，需重基线整套段回归，非定点修复。
+2. 「未确认即用 `gapdefer=True` 重试」（`build/probe_fix_b_retry_impact.py`）：**无效**——
+   theory 模式下重试返回 `(end=41, conf=False)`，因 `fallback_reverse_break=False`，
+   bi40 的 `reverse_break` 不被接受，无法确认小段。
+   且「改 `_resolve_later_confirmed_seed` 从巨型段内部重新寻种」也**不适用**——theory 模式压根不走该函数。
+
+**结论**：塌缩根植于 theory 特征序列终结的尾部敏感（新确认更深极值回溯性合并中段），
+无就地聚焦修法；修它须改 theory 终结逻辑，属高回归风险的分段算法工程，需专项 + 全套段回归红→绿。
+故**保留 `000651-1m` strict xfail 钉住**，不贸然改 `identify_segments`。
 
 ## 4. 实时预备态（RS1）
 
