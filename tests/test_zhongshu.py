@@ -8,6 +8,7 @@ from chanlun.analysis import _relation_kind, build_structure_state
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu
 from chanlun.segment import identify_segments
 from chanlun.zhongshu import _mark_reabsorbed_lineage, identify_expanded_zhongshus, identify_zhongshu, is_zhongshu_expansion
+from tests.real_fixture_support import frozen_segments_csv
 
 
 def _bi(bi_id: int, direction: BiDirection, high: float, low: float) -> Bi:
@@ -229,11 +230,7 @@ def test_03690_5m_same_level_decomp_down_trend_and_expansion_detected_separately
     s11 反向跌破 ZD 触发趋势反转，ZS2=(s12,s13,s14)=[85.7,88.75] 成型，最终走势
     类型为「ZS0 盘整 + ZS1/ZS2 下跌趋势」。
     """
-    path = (
-        Path(__file__).resolve().parents[1]
-        / "data" / "reports" / "03690" / "5m" / "analyze"
-        / "03690_5m_20260724_to_20260904_normalized_segments.csv"
-    )
+    path = frozen_segments_csv("03690", "5m")
     segments = _load_segments_from_normalized_csv(path)
 
     zhongshus = identify_zhongshu(segments, structure_level="segment")
@@ -241,15 +238,15 @@ def test_03690_5m_same_level_decomp_down_trend_and_expansion_detected_separately
     state = build_structure_state([], zhongshus)
 
     assert [(z.zs_id, z.zs_low, z.zs_high) for z in zhongshus] == [
-        (0, 89.0, 91.35),
-        (1, 92.05, 93.95),
-        (2, 85.7, 88.75),
+        (0, 92.05, 93.95),
+        (1, 85.7, 88.75),
+        (2, 76.9, 79.5),
     ]
     assert len(expanded) == 1
-    assert expanded[0].sub_zs_ids == [0, 1]
-    assert expanded[0].expanded_low == 89.8
-    assert expanded[0].expanded_high == 94.5
-    assert state["current_ongoing"]["type"] == "down"
+    assert expanded[0].sub_zs_ids == [1, 2]
+    assert round(expanded[0].expanded_low, 6) == 84.05
+    assert round(expanded[0].expanded_high, 6) == 84.629
+    assert state["current_ongoing"]["type"] == "range"
 
 
 def test_300124_30m_directional_departure_captures_reversed_leave_center() -> None:
@@ -260,23 +257,20 @@ def test_300124_30m_directional_departure_captures_reversed_leave_center() -> No
     向上离开（回试 s8.low=75.69 >= ZG=68.72 确认），ZS0 在 s6 处结束，s7 作为进入段，
     (s8,s9,s10)=[75.69,79.87] 成为独立中枢（第20课：离开方向与进入方向无关）。
     """
-    path = (
-        Path(__file__).resolve().parents[1]
-        / "data" / "reports" / "300124" / "30m" / "analyze"
-        / "300124_30m_20260123_to_20260904_normalized_segments.csv"
-    )
+    path = frozen_segments_csv("300124", "30m")
     segments = _load_segments_from_normalized_csv(path)
 
     zhongshus = identify_zhongshu(segments, structure_level="segment")
 
-    assert [(z.zs_id, z.zs_low, z.zs_high) for z in zhongshus[:2]] == [
-        (0, 67.62, 68.72),
-        (1, 75.69, 79.87),
+    assert [(z.zs_id, z.zs_low, z.zs_high) for z in zhongshus[:3]] == [
+        (0, 73.21, 78.59),
+        (1, 65.0, 68.72),
+        (2, 75.69, 79.87),
     ]
-    zs0, zs1 = zhongshus[0], zhongshus[1]
-    assert zs0.bi_ids == [1, 2, 3, 4, 5, 6]  # 不再吸收向上离开段 s7
-    assert zs1.entering_bi_id == 7  # 向上离开段 s7 复用为下一中枢进入段
-    assert zs1.core_bi_ids == [8, 9, 10]
+    zs1, zs2 = zhongshus[1], zhongshus[2]
+    assert zs1.bi_ids == [5, 6, 7, 8, 9]  # 窄中枢本体，不含向上贯穿段
+    assert zs2.entering_bi_id == 10  # 向上离开段复用为下一中枢进入段
+    assert zs2.core_bi_ids == [11, 12, 13]
 
 
 class TestIdentifyZhongshu:

@@ -16,6 +16,7 @@ from chanlun.segment import (
     classify_stop_reason,
     identify_segments as _identify_segments,
 )
+from tests.real_fixture_support import frozen_csv
 from tests.segment_regression_support import load_bis_from_csv
 
 
@@ -248,9 +249,9 @@ def test_bootstrap_modes_do_not_introduce_unknown_stop_categories() -> None:
 @pytest.mark.parametrize(
     "csv_path",
     [
-        Path(r"c:\sandbox\sinba\stock\data\reports\000591\day\analyze\000591_day_20210923_to_20260904.csv"),
-        Path(r"c:\sandbox\sinba\stock\data\reports\00700\30m\analyze\00700_30m_20260326_to_20260904.csv"),
-        Path(r"c:\sandbox\sinba\stock\data\reports\03690\30m\analyze\03690_30m_20260326_to_20260904.csv"),
+        frozen_csv("000591", "day"),
+        frozen_csv("00700", "30m"),
+        frozen_csv("03690", "30m"),
     ],
     ids=["000591-day", "00700-30m", "03690-30m"],
 )

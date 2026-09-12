@@ -20,10 +20,11 @@ from chanlun.segment import (
     SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
     identify_segments,
 )
+from tests.real_fixture_support import frozen_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CSV = ROOT / "data" / "reports" / "000651" / "1m" / "analyze" / "000651_1m_20260817_to_20260904.csv"
+CSV = frozen_csv("000651", "1m")
 
 
 def _segments_theory():
@@ -41,18 +42,19 @@ def _segments_theory():
 
 
 def test_000651_1m_lesson71_first_bi_break_then_contained_third_confirms_segment() -> None:
-    """数据刷新到 20260904 后 000651 1m 新窗口不再含 first_bi_break_then_third_extends，
-    但仍含 71课「第一笔破坏前段 + 第三笔被第一笔包含、先破第一笔结束位」确认规则：
-    段 1（down 7-9）theory-confirmed，break=10。锁住该 71课识别规则在真实 1m 窗口仍生效。
+    """000651 1m（冻结快照 000651_1m_20260824_to_20260911）仍含 71课
+
+    「第一笔破坏前段 + 第三笔被第一笔包含、先破第一笔结束位」确认规则：
+    段 13（down 193-195）theory-confirmed，break=196。锁住该 71课识别规则在真实 1m 窗口仍生效。
     """
     segments = _segments_theory()
 
-    assert len(segments) >= 2
-    seg = segments[1]
+    assert len(segments) >= 14
+    seg = segments[13]
 
     assert seg.direction.value == "down"
-    assert seg.start_bi_id == 7
-    assert seg.end_bi_id == 9
+    assert seg.start_bi_id == 193
+    assert seg.end_bi_id == 195
     assert seg.is_confirmed is True
     assert seg.stop_reason == "first_bi_break_then_contained_third_breaks_end"
-    assert seg.break_bi_id == 10
+    assert seg.break_bi_id == 196

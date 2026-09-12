@@ -1,10 +1,11 @@
 from pathlib import Path
 
+from tests.real_fixture_support import frozen_csv
 from tests.segment_regression_support import assert_landmarks_equal, identify_segments_from_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_DAY_CSV = ROOT / "data" / "reports" / "000591" / "day" / "analyze" / "000591_day_20210923_to_20260904.csv"
+SAMPLE_DAY_CSV = frozen_csv("000591", "day")
 
 
 def test_000591_day_segments_do_not_regress_to_oversized_single_leg() -> None:

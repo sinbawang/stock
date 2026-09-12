@@ -1,11 +1,12 @@
 from pathlib import Path
 
+from tests.real_fixture_support import frozen_csv
 from tests.segment_regression_support import assert_landmarks_equal, identify_segments_from_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_DAY_CSV = ROOT / "data" / "reports" / "300124" / "day" / "analyze" / "300124_day_20210923_to_20260904.csv"
-SAMPLE_30M_CSV = ROOT / "data" / "reports" / "300124" / "30m" / "analyze" / "300124_30m_20260123_to_20260904.csv"
+SAMPLE_DAY_CSV = frozen_csv("300124", "day")
+SAMPLE_30M_CSV = frozen_csv("300124", "30m")
 
 def test_300124_day_segments_keep_current_landmarks() -> None:
     segments = identify_segments_from_csv(SAMPLE_DAY_CSV)
@@ -54,25 +55,30 @@ def test_300124_30m_segments_keep_tail_and_no_followup_state() -> None:
     ]
 
     expected = [
-        ("down", 3, 15, "reverse_break", True, (27, 146)),
-        ("up", 16, 18, "reverse_break", True, (146, 162)),
-        ("down", 19, 21, "reverse_break", True, (162, 189)),
-        ("up", 22, 24, "feature_sequence_fractal", True, (189, 211)),
-        ("down", 25, 29, "reverse_break", True, (211, 248)),
-        ("up", 30, 34, "reverse_break", True, (248, 277)),
-        ("down", 35, 41, "reverse_break", True, (277, 322)),
-        ("up", 42, 48, "feature_sequence_fractal", True, (322, 380)),
-        ("down", 49, 51, "reverse_break", True, (380, 397)),
-        ("up", 52, 54, "reverse_break", True, (397, 417)),
-        ("down", 55, 61, "feature_sequence_fractal", True, (417, 494)),
-        ("up", 62, 64, "reverse_break", True, (494, 510)),
-        ("down", 65, 67, "reverse_break", True, (510, 544)),
-        ("up", 68, 70, "reverse_break", True, (544, 567)),
-        ("down", 71, 75, "reverse_break", True, (567, 629)),
-        ("up", 76, 80, "feature_sequence_gap_fractal", True, (629, 677)),
-        ("down", 81, 91, "reverse_break", True, (677, 766)),
-        ("up", 92, 97, "exhausted_confirmed_bis", False, (766, 795)),
+        ("up", 0, 10, "feature_sequence_fractal", True, (1, 85)),
+        ("down", 11, 17, "same_direction_not_extending", False, (85, 138)),
+        ("up", 20, 22, "feature_sequence_fractal", True, (150, 182)),
+        ("down", 23, 31, "reverse_break", True, (182, 262)),
+        ("up", 32, 34, "reverse_break", True, (262, 278)),
+        ("down", 35, 37, "reverse_break", True, (278, 305)),
+        ("up", 38, 40, "feature_sequence_fractal", True, (305, 327)),
+        ("down", 41, 45, "reverse_break", True, (327, 364)),
+        ("up", 46, 50, "reverse_break", True, (364, 393)),
+        ("down", 51, 57, "reverse_break", True, (393, 438)),
+        ("up", 58, 64, "feature_sequence_fractal", True, (438, 496)),
+        ("down", 65, 67, "reverse_break", True, (496, 513)),
+        ("up", 68, 70, "reverse_break", True, (513, 533)),
+        ("down", 71, 77, "feature_sequence_fractal", True, (533, 610)),
+        ("up", 78, 80, "reverse_break", True, (610, 626)),
+        ("down", 81, 83, "reverse_break", True, (626, 660)),
+        ("up", 84, 86, "reverse_break", True, (660, 683)),
+        ("down", 87, 91, "reverse_break", True, (683, 745)),
+        ("up", 92, 96, "feature_sequence_gap_fractal", True, (745, 793)),
+        ("down", 97, 107, "reverse_break", True, (793, 882)),
+        ("up", 108, 113, "exhausted_confirmed_bis", False, (882, 911)),
     ]
+
+    assert_landmarks_equal(expected, landmarks)
 
     assert_landmarks_equal(expected, landmarks)
 

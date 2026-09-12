@@ -24,10 +24,11 @@ from chanlun.segment import (
     SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
     identify_segments,
 )
+from tests.real_fixture_support import frozen_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CSV = ROOT / "data" / "reports" / "00728" / "day" / "analyze" / "00728_day_20211022_to_20260904.csv"
+CSV = frozen_csv("00728", "day")
 
 
 def _segments_theory():

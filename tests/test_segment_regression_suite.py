@@ -3,14 +3,17 @@ from pathlib import Path
 import pytest
 
 from chanlun.segment import StopOutcomeCategory, classify_stop_reason
+from tests.real_fixture_support import frozen_csv
 from tests.segment_regression_support import identify_segments_from_csv, load_bis_from_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# 真实窗口来自冻结快照（tests/fixtures/real/），避免 data/reports 刷新后 CSV family 被
+# `prune_analyze_csv_families` 删除导致回归集体失效；见 tests/real_fixture_support.py。
 SCENARIOS = [
     {
         "name": "000591-day",
-        "csv_path": ROOT / "data" / "reports" / "000591" / "day" / "analyze" / "000591_day_20210923_to_20260904.csv",
+        "csv_path": frozen_csv("000591", "day"),
         "expected_stop_reasons": {"feature_sequence_fractal", "reverse_break"},
         "min_segments": 3,
         "min_confirmed": 2,
@@ -18,7 +21,7 @@ SCENARIOS = [
     },
     {
         "name": "000591-1m",
-        "csv_path": ROOT / "data" / "reports" / "000591" / "1m" / "analyze" / "000591_1m_20260817_to_20260904.csv",
+        "csv_path": frozen_csv("000591", "1m"),
         "expected_stop_reasons": {"feature_sequence_gap_fractal", "reverse_break", "same_direction_not_extending"},
         "min_segments": 3,
         "min_confirmed": 2,
@@ -26,7 +29,7 @@ SCENARIOS = [
     },
     {
         "name": "000591-5m",
-        "csv_path": ROOT / "data" / "reports" / "000591" / "5m" / "analyze" / "000591_5m_20260710_to_20260904.csv",
+        "csv_path": frozen_csv("000591", "5m"),
         "expected_stop_reasons": {"reverse_break"},
         "min_segments": 2,
         "min_confirmed": 2,
@@ -34,7 +37,7 @@ SCENARIOS = [
     },
     {
         "name": "00700-30m",
-        "csv_path": ROOT / "data" / "reports" / "00700" / "30m" / "analyze" / "00700_30m_20260326_to_20260904.csv",
+        "csv_path": frozen_csv("00700", "30m"),
         "expected_stop_reasons": {"reverse_break", "feature_sequence_gap_fractal", "feature_sequence_fractal"},
         "min_segments": 6,
         "min_confirmed": 5,
@@ -42,7 +45,7 @@ SCENARIOS = [
     },
     {
         "name": "00700-1m",
-        "csv_path": ROOT / "data" / "reports" / "00700" / "1m" / "analyze" / "00700_1m_20260821_to_20260904.csv",
+        "csv_path": frozen_csv("00700", "1m"),
         "expected_stop_reasons": {"reverse_break", "feature_sequence_fractal"},
         "min_segments": 2,
         "min_confirmed": 1,
@@ -50,7 +53,7 @@ SCENARIOS = [
     },
     {
         "name": "00700-5m",
-        "csv_path": ROOT / "data" / "reports" / "00700" / "5m" / "analyze" / "00700_5m_20260724_to_20260904.csv",
+        "csv_path": frozen_csv("00700", "5m"),
         "expected_stop_reasons": {"feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break"},
         "min_segments": 8,
         "min_confirmed": 6,
@@ -58,7 +61,7 @@ SCENARIOS = [
     },
     {
         "name": "03690-30m",
-        "csv_path": ROOT / "data" / "reports" / "03690" / "30m" / "analyze" / "03690_30m_20260326_to_20260904.csv",
+        "csv_path": frozen_csv("03690", "30m"),
         "expected_stop_reasons": {"feature_sequence_fractal", "reverse_break"},
         "min_segments": 5,
         "min_confirmed": 4,
@@ -66,7 +69,7 @@ SCENARIOS = [
     },
     {
         "name": "03690-1m",
-        "csv_path": ROOT / "data" / "reports" / "03690" / "1m" / "analyze" / "03690_1m_20260821_to_20260904.csv",
+        "csv_path": frozen_csv("03690", "1m"),
         "expected_stop_reasons": {"feature_sequence_fractal", "reverse_break", "same_direction_not_extending"},
         "min_segments": 12,
         "min_confirmed": 10,
@@ -74,7 +77,7 @@ SCENARIOS = [
     },
     {
         "name": "03690-5m",
-        "csv_path": ROOT / "data" / "reports" / "03690" / "5m" / "analyze" / "03690_5m_20260724_to_20260904.csv",
+        "csv_path": frozen_csv("03690", "5m"),
         "expected_stop_reasons": {"feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break"},
         "min_segments": 10,
         "min_confirmed": 10,
@@ -82,15 +85,15 @@ SCENARIOS = [
     },
     {
         "name": "300124-1m",
-        "csv_path": ROOT / "data" / "reports" / "300124" / "1m" / "analyze" / "300124_1m_20260817_to_20260904.csv",
+        "csv_path": frozen_csv("300124", "1m"),
         "expected_stop_reasons": {"feature_sequence_fractal", "feature_sequence_gap_fractal", "reverse_break"},
-        "min_segments": 18,
-        "min_confirmed": 17,
+        "min_segments": 15,
+        "min_confirmed": 14,
         "min_preprocessing": 1,
     },
     {
         "name": "300124-5m",
-        "csv_path": ROOT / "data" / "reports" / "300124" / "5m" / "analyze" / "300124_5m_20260715_to_20260904.csv",
+        "csv_path": frozen_csv("300124", "5m"),
         "expected_stop_reasons": {"feature_sequence_fractal", "reverse_break", "same_direction_not_extending"},
         "min_segments": 6,
         "min_confirmed": 5,
@@ -252,9 +255,9 @@ def test_regression_suite_key_landmarks_do_not_collapse_to_single_overlong_segme
 def test_00700_5m_practical_keeps_mixed_stop_reasons_with_overlap_reuse_anchors() -> None:
     """00700 5m：锁住 overlap-reuse 边界（下一段在上一段 break 之前复用重叠区）。
 
-    2026-09-06 数据窗口刷新到 20260904 后，overlap-reuse 锚点迁移到：
-    段 9 `down 85-89 reverse_break break=92` 后段 10 `up 起点 90 = break-2`，
-    起点 90 < break 92：下一段在上一段 break 之前复用重叠区域，
+    冻结快照 00700_5m_20260731_to_20260911（见 tests/fixtures/real/）下 overlap-reuse 锚点位于：
+    段 9 `down 61-65 reverse_break break=68` 后段 10 `up 起点 66 = break-2`，
+    起点 66 < break 68：下一段在上一段 break 之前复用重叠区域，
     对应 S3 重写/吸收/复用输出口径不得漂移。
     """
     scenario = next(item for item in SCENARIOS if item["name"] == "00700-5m")
@@ -268,14 +271,14 @@ def test_00700_5m_practical_keeps_mixed_stop_reasons_with_overlap_reuse_anchors(
     seg9 = practical_segments[9]
     seg10 = practical_segments[10]
 
-    # overlap-reuse: down 85-89 reverse_break break=92, next up 起点 90 在 break 之前
+    # overlap-reuse: down 61-65 reverse_break break=68, next up 起点 66 在 break 之前
     assert seg9.direction.value == "down"
-    assert seg9.start_bi_id == 85
-    assert seg9.end_bi_id == 89
-    assert seg9.break_bi_id == 92
+    assert seg9.start_bi_id == 61
+    assert seg9.end_bi_id == 65
+    assert seg9.break_bi_id == 68
     assert seg9.stop_reason == "reverse_break"
     assert seg10.direction.value == "up"
-    assert seg10.start_bi_id == 90
+    assert seg10.start_bi_id == 66
     assert seg10.start_bi_id == seg9.break_bi_id - 2
     assert seg10.stop_reason == "reverse_break"
 
@@ -283,9 +286,9 @@ def test_00700_5m_practical_keeps_mixed_stop_reasons_with_overlap_reuse_anchors(
 def test_300124_5m_practical_keeps_mixed_stop_reasons_with_pending_middle_tail() -> None:
     """300124 5m：锁住混合 stop_reason 链与「历史中间段仍带 pending 停靠标签」。
 
-    effective_only 后 300124 5m 的中间 pending 段迁移到：
-    段 7 `up 50-62 same_direction_not_extending is_confirmed=False` 之后仍有
-    已确认段 8/9（down 65-67、up 68-82），锁住「中间 pending 段在后续段存在时
+    冻结快照 300124_5m_20260716_to_20260911（见 tests/fixtures/real/）下中间 pending 段位于：
+    段 7 `up 44-56 same_direction_not_extending is_confirmed=False` 之后仍有
+    已确认段 8/9（down 59-61、up 62-76），锁住「中间 pending 段在后续段存在时
     必须留在交替链中、不能被裁掉」的口径（否则该窗口会塌缩出错误的段集合）。
     """
     scenario = next(item for item in SCENARIOS if item["name"] == "300124-5m")
@@ -297,15 +300,15 @@ def test_300124_5m_practical_keeps_mixed_stop_reasons_with_pending_middle_tail()
 
     assert len(practical_segments) >= 9
     expected_head = [
-        ("down", 5, 11, "reverse_break", True),
-        ("up", 12, 18, "feature_sequence_gap_fractal", True),
-        ("down", 19, 21, "feature_sequence_fractal", True),
-        ("up", 22, 24, "feature_sequence_fractal", True),
-        ("down", 25, 29, "feature_sequence_fractal", True),
-        ("up", 30, 34, "reverse_break", True),
-        ("down", 35, 49, "reverse_break", True),
-        ("up", 50, 62, "same_direction_not_extending", False),
-        ("down", 65, 67, "feature_sequence_fractal", True),
+        ("down", 1, 9, "feature_sequence_fractal", True),
+        ("up", 10, 12, "feature_sequence_gap_fractal", True),
+        ("down", 13, 15, "feature_sequence_fractal", True),
+        ("up", 16, 18, "feature_sequence_fractal", True),
+        ("down", 19, 23, "feature_sequence_fractal", True),
+        ("up", 24, 28, "reverse_break", True),
+        ("down", 29, 43, "reverse_break", True),
+        ("up", 44, 56, "same_direction_not_extending", False),
+        ("down", 59, 61, "feature_sequence_fractal", True),
     ]
     for segment, (direction, start, end, reason, confirmed) in zip(practical_segments, expected_head):
         assert segment.direction.value == direction

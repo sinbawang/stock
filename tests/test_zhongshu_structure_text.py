@@ -19,6 +19,7 @@ if str(SCRIPTS) not in sys.path:
 
 import run_cn_60m_chanlun_report as cn_report
 from batch_prepare_chanlun_reports import build_advice, build_technical_summary
+from tests.real_fixture_support import frozen_tech_json
 
 
 PROBE_SPEC = importlib.util.spec_from_file_location(
@@ -151,10 +152,32 @@ def test_build_advice_keeps_pre_breakdown_as_pending_watch() -> None:
 # 以及 build_advice 单测 test_build_advice_keeps_pre_breakdown_as_pending_watch。
 
 
-def test_real_01024_1m_sell3_live_sample_keeps_current_state() -> None:
-    # 01024 1m 真实样本当前回到「向上预警 + 新类型候选未确认」（pending），
-    # 不再输出确认买卖点，只保留观察态消费。
-    sample_path = ROOT / "data" / "reports" / "01024" / "1m" / "tech.json"
+def test_real_01024_1m_down_warning_live_sample_keeps_current_state() -> None:
+    # 01024 1m 真实样本当前为「向下预警 + 已确认消费、无确认买卖点」的偏弱观察态。
+    sample_path = frozen_tech_json("01024", "1m")
+    payload = json.loads(sample_path.read_text(encoding="utf-8"))
+
+    assert payload["timeframe"] == "1m"
+    assert payload["summary"]["conclusion"] == "偏弱，先观望。"
+    assert payload["summary"]["same_level_consumption_level"] == "confirmed"
+    assert payload["summary"]["same_level_consumption_level_label"] == "已确认消费"
+    assert payload["summary"]["same_level_decomposition_mode"] == "single_confirmed"
+    assert payload["summary"]["oscillation_rhythm_state"] == "down_bias"
+    assert payload["summary"]["buy_points"] == []
+    assert payload["summary"]["sell_points"] == []
+    assert "消费等级：已确认消费" in payload["analysis_text"]
+    assert "买点：当前无确认一二三类买点" in payload["analysis_text"]
+    assert "卖点：当前无确认一二三类卖点" in payload["analysis_text"]
+    assert "结论：偏弱，先观望。" in payload["advice_text"]
+    assert "预警状态 向下预警" in payload["advice_text"]
+    assert "节奏偏弱" in payload["advice_text"]
+    assert "监视器：中枢中线 31.49，当前偏弱" in payload["advice_text"]
+
+
+def test_real_002555_1m_sell3_pending_live_sample_keeps_current_state() -> None:
+    # 002555 1m 真实样本当前识别出「跌破中枢后反抽下沿失败」的三卖，
+    # 但同级别结构仍处待确认消费，只按观察态消费，未升级为已确认卖点。
+    sample_path = frozen_tech_json("002555", "1m")
     payload = json.loads(sample_path.read_text(encoding="utf-8"))
 
     assert payload["timeframe"] == "1m"
@@ -164,59 +187,38 @@ def test_real_01024_1m_sell3_live_sample_keeps_current_state() -> None:
     assert payload["summary"]["same_level_decomposition_mode"] == "dual_interpretation_pending"
     assert payload["summary"]["oscillation_rhythm_state"] == "down_bias"
     assert payload["summary"]["buy_points"] == []
-    assert payload["summary"]["sell_points"] == []
+    assert payload["summary"]["sell_points"] == ["sell3"]
     assert "消费等级：待确认消费" in payload["analysis_text"]
     assert "买点：当前无确认一二三类买点" in payload["analysis_text"]
-    assert "卖点：当前无确认一二三类卖点" in payload["analysis_text"]
+    assert "卖点：三卖" in payload["analysis_text"]
     assert "结论：观察，等待确认。" in payload["advice_text"]
-    assert "预警状态 向上预警" in payload["advice_text"]
-    assert "节奏偏弱" in payload["advice_text"]
+    assert "预警状态 向下预警" in payload["advice_text"]
     assert "消费说明：当前同级别结构处于 待确认消费" in payload["advice_text"]
+    assert "信号说明：三卖，跌破中枢后反抽下沿失败，参考价 17.75，关联中枢 ZS1" in payload["advice_text"]
 
 
-def test_real_002555_1m_buy3_and_sell2like_live_sample_keeps_current_state() -> None:
-    # 002555 1m 真实样本当前围绕中枢震荡，结构处于待确认消费，
-    # 不再输出确认三买/类二卖，只保留中枢内等待方向选择的观察态。
-    sample_path = ROOT / "data" / "reports" / "002555" / "1m" / "tech.json"
+def test_real_600900_1m_buy3_pending_live_sample_keeps_current_state() -> None:
+    # 600900 1m 真实样本当前识别出「离开中枢后回踩上沿未失守」的三买雏形，
+    # 但同级别结构仍处待确认消费，只按观察态消费，未升级为已确认买点。
+    sample_path = frozen_tech_json("600900", "1m")
     payload = json.loads(sample_path.read_text(encoding="utf-8"))
 
     assert payload["timeframe"] == "1m"
-    assert payload["summary"]["conclusion"] == "震荡，等待方向选择。"
+    assert payload["summary"]["conclusion"] == "观察，等待确认。"
     assert payload["summary"]["same_level_consumption_level"] == "pending"
     assert payload["summary"]["same_level_consumption_level_label"] == "待确认消费"
     assert payload["summary"]["same_level_decomposition_mode"] == "dual_interpretation_pending"
     assert payload["summary"]["oscillation_rhythm_state"] == "down_bias"
-    assert payload["summary"]["buy_points"] == []
+    assert payload["summary"]["buy_points"] == ["buy3"]
     assert payload["summary"]["sell_points"] == []
     assert "消费等级：待确认消费" in payload["analysis_text"]
-    assert "买点：当前无确认一二三类买点" in payload["analysis_text"]
     assert "卖点：当前无确认一二三类卖点" in payload["analysis_text"]
-    assert "结论：震荡，等待方向选择。" in payload["advice_text"]
-    assert "预警状态 无预警" in payload["advice_text"]
-    assert "中枢内少折腾，等向上离开或向下跌破后再做决策。" in payload["advice_text"]
-
-
-def test_real_600900_1m_sell3_live_sample_keeps_current_state() -> None:
-    # 三卖修复后，600900 1m 真实样本（ZS2→ZS3 上行后向下跌破）重新识别出
-    # 「跌破 ZS3 后反抽不破下沿」的三卖雏形（当前走势类型仍为 up，故为未确认三卖）。
-    sample_path = ROOT / "data" / "reports" / "600900" / "1m" / "tech.json"
-    payload = json.loads(sample_path.read_text(encoding="utf-8"))
-
-    assert payload["timeframe"] == "1m"
-    assert payload["summary"]["conclusion"] == "偏空，优先减仓或兑现。"
-    assert payload["summary"]["same_level_consumption_level"] == "confirmed"
-    assert payload["summary"]["same_level_consumption_level_label"] == "已确认消费"
-    assert payload["summary"]["same_level_decomposition_mode"] == "single_confirmed"
-    assert payload["summary"]["oscillation_rhythm_state"] == "up_bias"
-    assert payload["summary"]["buy_points"] == []
-    assert payload["summary"]["sell_points"] == ["sell3"]
-    assert "消费等级：已确认消费" in payload["analysis_text"]
-    assert "买点：当前无确认一二三类买点" in payload["analysis_text"]
-    assert "卖点：三卖" in payload["analysis_text"]
-    assert "结论：偏空，优先减仓或兑现。" in payload["advice_text"]
-    assert "预警状态 向下预警" in payload["advice_text"]
-    assert "三卖" in payload["advice_text"]
-    assert "三买" not in payload["advice_text"]
+    assert "买点：三买" in payload["analysis_text"]
+    assert "结论：观察，等待确认。" in payload["advice_text"]
+    assert "预警状态 向上预警" in payload["advice_text"]
+    assert "三买" in payload["advice_text"]
+    assert "三卖" not in payload["advice_text"]
+    assert "信号说明：三买，离开中枢后回踩上沿未失守，参考价 27.98，关联中枢 ZS3" in payload["advice_text"]
 
 
 def test_real_01024_1m_confirmed_buy2like_replay_sample_keeps_current_state() -> None:

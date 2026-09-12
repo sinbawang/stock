@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from chanlun.segment import StopOutcomeCategory, classify_stop_reason, summarize_stop_reason_outcome
+from tests.real_fixture_support import frozen_csv
 from tests.segment_regression_support import identify_segments_from_csv
 
 
@@ -10,11 +11,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SMOKE_SCENARIOS = [
     {
         "name": "000591-day",
-        "csv_path": ROOT / "data" / "reports" / "000591" / "day" / "analyze" / "000591_day_20210923_to_20260904.csv",
+        "csv_path": frozen_csv("000591", "day"),
     },
     {
         "name": "00700-30m",
-        "csv_path": ROOT / "data" / "reports" / "00700" / "30m" / "analyze" / "00700_30m_20260326_to_20260904.csv",
+        "csv_path": frozen_csv("00700", "30m"),
     },
 ]
 

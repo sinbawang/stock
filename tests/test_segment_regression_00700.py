@@ -1,10 +1,11 @@
 from pathlib import Path
 
+from tests.real_fixture_support import frozen_csv
 from tests.segment_regression_support import identify_segments_from_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_DAY_CSV = ROOT / "data" / "reports" / "00700" / "day" / "analyze" / "00700_day_20211022_to_20260904.csv"
+SAMPLE_DAY_CSV = frozen_csv("00700", "day")
 
 
 def test_00700_day_segments_keep_gap_and_tail_landmarks() -> None:
@@ -27,8 +28,8 @@ def test_00700_day_segments_keep_gap_and_tail_landmarks() -> None:
         if segment.stop_reason in {"feature_sequence_gap_fractal", "feature_sequence_gap_fractal_delayed_true"}
     ]
     assert gap_landmarks == [
-        ("up", 23, 25, "feature_sequence_gap_fractal", True),
-        ("up", 51, 55, "feature_sequence_gap_fractal_delayed_true", True),
+        ("up", 22, 24, "feature_sequence_gap_fractal", True),
+        ("up", 50, 54, "feature_sequence_gap_fractal_delayed_true", True),
     ]
 
     assert any(segment.stop_reason in {"feature_sequence_gap_fractal", "reverse_break"} for segment in segments)
