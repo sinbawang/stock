@@ -219,8 +219,50 @@ PRECISION_PAIRS = (
 )
 PRECISION_SYMBOLS = ("000591", "00700", "03690", "300124", "600900")
 
-# 文档记录：这三档在真实窗口上从未出现，只有构造 / 契约回归覆盖。
-UNOBSERVED_HIGHER_STATES = ("actionable", "third_class_confirmed", "higher_level_confirmed")
+# **杆序号口径**卡片：`cutoff` 是高级别 fixture 的**杆数下标**（非 `analysis_cutoffs` 下标）。
+#
+# 背景订正：先前用 `analysis_cutoffs`（每窗 13–14 帧，共 126 帧）测得
+# `actionable` / `third_class_confirmed` / `higher_level_confirmed` 均为 0，据此写成「未观测到」。
+# 后改用密集网格（step=8，2812 帧）重测，`third_class_confirmed` **实际可达**（2 帧，在本组卡片）；
+# 当时结论是**取样太稀疏**造成的假象。这两张卡片就是该状态的真实锚点。
+PRECISION_BAR_CARDS = (
+    {
+        "card": "区间套 S1 · 300124 5m->1m 必要条件已具备",
+        "symbol": "300124",
+        "higher": "5m",
+        "lower": "1m",
+        "cutoff": 1820,
+        "last_bar_ts": "2026-09-08 10:30:00",
+        "status": "watch",
+        "small_to_large": "third_class_confirmed",
+        "window_basis": "中枢到锚点窗口",
+        "side": "sell",
+        "trigger": "sell3",
+        "dynamic_grade": "oscillation_opportunity",
+        "higher_consumption": "pending",
+        "in_window_points": ("sell3",),
+    },
+    {
+        "card": "区间套 S2 · 300124 5m->1m 必要条件已具备（含类二卖）",
+        "symbol": "300124",
+        "higher": "5m",
+        "lower": "1m",
+        "cutoff": 1956,
+        "last_bar_ts": "2026-09-11 09:50:00",
+        "status": "watch",
+        "small_to_large": "third_class_confirmed",
+        "window_basis": "中枢到锚点窗口",
+        "side": "sell",
+        "trigger": "sell3",
+        "dynamic_grade": "oscillation_opportunity",
+        "higher_consumption": "pending",
+        "in_window_points": ("sell3", "sell2like"),
+    },
+)
+
+# 文档记录：这两档在真实窗口上仍未观测到（带半径说明，见案例库 §7.3）。
+# 注意 `third_class_confirmed` **不在**此列——它已由 PRECISION_BAR_CARDS 证实可达。
+UNOBSERVED_HIGHER_STATES = ("actionable", "higher_level_confirmed")
 
 
 def _bootstrap_for(timeframe: str) -> str:
@@ -349,11 +391,58 @@ def test_precision_card_library_is_not_vacuous() -> None:
     assert len({c["window_basis"] for c in PRECISION_CARDS if c["window_basis"]}) >= 3
 
 
-def test_precision_higher_states_stay_unobserved_on_real_windows() -> None:
-    """文档记录：`actionable` / `third_class_confirmed` / `higher_level_confirmed` 在真实窗口上未观测到。
+@pytest.mark.parametrize("card", PRECISION_BAR_CARDS, ids=[c["card"] for c in PRECISION_BAR_CARDS])
+def test_precision_bar_card_reproduces_on_frozen_window(card: dict[str, object]) -> None:
+    """杆序号口径卡片：钉住 `third_class_confirmed` 这个高位档的真实锚点。"""
+    entry = _precision_entry(card["symbol"], card["higher"], card["lower"], int(card["cutoff"]))
+    nested = entry.get("nested_from") or {}
+    actual = {
+        "status": entry.get("status"),
+        "small_to_large": entry.get("small_to_large_status"),
+        "window_basis": entry.get("window_basis_label"),
+        "side": nested.get("side"),
+        "trigger": nested.get("trigger"),
+        "dynamic_grade": entry.get("dynamic_grade"),
+        "higher_consumption": entry.get("higher_consumption_level"),
+    }
+    expected = {key: card[key] for key in actual}
+    assert actual == expected, (
+        f"{card['card']}: 冻结窗口上区间套高位档卡片已变化（cutoff={card['cutoff']} 杆）；"
+        f"期望 {expected}，实得 {actual}。规则变更请同步更新卡片与文档，不要放宽本断言。"
+    )
 
-    本用例同时是**文档同步闸门**：若这三档开始在真实窗口出现，说明文档里「仅构造 / 契约覆盖」
-    的说法已过期，需要补真实卡片并更新覆盖矩阵。
+    higher_all = clean_bars(read_bars_from_csv(str(frozen_csv(card["symbol"], card["higher"]))))
+    assert str(getattr(higher_all[int(card["cutoff"]) - 1], "ts")) == card["last_bar_ts"], (
+        f"{card['card']}: cutoff 杆序号对应的末杆时间已变（窗口被重新冻结？）"
+    )
+
+    # 窗口内确实存在同向三类点——这正是 `third_class_confirmed` 的触发证据。
+    in_window = tuple(str(p.get("point")) for p in (entry.get("signal_points") or []))
+    assert in_window == card["in_window_points"], (
+        f"{card['card']}: 窗口内点已变（期望 {card['in_window_points']}，实得 {in_window}）"
+    )
+    # 上位档成立时仍然被上级别消费等级降级为 watch——锁住这个组合，避免被误升为 actionable。
+    assert entry.get("signal_descriptions"), f"{card['card']}: 应有窗口内点描述"
+
+
+def test_precision_third_class_confirmed_is_reachable_on_real_windows() -> None:
+    """非空转守卫：`PRECISION_BAR_CARDS` 必须真的钉住了 `third_class_confirmed`。"""
+    states = {c["small_to_large"] for c in PRECISION_BAR_CARDS}
+    assert "third_class_confirmed" in states, (
+        "本组卡片的存在意义就是钉住 third_class_confirmed；"
+        "若该状态不再可达，应把它重新移回 UNOBSERVED_HIGHER_STATES 并更新案例库 §7.1/§7.3。"
+    )
+    assert len(PRECISION_BAR_CARDS) >= 2
+
+
+def test_precision_unreached_states_stay_unreached_on_real_windows() -> None:
+    """文档记录：`actionable` 与 `higher_level_confirmed` 在真实窗口上仍未观测到。
+
+    本用例是**文档同步闸门**：若这两档开始出现，说明案例库 §7.3 的措辞需更新。
+
+    注意 `third_class_confirmed` **不在**本用例的未观测列表里：它已由
+    `PRECISION_BAR_CARDS` 证实可达（先前「未观测到」的结论是 `analysis_cutoffs` 网格
+    取样太稀疏造成的假象，见案例库 §7.3 的漏斗分解）。
     """
     status_counts: dict[str, int] = {}
     small_to_large_counts: dict[str, int] = {}
@@ -390,14 +479,14 @@ def test_precision_higher_states_stay_unobserved_on_real_windows() -> None:
 
     assert "actionable" not in status_counts, (
         f"precision_entry.status 已在真实窗口出现 actionable（{status_counts}）；"
-        "文档中「仅构造覆盖」的说法需更新。"
+        "案例库 §7.3 中「被上级别消费等级降级」的说法需更新。"
     )
     for state in UNOBSERVED_HIGHER_STATES:
         if state == "actionable":
             continue
         assert state not in small_to_large_counts, (
             f"small_to_large_status 已在真实窗口出现 {state}（{small_to_large_counts}）；"
-            "文档中「仅构造覆盖」的说法需更新，并补对应真实卡片。"
+            "案例库 §7.1/§7.3 的覆盖矩阵需更新，并补对应真实卡片。"
         )
 
 
