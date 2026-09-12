@@ -113,6 +113,43 @@ invalidation 是跨帧概念：单帧 `analyze_chanlun_signals` 恒按最新结�
   二者可并存但不得互相顶替。
 - 消费：`forming` 一律 watch 档，文案显式「待转折确认，非确认点」。
 
+### 4.1 2026-09-12 核对：forming 在真实链路上不可达（需设计决策）
+
+现状是「链路完备、产不出数据」：
+
+- 小程序「买卖点」页已能渲染 `forming`（`publishViewService.js:621-622` / `682-683` 为买卖两侧成行，
+  `SIGNAL_LIFECYCLE_LABELS.forming = '预备'`，`buyPoints/index.wxml` 渲染 `lifecycle-badge`）；
+  发布包也会输出「买卖点预备：…（待转折确认，非确认点）」文案行。
+- 但真实数据恒为空：287 帧冻结真实窗口 `forming_points` 出现 **0 次**；
+  本地 96 个真实 `tech.json` 中 64 个带该字段、**非空 0 个**。
+
+归因（合取项真实命中，见 `tests/test_signal_forming_reachability.py`）：
+
+| 合取项 | 命中 |
+| --- | --- |
+| `seg_pair_present`（当前中枢同时解析出 entering 与 exit 段） | **30 / 203** ← 主阻塞 |
+| `tail_ok`（尾部同向笔在 zs 边界外且无反向转折） | 129 |
+| `segment_bottom_divergence=True` | 14 |
+| `tail_ok ∧ ongoing_down ∧ bottom_div=True` | 3（但这些帧 `buy_1` 已 confirmed，forming 按设计跳过） |
+
+根因：**背驰只在「已终结、有离开段」的中枢上可算**（ongoing 中枢的 `exit_bi_id` 为 None，
+故 173/203 帧根本不计算 `segment_bottom_divergence`），而**「待转折确认」只存在于未终结的
+最新中枢**。两个前提构造上互斥。
+
+同源的另一个隐蔽点：原 forming 的「待转折确认」判在**已完成的离开段末笔**上，而笔严格交替且
+该笔之后必然还有已确认后续笔 → `_has_reverse_turn_after` 恒为 True（实测 42/42），
+即该子条件在真实链路上逻辑上不可满足。已改为判在**实时尾部**（`latest_down` / `latest_up`），
+并保持 forming-only（不影响任何 confirmed 发点）。
+
+尚未解决：即使去掉上述子条件，合取仍不相交（见上表）。两条可选方向：
+
+1. **重定形成前提**：让 forming 挂到「未终结中枢的离开尝试」上（如尾部笔相对 ZG/ZD 的突破未回），
+   而不是复用「已终结中枢的段级背驰」。
+2. **承认不可达并下架**：删除 `forming_points` 及其发布/前端链路，把 RS1 标为不做，
+   避免维护一个永远为空的字段与 UI 分支。
+
+在此之前保持 strict xfail：不得用「改成宽条件」把红灯刷绿。
+
 ## 5. 多级别双向联立（RS2）
 
 - 现状单向：`build_lower_timeframe_precision_entry` 依上级别 `same_level_consumption_level` 降级。

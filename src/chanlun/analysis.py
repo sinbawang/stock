@@ -1345,35 +1345,43 @@ def analyze_chanlun_signals(
         )
 
     if current_zs is not None:
+        # forming（实时预备态）的锚点必须是**实时尾部**，而不是已完成的离开段末笔。
+        # 离开段既已确认，其后必然还有后续笔（笔严格交替且已确认），于是
+        # `_has_reverse_turn_after(离开段末笔)` 恒为 True —— forming 在真实链路上永不可达，
+        # 只在「把离开笔截成链尾」的构造输入下成立（RS1 原单测正是这样截的）。
+        # 尾部口径：最新同向笔仍停在离开极值一侧、且其后尚无已确认反向笔 = 待转折确认。
+        # 这两个变量只服务 forming，不影响任何 confirmed 发点（confirmed 仍以离开段末笔为准）。
+        buy_forming_bi = (
+            latest_down if latest_down is not None and latest_down.low <= current_zs.zs_low else None
+        )
+        sell_forming_bi = (
+            latest_up if latest_up is not None and latest_up.high >= current_zs.zs_high else None
+        )
         buy_break = (
-            buy_signal_bi is not None
-            and buy_signal_bi.is_confirmed
+            buy_forming_bi is not None
             and buy_divergence
-            and buy_signal_bi.low <= current_zs.zs_low
-            and not _has_reverse_turn_after(buy_signal_bi, direction="down", bis=bis)
+            and not _has_reverse_turn_after(buy_forming_bi, direction="down", bis=bis)
         )
         sell_break = (
-            sell_signal_bi is not None
-            and sell_signal_bi.is_confirmed
+            sell_forming_bi is not None
             and sell_divergence
-            and sell_signal_bi.high >= current_zs.zs_high
-            and not _has_reverse_turn_after(sell_signal_bi, direction="up", bis=bis)
+            and not _has_reverse_turn_after(sell_forming_bi, direction="up", bis=bis)
         )
         if "buy_1" not in buy_points and ongoing_type == "down" and buy_break:
             _append_forming(
-                "buy_1", buy_signal_bi, getattr(buy_signal_bi, "low", None), "bottom_divergence_near_zs_low"
+                "buy_1", buy_forming_bi, getattr(buy_forming_bi, "low", None), "bottom_divergence_near_zs_low"
             )
         if "sell_1" not in sell_points and ongoing_type == "up" and sell_break:
             _append_forming(
-                "sell_1", sell_signal_bi, getattr(sell_signal_bi, "high", None), "top_divergence_near_zs_high"
+                "sell_1", sell_forming_bi, getattr(sell_forming_bi, "high", None), "top_divergence_near_zs_high"
             )
         if "buy_1like" not in buy_points and forming_same_type_range and buy_break:
             _append_forming(
-                "buy_1like", buy_signal_bi, getattr(buy_signal_bi, "low", None), "consolidation_divergence_reverse_low"
+                "buy_1like", buy_forming_bi, getattr(buy_forming_bi, "low", None), "consolidation_divergence_reverse_low"
             )
         if "sell_1like" not in sell_points and forming_same_type_range and sell_break:
             _append_forming(
-                "sell_1like", sell_signal_bi, getattr(sell_signal_bi, "high", None), "consolidation_divergence_reverse_high"
+                "sell_1like", sell_forming_bi, getattr(sell_forming_bi, "high", None), "consolidation_divergence_reverse_high"
             )
 
         # 二类预备：一类前置 + 首次回抽不破前低 / 前高已成立，待「再度走强 / 走弱创新高 / 新低」确认。
