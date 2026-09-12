@@ -244,20 +244,43 @@
    对比之下，`tests/test_build_miniapp_publish_bundle.py` 里的区间套断言是**手写 payload 的透传测试**，
    不校验推导，也无法用作本节的真实锚点。
 
-### 5.1 现有 002555 锚点的可复现性问题（待处理）
+### 5.1 消费层 replay 锚点的可复现性缺陷（已修复）
 
 `docs/chanlun/buy-sell-multi-level-visual-example-library.md` §6.6（`002555 1m -> 5M` 候选观察链）对应的
 `tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample`
-存在两个可复现性缺陷，已实测确认：
+曾存在两个可复现性缺陷。**已于 2026-09-12 修复**，记录如下以备回溯：
 
-- 该模块在**导入期**加载 `build/probe_intraday_prebreak_sample.py`，而 `build/` 是 gitignore（`git ls-files build`
-  为 **0** 个文件）。在仅含已跟踪文件的树上运行该模块会在**收集阶段**直接报错：
-  `FileNotFoundError: .../build/probe_intraday_prebreak_sample.py`，`no tests collected`。
-- 即使本地有该文件，其 `_load_rows` 只从 `data/reports/**` 与 `data/cache/kline/**`读取，而这些目录同样
-  未入版本库；数据被 `scripts/report_retention.py` 剪掉后样本即失效。
+- 缺陷现象：该模块（以及另外三个模块）在**导入期**加载 `build/probe_intraday_prebreak_sample.py`，
+  而该文件**未被版本控制**（`build/` 在 `.gitignore` 里，仅有
+  `build/scan_real_1m_confirmed_buy_samples.py` 一个文件被强制加入）。在仅含已跟踪文件的树上运行，
+  这些模块会在**收集阶段**直接报错：`FileNotFoundError: .../build/probe_intraday_prebreak_sample.py`，
+  `no tests collected`。
+- 次要缺陷：即使本地有该文件，其 `_load_rows` 只从 `data/reports/**` 与 `data/cache/kline/**` 读取，
+  而这些目录同样未入版本库；数据被 `scripts/report_retention.py` 剪掉后样本即失效。
 
-因此该锚点**不能被当作「可回归」证据**。修复方向：把区间套 / 小转大的锚点全部换成 `tests/fixtures/real/`
-驱动（本页 §7 已按此口径落地），再逐步把该模块的 replay 依赖从 `build/` + `data/` 移到冻结 fixture。
+**影响面比最初报告的更大**：依赖该未跟踪探针的共有 **4 个模块**——
+`test_build_miniapp_publish_bundle.py`、`test_chanlun_analysis.py`、`test_zhongshu_structure_text.py`、
+`test_probe_intraday_prebreak_sample.py`（后者测试探针自身的 `--auto-find` 纯函数）。
+即全仓 4 个模块共 29 个真实 replay 样本在干净机器上都不可运行。
+
+修复方式：
+
+- 新增受版本控制的 `tests/replay_support.py`：`load_replay_rows` / `replay` / `select_auto_cutoffs` /
+  `filter_auto_find_results`，只读 `tests/fixtures/real/replay/`。
+- 新增 11 个 replay 窗口 fixture（2026-07-30 ~ 2026-08-11 的早期 1m，以及 `000591`/`601328` day）。
+  这些窗口只存在于 `data/stock-kline-cache/`（`data/cache/kline` 只保留尾部 4500 根，已不含该区间），
+  因此必须显式冻结。登记在 `scripts/freeze_real_fixtures.py::REPLAY_FIXTURES`，
+  用 `--only replay` 单独重建（完整重建会先清空根目录 fixture 并按当前 `data/` 重算，**不要**随手跑）。
+- 四个模块全部改为依赖 `tests/replay_support`。
+
+验证：
+
+- **载荷等价**：10 个样本逐字段比对（含 `conclusion` / `buy_points` / `sell_points` /
+  `same_level_decomposition_mode` / `zs_monitor_*` / `post_divergence_route` 等 24 个字段），
+  新旧完全一致，断言语义未变。
+- **fixture 生效**：临时改名 `002555` 的 replay fixture → 对应用例失败；还原 → 通过。
+- **干净树复现**：用暂存区（= 将提交的集合）构建无 `data/` 的树，四个模块由「4 个收集错误」变为
+  **230 passed**。
 
 ## 6. 维护与验收
 
@@ -363,5 +386,6 @@
   `5M buy3 -> third_class_confirmed` 描述为「**回归卡片 B**」，这仍然准确（它是构造/契约回归）。
   但同页 §7 映射表把它与 `002555` 卡片并列在「案例 -> 回归锚点映射表」里，容易让 reviewer 以为
   两者都是真实样本——**§6.6 那张的锚点存在 §5.1 描述的可复现性问题**。
-- 本页 §7.2 的 5 张卡片是这一批里**唯一**完全由冻结 fixture 驱动、可在任意机器上复现的
-  区间套 / 小转大真实锚点。
+- 本页 §7.2 的 5 张卡片是区间套 / 小转大里完全由冻结 fixture 驱动、可在任意机器上复现的真实锚点。
+- 2026-09-12 修复后，原先不可复现的 4 个模块（共用 29 个 replay 样本）已全部改为依赖
+  `tests/replay_support` + `tests/fixtures/real/replay/`，详见 §5.1。

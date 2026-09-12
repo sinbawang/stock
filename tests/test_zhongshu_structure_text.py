@@ -21,15 +21,8 @@ import run_cn_60m_chanlun_report as cn_report
 from batch_prepare_chanlun_reports import build_advice, build_technical_summary
 from tests.real_fixture_support import frozen_tech_json
 
-
-PROBE_SPEC = importlib.util.spec_from_file_location(
-    "probe_intraday_prebreak_sample",
-    ROOT / "build" / "probe_intraday_prebreak_sample.py",
-)
-if PROBE_SPEC is None or PROBE_SPEC.loader is None:
-    raise RuntimeError("failed to load probe_intraday_prebreak_sample.py for tests")
-probe_module = importlib.util.module_from_spec(PROBE_SPEC)
-PROBE_SPEC.loader.exec_module(probe_module)
+# 历史注记：这两个 replay 样本原本加载未入版本库的 `build/probe_intraday_prebreak_sample.py`。
+from tests.replay_support import load_replay_rows, replay  # noqa: E402
 
 
 @dataclass
@@ -222,8 +215,8 @@ def test_real_600900_1m_buy3_pending_live_sample_keeps_current_state() -> None:
 
 
 def test_real_01024_1m_confirmed_buy2like_replay_sample_keeps_current_state() -> None:
-    rows = probe_module._load_rows("01024", "1m")
-    payload = probe_module._replay("01024", "快手", "2026-08-03 15:33", rows)
+    rows = load_replay_rows("01024", "1m")
+    payload = replay("01024", "快手", "2026-08-03 15:33", rows)
 
     assert payload["cutoff"] == "2026-08-03 15:33"
     assert payload["same_level_decomposition_mode"] == "single_confirmed"
@@ -239,8 +232,8 @@ def test_real_01024_1m_confirmed_buy2like_replay_sample_keeps_current_state() ->
 
 
 def test_real_00175_1m_confirmed_buy2like_replay_sample_keeps_current_state() -> None:
-    rows = probe_module._load_rows("00175", "1m")
-    payload = probe_module._replay("00175", "吉利汽车", "2026-08-05 10:43", rows)
+    rows = load_replay_rows("00175", "1m")
+    payload = replay("00175", "吉利汽车", "2026-08-05 10:43", rows)
 
     assert payload["cutoff"] == "2026-08-05 10:43"
     assert payload["same_level_decomposition_mode"] == "single_confirmed"

@@ -21,15 +21,10 @@ from chanlun.analysis import _build_zs_monitor_state, _is_first_reverse_hold, _s
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
 
-
-PROBE_SPEC = importlib.util.spec_from_file_location(
-    "probe_intraday_prebreak_sample",
-    ROOT / "build" / "probe_intraday_prebreak_sample.py",
-)
-if PROBE_SPEC is None or PROBE_SPEC.loader is None:
-    raise RuntimeError("failed to load probe_intraday_prebreak_sample.py for tests")
-probe_module = importlib.util.module_from_spec(PROBE_SPEC)
-PROBE_SPEC.loader.exec_module(probe_module)
+# 历史注记：这些真实 replay 样本原本加载 `build/probe_intraday_prebreak_sample.py`，
+# 但 `build/` 与 `data/` 均未入版本库，干净机器上本模块会在收集阶段直接报错。
+# 现已改为 `tests.replay_support`（只读 `tests/fixtures/real/replay/`），载荷逐字段比对一致。
+from tests.replay_support import load_replay_rows, replay  # noqa: E402
 
 
 def _zhongshu(zs_id: int, *, zs_low: float, zs_high: float, day: int) -> Zhongshu:
@@ -804,8 +799,8 @@ def test_build_signal_summary_fields_preserves_pre_breakout_pending_gate() -> No
 
 
 def test_real_1m_pre_breakout_replay_sample_preserves_independent_gate() -> None:
-    rows = probe_module._load_rows("002555", "1m")
-    payload = probe_module._replay("002555", "三七互娱", "2026-08-04 13:35", rows)
+    rows = load_replay_rows("002555", "1m")
+    payload = replay("002555", "三七互娱", "2026-08-04 13:35", rows)
 
     assert payload["cutoff"] == "2026-08-04 13:35"
     assert payload["zs_monitor_alert"] == "none"
@@ -829,8 +824,8 @@ def test_real_1m_pre_breakout_replay_sample_preserves_independent_gate() -> None
 def test_real_1m_pre_breakout_replay_sample_03690_preserves_independent_gate() -> None:
     # 第二个真实 1m pre_breakout 锚点（非 002555），港股 03690 美团，
     # 用于降低单标偏置。与 002555 同为「无中枢 fallback 监视带 + dual_interpretation_pending」。
-    rows = probe_module._load_rows("03690", "1m")
-    payload = probe_module._replay("03690", "美团", "2026-08-05 09:56", rows)
+    rows = load_replay_rows("03690", "1m")
+    payload = replay("03690", "美团", "2026-08-05 09:56", rows)
 
     assert payload["cutoff"] == "2026-08-05 09:56"
     assert payload["zs_monitor_alert"] == "none"
@@ -851,8 +846,8 @@ def test_real_1m_pre_breakout_replay_sample_03690_preserves_independent_gate() -
 def test_real_1m_pre_breakout_replay_sample_600900_preserves_independent_gate() -> None:
     # 第三个真实 1m pre_breakout 锚点（非 002555），CN 600900 长江电力（防御/电力标的），
     # 与 002555（CN 游戏）、03690（HK 互联网）形成市场/行业多样性，继续降低单标偏置。
-    rows = probe_module._load_rows("600900", "1m")
-    payload = probe_module._replay("600900", "长江电力", "2026-08-04 13:18", rows)
+    rows = load_replay_rows("600900", "1m")
+    payload = replay("600900", "长江电力", "2026-08-04 13:18", rows)
 
     assert payload["cutoff"] == "2026-08-04 13:18"
     assert payload["zs_monitor_alert"] == "pre_breakdown"
@@ -873,8 +868,8 @@ def test_real_1m_pre_breakout_replay_sample_600900_preserves_independent_gate() 
 def test_real_1m_pre_breakout_replay_sample_01024_preserves_independent_gate() -> None:
     # 第四个真实 1m 回放锚点（01024 快手），用于扩展 pre_breakout 样本广度。
     # 该断言避免绑定易漂移的价位数值，重点锁 pending/watch 语义与不误升 confirmed。
-    rows = probe_module._load_rows("01024", "1m")
-    payload = probe_module._replay("01024", "快手", "2026-08-10 09:56", rows)
+    rows = load_replay_rows("01024", "1m")
+    payload = replay("01024", "快手", "2026-08-10 09:56", rows)
 
     assert payload["cutoff"] == "2026-08-10 09:56"
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
@@ -891,8 +886,8 @@ def test_real_1m_pre_breakout_replay_sample_01024_preserves_independent_gate() -
 def test_real_1m_pre_breakout_replay_sample_09988_preserves_independent_gate() -> None:
     # 第五个真实 1m 回放锚点（09988 阿里巴巴），继续扩展 pre_breakout 样本广度。
     # 断言锁 pending/watch 语义，避免绑定易漂移的具体价位。
-    rows = probe_module._load_rows("09988", "1m")
-    payload = probe_module._replay("09988", "阿里巴巴", "2026-08-05 10:01", rows)
+    rows = load_replay_rows("09988", "1m")
+    payload = replay("09988", "阿里巴巴", "2026-08-05 10:01", rows)
 
     assert payload["cutoff"] == "2026-08-05 10:01"
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
@@ -908,8 +903,8 @@ def test_real_1m_pre_breakout_replay_sample_09988_preserves_independent_gate() -
 
 def test_real_1m_pre_breakout_replay_sample_00700_preserves_independent_gate() -> None:
     # 第六个真实 1m 回放锚点（00700 腾讯），补齐本轮 pre_breakout 扩样本收口。
-    rows = probe_module._load_rows("00700", "1m")
-    payload = probe_module._replay("00700", "腾讯", "2026-08-05 10:01", rows)
+    rows = load_replay_rows("00700", "1m")
+    payload = replay("00700", "腾讯", "2026-08-05 10:01", rows)
 
     assert payload["cutoff"] == "2026-08-05 10:01"
     assert payload["same_level_decomposition_mode"] == "dual_interpretation_pending"
@@ -924,8 +919,8 @@ def test_real_1m_pre_breakout_replay_sample_00700_preserves_independent_gate() -
 
 
 def test_real_1m_pre_breakdown_replay_sample_preserves_independent_gate() -> None:
-    rows = probe_module._load_rows("000651", "1m")
-    payload = probe_module._replay("000651", "格力电器", "2026-07-30 10:21", rows)
+    rows = load_replay_rows("000651", "1m")
+    payload = replay("000651", "格力电器", "2026-07-30 10:21", rows)
 
     assert payload["cutoff"] == "2026-07-30 10:21"
     assert payload["zs_monitor_alert"] == "pre_breakdown"
@@ -947,8 +942,8 @@ def test_real_1m_pre_breakdown_replay_sample_03690_preserves_independent_gate() 
     # 第二个真实 1m pre_breakdown 锚点（非 000651），港股 03690 美团 2026-08-05 09:46。
     # 与既有 03690 2026-08-05 09:56 pre_breakout 构成「同日同标的下破→上破」对照，
     # 降低单标偏置并覆盖向下预警链的第二个真实样本。
-    rows = probe_module._load_rows("03690", "1m")
-    payload = probe_module._replay("03690", "美团", "2026-08-05 09:46", rows)
+    rows = load_replay_rows("03690", "1m")
+    payload = replay("03690", "美团", "2026-08-05 09:46", rows)
 
     assert payload["cutoff"] == "2026-08-05 09:46"
     assert payload["zs_monitor_alert"] == "pre_breakdown"
@@ -971,8 +966,8 @@ def test_real_1m_trend_divergence_replay_sample_000651_down_non_strict() -> None
     # ZS0 不再吸收向下离开段 s5，ZS0 [41.75,41.92] 与 ZS1 [40.21,40.51] 波动区间不再回探重叠，
     # 构成干净下跌趋势（rel=down、非扩张）。同向下探力度衰减但未跌破 -> trend_active=True、strict=False，
     # route 回落 last_zs_extension。见 trend-divergence-tasks.md「趋势背驰（下跌非严格）000651 双锚点」。
-    rows = probe_module._load_rows("000651", "1m")
-    payload = probe_module._replay("000651", "格力电器", "2026-08-12 10:38", rows)
+    rows = load_replay_rows("000651", "1m")
+    payload = replay("000651", "格力电器", "2026-08-12 10:38", rows)
 
     assert payload["cutoff"] == "2026-08-12 10:38"
     assert payload["ongoing_type"] == "down"
@@ -987,8 +982,8 @@ def test_real_1m_trend_divergence_replay_sample_000651_down_non_strict() -> None
 def test_real_1m_trend_divergence_replay_sample_000651_down_second_anchor() -> None:
     # 第二个 cutoff 锚点：与 08-12 同一下跌趋势背驰（非严格），锁追加更多 bar 后
     # 结构分类与背驰结论不漂移（ongoing=down、trend_active=True、strict=False、route=last_zs_extension）。
-    rows = probe_module._load_rows("000651", "1m")
-    payload = probe_module._replay("000651", "格力电器", "2026-08-14 10:57", rows)
+    rows = load_replay_rows("000651", "1m")
+    payload = replay("000651", "格力电器", "2026-08-14 10:57", rows)
 
     assert payload["cutoff"] == "2026-08-14 10:57"
     assert payload["ongoing_type"] == "down"
@@ -1005,8 +1000,8 @@ def test_real_day_range_divergence_replay_sample_000591_down_strict() -> None:
     # 前两中枢（zs0 [6.67,9.54] -> zs1 [4.98,5.54]）构成干净下跌趋势已完结，
     # 当前 zs1/zs2 区间不重叠但波动回探重叠（中枢扩张）归入盘整，落 strict=True
     # 盘整背驰轨道（route=higher_level_range、dual_interpretation_pending/pending）。
-    rows = probe_module._load_rows("000591", "day")
-    payload = probe_module._replay("000591", "太阳能", "2026-08-03", rows)
+    rows = load_replay_rows("000591", "day")
+    payload = replay("000591", "太阳能", "2026-08-03", rows)
 
     assert payload["cutoff"] == "2026-08-03"
     assert payload["ongoing_type"] == "range"
@@ -1023,8 +1018,8 @@ def test_real_day_range_divergence_replay_sample_000591_down_strict() -> None:
 
 def test_real_day_range_divergence_replay_sample_000591_only_marks_small_to_large_candidate_without_buy3() -> None:
     """真实 000591 day 严格盘整底背驰样本：未见次级别三买前，只能标记为小转大候选。"""
-    rows = probe_module._load_rows("000591", "day")
-    payload = probe_module._replay("000591", "太阳能", "2026-08-03", rows)
+    rows = load_replay_rows("000591", "day")
+    payload = replay("000591", "太阳能", "2026-08-03", rows)
 
     assert payload["post_divergence_route"] == "higher_level_range"
     assert payload["same_level_consumption_level"] == "pending"
@@ -1089,8 +1084,8 @@ def test_real_day_range_divergence_replay_sample_601328_up_strict() -> None:
     # 严格盘整顶背驰真实样本（day 级）：601328 交通银行 2025-06-24。
     # 连续中枢区间不重叠但波动区间回探重叠（中枢扩张），按第20课归入盘整，
     # 落 strict=True 盘整背驰轨道（route=higher_level_range、dual_interpretation_pending/pending）。
-    rows = probe_module._load_rows("601328", "day")
-    payload = probe_module._replay("601328", "交通银行", "2025-06-24", rows)
+    rows = load_replay_rows("601328", "day")
+    payload = replay("601328", "交通银行", "2025-06-24", rows)
 
     assert payload["cutoff"] == "2025-06-24"
     assert payload["ongoing_type"] == "range"
@@ -1109,8 +1104,8 @@ def test_real_1m_range_divergence_replay_sample_300124_up_non_strict() -> None:
     # 非严格盘整顶背驰真实样本（1m 级）：300124 汇川技术 2026-08-05 10:29。
     # 两个中枢区间不重叠但波动回探重叠（中枢扩张）归入盘整，落非严格盘整背驰轨道
     # （route=last_zs_extension），与 000651 下跌非严格对称。
-    rows = probe_module._load_rows("300124", "1m")
-    payload = probe_module._replay("300124", "汇川技术", "2026-08-05 10:29", rows)
+    rows = load_replay_rows("300124", "1m")
+    payload = replay("300124", "汇川技术", "2026-08-05 10:29", rows)
 
     assert payload["cutoff"] == "2026-08-05 10:29"
     assert payload["ongoing_type"] == "range"
@@ -1129,8 +1124,8 @@ def test_real_1m_range_divergence_replay_sample_000651_strict() -> None:
     # 严格盘整背驰真实样本（1m 级）：000651 格力电器 2026-08-03 13:47，
     # 补 TD5 长期缺失的盘整背驰真实样本（range_active=True、strict=True、
     # touches_boundary=True、route=higher_level_range、dual_interpretation_pending）。
-    rows = probe_module._load_rows("000651", "1m")
-    payload = probe_module._replay("000651", "格力电器", "2026-08-03 13:47", rows)
+    rows = load_replay_rows("000651", "1m")
+    payload = replay("000651", "格力电器", "2026-08-03 13:47", rows)
 
     assert payload["cutoff"] == "2026-08-03 13:47"
     assert payload["ongoing_type"] == "range"
@@ -1148,8 +1143,8 @@ def test_real_1m_confirmed_buy2like_replay_sample_01024() -> None:
     # 真实 1m confirmed 买侧样本：01024 快手 2026-08-03 15:33。
     # 当前窗口已进入 single_confirmed + confirmed，且 buy2like 生效，
     # 可作为前端 `1m confirmed` 买侧 live 对照候选。
-    rows = probe_module._load_rows("01024", "1m")
-    payload = probe_module._replay("01024", "快手", "2026-08-03 15:33", rows)
+    rows = load_replay_rows("01024", "1m")
+    payload = replay("01024", "快手", "2026-08-03 15:33", rows)
 
     assert payload["cutoff"] == "2026-08-03 15:33"
     assert payload["same_level_decomposition_mode"] == "single_confirmed"
@@ -1166,8 +1161,8 @@ def test_real_1m_confirmed_buy2like_replay_sample_00175() -> None:
     # 第二个真实 1m confirmed 买侧样本：00175 吉利汽车 2026-08-05 10:43。
     # 该窗口同样进入 single_confirmed + confirmed，且仅保留 buy2like，
     # 可作为 01024 之外的第二个买侧 replay 对照，降低单标偏置。
-    rows = probe_module._load_rows("00175", "1m")
-    payload = probe_module._replay("00175", "吉利汽车", "2026-08-05 10:43", rows)
+    rows = load_replay_rows("00175", "1m")
+    payload = replay("00175", "吉利汽车", "2026-08-05 10:43", rows)
 
     assert payload["cutoff"] == "2026-08-05 10:43"
     assert payload["same_level_decomposition_mode"] == "single_confirmed"

@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 from tests.real_fixture_support import frozen_tech_json
+from tests.replay_support import load_replay_rows, replay
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,14 +22,9 @@ module = importlib.util.module_from_spec(module_spec)
 sys.modules[module_spec.name] = module
 module_spec.loader.exec_module(module)
 
-probe_spec = importlib.util.spec_from_file_location(
-    "probe_intraday_prebreak_sample",
-    ROOT / "build" / "probe_intraday_prebreak_sample.py",
-)
-if probe_spec is None or probe_spec.loader is None:
-    raise RuntimeError("failed to load probe_intraday_prebreak_sample.py for tests")
-probe_module = importlib.util.module_from_spec(probe_spec)
-probe_spec.loader.exec_module(probe_module)
+# 历史注记：本模块曾在此加载 `build/probe_intraday_prebreak_sample.py`（该文件未被版本控制，
+# `build/` 在 .gitignore 里），而那个探针只读 `data/`，导致干净机器上本模块在收集阶段就报错。
+# 现已改为 `tests/replay_support`（只读 `tests/fixtures/real/replay/`），载荷经逐字段比对完全一致。
 
 
 def test_parse_combined_group_file_extracts_mobile_sections(tmp_path: Path) -> None:
@@ -1388,8 +1384,8 @@ def test_build_summary_and_detail_payload_preserve_1m_pre_breakout_publish_gate(
 
 
 def test_build_summary_and_detail_payload_preserve_real_1m_pre_breakdown_sample(tmp_path: Path) -> None:
-    replay_rows = probe_module._load_rows("000651", "1m")
-    replay_payload = probe_module._replay("000651", "格力电器", "2026-07-30 10:21", replay_rows)
+    replay_rows = load_replay_rows("000651", "1m")
+    replay_payload = replay("000651", "格力电器", "2026-07-30 10:21", replay_rows)
 
     stock_dir = tmp_path / "000651"
     (stock_dir / "1m").mkdir(parents=True)
@@ -1478,8 +1474,8 @@ def test_build_summary_and_detail_payload_preserve_real_1m_pre_breakdown_sample(
 def test_build_summary_and_detail_payload_preserve_real_03690_1m_pre_breakdown_sample(tmp_path: Path) -> None:
     # 第二个真实 1m pre_breakdown publish 锚点（非 000651），港股 03690 美团 2026-08-05 09:46，
     # 与既有 03690 2026-08-05 09:56 pre_breakout 构成「同日同标的下破→上破」publish 对照。
-    replay_rows = probe_module._load_rows("03690", "1m")
-    replay_payload = probe_module._replay("03690", "美团", "2026-08-05 09:46", replay_rows)
+    replay_rows = load_replay_rows("03690", "1m")
+    replay_payload = replay("03690", "美团", "2026-08-05 09:46", replay_rows)
 
     stock_dir = tmp_path / "03690"
     (stock_dir / "1m").mkdir(parents=True)
@@ -1566,8 +1562,8 @@ def test_build_summary_and_detail_payload_preserve_real_03690_1m_pre_breakdown_s
 
 
 def test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample(tmp_path: Path) -> None:
-    replay_rows = probe_module._load_rows("002555", "1m")
-    replay_payload = probe_module._replay("002555", "三七互娱", "2026-08-04 13:35", replay_rows)
+    replay_rows = load_replay_rows("002555", "1m")
+    replay_payload = replay("002555", "三七互娱", "2026-08-04 13:35", replay_rows)
 
     stock_dir = tmp_path / "002555"
     (stock_dir / "1m").mkdir(parents=True)
@@ -1691,8 +1687,8 @@ def test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample(t
 def test_build_summary_and_detail_payload_preserve_real_03690_1m_pre_breakout_sample(tmp_path: Path) -> None:
     # 第二个真实 1m 观察锚点（非 002555），港股 03690 美团，
     # 与 002555 同为「无中枢 fallback 监视带 + pending 消费」，降低单标偏置。
-    replay_rows = probe_module._load_rows("03690", "1m")
-    replay_payload = probe_module._replay("03690", "美团", "2026-08-05 09:56", replay_rows)
+    replay_rows = load_replay_rows("03690", "1m")
+    replay_payload = replay("03690", "美团", "2026-08-05 09:56", replay_rows)
 
     stock_dir = tmp_path / "03690"
     (stock_dir / "1m").mkdir(parents=True)
@@ -1816,8 +1812,8 @@ def test_build_summary_and_detail_payload_preserve_real_03690_1m_pre_breakout_sa
 def test_build_summary_and_detail_payload_preserve_real_600900_1m_pre_breakout_sample(tmp_path: Path) -> None:
     # 第三个真实 1m 预警锚点（非 002555），CN 600900 长江电力，
     # 与 002555 / 03690 同为「无中枢 fallback 监视带 + pending 消费」，覆盖防御/电力行业。
-    replay_rows = probe_module._load_rows("600900", "1m")
-    replay_payload = probe_module._replay("600900", "长江电力", "2026-08-04 13:18", replay_rows)
+    replay_rows = load_replay_rows("600900", "1m")
+    replay_payload = replay("600900", "长江电力", "2026-08-04 13:18", replay_rows)
 
     stock_dir = tmp_path / "600900"
     (stock_dir / "1m").mkdir(parents=True)
@@ -1943,8 +1939,8 @@ def test_build_summary_and_detail_payload_preserve_real_600900_1m_pre_breakout_s
 def test_build_summary_and_detail_payload_preserve_real_01024_1m_pre_breakout_sample(tmp_path: Path) -> None:
     # 新增 01024 1m 历史 cutoff 回放锚点，扩展 pre_breakout 样本广度。
     # 这里锁消费层的 pending 语义，不绑定容易漂移的具体中线价位文案。
-    replay_rows = probe_module._load_rows("01024", "1m")
-    replay_payload = probe_module._replay("01024", "快手", "2026-08-10 09:56", replay_rows)
+    replay_rows = load_replay_rows("01024", "1m")
+    replay_payload = replay("01024", "快手", "2026-08-10 09:56", replay_rows)
 
     stock_dir = tmp_path / "01024_replay"
     (stock_dir / "1m").mkdir(parents=True)
@@ -2047,8 +2043,8 @@ def test_build_summary_and_detail_payload_preserve_real_01024_1m_pre_breakout_sa
 def test_build_summary_and_detail_payload_preserve_real_09988_1m_pre_breakout_sample(tmp_path: Path) -> None:
     # 新增 09988 1m 历史 cutoff 回放锚点，继续扩展 pre_breakout 样本广度。
     # 锁消费层 pending 语义，不绑定具体中线价位文案。
-    replay_rows = probe_module._load_rows("09988", "1m")
-    replay_payload = probe_module._replay("09988", "阿里巴巴", "2026-08-05 10:01", replay_rows)
+    replay_rows = load_replay_rows("09988", "1m")
+    replay_payload = replay("09988", "阿里巴巴", "2026-08-05 10:01", replay_rows)
 
     stock_dir = tmp_path / "09988_replay"
     (stock_dir / "1m").mkdir(parents=True)
@@ -2150,8 +2146,8 @@ def test_build_summary_and_detail_payload_preserve_real_09988_1m_pre_breakout_sa
 
 def test_build_summary_and_detail_payload_preserve_real_00700_1m_pre_breakout_sample(tmp_path: Path) -> None:
     # 新增 00700 1m 历史 cutoff 回放锚点，补齐本轮 pre_breakout 扩样本收口。
-    replay_rows = probe_module._load_rows("00700", "1m")
-    replay_payload = probe_module._replay("00700", "腾讯", "2026-08-05 10:01", replay_rows)
+    replay_rows = load_replay_rows("00700", "1m")
+    replay_payload = replay("00700", "腾讯", "2026-08-05 10:01", replay_rows)
 
     stock_dir = tmp_path / "00700_replay"
     (stock_dir / "1m").mkdir(parents=True)
@@ -2443,8 +2439,8 @@ def test_build_summary_and_detail_payload_preserve_real_00700_5m_confirmed_sell3
 
 
 def test_build_summary_and_detail_payload_preserve_real_01024_1m_confirmed_buy2like_replay_sample(tmp_path: Path) -> None:
-    replay_rows = probe_module._load_rows("01024", "1m")
-    replay_payload = probe_module._replay("01024", "快手", "2026-08-03 15:33", replay_rows)
+    replay_rows = load_replay_rows("01024", "1m")
+    replay_payload = replay("01024", "快手", "2026-08-03 15:33", replay_rows)
 
     stock_dir = tmp_path / "01024_1m_confirmed_buy"
     (stock_dir / "1m").mkdir(parents=True)
@@ -2546,8 +2542,8 @@ def test_build_summary_and_detail_payload_preserve_real_01024_1m_confirmed_buy2l
 
 
 def test_build_summary_and_detail_payload_preserve_real_00175_1m_confirmed_buy2like_replay_sample(tmp_path: Path) -> None:
-    replay_rows = probe_module._load_rows("00175", "1m")
-    replay_payload = probe_module._replay("00175", "吉利汽车", "2026-08-05 10:43", replay_rows)
+    replay_rows = load_replay_rows("00175", "1m")
+    replay_payload = replay("00175", "吉利汽车", "2026-08-05 10:43", replay_rows)
 
     stock_dir = tmp_path / "00175_1m_confirmed_buy"
     (stock_dir / "1m").mkdir(parents=True)

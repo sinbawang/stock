@@ -1,16 +1,21 @@
+"""区间套 replay 样本辅助函数（`--auto-find` 相关）的单元测试。
+
+**历史注记**：本模块原本从**未入版本库**的 `build/probe_intraday_prebreak_sample.py`
+导入被测函数，导致在干净机器上收集阶段就报错。被测实现现已搬到受版本控制的
+`tests/replay_support.py`；断言语义未变。
+"""
+
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE_PATH = ROOT / "build" / "probe_intraday_prebreak_sample.py"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-spec = importlib.util.spec_from_file_location("probe_intraday_prebreak_sample", MODULE_PATH)
-assert spec is not None and spec.loader is not None
-probe_module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(probe_module)
+from tests.replay_support import filter_auto_find_results, select_auto_cutoffs  # noqa: E402
 
 
 def test_select_auto_cutoffs_filters_duplicates_and_time_window() -> None:
@@ -22,7 +27,7 @@ def test_select_auto_cutoffs_filters_duplicates_and_time_window() -> None:
         {"ts": "2026-08-01 09:34"},
     ]
 
-    cutoffs = probe_module._select_auto_cutoffs(rows, "2026-08-01 09:32", "2026-08-01 09:33")
+    cutoffs = select_auto_cutoffs(rows, "2026-08-01 09:32", "2026-08-01 09:33")
 
     assert cutoffs == ["2026-08-01 09:32", "2026-08-01 09:33"]
 
@@ -34,7 +39,7 @@ def test_filter_auto_find_results_keeps_first_matching_alerts() -> None:
         {"cutoff": "2026-08-01 09:33", "zs_monitor_alert": "pre_breakout"},
     ]
 
-    payload = probe_module._filter_auto_find_results(
+    payload = filter_auto_find_results(
         scan_results,
         symbol="01339",
         target_alert="pre_breakout",
@@ -52,7 +57,7 @@ def test_filter_auto_find_results_emits_no_match_summary() -> None:
         {"cutoff": "2026-08-01 09:32", "zs_monitor_alert": "none"},
     ]
 
-    payload = probe_module._filter_auto_find_results(
+    payload = filter_auto_find_results(
         scan_results,
         symbol="01339",
         target_alert="pre_breakout",

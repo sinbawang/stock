@@ -99,6 +99,42 @@ HALT_FIXTURES: tuple[tuple[str, str, str], ...] = (
 )
 HALT_FIXTURES_ROOT = FIXTURES_ROOT / "segment_practical_halt"
 
+# 消费层 replay 样本用的「早期 1m 窗口」。
+#
+# 背景：`tests/test_build_miniapp_publish_bundle.py` 的 10 个 sample 要回放到
+# 2026-07-30 ~ 2026-08-11 之间的 cutoff，而 `data/reports/**/analyze` 的当前窗口起点已到
+# 2026-08-24/28，`data/cache/kline` 也只保留最近 4500 根 1m。这些早期窗口只存在于
+# `data/stock-kline-cache/<mkt>/<sym>/<tf>.csv`，因此必须单独冻结，否则测试会退回去
+# 读未入版本库的 `data/`（见 tests/real_fixture_support.py 说明）。
+#
+# 消费方（全部四个模块都靠这些窗口，不能只覆盖其中一个）：
+# - `tests/test_build_miniapp_publish_bundle.py`
+# - `tests/test_chanlun_analysis.py`
+# - `tests/test_zhongshu_structure_text.py`
+# - `tests/replay_support.py`（由上述模块共享）
+#
+# 注意：本组 fixture 放在 `replay/` 子目录，**不能**放在 FIXTURES_ROOT 根下：
+# `frozen_csv(symbol, timeframe)` 用 `<sym>_<tf>_*.csv` glob 并取排序最后一项，
+# 同一 (symbol, timeframe) 出现两个窗口会让既有闸门静默切到另一个窗口。
+REPLAY_FIXTURES: tuple[tuple[str, str, str], ...] = (
+    # (symbol, timeframe, market)
+    ("000591", "day", "A"),
+    ("000651", "1m", "A"),
+    ("00175", "1m", "HK"),
+    ("002555", "1m", "A"),
+    ("00700", "1m", "HK"),
+    ("01024", "1m", "HK"),
+    ("03690", "1m", "HK"),
+    ("09988", "1m", "HK"),
+    ("300124", "1m", "A"),
+    ("600900", "1m", "A"),
+    ("601328", "day", "A"),
+)
+REPLAY_FIXTURES_ROOT = FIXTURES_ROOT / "replay"
+
+# 早期 1m 窗口所在的本地仓库（与 KLINE_CACHE_DIR 不同：后者只保留尾部 4500 根）。
+STOCK_KLINE_CACHE_ROOT = ROOT / "data" / "stock-kline-cache"
+
 _FIELDS = ["ts", "open", "high", "low", "close", "volume"]
 
 
@@ -135,10 +171,46 @@ def _latest_segments_csv(symbol: str, timeframe: str) -> Path | None:
     return candidates[-1] if candidates else None
 
 
+def _write_replay_fixtures() -> None:
+    """冻结消费层 replay 用的早期 1m 窗口（幂等，不影响其它 fixture）。"""
+    REPLAY_FIXTURES_ROOT.mkdir(parents=True, exist_ok=True)
+    for stale in REPLAY_FIXTURES_ROOT.glob("*.csv"):
+        stale.unlink()
+    for symbol, timeframe, market in REPLAY_FIXTURES:
+        rows = load_local_rows(symbol, market, timeframe, root=STOCK_KLINE_CACHE_ROOT)
+        window = [row for row in rows if str(row["ts"])[:10] <= CUTOFF]
+        if not window:
+            print(f"[replay] {symbol} {timeframe}: NO STORE DATA")
+            continue
+        start = str(window[0]["ts"])[:10].replace("-", "")
+        end = str(window[-1]["ts"])[:10].replace("-", "")
+        target = REPLAY_FIXTURES_ROOT / f"{symbol}_{timeframe}_{start}_to_{end}.csv"
+        with target.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=_FIELDS)
+            writer.writeheader()
+            for row in window:
+                writer.writerow({field: row[field] for field in _FIELDS})
+        print(f"[replay] {symbol} {timeframe}: {target.name} ({len(window)} bars)")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="只校验冻结 fixture 是否齐全，不重建")
+    parser.add_argument(
+        "--only",
+        choices=("replay",),
+        default=None,
+        help=(
+            "只重建指定分组。注意：无 --only 的完整重建会先清空 FIXTURES_ROOT 根下的全部 CSV "
+            "并按当前 data/ 重算，可能改变已提交窗口；只补 replay 窗口时请用 --only replay。"
+        ),
+    )
     args = parser.parse_args()
+
+    if args.only == "replay":
+        FIXTURES_ROOT.mkdir(parents=True, exist_ok=True)
+        _write_replay_fixtures()
+        return 0
 
     FIXTURES_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -204,6 +276,8 @@ def main() -> int:
             for row in window:
                 writer.writerow({field: row[field] for field in _FIELDS})
         print(f"[halt] {symbol} {timeframe}: {target.name} ({len(window)} bars)")
+
+    _write_replay_fixtures()
 
     total = sum(path.stat().st_size for path in FIXTURES_ROOT.rglob("*.csv"))
     total += sum(path.stat().st_size for path in FIXTURES_ROOT.rglob("*.json"))

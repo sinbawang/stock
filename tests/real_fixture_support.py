@@ -82,3 +82,25 @@ def halt_fixture_csv(symbol: str, timeframe: str) -> Path:
     if not candidates:
         raise FileNotFoundError(f"缺少 practical 停扫 fixture：{symbol} {timeframe}。{_FREEZE_HINT}")
     return candidates[-1]
+
+
+REPLAY_FIXTURES_ROOT = FIXTURES_ROOT / "replay"
+
+
+def replay_fixture_csv(symbol: str, timeframe: str) -> Path:
+    """`replay/` 下的早期 1m 窗口 fixture（消费层 replay 样本的输入）。
+
+    这些窗口（2026-07-30 ~ 2026-08-11）**故意与 `frozen_csv` 的当前 analyze 窗口错开**：
+    它们只存在于 `data/stock-kline-cache/`，若不单独冻结，消费层样本测试就只能去读未入
+    版本库的 `data/`，无法在干净机器上复现。
+
+    单独放在子目录而不是 FIXTURES_ROOT 根下，是为了不干扰 `frozen_csv` 的
+    `<symbol>_<timeframe>_*.csv` glob（同一 (symbol, timeframe) 出现两个窗口会让既有闸门静默切换窗口）。
+    """
+    candidates = sorted(REPLAY_FIXTURES_ROOT.glob(f"{symbol}_{timeframe}_*.csv"))
+    if not candidates:
+        raise FileNotFoundError(
+            f"缺少 replay 窗口 fixture：{symbol} {timeframe}。{_FREEZE_HINT}"
+            "（可用 `python scripts/freeze_real_fixtures.py --only replay` 只重建该组）"
+        )
+    return candidates[-1]
