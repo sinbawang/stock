@@ -27,15 +27,16 @@ from chanlun.segment import (
 )
 from chanlun.visualization import Plotter
 from chanlun.zhongshu import identify_zhongshu
+from tests.real_fixture_support import frozen_csv, halt_fixture_csv
 from tests.segment_regression_support import load_bis_from_csv
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_03690_30M_CSV = ROOT / "data" / "reports" / "03690" / "30m" / "analyze" / "03690_30m_20260326_to_20260904.csv"
-SAMPLE_03690_DAY_CSV = ROOT / "data" / "reports" / "03690" / "day" / "analyze" / "03690_day_20211022_to_20260904.csv"
-SAMPLE_01024_1M_CSV = ROOT / "data" / "reports" / "01024" / "1m" / "analyze" / "01024_1m_20260821_to_20260904.csv"
-SAMPLE_600900_1M_CSV = ROOT / "data" / "reports" / "600900" / "1m" / "analyze" / "600900_1m_20260817_to_20260904.csv"
-SAMPLE_600900_5M_CSV = ROOT / "data" / "reports" / "600900" / "5m" / "analyze" / "600900_5m_20260715_to_20260904.csv"
+SAMPLE_03690_30M_CSV = frozen_csv("03690", "30m")
+SAMPLE_03690_DAY_CSV = frozen_csv("03690", "day")
+SAMPLE_01024_1M_CSV = frozen_csv("01024", "1m")
+SAMPLE_600900_1M_CSV = frozen_csv("600900", "1m")
+SAMPLE_600900_5M_CSV = frozen_csv("600900", "5m")
 
 NESTED_DEFERRED_INVALIDATED_ANCHORS = [
     (
@@ -44,11 +45,11 @@ NESTED_DEFERRED_INVALIDATED_ANCHORS = [
     ),
     (
         SAMPLE_600900_5M_CSV,
-        ["down", "up", "down", "up", "down", "up", "down", "up", "down", "up", "down"],
+        ["up", "down", "up", "down", "up", "down", "up", "down", "up", "down", "up"],
     ),
     (
         SAMPLE_03690_DAY_CSV,
-        ["down", "up", "down", "up", "down", "up", "down", "up", "down", "up", "down"],
+        ["up", "down", "up", "down", "up", "down", "up", "down", "up", "down", "up"],
     ),
     (
         SAMPLE_600900_1M_CSV,
@@ -852,6 +853,48 @@ class TestIdentifySegments:
             monkeypatch,
             sample_csv=sample_csv,
             expected_directions=expected_directions,
+        )
+
+    def test_practical_recovers_past_pending_segment_to_later_confirmed_anchor(self) -> None:
+        """practical 模式：中段 pending 之后不得因「首个候选种子仍 pending」而整体停扫。
+
+        真实锚点：300124 30m 加宽窗口（1400 根 / 116 笔，见 tests/fixtures/real/segment_practical_halt/）。
+        该窗口中段出现一个 pending 段，紧随其后的首个候选种子（bi 19）同样 pending，但其后的
+        bi 20 已能形成已确认线段——修复前主循环只试探首个种子便 `break`，把 bi 18..114 整体丢弃
+        （116 笔只剩 2 段）。修复后应继续向右找回退锚点，覆盖到窗口尾部。
+        """
+        csv_path = halt_fixture_csv("300124", "30m")
+        bis = load_bis_from_csv(csv_path)
+        assert len(bis) >= 100
+
+        practical = _identify_segments(
+            bis,
+            bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED,
+            termination_mode="practical",
+        )
+
+        covered_to = max(segment.end_bi_id for segment in practical)
+        assert len(practical) >= 15, f"practical 段数异常偏少：{len(practical)}"
+        assert covered_to >= 100, f"practical 在 bi {covered_to} 处过早停扫，丢弃了其后的全部笔"
+
+        # 未确认尾段仍应保留为最后一个（不回退既有「尾段可 pending」语义）。
+        assert practical[-1].is_confirmed is False
+
+    def test_practical_segment_count_does_not_collapse_against_theory(self) -> None:
+        """同一窗口在 practical / theory 下的段数不应出现量级差异（停扫缺陷的量级哨兵）。"""
+        csv_path = halt_fixture_csv("300124", "30m")
+        bis = load_bis_from_csv(csv_path)
+
+        practical = _identify_segments(
+            bis, bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED, termination_mode="practical"
+        )
+        theory = _identify_segments(
+            bis, bootstrap_mode=SEGMENT_BOOTSTRAP_FIRST_VALID_SEED, termination_mode="theory"
+        )
+
+        assert len(practical) >= 0.6 * len(theory), (
+            f"practical 段数({len(practical)}) 相对 theory({len(theory)}) 出现量级塌陷，"
+            "疑似 pending 停扫问题回归"
         )
 
     def test_feature_sequence_elements_expose_explicit_context(self):

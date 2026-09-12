@@ -1153,6 +1153,41 @@ def _find_later_initial_segment_window(
     return None
 
 
+def _resolve_later_confirmed_seed(
+    bis: List[Bi],
+    start_idx: int,
+    *,
+    strict_segment_rules: bool = False,
+    enable_fallback_reverse_break: bool = True,
+    enable_same_direction_fallback: bool = True,
+) -> Optional[int]:
+    """pending 段之后继续向右寻找第一个能形成「已确认」线段的种子。
+
+    不能只试探第一个候选种子：中段 pending 之后紧随的候选往往同样 pending，
+    若就此停扫会把其后所有笔整体丢弃（真实窗口 300124 30m 加宽窗口曾 116 笔只剩 2 段）。
+    返回 None 表示其后确实不存在可确认锚点，即正常的「未确认尾段」情形。
+    """
+    cursor = start_idx
+    while True:
+        seed = _find_later_initial_segment_window(bis, cursor, strict_segment_rules=strict_segment_rules)
+        if seed is None:
+            return None
+        seed_start_idx = seed[0]
+        probe = _extend_segment(
+            bis,
+            seed_start_idx,
+            anchor_idx=seed_start_idx,
+            strict_segment_rules=strict_segment_rules,
+            enable_gap_false_defer=False,
+            enable_fallback_reverse_break=enable_fallback_reverse_break,
+            enable_same_direction_fallback=enable_same_direction_fallback,
+        )
+        if probe is not None and probe[1]:
+            return seed_start_idx
+        # 该候选仍 pending / 无法成段：继续向右寻找下一个候选种子。
+        cursor = seed_start_idx
+
+
 def _evaluate_theory_stop(
     bis: List[Bi],
     reverse_indices: List[int],
@@ -1879,26 +1914,17 @@ def identify_segments(
                 index = effective_end_idx + 1
                 anchor_idx = None
                 continue
-            later_seed = _find_later_initial_segment_window(
+            recovery_start_idx = _resolve_later_confirmed_seed(
                 bis,
                 effective_end_idx,
                 strict_segment_rules=effective_strict_segment_rules,
+                enable_fallback_reverse_break=enable_fallback_reverse_break,
+                enable_same_direction_fallback=enable_same_direction_fallback,
             )
-            if later_seed is not None:
-                later_seed_start_idx = later_seed[0]
-                later_probe = _extend_segment(
-                    bis,
-                    later_seed_start_idx,
-                    anchor_idx=later_seed_start_idx,
-                    strict_segment_rules=effective_strict_segment_rules,
-                    enable_gap_false_defer=False,
-                    enable_fallback_reverse_break=enable_fallback_reverse_break,
-                    enable_same_direction_fallback=enable_same_direction_fallback,
-                )
-                if later_probe is not None and later_probe[1]:
-                    index = later_seed_start_idx
-                    anchor_idx = later_seed_start_idx
-                    continue
+            if recovery_start_idx is not None:
+                index = recovery_start_idx
+                anchor_idx = recovery_start_idx
+                continue
             break
 
         if break_idx is not None:
