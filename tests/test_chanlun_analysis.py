@@ -3229,6 +3229,28 @@ def test_replay_does_not_invalidate_without_structural_evidence() -> None:
     assert result["repaint_violations"][0]["kind"] == "vanished_without_break"
 
 
+def test_replay_reports_reconfirm_once_per_event_not_per_frame() -> None:
+    """RS0 增量6：失效后回归只在**首次**那一帧报一次，不得按帧重复计数。
+
+    实测 `09988 1m` 上同一事件被报 2 次（f12 / f13 各一次），会使监控口径随帧数膨胀。
+    """
+    frame_a = _lifecycle_frame(
+        [_confirmed_point("buy1", 5, 9.8)],
+        latest_down=_bi(5, BiDirection.DOWN, high=11.0, low=9.8, day=5),
+    )
+    frame_b = _lifecycle_frame(
+        [],
+        latest_down=_bi(7, BiDirection.DOWN, high=10.4, low=9.5, day=7),  # 新低跌破 9.8 -> invalidated
+    )
+    reappeared = [_confirmed_point("buy1", 5, 9.8)]
+    frame_c = _lifecycle_frame(reappeared, latest_down=_bi(7, BiDirection.DOWN, high=10.4, low=9.5, day=7))
+    frame_d = _lifecycle_frame(reappeared, latest_down=_bi(7, BiDirection.DOWN, high=10.4, low=9.5, day=7))
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b, frame_c, frame_d])
+
+    assert [v["kind"] for v in result["repaint_violations"]] == ["reconfirm_after_invalidated"]
+
+
 def test_derive_signal_lifecycle_transitions_reports_invalidated_premise() -> None:
     """RS0 增量6：derive 透出 invalidated_premise（additive，区分 price / structure）。"""
     previous_frame = {

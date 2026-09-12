@@ -1967,12 +1967,20 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
                     "status": "confirmed",
                 }
                 timeline.append({"frame": idx, "point": key[0], "signal_bi_id": key[1], "transition": "confirmed"})
-            elif record["status"] == "invalidated":
-                # 同锚点在失效后不应重新 confirmed；出现即视为 repaint 违规。
-                repaint_violations.append({"frame": idx, "point": key[0], "signal_bi_id": key[1], "kind": "reconfirm_after_invalidated"})
-            elif record["status"] == "superseded":
-                # 同锚点在更替后不应回到 confirmed（更替是终态）；回来即视为 repaint 违规。
-                repaint_violations.append({"frame": idx, "point": key[0], "signal_bi_id": key[1], "kind": "reconfirm_after_superseded"})
+            elif record["status"] in ("invalidated", "superseded"):
+                # 失效 / 更替均为终态：同锚点不应回到 confirmed；回归即视为 repaint 违规。
+                # 只在**首次**回归那一帧报一次：否则同一事件会按「点仍出现的帧数」重复计数
+                # （实测 09988 1m 上同一事件被报 2 次），使监控口径随帧数膨胀。
+                if not record.get("reconfirm_reported"):
+                    record["reconfirm_reported"] = True
+                    kind = (
+                        "reconfirm_after_invalidated"
+                        if record["status"] == "invalidated"
+                        else "reconfirm_after_superseded"
+                    )
+                    repaint_violations.append(
+                        {"frame": idx, "point": key[0], "signal_bi_id": key[1], "kind": kind}
+                    )
 
         for key, record in history.items():
             if record["status"] != "confirmed" or key in current:

@@ -89,7 +89,8 @@ stateDiagram-v2
 - 余 **2 条无任何独立证据**，为本轮唯一存量：`00700 day f10 buy3@77`、`03690 5m f9 sell2like@77`；
   已定性为真缺陷（§4.2.8）并**已修复** → 改判 `invalidated`（结构型前提失效，§3.6），
   使 `vanished_without_break` **2 → 0**。
-- 另有 **2 条** `reconfirm_after_invalidated`（另一类违规），未受本次改动影响。
+- 另有 `reconfirm_after_invalidated`：去重后为**真实 1 起事件**（曾因按帧重复计数报为 2 条），
+  根因是**参考中枢 `zs_id` 回退**（属更上层不稳定，非生命周期层），见 §4.2.9 —— **保留不豁免**。
 - 回放探针（均不提交）：`build/probe_signal_lifecycle_replay.py`（固定窗口起点，使 `data_window`
   恒定，避免被「窗口重基」豁免路径掩盖）、`build/probe_repaint_cases_detail.py`、
   `build/probe_supersede_criteria.py`、`build/probe_supersede_outcome.py`。
@@ -170,6 +171,43 @@ price premise → rebased → superseded → structural premise → repaint_viol
 证据分布仍为 16/7/5）；`invalidated` 39 → 41。
 `invalidated` 记录新增 `invalidated_premise`（`price` / `structure`）供审计，`derive` 透出同名字段。
 **发点零变化**（已确认集合与基线完全一致），故无「发过期点」风险。
+
+#### 4.2.9 `reconfirm_after_invalidated`（已完成，2026-09-12）——同 1 起事件，根因是**参考中枢不单调**
+
+探针 `build/probe_reconfirm_invalidated.py`（不提交）逐帧转储该锚点的状态与前提输入。
+
+**先纠正计数**：2 条违规其实是**同一个事件**（`09988 1m` `sell3@117`，f12 与 f13 各报一次）。
+原因是回归检测在**每一帧**都触发（记录状态未变），同一事件按「点仍出现的帧数」重复计数。
+已修：只在**首次**回归那一帧报一次
+（`test_replay_reports_reconfirm_once_per_event_not_per_frame`）；实测 **2 → 1**。
+
+**逐帧轨迹**（`09988 1m`，`sell3@117`）：
+
+| 帧 | 状态 | `zs_id` | `zs_low` | `latest_up_high` | `sell3_hold` |
+| --- | --- | --- | --- | --- | --- |
+| f10 | CONFIRMED | 2 | 108.6 | 106.3 | 117 |
+| f11 | 消失 → `invalidated`(price) | **3** | 105.7 | 106.4 | **None** |
+| f12 | CONFIRMED | **2** | 108.6 | 107.6 | 117 |
+| f13 | CONFIRMED | 2 | 108.6 | 107.6 | 117 |
+
+f11 判失效的依据是 `high 106.4 > zs_low 105.7` —— 但那个 `zs_low` 属于**瞬时的 ZS3**；
+f12 参考中枢又回到 ZS2，于是点回来了 → 违规。**即该失效本身是假阳性（依据的参考不可比）。**
+
+**根因：参考中枢（`zhongshus[-1].zs_id`）不单调。** 全量测量
+（`build/probe_zs_monotonicity.py`，21 窗口 × 12 cutoff，182 个可比帧对）：
+
+| 相邻帧对 `zs_id` 变化 | 次数 |
+| --- | --- |
+| 递增 | 34 |
+| 不变 | 146 |
+| **递减（回退）** | **2** |
+
+两条回退：`000651 1m` f8→f9 `2 → 0`（整条中枢链重算）、
+`09988 1m` f11→f12 `3 → 2`（正是本违规）。
+
+即：**这不是生命周期层的问题**，而是「`current_zs` 会回退」这一更上层的不稳定
+（与 §4.2.8 的「尾部相对位置」同源：参考结构在增量数据下不稳定）。
+修它要动中枢链的稳定性，属**独立课题** —— 故本条**保留为真实存留违规，不豁免**。
 
 ## 4. 实时预备态（RS1）
 
