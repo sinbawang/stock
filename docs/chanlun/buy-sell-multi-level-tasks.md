@@ -393,7 +393,7 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 
 | ID | 任务 | 类别 | 优先级 | 覆盖点类型 | ROI 理由 | 状态 |
 | --- | --- | --- | --- | --- | --- | --- |
-| RS0 | 信号生命周期与 repaint 安全契约 | 准确性 + 实时 | P0 | 1/2/3 + 类一 / 类二 | 横切全部点类型；补「确认→失效」回路 + 跨帧不翻转护栏，直接降低事后被打脸的假信号 | 完成（契约 + confirmed + 跨帧 invalidated/repaint + 管道 + 发布前闸门） |
+| RS0 | 信号生命周期与 repaint 安全契约 | 准确性 + 实时 | P0 | 1/2/3 + 类一 / 类二 | 横切全部点类型；补「确认→失效」回路 + 跨帧不翻转护栏，直接降低事后被打脸的假信号 | 完成（契约 + confirmed + 跨帧 invalidated/repaint + 管道 + 发布前闸门）。`2026-09-12` 核对修正（三项）：① **锚点红线此前实际被违反**——一类点发点门控校验的是离开段末笔，但 `build_signal_point_payloads` 的 `buy_1` / `buy_2` / `sell_2` 没有专用锚点参数，落到 `latest_down` / `latest_up`（可能正是未确认尾笔），再被「active 即 confirmed」的兜底盖成确认态；已在 21 个冻结窗口中检出（`000591 day` cutoff=1010 `buy1` 锚在未确认 bi 95），已补专用锚点参数并让生命周期兜底 fail closed（锚点未确认只能给 `forming`）。② 原「发布前闸门」只读 gitignored 的 `data/reports/**`、无报告即 `skip`，在干净检出 / CI 中**实际空转**；已补冻结 fixture 版确定性闸门 `tests/test_signal_lifecycle_anchor_gate.py`（24 项，已注册进 `signal-lifecycle` 安全闸门）。③ 仍有 **32 条**跨帧 repaint 待收口：其中 19 条属「被更晚同类点自然更替」（设计文档已允许该终态，但 `replay_confirmed_signal_lifecycle` 未建模，详见 [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §3.3）。 |
 | RS1 | 实时「预备态」（imminent / forming）分层 | 实时 | P1 | 1/2/3 + 类一 / 类二 | 把「背驰已现、待转折确认」升级为 watch 档可操作提示，盘中更早预警且不 repaint | 完成（1/2/3 + 类一 / 类二 forming 均已落地并双边回归） |
 | RS2 | 多级别双向联立（小转大自动升级 + 区间套反向确认） | 准确性 | P2 | 1/2/3（尤其 3 类 / 类二） | 现只单向降级；补下级别→上级别确认，减少高级别转折漏报 | 完成（小转大升级 higher_level_confirmed + 区间套反向确认 + 回归） |
 | RS3 | 收口既有「工程近似」（笔级中枢级别收敛 / 二类首次回抽窗口 / 三类回中枢失效） | 准确性 | P3 | 1/2/3 | 关闭 BS1 差异表遗留近似，降低边界假信号 | 完成（item1 级别收敛 + item2 首次回抽窗口均已落地 / item3 由 RS0 覆盖） |

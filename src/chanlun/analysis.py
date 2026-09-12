@@ -431,9 +431,17 @@ def _build_signal_point_detail(
     lifecycle_state: str | None = None,
     invalidated_reason: str | None = None,
 ) -> dict[str, object]:
-    # 生命周期（spec §2.8）：active 点未显式给状态时按 confirmed；forming/invalidated 由调用方显式传入。
+    # 生命周期（spec §2.8 §3.3）：active 点未显式给状态时按 confirmed；forming/invalidated 由调用方显式传入。
+    # 兜底 fail closed：§3.3 红线要求 confirmed 只能锚定 `is_confirmed=True` 的笔 / 线段，
+    # 未确认笔只能承载 forming。若这里无条件盖 confirmed，未确认尾笔会被贴上确认态，
+    # 并在后续帧因笔编号重排而「凭空消失」，直接撞上 repaint 红线。
     if lifecycle_state is None and active:
-        lifecycle_state = SignalLifecycleState.CONFIRMED.value
+        anchor_confirmed = signal_bi is None or bool(getattr(signal_bi, "is_confirmed", False))
+        lifecycle_state = (
+            SignalLifecycleState.CONFIRMED.value
+            if anchor_confirmed
+            else SignalLifecycleState.FORMING.value
+        )
     populated = active or lifecycle_state in (
         SignalLifecycleState.FORMING.value,
         SignalLifecycleState.INVALIDATED.value,
@@ -1439,7 +1447,11 @@ def analyze_chanlun_signals(
         latest_up=latest_up,
         latest_down=latest_down,
         current_zs=current_zs,
+        buy1_signal_bi=buy_signal_bi,
+        buy2_signal_bi=buy2_anchor,
         buy3_signal_bi=buy3_signal_bi,
+        sell1_signal_bi=sell_signal_bi,
+        sell2_signal_bi=sell2_anchor,
         sell3_signal_bi=sell3_signal_bi,
         buy2like_signal_bi=buy2like_signal_bi,
         sell2like_signal_bi=sell2like_signal_bi,
@@ -1484,7 +1496,11 @@ def build_signal_point_payloads(
     latest_up: Bi | None,
     latest_down: Bi | None,
     current_zs: Zhongshu | None,
+    buy1_signal_bi: Bi | None = None,
+    buy2_signal_bi: Bi | None = None,
     buy3_signal_bi: Bi | None = None,
+    sell1_signal_bi: Bi | None = None,
+    sell2_signal_bi: Bi | None = None,
     sell3_signal_bi: Bi | None = None,
     buy2like_signal_bi: Bi | None = None,
     sell2like_signal_bi: Bi | None = None,
@@ -1512,6 +1528,14 @@ def build_signal_point_payloads(
     }
 
     def buy_signal_bi_for(point: str) -> Bi | None:
+        # 一/二类点在段级模式的锚点必须与发点门控用的是同一根笔（`buy_signal_bi` /
+        # `buy2_anchor`，见 `analyze_chanlun_signals`），否则会出现「门控校验的是离开段末笔、
+        # 载荷却锤在 latest_down」的不一致，latest_down 可能正是**未确认尾笔**，
+        # 直接违反 spec §3.3「confirmed 仅锚定已确认笔/线段」红线。
+        if point == "buy_1" and buy1_signal_bi is not None:
+            return buy1_signal_bi
+        if point == "buy_2" and buy2_signal_bi is not None:
+            return buy2_signal_bi
         if point == "buy_3" and buy3_signal_bi is not None:
             return buy3_signal_bi
         if point == "buy_2like" and buy2like_signal_bi is not None:
@@ -1521,6 +1545,11 @@ def build_signal_point_payloads(
         return latest_down
 
     def sell_signal_bi_for(point: str) -> Bi | None:
+        # 与买侧对称：一类点段级锚点是离开段末笔（而非「最新同向笔」）。
+        if point == "sell_1" and sell1_signal_bi is not None:
+            return sell1_signal_bi
+        if point == "sell_2" and sell2_signal_bi is not None:
+            return sell2_signal_bi
         if point == "sell_3" and sell3_signal_bi is not None:
             return sell3_signal_bi
         if point == "sell_2like" and sell2like_signal_bi is not None:

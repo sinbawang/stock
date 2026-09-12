@@ -65,6 +65,7 @@ SEGMENT_SAFETY_GATES = [
             "pytest",
             "-q",
             "tests/test_signal_repaint_gate.py",
+            "tests/test_signal_lifecycle_anchor_gate.py",
         ],
     ),
 ]

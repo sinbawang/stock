@@ -62,6 +62,38 @@ stateDiagram-v2
 - 同一 `signal_bi_id` 的 `confirmed` 在后续帧只能保持或转 `invalidated`，禁止消失 / 反向。
 - 回归护栏：bar-by-bar replay 真实样本（1m/5m/30m/day），断言 confirmed 集合单调。
 
+#### 3.3.1 2026-09-12 核对结果（红线 1 曾被违反；红线 2 尚有存量）
+
+关于红线 1（`confirmed` 仅锚定已确认笔）——**曾被真实违反，已修**：
+
+- 症状：21 个冻结真实窗口逐 cutoff 回放时，`000591 day` cutoff=1010 的 `buy1` 以
+  `lifecycle_state=confirmed` 锚在 **未确认的 pending 尾笔** bi=95 上（同期 `exit_segment.end_bi_id=77`
+  才是门控校验过、且 `is_confirmed=True` 的笔）。
+- 根因：一类点发点门控用的是「离开段末笔」（`buy_signal_bi` / `sell_signal_bi`），
+  但 `build_signal_point_payloads` 里 `buy_1` / `buy_2` / `sell_2` **没有专用锚点参数**，
+  落到 `latest_down` / `latest_up`；后者可能正是未确认尾笔，再被「active 即 confirmed」的兜底盖成确认态。
+  （`sell_1` 因为落到 `latest_confirmed_up` 而「偶然安全」，属买/卖不对称。）
+- 修复：补 `buy1_signal_bi` / `buy2_signal_bi` / `sell1_signal_bi` / `sell2_signal_bi` 专用锚点参数，
+  由调用方传入门控校验过的那根笔；同时让生命周期兜底 **fail closed**——锚点未确认只能给 `forming`。
+- 护栏：新增 `tests/test_signal_lifecycle_anchor_gate.py`（冻结 fixture 跨帧回放，24 项），
+  并注册进 `scripts/run_segment_safety_gates.py` 的 `signal-lifecycle` 闸门。
+  原闸门 `tests/test_signal_repaint_gate.py` 依赖 gitignored 的 `data/reports/**`、
+  缺失时 `pytest.skip`，在干净检出 / CI 中并不执行，因此该违约可长期潜伏。
+
+关于红线 2（confirmed 不得消失 / 翻转）——**存量未清零，待收口**：
+
+- 同一回放口径下仍有 **32 条** `vanished_without_break`。其中 **19 条**属设计文档
+  §3 状态机里已允许的终态「`confirmed --> [*]`：结构自然更替（被更晚的点替换 / 中枢换锚）」，
+  但 `replay_confirmed_signal_lifecycle` 只建模了 `invalidated` / `rebased` / `repaint_violation`
+  三态，没有 `superseded`，于是把「被更晚同类点更替」误报成 repaint 违规。
+  例如 `000591 5m`：frame 9 的 `sell3@bi45/4.34` 在 frame 10 被 `sell3@bi49/4.35` 更替。
+- 剩余 13 条既非 `superseded` 也无法由 `_signal_premise_broken` 解释，需个案定性
+  （可能是「同类点换了点类型」或「前提破坏模型覆盖不足」）。
+- 收口前不宜放宽判定：应先为 `superseded` 建显式分支（单独成列、可审计），
+  再逐条消化剩下 13 条，不得直接改成「消失即豁免」。
+- 回放探针：`build/probe_signal_lifecycle_replay.py`（固定窗口起点，使 `data_window` 恒定，
+  避免被「窗口重基」豁免路径掩盖）。
+
 ### 3.4 invalidation 与 repaint 的跨帧实现（RS0 增量2）
 
 invalidation 是跨帧概念：单帧 `analyze_chanlun_signals` 恒按最新结构判定，前提被破坏时确认点自然
