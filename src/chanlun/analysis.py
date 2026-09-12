@@ -1688,6 +1688,7 @@ def build_signal_summary_fields(
         "invalidated_points": list(transitions.get("invalidated_points", [])),
         "signal_repaint_violations": list(transitions.get("repaint_violations", [])),
         "lifecycle_rebased_points": list(transitions.get("rebased_points", [])),
+        "lifecycle_superseded_points": list(transitions.get("superseded_points", [])),
         "lifecycle_window_rebased": bool(transitions.get("window_rebased", False)),
         "lifecycle_frame": to_lifecycle_frame(signals, data_window=data_window),
         "structure_state": signals.get("structure_state"),
@@ -1762,6 +1763,79 @@ def _frame_zs_low(frame: dict[str, object]) -> float | None:
     return float(current_zs.zs_low) if current_zs is not None else None
 
 
+# 旧版压缩帧缺少中枢标识时的哨兵：调用方必须按 **fail closed** 处理（不得据此豁免 repaint 违规）。
+_LIFECYCLE_FIELD_MISSING = object()
+
+
+def _frame_zs_id(frame: dict[str, object]) -> object:
+    """取帧的**参考中枢编号**（`zs_id`）。
+
+    `analyze_chanlun_signals` 输出携带对象 `current_zs`；`to_lifecycle_frame` 压缩帧携带标量 `zs_id`。
+    两者皆无（改动前的旧压缩帧）→ 返回 `_LIFECYCLE_FIELD_MISSING`，调用方不得据此豁免。
+    """
+    current_zs = frame.get("current_zs")
+    if current_zs is not None:
+        return getattr(current_zs, "zs_id", None)
+    if "zs_id" in frame:
+        return frame.get("zs_id")
+    return _LIFECYCLE_FIELD_MISSING
+
+
+def _confirmed_anchor_map(frame: dict[str, object]) -> dict[str, set]:
+    """按 `point` 归组帧内 confirmed 锚点（`signal_bi_id`）。"""
+    anchors: dict[str, set] = {}
+    for payload in frame.get("signal_points", []) or []:
+        if payload.get("lifecycle_state") != SignalLifecycleState.CONFIRMED.value:
+            continue
+        anchors.setdefault(str(payload.get("point")), set()).add(payload.get("signal_bi_id"))
+    return anchors
+
+
+def classify_confirmed_disappearance(
+    previous_frame: dict[str, object],
+    frame: dict[str, object],
+    *,
+    point: str,
+    signal_bi_id: object,
+    current_anchors: dict[str, set] | None = None,
+) -> str | None:
+    """判定「confirmed 锚点消失」是否属于参考结构推进导致的**自然更替**（spec §2.8 / design §3）。
+
+    返回**证据键**；返回 `None` 表示**无独立证据** → 调用方仍应判 repaint 违规（fail closed）。
+
+    三条证据均为「结构已推进」的独立证据，且**不可能由本次消失自身推出**：
+
+    - `reanchored`：同一 `point` 在本帧仍 confirmed，但锚点已换 —— 设计 §3 明文允许的
+      「被更晚的点替换」。
+    - `zs_superseded`：参考中枢被更替（`zs_id` 变化）—— 设计 §3 的「中枢换锚」。
+    - `sibling_new_anchor`：**其他** `point` 在本帧新增了确认锚点（新结构产出新点）。
+
+    **刻意排除**：本点自己的位置型门控变化（`hold_s3` / `ls2_anchor` 等）**不构成证据** ——
+    它们就是本点自己的发点锚点，「门控变化」与「点消失」是同一件事，属**同义反复**；
+    若把它们算作证据，则该判据恒真、闸门在真实数据上永不触发（空转闸门反模式）。
+
+    旧帧缺少中枢标识（无 `zs_id` 且无 `current_zs`）时**不豁免**。
+    """
+    anchors = current_anchors if current_anchors is not None else _confirmed_anchor_map(frame)
+    if set(anchors.get(point, set())) - {signal_bi_id}:
+        return "reanchored"
+    previous_zs_id = _frame_zs_id(previous_frame)
+    current_zs_id = _frame_zs_id(frame)
+    if (
+        previous_zs_id is not _LIFECYCLE_FIELD_MISSING
+        and current_zs_id is not _LIFECYCLE_FIELD_MISSING
+        and previous_zs_id != current_zs_id
+    ):
+        return "zs_superseded"
+    previous_anchors = _confirmed_anchor_map(previous_frame)
+    for other, anchors_now in anchors.items():
+        if other == point:
+            continue
+        if anchors_now - set(previous_anchors.get(other, set())):
+            return "sibling_new_anchor"
+    return None
+
+
 def _signal_premise_broken(point: str, price: float, frame: dict[str, object]) -> bool:
     """判定某确认点在给定帧里成立前提是否已被破坏（spec §2.8 §3.2）。
 
@@ -1792,15 +1866,22 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
 
     - `invalidated`：某帧曾 confirmed 的信号锚点（`point` + `signal_bi_id`）在后续帧从 confirmed 集合
       消失，且该帧成立前提已被破坏（`_signal_premise_broken`）→ 记为失效，附 `invalidated_reason`。
-    - `repaint_violations`：confirmed 信号消失但成立前提未破坏 → 违反 spec §2.8 repaint 红线
-      （confirmed 只能保持或转 invalidated，不得凭空消失 / 翻转）。
+    - `repaint_violations`：confirmed 信号消失但成立前提未破坏，**且无任何「参考结构已推进」的独立证据**
+      → 违反 spec §2.8 repaint 红线（confirmed 不得凭空消失 / 翻转）。
     - `rebased`：相邻两帧的 `data_window` 不同（K 线窗口重基，如全量重抓 / 重算）时，笔编号会整体
       重排，`signal_bi_id` 不再是同一坐标系，此时锚点消失记为 `rebased` 而非 repaint 违规。
+    - `superseded`：confirmed 锚点消失，但存在**独立证据**表明参考结构已推进
+      （见 `classify_confirmed_disappearance`：`reanchored` / `zs_superseded` / `sibling_new_anchor`），
+      即设计 §3 状态机明文允许的终态 `confirmed --> [*]：结构自然更替`。
+      每条均附 `evidence`，供事后审计；**未命中证据时一律回退为 repaint 违规（fail closed）**。
+
+    判定优先级：`invalidated` → `rebased` → `superseded` → `repaint_violations`。
     """
     timeline: list[dict[str, object]] = []
     invalidated: list[dict[str, object]] = []
     repaint_violations: list[dict[str, object]] = []
     rebased: list[dict[str, object]] = []
+    superseded: list[dict[str, object]] = []
     history: dict[tuple[str, object], dict[str, object]] = {}
     window_rebased = False
 
@@ -1824,6 +1905,10 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
             key = (str(point_payload.get("point")), point_payload.get("signal_bi_id"))
             current[key] = point_payload
 
+        current_anchors: dict[str, set] = {}
+        for point_name, anchor in current:
+            current_anchors.setdefault(point_name, set()).add(anchor)
+
         for key, payload in current.items():
             record = history.get(key)
             if record is None:
@@ -1837,6 +1922,9 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
             elif record["status"] == "invalidated":
                 # 同锚点在失效后不应重新 confirmed；出现即视为 repaint 违规。
                 repaint_violations.append({"frame": idx, "point": key[0], "signal_bi_id": key[1], "kind": "reconfirm_after_invalidated"})
+            elif record["status"] == "superseded":
+                # 同锚点在更替后不应回到 confirmed（更替是终态）；回来即视为 repaint 违规。
+                repaint_violations.append({"frame": idx, "point": key[0], "signal_bi_id": key[1], "kind": "reconfirm_after_superseded"})
 
         for key, record in history.items():
             if record["status"] != "confirmed" or key in current:
@@ -1865,15 +1953,45 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
                 rebased.append({"frame": idx, "point": point, "signal_bi_id": key[1], "kind": "vanished_on_rebase"})
                 timeline.append({"frame": idx, "point": point, "signal_bi_id": key[1], "transition": "rebased"})
             else:
-                record["status"] = "repaint_violation"
-                repaint_violations.append({"frame": idx, "point": point, "signal_bi_id": key[1], "kind": "vanished_without_break"})
-                timeline.append({"frame": idx, "point": point, "signal_bi_id": key[1], "transition": "repaint_violation"})
+                evidence = classify_confirmed_disappearance(
+                    frames[idx - 1],
+                    frame,
+                    point=point,
+                    signal_bi_id=key[1],
+                    current_anchors=current_anchors,
+                )
+                if evidence is not None:
+                    record["status"] = "superseded"
+                    superseded.append(
+                        {
+                            "frame": idx,
+                            "point": point,
+                            "signal_bi_id": key[1],
+                            "kind": "vanished_on_structure_advance",
+                            "evidence": evidence,
+                        }
+                    )
+                    timeline.append(
+                        {
+                            "frame": idx,
+                            "point": point,
+                            "signal_bi_id": key[1],
+                            "transition": "superseded",
+                            "evidence": evidence,
+                        }
+                    )
+                else:
+                    # 无独立证据 → 仍按 repaint 红线报违规（fail closed，不得默认豁免）。
+                    record["status"] = "repaint_violation"
+                    repaint_violations.append({"frame": idx, "point": point, "signal_bi_id": key[1], "kind": "vanished_without_break"})
+                    timeline.append({"frame": idx, "point": point, "signal_bi_id": key[1], "transition": "repaint_violation"})
 
     return {
         "timeline": timeline,
         "invalidated": invalidated,
         "repaint_violations": repaint_violations,
         "rebased": rebased,
+        "superseded": superseded,
         "window_rebased": window_rebased,
     }
 
@@ -1885,6 +2003,9 @@ def to_lifecycle_frame(signals: dict[str, object], *, data_window: str | None = 
 
     `data_window` 标识本次分析所用 K 线窗口（实现取窗口起始 bar 时间戳）：增量追加时保持稳定，
     全量重抓 / 重算会变化。跨帧比较据此区分「真 repaint」与「窗口重基导致锚点重编号」。
+
+    另持久化参考中枢编号 `zs_id`：它是唯一能**独立于本次消失**说明「结构已推进」的标量，
+    供 `classify_confirmed_disappearance` 判定自然更替（旧帧缺该键时按 fail closed 不豁免）。
     """
     latest_down = signals.get("latest_down")
     latest_confirmed_up = signals.get("latest_confirmed_up")
@@ -1906,6 +2027,7 @@ def to_lifecycle_frame(signals: dict[str, object], *, data_window: str | None = 
         "latest_up_high": getattr(latest_confirmed_up, "high", None),
         "zs_high": getattr(current_zs, "zs_high", None),
         "zs_low": getattr(current_zs, "zs_low", None),
+        "zs_id": getattr(current_zs, "zs_id", None),
         "data_window": data_window,
     }
 
@@ -1924,12 +2046,16 @@ def derive_signal_lifecycle_transitions(
     `data_window`（当前帧窗口标识）与 `previous_frame["data_window"]` 不同时，视为窗口重基：
     锚点消失记入 `rebased_points` 而不再计入 `repaint_violations`（笔编号已整体重排，跨窗口比较
     不成立）；前提被破坏的点仍正常计入 `invalidated_points`。
+
+    锚点消失但存在「参考结构已推进」的独立证据时，记入 `superseded_points`（附
+    `superseded_evidence`），即设计 §3 允许的自然更替终态；无证据仍计入 `repaint_violations`。
     """
     if not previous_frame:
         return {
             "invalidated_points": [],
             "repaint_violations": [],
             "rebased_points": [],
+            "superseded_points": [],
             "window_rebased": False,
         }
     current_frame = to_lifecycle_frame(signals, data_window=data_window)
@@ -1955,10 +2081,19 @@ def derive_signal_lifecycle_transitions(
         }
         for entry in lifecycle.get("rebased", [])
     ]
+    superseded_points = [
+        {
+            "point": entry.get("point"),
+            "signal_bi_id": entry.get("signal_bi_id"),
+            "superseded_evidence": entry.get("evidence"),
+        }
+        for entry in lifecycle.get("superseded", [])
+    ]
     return {
         "invalidated_points": invalidated_points,
         "repaint_violations": lifecycle.get("repaint_violations", []),
         "rebased_points": rebased_points,
+        "superseded_points": superseded_points,
         "window_rebased": bool(lifecycle.get("window_rebased")),
     }
 

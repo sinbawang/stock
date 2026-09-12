@@ -80,19 +80,19 @@ stateDiagram-v2
   原闸门 `tests/test_signal_repaint_gate.py` 依赖 gitignored 的 `data/reports/**`、
   缺失时 `pytest.skip`，在干净检出 / CI 中并不执行，因此该违约可长期潜伏。
 
-关于红线 2（confirmed 不得消失 / 翻转）——**存量未清零，待收口**：
+关于红线 2（confirmed 不得消失 / 翻转）——**已收口（2026-09-12）**：
 
-- 同一回放口径下仍有 **32 条** `vanished_without_break`。其中 **19 条**属设计文档
-  §3 状态机里已允许的终态「`confirmed --> [*]`：结构自然更替（被更晚的点替换 / 中枢换锚）」，
-  但 `replay_confirmed_signal_lifecycle` 只建模了 `invalidated` / `rebased` / `repaint_violation`
-  三态，没有 `superseded`，于是把「被更晚同类点更替」误报成 repaint 违规。
-  例如 `000591 5m`：frame 9 的 `sell3@bi45/4.34` 在 frame 10 被 `sell3@bi49/4.35` 更替。
-- 剩余 13 条既非 `superseded` 也无法由 `_signal_premise_broken` 解释，需个案定性
-  （可能是「同类点换了点类型」或「前提破坏模型覆盖不足」）。
-- 收口前不宜放宽判定：应先为 `superseded` 建显式分支（单独成列、可审计），
-  再逐条消化剩下 13 条，不得直接改成「消失即豁免」。
-- 回放探针：`build/probe_signal_lifecycle_replay.py`（固定窗口起点，使 `data_window` 恒定，
-  避免被「窗口重基」豁免路径掩盖）。
+- 同一回放口径（21 个冻结窗口 × 12 cutoff）下原有 **32 条** `vanished_without_break`。
+- 已为 `superseded` 建**显式、可审计**分支（见 §3.5），按「独立于本次消失」的结构推进证据分流：
+  `reanchored` 16 + `zs_superseded` 7 + `sibling_new_anchor` 5 = **28 条**，均属设计文档 §3
+  明文允许的终态「`confirmed --> [*]`：结构自然更替（被更晚的点替换 / 中枢换锚）」。
+- 余 **2 条无任何独立证据**，仍判 repaint 违规（fail closed），为本轮唯一存量：
+  `00700 day f10 buy3@77`、`03690 5m f9 sell2like@77`—— 均为「本点自己的门控转为 None、
+  兄弟点与参考中枢均未变，但笔链继续推进」，目前**无法解释**。
+- 另有 **2 条** `reconfirm_after_invalidated`（另一类违规），未受本次改动影响。
+- 回放探针（均不提交）：`build/probe_signal_lifecycle_replay.py`（固定窗口起点，使 `data_window`
+  恒定，避免被「窗口重基」豁免路径掩盖）、`build/probe_repaint_cases_detail.py`、
+  `build/probe_supersede_criteria.py`、`build/probe_supersede_outcome.py`。
 
 ### 3.4 invalidation 与 repaint 的跨帧实现（RS0 增量2）
 
@@ -103,7 +103,42 @@ invalidation 是跨帧概念：单帧 `analyze_chanlun_signals` 恒按最新结�
 - 逐帧比较 confirmed 集合（键 = `point` + `signal_bi_id`）：某锚点从 confirmed 消失时，若该帧成立
   前提已破坏（`_signal_premise_broken`，按 §3.2 分族）→ 记 `invalidated` + `invalidated_reason`；
   否则记 `repaint_violations`（违反上面的 repaint 红线）。
-- 输出：`{timeline, invalidated, repaint_violations}`，既是失效发射，也是 repaint 自动护栏。
+- 输出：`{timeline, invalidated, repaint_violations, rebased, superseded}`，既是失效发射，也是 repaint 自动护栏。
+
+### 3.5 `superseded` 自然更替分支（RS0 增量5，2026-09-12）
+
+改动前的回放只建模 `invalidated` / `rebased` / `repaint_violation`，把「结构推进导致的旧点终止」
+一律报成违规（实测 28/30 属误报）。现补入显式终态分支，判定优先级：
+
+```
+invalidated（前提被破坏） → rebased（窗口重基） → superseded（结构自然更替） → repaint_violation
+```
+
+**证据（`analysis.classify_confirmed_disappearance`，必须独立于本次消失、可审计）：**
+
+| 证据键 | 含义 | 本轮命中 |
+| --- | --- | --- |
+| `reanchored` | 同一 `point` 仍 confirmed，但锚点已换（设计 §3「被更晚的点替换」） | 16 |
+| `zs_superseded` | 参考中枢被更替（`zs_id` 变化，设计 §3「中枢换锚」） | 7 |
+| `sibling_new_anchor` | **其他** `point` 新增确认锚点（新结构产出新点） | 5 |
+| 无证据 | → 仍判 `repaint_violation`（**fail closed**） | 2 |
+
+**三个必须守住的点（本轮踩过的坑）：**
+
+1. **不得把本点自己的位置型门控变化（`hold_s3` / `ls2_anchor` 等）算作证据**。
+   它们**就是**该点自己的发点锚点，「门控变化」与「点消失」是同一件事，属**同义反复**；
+   用它归类会得出「0 条未能归因」的**假结论**（本文件 §4.2.5 已更正）。
+2. **不得退化为「消失即豁免」**。实现上用「无证据 → 违规」的 fail closed，并已有单测
+   `test_replay_still_flags_repaint_without_independent_evidence` 钉住；
+   否则闸门在真实数据上永不触发（空转闸门反模式）。
+3. **旧帧兼容必须 fail closed**。`to_lifecycle_frame` 新增持久化 `zs_id`；仍缺
+   `zs_id` 且无 `current_zs` 的旧压缩帧**不得据此豁免**（`test_replay_does_not_exempt_legacy_frame_missing_zs_id`）。
+
+**非空转证据**：`zs_id` 在 209/266 个相邻帧对中不变、`point_anchors` 在 169/266 中不变、
+8 个帧对完全冻结 —— 即豁免条件并不恒成立，闸门仍会触发（本轮仍有 2 条）。
+
+`derive_signal_lifecycle_transitions` 透出 `superseded_points`（附 `superseded_evidence`），
+summary 侧新增 `lifecycle_superseded_points`（additive）。
 
 ## 4. 实时预备态（RS1）
 
@@ -252,12 +287,28 @@ invalidation 是跨帧概念：单帧 `analyze_chanlun_signals` 恒按最新结�
 | 判据 | 条数 |
 | --- | --- |
 | 锚点 bi **仍存在**于 f(idx) 的 `bis`（即**不是**重编号） | **14 / 14** |
-| 机制：**中枢换锚**（`zs_id` 进阶，`current_zs = zhongshus[-1]` 换了） | 7 |
-| 机制：**位置型锚点右移**（`hold_b3` / `hold_s3` / `lb2_anchor` / `ls2_anchor` 变化） | 7 |
-| **未能归因** | **0** |
+| 机制：**中枢换锚**（`zs_id` 进阶） | 7 |
+| 机制：位置型门控（`hold_b3` / `hold_s3` / `lb2_anchor` / `ls2_anchor`）变化 | 7 |
+| ~~未能归因~~ | ~~0~~ → **2**（见下） |
 
 典型样本（`000591 day f7 sell3 anchor_bi=58`）：锚点笔 58 仍在 `bi_ids` 里，
 但 `zs_id: 0 -> 1`、`zs_low: 6.67 -> 4.98`、`hold_s3: 58 -> None`。
+
+**⚠ 自我更正（同日）**：上表「未能归因 0」是**判据本身有缺陷**造成的假象。
+`hold_b3` / `hold_s3` / `lb2_anchor` / `ls2_anchor` **分别是 buy3 / sell3 / buy2like / sell2like
+自己的发点锚点**，因此「该门控变化」与「该点消失」是**同一件事**（同义反复），
+把它算作归因属**循环论证**。
+
+改用**不可能由本次消失自身推出**的独立判据后（`build/probe_supersede_criteria.py`）：
+
+| 独立证据 | 条数（14 条中） |
+| --- | --- |
+| 参考中枢更替（`zs_id` 变化） | 7 |
+| **兄弟**点新增确认锚点（新结构产出新点） | 5 |
+| **无任何独立证据** | **2** |
+
+且在全部 30 条 `vanished_without_break` 上，另有 16 条属「同点换锚」（`reanchored`）。
+合计 **28/30 有独立证据，2 条残留**。
 
 #### 4.2.6 结论：不是发点缺陷，是 **repaint 判定用错了不变量**
 
@@ -271,17 +322,20 @@ invalidation 是跨帧概念：单帧 `analyze_chanlun_signals` 恒按最新结�
 - `replay_confirmed_signal_lifecycle` 却把它当成**累计确认台账**，
   于是把「结构推进导致的旧点终止」一律判为 repaint 违规。
 
-合计：**30 / 30 条 `vanished_without_break` 都属同一个文档化终态，且 0 条无法归因**。
-即：§3.3 红线在这些窗口上**实际未被违反**，是**检查器过度报告（30/30 误报）**。
-这也解释了为何 16 条“换锚点”与 14 条“同锚点消失”本质同一件事。
+合计：**28 / 30 条 `vanished_without_break` 有独立证据证明属文档化终态，2 条无法归因**
+（`00700 day f10 buy3@77`、`03690 5m f9 sell2like@77`）。
+即：§3.3 红线在这些窗口上的**大部分**报告是检查器过度报告，但**不是全部** ——
+余下 2 条是真残留，已由 fail closed 保持在违规列，未被本轮豁免掩盖。
+“16 条换锚点”与“14 条同锚点消失”中绝大多数本质是同一件事（结构推进）。
 
 #### 4.2.7 next（待决策后再动）
 
-1. 给 `replay_confirmed_signal_lifecycle` 补 `superseded` 分支（**可审计**，不是“消失即豁免”）。
-   机械判据：**`zs_id` 进阶、或位置型锚点右移 → `superseded`；两者都未变且锚点与依据笔仍在
-   却消失 → 仍判违规**。
-   **前置改动**：`to_lifecycle_frame` 目前只存 `signal_points` + 几个标量，不携带 `zs_id` 与
-   位置型锚点 id，需扩展帧格式；且必须处理**旧帧兼容**（字段缺失时按 **fail closed**，不得默认豁免）。
+1. ~~给 `replay_confirmed_signal_lifecycle` 补 `superseded` 分支~~ **已完成（2026-09-12，见 §3.5）**：
+   证据键 `reanchored` / `zs_superseded` / `sibling_new_anchor`；无证据 fail closed。
+   **实测收敛**：32 条 `vanished_without_break` → **28 条 superseded + 2 条残留违规**；
+   新增 8 项单测，全量套件 1074 passed / 1 xfailed，4 个安全闸门全绿。
+   **遗留**：那 2 条残留（`00700 day f10 buy3@77`、`03690 5m f9 sell2like@77`）需单独定性 ——
+   其特征是「本点自己的门控转 None、兄弟点与参考中枢均未变、笔链继续推进」。
 2. 给三类 / 二类判据补 `is_confirmed`（4.2.2 的独立隐患）；**代价**：已确认三类 / 二类点会收缩。
 3. 最后再决定是否收紧判别式强度（要求反向笔突破锚点极值 / 形成反向线段）。
 

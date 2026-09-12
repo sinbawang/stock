@@ -2915,12 +2915,13 @@ def test_derive_signal_lifecycle_transitions_marks_invalidated_across_runs() -> 
 
 
 def test_derive_signal_lifecycle_transitions_empty_on_first_frame() -> None:
-    """RS0 real-frame：首帧（无上一帧）不产出 invalidated / repaint / rebase。"""
+    """RS0 real-frame：首帧（无上一帧）不产出 invalidated / repaint / rebase / supersede。"""
     result = derive_signal_lifecycle_transitions(None, {"signal_points": []})
     assert result == {
         "invalidated_points": [],
         "repaint_violations": [],
         "rebased_points": [],
+        "superseded_points": [],
         "window_rebased": False,
     }
 
@@ -2992,6 +2993,149 @@ def test_replay_keeps_repaint_violation_within_same_data_window() -> None:
     assert result["rebased"] == []
     assert len(result["repaint_violations"]) == 1
     assert result["repaint_violations"][0]["kind"] == "vanished_without_break"
+
+
+def test_replay_marks_reanchored_point_superseded_not_violation() -> None:
+    """RS0 增量5：同一 point 仍 confirmed 但锚点已换 -> superseded（design §3「被更晚的点替换」）。
+
+    旧锚点的键消失属**键变更**而非凭空消失，不再计入 repaint 违规。
+    """
+    frame_a = _lifecycle_frame([_confirmed_point("sell2like", 64, 12.0)])
+    frame_b = _lifecycle_frame([_confirmed_point("sell2like", 80, 12.0)])
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["repaint_violations"] == []
+    assert len(result["superseded"]) == 1
+    assert result["superseded"][0]["point"] == "sell2like"
+    assert result["superseded"][0]["signal_bi_id"] == 64
+    assert result["superseded"][0]["evidence"] == "reanchored"
+
+
+def test_replay_marks_zs_superseded_when_reference_zhongshu_advances() -> None:
+    """RS0 增量5：参考中枢被更替（zs_id 变化）-> superseded（design §3「中枢换锚」）。"""
+    frame_a = _lifecycle_frame(
+        [_confirmed_point("buy3", 77, 11.0)],
+        current_zs=_zhongshu(1, zs_low=10.0, zs_high=10.8, day=1),
+    )
+    frame_b = _lifecycle_frame(
+        [],
+        current_zs=_zhongshu(2, zs_low=4.98, zs_high=6.0, day=20),
+    )
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["repaint_violations"] == []
+    assert [p["evidence"] for p in result["superseded"]] == ["zs_superseded"]
+
+
+def test_replay_marks_sibling_new_anchor_superseded() -> None:
+    """RS0 增量5：**其他** point 新增确认锚点（新结构产出新点）-> superseded。
+
+    兄弟点的新增锚点是独立于本次消失的证据；不能由「本次消失」自身推出。
+    """
+    frame_a = _lifecycle_frame([_confirmed_point("sell2like", 64, 12.0)])
+    frame_b = _lifecycle_frame([_confirmed_point("buy2like", 77, 9.0)])
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["repaint_violations"] == []
+    assert [p["evidence"] for p in result["superseded"]] == ["sibling_new_anchor"]
+
+
+def test_replay_still_flags_repaint_without_independent_evidence() -> None:
+    """RS0 增量5 **闸门非空转保证**：无任何独立证据时 confirmed 消失仍是 repaint 违规。
+
+    否则该分支退化为「消失即豁免」，闸门在真实数据上永不触发（空转闸门反模式）。
+    """
+    zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)
+    frame_a = _lifecycle_frame([_confirmed_point("buy3", 77, 11.0)], current_zs=zs)
+    frame_b = _lifecycle_frame([], current_zs=zs)  # 同中枢、无兄弟点、本点也不再发射
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["superseded"] == []
+    assert len(result["repaint_violations"]) == 1
+    assert result["repaint_violations"][0]["kind"] == "vanished_without_break"
+
+
+def test_replay_does_not_exempt_legacy_frame_missing_zs_id() -> None:
+    """RS0 增量5 fail closed：旧压缩帧有窗口标识但缺 `zs_id` 时不得据此豁免。
+
+    这类帧处于「增量4（data_window）」与「增量5（zs_id）」之间，中枢可比性不可验证。
+    """
+    legacy_frame = {
+        "signal_points": [{"point": "buy3", "signal_bi_id": 77, "price": 11.0, "lifecycle_state": "confirmed"}],
+        "latest_down_low": None,
+        "latest_up_high": None,
+        "zs_high": 10.8,
+        "zs_low": 10.0,
+        "data_window": "2026-08-21T09:30:00",
+    }  # 注意：有 data_window，但无 zs_id
+    current_frame = _lifecycle_frame(
+        [],
+        current_zs=_zhongshu(2, zs_low=4.98, zs_high=6.0, day=20),
+        data_window="2026-08-21T09:30:00",  # 同一窗口 -> 不触发 rebase 分流
+    )
+
+    result = replay_confirmed_signal_lifecycle([legacy_frame, current_frame])
+
+    assert result["rebased"] == []
+    assert result["superseded"] == []
+    assert len(result["repaint_violations"]) == 1
+
+
+def test_replay_flags_reconfirm_after_superseded() -> None:
+    """RS0 增量5：更替是终态 —— 同锚点在 superseded 后回到 confirmed 记为 repaint 违规。"""
+    frame_a = _lifecycle_frame([_confirmed_point("sell2like", 64, 12.0)])
+    frame_b = _lifecycle_frame([_confirmed_point("sell2like", 80, 12.0)])  # 换锚 -> 更替
+    frame_c = _lifecycle_frame([_confirmed_point("sell2like", 64, 12.0)])  # 旧锚点又回来
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b, frame_c])
+
+    assert [v["kind"] for v in result["repaint_violations"]] == ["reconfirm_after_superseded"]
+
+
+def test_to_lifecycle_frame_persists_zs_id() -> None:
+    """RS0 增量5：压缩帧持久化参考中枢编号 zs_id（供跨帧判定自然更替）。"""
+    signals = {
+        "signal_points": [],
+        "current_zs": _zhongshu(3, zs_low=10.0, zs_high=10.8, day=1),
+    }
+
+    assert to_lifecycle_frame(signals)["zs_id"] == 3
+    assert to_lifecycle_frame({"signal_points": []})["zs_id"] is None
+
+
+def test_derive_signal_lifecycle_transitions_reports_superseded_points() -> None:
+    """RS0 增量5：derive 透出 superseded_points + superseded_evidence（additive）。"""
+    previous_frame = {
+        "signal_points": [{"point": "sell2like", "signal_bi_id": 64, "price": 12.0, "lifecycle_state": "confirmed"}],
+        "latest_down_low": None,
+        "latest_up_high": None,
+        "zs_high": None,
+        "zs_low": None,
+        "zs_id": None,
+        "data_window": "2026-08-21T09:30:00",
+    }
+    current_signals = {
+        "signal_points": [{"point": "sell2like", "signal_bi_id": 80, "price": 12.0, "lifecycle_state": "confirmed"}],
+        "latest_down": None,
+        "latest_confirmed_up": None,
+        "current_zs": None,
+    }
+
+    result = derive_signal_lifecycle_transitions(
+        previous_frame,
+        current_signals,
+        data_window="2026-08-21T09:30:00",
+    )
+
+    assert result["repaint_violations"] == []
+    assert result["invalidated_points"] == []
+    assert result["superseded_points"] == [
+        {"point": "sell2like", "signal_bi_id": 64, "superseded_evidence": "reanchored"}
+    ]
 
 
 def test_replay_treats_legacy_frame_without_window_identity_as_rebase() -> None:
