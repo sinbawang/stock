@@ -24,6 +24,7 @@ for _extra in (SRC, SCRIPTS):
         sys.path.insert(0, str(_extra))
 
 from chanlun.analysis import analyze_chanlun_signals  # noqa: E402
+from chanlun.analysis import build_lower_timeframe_precision_entry  # noqa: E402
 from chanlun.bi import identify_bis  # noqa: E402
 from chanlun.data import read_bars_from_csv  # noqa: E402
 from chanlun.data.cleaner import clean_bars  # noqa: E402
@@ -131,6 +132,96 @@ CASE_CARDS = (
 # 文档中记录的「真实样本覆盖为零」的点类型。真实窗口上若开始发点，说明文档的缺口清单过期。
 ZERO_REAL_COVERAGE = ("sell1", "sell2", "buy2", "sell1like")
 
+# 区间套 / 小转大卡片。`cutoff_index` 是高级别 `analysis_cutoffs` 的下标；
+# 次级别按同一时刻 T 截断，模拟生产同时取两级数据。
+PRECISION_CARDS = (
+    {
+        # 生产口径：PRIMARY_TECHNICAL_TIMEFRAME=30m + LOWER_PRECISION_TIMEFRAME=5m
+        "card": "区间套 P1 · 00700 30m->5m 候选",
+        "symbol": "00700",
+        "higher": "30m",
+        "lower": "5m",
+        "cutoff_index": 9,
+        "cutoff": 915,
+        "status": "watch",
+        "small_to_large": "candidate",
+        "window_basis": "中枢到锚点窗口",
+        "side": "sell",
+        "trigger": "higher_range_divergence",
+        "dynamic_grade": "oscillation_opportunity",
+    },
+    {
+        "card": "区间套 P2 · 03690 5m->1m 离开笔窗口",
+        "symbol": "03690",
+        "higher": "5m",
+        "lower": "1m",
+        "cutoff_index": 11,
+        "cutoff": 1831,
+        "status": "watch",
+        "small_to_large": "candidate",
+        "window_basis": "离开笔窗口",
+        "side": "buy",
+        "trigger": "buy2like",
+        "dynamic_grade": "warning",
+    },
+    {
+        "card": "区间套 P3 · 000591 1m->5m 候选",
+        "symbol": "000591",
+        "higher": "1m",
+        "lower": "5m",
+        "cutoff_index": 13,
+        "cutoff": 3500,
+        "status": "watch",
+        "small_to_large": "candidate",
+        "window_basis": "中枢到锚点窗口",
+        "side": "sell",
+        "trigger": "higher_range_divergence",
+        "dynamic_grade": "oscillation_opportunity",
+    },
+    {
+        "card": "区间套 P4 · 000591 day->5m standby",
+        "symbol": "000591",
+        "higher": "day",
+        "lower": "5m",
+        "cutoff_index": 12,
+        "cutoff": 1200,
+        "status": "standby",
+        "small_to_large": None,
+        "window_basis": None,
+        "side": None,
+        "trigger": None,
+        "dynamic_grade": None,
+    },
+    {
+        "card": "区间套 P5 · 000591 1m->5m 锚点跟踪窗口",
+        "symbol": "000591",
+        "higher": "1m",
+        "lower": "5m",
+        "cutoff_index": 2,
+        "cutoff": 632,
+        "status": "watch",
+        "small_to_large": None,
+        "window_basis": "锚点跟踪窗口",
+        "side": "buy",
+        "trigger": "higher_bottom_divergence",
+        "dynamic_grade": None,
+    },
+)
+
+# 全部 (高级别, 次级别) 组合；前三个是生产实际会用到的口径。
+PRECISION_PAIRS = (
+    ("30m", "5m"),
+    ("day", "5m"),
+    ("1m", "5m"),
+    ("day", "1m"),
+    ("30m", "1m"),
+    ("5m", "1m"),
+)
+PRECISION_SYMBOLS = ("000591", "00700", "03690", "300124", "600900")
+
+# 文档记录：这三档在真实窗口上从未出现，只有构造 / 契约回归覆盖。
+UNOBSERVED_HIGHER_STATES = ("actionable", "third_class_confirmed", "higher_level_confirmed")
+
 
 def _bootstrap_for(timeframe: str) -> str:
     return SEGMENT_BOOTSTRAP_FIRST_VALID_SEED if timeframe == "1m" else SEGMENT_BOOTSTRAP_PREFER_EARLIER_START
@@ -186,6 +277,128 @@ def test_case_card_reproduces_on_frozen_window(card: dict[str, object]) -> None:
     point = matched[0]
     assert point.get("basis") == card["basis"], f"{card['card']}: 依据码已变"
     assert point.get("price") == pytest.approx(card["price"], rel=1e-9), f"{card['card']}: 价格已变"
+
+
+def _precision_entry(symbol: str, higher_tf: str, lower_tf: str, cutoff: int) -> dict[str, object]:
+    """高级别取 cutoff，次级别按同一时刻 T 截断，再构建区间套入口。"""
+    higher_all = clean_bars(read_bars_from_csv(str(frozen_csv(symbol, higher_tf))))
+    lower_all = clean_bars(read_bars_from_csv(str(frozen_csv(symbol, lower_tf))))
+    higher_bars = higher_all[:cutoff]
+    t_end = getattr(higher_bars[-1], "ts")
+    lower_bars = [bar for bar in lower_all if getattr(bar, "ts") <= t_end]
+
+    def _signals(bars, timeframe: str) -> dict[str, object]:
+        normalized = normalize_bars(bars)
+        fractals = filter_consecutive_fractals(identify_fractals(normalized))
+        bis = identify_bis(fractals, normalized, pending_reverse_mode="effective_only")
+        segments = identify_segments(
+            bis,
+            bootstrap_mode=_bootstrap_for(timeframe),
+            bootstrap_skip_confirmed_bis=0,
+            strict_segment_rules=True,
+        )
+        zhongshus = identify_zhongshu(segments, structure_level="segment")
+        return analyze_chanlun_signals(bars, bis, zhongshus, calculate_macd(bars), segments=segments)
+
+    return build_lower_timeframe_precision_entry(
+        _signals(higher_bars, higher_tf),
+        _signals(lower_bars, lower_tf),
+        lower_timeframe=lower_tf,
+        lower_timeframe_label=lower_tf.upper(),
+        pending_reverse_mode="effective_only",
+    )
+
+
+@pytest.mark.parametrize("card", PRECISION_CARDS, ids=[c["card"] for c in PRECISION_CARDS])
+def test_precision_card_reproduces_on_frozen_window(card: dict[str, object]) -> None:
+    higher_all = clean_bars(read_bars_from_csv(str(frozen_csv(card["symbol"], card["higher"]))))
+    cutoffs = analysis_cutoffs(len(higher_all))
+    index = int(card["cutoff_index"])
+    assert index < len(cutoffs), f"{card['card']}: cutoff 序号越界（窗口只有 {len(cutoffs)} 帧）"
+    assert cutoffs[index] == card["cutoff"], (
+        f"{card['card']}: cutoff 序列口径已变（期望 {card['cutoff']}，实得 {cutoffs[index]}）；"
+        "若窗口被重新冻结，请同步更新卡片与文档。"
+    )
+
+    entry = _precision_entry(
+        card["symbol"], card["higher"], card["lower"], int(card["cutoff"])
+    )
+    nested = entry.get("nested_from") or {}
+    actual = {
+        "status": entry.get("status"),
+        "small_to_large": entry.get("small_to_large_status"),
+        "window_basis": entry.get("window_basis_label"),
+        "side": nested.get("side"),
+        "trigger": nested.get("trigger"),
+        "dynamic_grade": entry.get("dynamic_grade"),
+    }
+    expected = {key: card[key] for key in actual}
+
+    assert actual == expected, (
+        f"{card['card']}: 冻结窗口上区间套卡片已变化（cutoff={card['cutoff']}）；"
+        f"期望 {expected}，实得 {actual}。规则变更请同步更新卡片与文档，不要放宽本断言。"
+    )
+
+
+def test_precision_card_library_is_not_vacuous() -> None:
+    """卡片必须同时覆盖有窗口 / 无窗口两种形态，且 window_basis 不得单一。"""
+    assert len(PRECISION_CARDS) >= 4
+    statuses = {c["status"] for c in PRECISION_CARDS}
+    assert {"watch", "standby"} <= statuses
+    assert None in {c["small_to_large"] for c in PRECISION_CARDS}
+    assert len({c["window_basis"] for c in PRECISION_CARDS if c["window_basis"]}) >= 3
+
+
+def test_precision_higher_states_stay_unobserved_on_real_windows() -> None:
+    """文档记录：`actionable` / `third_class_confirmed` / `higher_level_confirmed` 在真实窗口上未观测到。
+
+    本用例同时是**文档同步闸门**：若这三档开始在真实窗口出现，说明文档里「仅构造 / 契约覆盖」
+    的说法已过期，需要补真实卡片并更新覆盖矩阵。
+    """
+    status_counts: dict[str, int] = {}
+    small_to_large_counts: dict[str, int] = {}
+    scans = 0
+
+    for symbol in PRECISION_SYMBOLS:
+        for higher_tf, lower_tf in PRECISION_PAIRS:
+            try:
+                higher_all = clean_bars(read_bars_from_csv(str(frozen_csv(symbol, higher_tf))))
+                lower_all = clean_bars(read_bars_from_csv(str(frozen_csv(symbol, lower_tf))))
+            except FileNotFoundError:
+                continue
+            for cutoff in analysis_cutoffs(len(higher_all)):
+                higher_bars = higher_all[:cutoff]
+                if not higher_bars:
+                    continue
+                t_end = getattr(higher_bars[-1], "ts")
+                lower_bars = [bar for bar in lower_all if getattr(bar, "ts") <= t_end]
+                if len(lower_bars) < 60:
+                    continue
+                entry = _precision_entry(symbol, higher_tf, lower_tf, cutoff)
+                scans += 1
+                status = str(entry.get("status"))
+                status_counts[status] = status_counts.get(status, 0) + 1
+                if entry.get("small_to_large_status") is not None:
+                    key = str(entry.get("small_to_large_status"))
+                    small_to_large_counts[key] = small_to_large_counts.get(key, 0) + 1
+
+    # 非空转：确实扫到足够多的帧，且低位档确实出现过，否则「高位档未出现」没有意义。
+    assert scans >= 100, f"扫描帧数过少（{scans}），本闸门可能已空转"
+    assert status_counts.get("watch", 0) >= 10, f"watch 样本过少：{status_counts}"
+    assert status_counts.get("standby", 0) >= 5, f"standby 样本过少：{status_counts}"
+    assert small_to_large_counts.get("candidate", 0) >= 5, f"candidate 样本过少：{small_to_large_counts}"
+
+    assert "actionable" not in status_counts, (
+        f"precision_entry.status 已在真实窗口出现 actionable（{status_counts}）；"
+        "文档中「仅构造覆盖」的说法需更新。"
+    )
+    for state in UNOBSERVED_HIGHER_STATES:
+        if state == "actionable":
+            continue
+        assert state not in small_to_large_counts, (
+            f"small_to_large_status 已在真实窗口出现 {state}（{small_to_large_counts}）；"
+            "文档中「仅构造覆盖」的说法需更新，并补对应真实卡片。"
+        )
 
 
 def test_case_library_is_not_vacuous() -> None:

@@ -6,8 +6,8 @@
 
 | 文档 | 职责 |
 | --- | --- |
-| [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) §2 | 应然规则（严格确认要件、失效条件） |
-| **本页** | **案例证据**：真实窗口样本卡 + 构造正/反/易混淆例索引 + 覆盖缺口 |
+| [buy-sell-multi-level-spec.md](buy-sell-multi-level-spec.md) §2 / §3-§9 | 应然规则（严格确认要件、失效条件、区间套与小转大） |
+| **本页** | **案例证据**：真实窗口样本卡（§3 标准点 / 类比点，§7 区间套 / 小转大）+ 构造正/反/易混淆例索引 + 覆盖缺口 |
 | [buy-sell-multi-level-visual-example-library.md](buy-sell-multi-level-visual-example-library.md) | 图形化模板与卡片格式 |
 | `tests/test_example_library_real_cases.py` | 本页每张真实卡片的自动化锚点 |
 
@@ -23,6 +23,8 @@
   参数，不是帧数上限）。
 - 线段 `bootstrap_mode`：`1m` 用 `FIRST_VALID_SEED`，其余用 `PREFER_EARLIER_START`；`strict_segment_rules=True`；`pending_reverse_mode="effective_only"`。
 - 只在 `lifecycle_state == confirmed` 上取样本。
+- §7 的区间套 / 小转大卡片口径不同：需要**同标的两个级别**，高级别取 cutoff，次级别按同一时刻
+  T 截断（详见 §7）。
 
 ## 2. 覆盖矩阵
 
@@ -232,17 +234,134 @@
      该用例会失败并要求同步本页。
    - 缩小缺口的最直接办法是扩大冻结样本（更多标的 / 更长窗口），属 T3 范围。
 2. **两张卡片位于末帧**（§3.2 类一买、§3.6 三卖），未观察到退场轨迹。需要更长窗口才能补全。
-3. **区间套 / 小转大的卡片**不在本页，见 [buy-sell-multi-level-visual-example-library.md](buy-sell-multi-level-visual-example-library.md) §5
-   与 T3；本页只覆盖三类标准点 + 两类类比点。
+3. **区间套 / 小转大高位档在真实窗口上未观测到**：详见 §7.3。`actionable`、`third_class_confirmed`、
+   `higher_level_confirmed` 只有构造回归覆盖，没有真实卡片。
+4. **`precision_entry` 在已冻结的仓库产物中不存在**：4 个冻结 `tech.json` 的 `summary.precision_entry`
+   均为 `None`。原因已定性（**不是**功能死链）：冻结快照取自 `data/reports/<sym>/<tf>/tech.json`，
+   而该文件由 `scripts/batch_prepare_chanlun_reports.py` 产出，其 `build_technical_summary(...)` 调用
+   **不传** `precision_entry`（默认 `None`）；真正会填该字段的是
+   `scripts/generate_{a,h}_share_single_mixed_report.py`（`summary_payload["precision_entry"]`）。
+   对比之下，`tests/test_build_miniapp_publish_bundle.py` 里的区间套断言是**手写 payload 的透传测试**，
+   不校验推导，也无法用作本节的真实锚点。
+
+### 5.1 现有 002555 锚点的可复现性问题（待处理）
+
+`docs/chanlun/buy-sell-multi-level-visual-example-library.md` §6.6（`002555 1m -> 5M` 候选观察链）对应的
+`tests/test_build_miniapp_publish_bundle.py::test_build_summary_and_detail_payload_preserve_real_1m_pre_breakout_sample`
+存在两个可复现性缺陷，已实测确认：
+
+- 该模块在**导入期**加载 `build/probe_intraday_prebreak_sample.py`，而 `build/` 是 gitignore（`git ls-files build`
+  为 **0** 个文件）。在仅含已跟踪文件的树上运行该模块会在**收集阶段**直接报错：
+  `FileNotFoundError: .../build/probe_intraday_prebreak_sample.py`，`no tests collected`。
+- 即使本地有该文件，其 `_load_rows` 只从 `data/reports/**` 与 `data/cache/kline/**`读取，而这些目录同样
+  未入版本库；数据被 `scripts/report_retention.py` 剪掉后样本即失效。
+
+因此该锚点**不能被当作「可回归」证据**。修复方向：把区间套 / 小转大的锚点全部换成 `tests/fixtures/real/`
+驱动（本页 §7 已按此口径落地），再逐步把该模块的 replay 依赖从 `build/` + `data/` 移到冻结 fixture。
 
 ## 6. 维护与验收
 
 - BS6 验收第 1 条（「重点样例可被自动化回归支撑」）由 `tests/test_example_library_real_cases.py` 承担：
-  7 张真实卡片 + 覆盖非空转守卫 + 缺口清单同步守卫，共 9 个用例，约 23s。
-- BS6 验收第 2 条（「新增规则能及时暴露行为变化」）由同一闸门承担：卡片钉住 `signal_bi_id` /
-  `related_zs_id` / `price` / `basis` / cutoff 序列，任一环节变动都会指名失败。
-- 卡片失效时的正确处置顺序：① 确认是否**有意**变更规则；② 是则更新卡片与 §3 表格并说明原因；
+  标准点 / 类比点 7 张卡片（§3）+ 区间套 / 小转大 5 张卡片（§7）+ 两个非空转守卫 +
+  两个清单同步守卫，共 **16 个用例，约 48s**。
+- BS6 验收第 2 条（「新增规则能及时暴露行为变化」）由同一闸门承担：卡片钉住
+  `signal_bi_id` / `related_zs_id` / `price` / `basis` / cutoff 序列（§3），以及
+  `status` / `small_to_large_status` / `window_basis_label` / `nested_from.side` /
+  `nested_from.trigger` / `dynamic_grade` 六元组（§7）。
+- 卡片失效时的正确处置顺序：① 确认是否**有意**变更规则；② 是则更新卡片与对应表格并说明原因；
   ③ 否则按回归缺陷处理。**不要**放宽断言或删除卡片。
-- 闸门自证：把任一卡片的价格或锚点改错后，只有该卡片失败（已验证）。
+- 闸门自证（均已实测）：
+  - 把任一标准点卡片的价格或锚点改错，**只有该卡片**失败。
+  - 把任一区间套卡片的 `dynamic_grade` 改错，**只有该卡片**失败。
+  - 把已观测到的 `candidate` 错误地列入「应缺席」清单，§7.3 的守卫会失败并报出实际计数——
+    证明缺席断言确实在读实测计数，不是形同虚设。
+- 两个「清单同步守卫」的作用：`test_zero_real_coverage_types_are_still_absent`（§5 缺口 1）与
+  `test_precision_higher_states_stay_unobserved_on_real_windows`（§7.3）都带空转守卫，
+  保证「未观测到」的结论建立在足够多的扫描帧上。
 - 重新冻结 `tests/fixtures/real/` 会让本页全部 cutoff 与数值失效——重冻结后必须整体重跑本闸门并按
   新口径更新本节所有表格。
+
+## 7. 区间套 / 小转大案例（T3）
+
+与 §3 同一口径（`FIXTURES_ROOT` + `analysis_cutoffs`），但需要**同标的两个级别**：
+高级别取 cutoff，次级别按**同一时刻 T** 截断（模拟生产 `_build_lower_precision_entry` 同时取两级数据），
+再调 `build_lower_timeframe_precision_entry`。生产配置为：
+
+- `PRIMARY_TECHNICAL_TIMEFRAME = "30m"`（操作级别）、`LOWER_PRECISION_TIMEFRAME = "5m"`（区间套执行级别）
+- `LOWER_PRECISION_PENDING_REVERSE_MODE = "effective_only"`
+
+### 7.1 覆盖矩阵
+
+| 档位 | 构造 / 契约回归 | 真实窗口卡片 |
+| --- | --- | --- |
+| `status = standby`（上级别无窗口） | ✅ | ✅ P4 |
+| `status = watch`（窗口已绑定、次级别未出点） | ✅ | ✅ P1 / P2 / P3 / P5 |
+| `status = actionable`（次级别已出精确点） | ✅ | ❌ **未观测到** |
+| `small_to_large_status = null` | ✅ | ✅ P4 / P5 |
+| `small_to_large_status = candidate` | ✅ | ✅ P1 / P2 / P3 |
+| `small_to_large_status = third_class_confirmed` | ✅ | ❌ **未观测到** |
+| `small_to_large_status = higher_level_confirmed` | ✅ | ❌ **未观测到** |
+| `small_to_large_reverse_confirm`（区间套反向确认） | ✅ | ❌ **未观测到** |
+
+`window_basis_label` 三档都已取到真实样本：`中枢到锚点窗口`（P1/P3）、`离开笔窗口`（P2）、
+`锚点跟踪窗口`（P5）。
+
+### 7.2 真实卡片
+
+| 卡片 | 组合 | 帧 / cutoff | status | small_to_large | window_basis | 侧 / 触发 | dynamic_grade | 上级别消费等级 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **P1** | `00700` 30m→5m | f9 / 915 | `watch` | `candidate` | 中枢到锚点窗口 | sell / `higher_range_divergence` | `oscillation_opportunity`（震荡机会） | `pending` |
+| **P2** | `03690` 5m→1m | f11 / 1831 | `watch` | `candidate` | 离开笔窗口 | buy / `buy2like` | `warning`（警戒） | `confirmed` |
+| **P3** | `000591` 1m→5m | f13 / 3500 | `watch` | `candidate` | 中枢到锚点窗口 | sell / `higher_range_divergence` | `oscillation_opportunity` | `pending` |
+| **P4** | `000591` day→5m | f12 / 1200 | `standby` | `null` | — | — | — | — |
+| **P5** | `000591` 1m→5m | f2 / 632 | `watch` | `null` | 锚点跟踪窗口 | buy / `higher_bottom_divergence` | — | `auxiliary` |
+
+逐卡要点：
+
+- **P1**：生产口径（`30m` 操作 + `5m` 执行）。上级别路线为 `higher_level_range`（盘整背驰），
+  故可进入小转大判定；但 5M 窗口内**没有任何同向买卖点**（`lower signal_points = []`），
+  因此只能落 `watch + candidate`。这正是「已有窗口 ≠ 已确认买点」的真实样本。
+- **P2**：唯一取到 **`离开笔窗口`** 的样本（上级别已确认离开笔，窗口被收缩）。
+  上级别为 `higher_level_reverse_trend` + `confirmed`，`dynamic_grade = warning`——
+  说明「上级别已经很强」并不自动把小转大升档，仍取决于次级别是否出现三类点。
+- **P3**：`1m` 操作 + `5m` 执行的生产口径之一，窗口极窄（`2026-09-11 09:38 → 11:11`），
+  次级别同样未出点。
+- **P4**：**无窗口**分支。上级别路线为 `None`，`precision_entry` 整体降级为 `standby`，
+  且 `small_to_large_status` / `window_basis_label` / `dynamic_grade` 全为 `null`——
+  用于锁「上级别无背驰段窗口时不得凭空给出区间套与小转大结论」。
+- **P5**：上级别路线为 `last_zs_extension`（既非趋势背驰也非盘整背驰），
+  故 `small_to_large_status = null` 但窗口仍然激活（`锚点跟踪窗口`）——
+  用于锁「窗口激活」与「小转大候选」是**两个独立条件**，不得混为一谈。
+
+### 7.3 实测：高位档在真实窗口上未观测到
+
+对 5 个标的 × 6 个级别组合 × 全部 cutoff（共 **126** 帧，其中生产口径三组合 **86** 帧）实测：
+
+| 档位 | 全部组合 | 生产口径组合 |
+| --- | --- | --- |
+| `status = watch` | 76 | 34 |
+| `status = standby` | 50 | 38 |
+| `status = watch` 且 `stl = candidate` | 21 | 14 |
+| `status = actionable` | **0** | **0** |
+| `small_to_large_status = third_class_confirmed` | **0** | **0** |
+| `small_to_large_status = higher_level_confirmed` | **0** | **0** |
+
+即：**`actionable` 与两档高位 `small_to_large_status` 在真实冻结窗口上一次都没出现过**，
+目前只有构造回归与契约回归覆盖（`test_build_lower_timeframe_precision_entry_*`）。
+所有 21 个 `candidate` 样本的 `signal_points` 都是空的。该清单由
+`test_precision_higher_states_stay_unobserved_on_real_windows` 盯住（含空转守卫：
+要求 `scans >= 100`、`watch >= 10`、`standby >= 5`、`candidate >= 5`）。
+
+**不得把这当作缺陷**：`actionable` 需要「次级别出现同向且落在窗口内的精确买卖点」，
+而窗口来自上级别中枢结束/离开笔完成到触发锚点之间，本身很窄；样本量（126 帧）也远小于
+§3 的 287 帧语料。合理结论是「**在已覆盖的真实语料上未观测到**」，而不是「不可达」。
+要定性需要更大的多级别语料。
+
+### 7.4 与其它文档的已知不一致
+
+- [buy-sell-multi-level-visual-example-library.md](buy-sell-multi-level-visual-example-library.md) §6.5 把
+  `5M buy3 -> third_class_confirmed` 描述为「**回归卡片 B**」，这仍然准确（它是构造/契约回归）。
+  但同页 §7 映射表把它与 `002555` 卡片并列在「案例 -> 回归锚点映射表」里，容易让 reviewer 以为
+  两者都是真实样本——**§6.6 那张的锚点存在 §5.1 描述的可复现性问题**。
+- 本页 §7.2 的 5 张卡片是这一批里**唯一**完全由冻结 fixture 驱动、可在任意机器上复现的
+  区间套 / 小转大真实锚点。
