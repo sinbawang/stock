@@ -27,7 +27,7 @@ python scripts/run_segment_safety_gates.py --only core consumer
 1. 核心规则、契约一致性与回归样本
 
 ```powershell
-python -m pytest -q tests/test_segment.py tests/test_segment_rediscrimination_matrix.py tests/test_zhongshu_contract.py tests/test_analysis_contract.py tests/test_segment_regression_000591.py tests/test_segment_regression_00700.py tests/test_segment_regression_03690.py tests/test_segment_regression_300124.py
+python -m pytest -q tests/test_segment.py tests/test_segment_rediscrimination_matrix.py tests/test_zhongshu_contract.py tests/test_analysis_contract.py tests/test_segment_regression_000591.py tests/test_segment_regression_000651.py tests/test_segment_regression_00700.py tests/test_segment_regression_00728.py tests/test_segment_regression_03690.py tests/test_segment_regression_300124.py
 ```
 
 2. 起点锚定与跨周期一致性
@@ -36,7 +36,16 @@ python -m pytest -q tests/test_segment.py tests/test_segment_rediscrimination_ma
 python -m pytest -q tests/test_segment_bootstrap_anchor.py tests/test_segment_regression_suite.py
 ```
 
-3. 发布产物一致性（对照脚本）
+3. 段链完整性（截断 / 塌陷类缺陷）
+
+```powershell
+python -m pytest -q tests/test_segment_chain_integrity.py
+```
+
+该闸门对全部冻结真实窗口断言段链非空、覆盖率与段间跳空在阈值内、且 `practical / theory`
+段数不塌陷；用于拦截「段链静默截断、安静少给结构」这一类不报错但丢数据的缺陷。
+
+4. 发布产物一致性（对照脚本）
 
 ```powershell
 python build/compare_json_segments.py

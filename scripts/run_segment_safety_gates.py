@@ -36,10 +36,13 @@ SEGMENT_SAFETY_GATES = [
             "tests/test_segment_regression_suite.py",
             "tests/test_segment_bootstrap_anchor.py",
             "tests/test_segment_regression_000591.py",
+            "tests/test_segment_regression_000651.py",
             "tests/test_segment_regression_00700.py",
+            "tests/test_segment_regression_00728.py",
             "tests/test_segment_regression_03690.py",
             "tests/test_segment_regression_300124.py",
             "tests/test_segment_lesson_boundary_fixtures.py",
+            "tests/test_segment_chain_integrity.py",
         ],
     ),
     SafetyGate(
