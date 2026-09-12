@@ -1,0 +1,1708 @@
+{
+  "report_type": "technical",
+  "symbol": "600900",
+  "name": "长江电力",
+  "timeframe": "1m",
+  "generated_at": "2026-09-11T16:17:18",
+  "source": "tushare->tencent->xueqiu->eastmoney",
+  "data_fetch": {
+    "source": "tushare->tencent->xueqiu->eastmoney",
+    "actual_source": "tencent",
+    "source_attempts": [
+      {
+        "source": "tushare",
+        "status": "error",
+        "error": "未安装 tushare"
+      },
+      {
+        "source": "tencent",
+        "status": "ok",
+        "row_count": 120
+      }
+    ],
+    "actual_bar_count": 3500,
+    "requested_min_rows": 3500,
+    "fulfilled_min_rows": false,
+    "bar_count_policy": "feasible_maximum",
+    "source_probe_min_rows": 3500,
+    "local_store": {
+      "enabled": true,
+      "store_path": "C:\\sandbox\\sinba\\stock\\data\\cache\\kline\\A\\600900\\1m.csv",
+      "requested_start": "2026-07-14 09:30",
+      "effective_start": "2026-09-11 13:00",
+      "overlap_bars": 120,
+      "local_rows_before": 4500,
+      "remote_rows": 120,
+      "merged_total_rows": 4500,
+      "added_rows": 0,
+      "updated_rows": 0,
+      "analysis_rows": 3500
+    }
+  },
+  "pending_reverse_mode": "effective_only",
+  "zhongshu_level": "segment",
+  "code_fingerprint": "8083ac953b1d552f095a32deadd1a3c896bd2a5df02724030a1cfd36259f7711",
+  "structure": {
+    "primary_zhongshu_level": "segment",
+    "latest_zhongshu": {
+      "zs_id": 3,
+      "structure_level": "segment",
+      "recognition_mode": "fixed_first_three_overlap",
+      "render_mode": "core_plus_extension",
+      "entering_bi_id": 16,
+      "core_bi_ids": [
+        17,
+        18,
+        19
+      ],
+      "bi_ids": [
+        17,
+        18,
+        19,
+        20
+      ],
+      "exit_bi_id": null,
+      "start_bi_id": 17,
+      "end_bi_id": 20,
+      "render_start_bi_id": 17,
+      "render_end_bi_id": 20,
+      "zone_mode": "fixed_first_three_overlap",
+      "zs_low": 27.78,
+      "zs_high": 27.88,
+      "peak_low": 27.63,
+      "peak_high": 27.94,
+      "start_ts": "2026-09-07T13:45:00",
+      "end_ts": "2026-09-09T09:31:00",
+      "is_terminated": false,
+      "superseded_by_zs_id": null,
+      "is_reabsorbed_by_larger_expansion": false,
+      "entering_segment_id": 16,
+      "core_segment_ids": [
+        17,
+        18,
+        19
+      ],
+      "segment_ids": [
+        17,
+        18,
+        19,
+        20
+      ],
+      "exit_segment_id": null,
+      "start_segment_id": 17,
+      "end_segment_id": 20,
+      "render_start_segment_id": 17,
+      "render_end_segment_id": 20
+    },
+    "zhongshus": [
+      {
+        "zs_id": 0,
+        "structure_level": "segment",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 0,
+        "core_bi_ids": [
+          1,
+          2,
+          3
+        ],
+        "bi_ids": [
+          1,
+          2,
+          3
+        ],
+        "exit_bi_id": 4,
+        "start_bi_id": 1,
+        "end_bi_id": 3,
+        "render_start_bi_id": 1,
+        "render_end_bi_id": 3,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.2,
+        "zs_high": 28.35,
+        "peak_low": 28.1,
+        "peak_high": 28.48,
+        "start_ts": "2026-08-24T14:27:00",
+        "end_ts": "2026-08-26T14:00:00",
+        "is_terminated": true,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false,
+        "entering_segment_id": 0,
+        "core_segment_ids": [
+          1,
+          2,
+          3
+        ],
+        "segment_ids": [
+          1,
+          2,
+          3
+        ],
+        "exit_segment_id": 4,
+        "start_segment_id": 1,
+        "end_segment_id": 3,
+        "render_start_segment_id": 1,
+        "render_end_segment_id": 3
+      },
+      {
+        "zs_id": 1,
+        "structure_level": "segment",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 4,
+        "core_bi_ids": [
+          5,
+          6,
+          7
+        ],
+        "bi_ids": [
+          5,
+          6,
+          7,
+          8
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 5,
+        "end_bi_id": 8,
+        "render_start_bi_id": 5,
+        "render_end_bi_id": 8,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.01,
+        "zs_high": 28.13,
+        "peak_low": 27.81,
+        "peak_high": 28.14,
+        "start_ts": "2026-08-27T10:44:00",
+        "end_ts": "2026-08-31T10:12:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false,
+        "entering_segment_id": 4,
+        "core_segment_ids": [
+          5,
+          6,
+          7
+        ],
+        "segment_ids": [
+          5,
+          6,
+          7,
+          8
+        ],
+        "exit_segment_id": null,
+        "start_segment_id": 5,
+        "end_segment_id": 8,
+        "render_start_segment_id": 5,
+        "render_end_segment_id": 8
+      },
+      {
+        "zs_id": 2,
+        "structure_level": "segment",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 11,
+        "core_bi_ids": [
+          12,
+          13,
+          14
+        ],
+        "bi_ids": [
+          12,
+          13,
+          14
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 12,
+        "end_bi_id": 14,
+        "render_start_bi_id": 12,
+        "render_end_bi_id": 14,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.65,
+        "zs_high": 28.82,
+        "peak_low": 28.34,
+        "peak_high": 28.84,
+        "start_ts": "2026-09-02T10:19:00",
+        "end_ts": "2026-09-04T10:18:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false,
+        "entering_segment_id": 11,
+        "core_segment_ids": [
+          12,
+          13,
+          14
+        ],
+        "segment_ids": [
+          12,
+          13,
+          14
+        ],
+        "exit_segment_id": null,
+        "start_segment_id": 12,
+        "end_segment_id": 14,
+        "render_start_segment_id": 12,
+        "render_end_segment_id": 14
+      },
+      {
+        "zs_id": 3,
+        "structure_level": "segment",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 16,
+        "core_bi_ids": [
+          17,
+          18,
+          19
+        ],
+        "bi_ids": [
+          17,
+          18,
+          19,
+          20
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 17,
+        "end_bi_id": 20,
+        "render_start_bi_id": 17,
+        "render_end_bi_id": 20,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 27.78,
+        "zs_high": 27.88,
+        "peak_low": 27.63,
+        "peak_high": 27.94,
+        "start_ts": "2026-09-07T13:45:00",
+        "end_ts": "2026-09-09T09:31:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false,
+        "entering_segment_id": 16,
+        "core_segment_ids": [
+          17,
+          18,
+          19
+        ],
+        "segment_ids": [
+          17,
+          18,
+          19,
+          20
+        ],
+        "exit_segment_id": null,
+        "start_segment_id": 17,
+        "end_segment_id": 20,
+        "render_start_segment_id": 17,
+        "render_end_segment_id": 20
+      }
+    ],
+    "latest_lei_zhongshu": {
+      "zs_id": 27,
+      "structure_level": "bi",
+      "recognition_mode": "fixed_first_three_overlap",
+      "render_mode": "core_plus_extension",
+      "entering_bi_id": 183,
+      "core_bi_ids": [
+        184,
+        185,
+        186
+      ],
+      "bi_ids": [
+        184,
+        185,
+        186,
+        187
+      ],
+      "exit_bi_id": null,
+      "start_bi_id": 184,
+      "end_bi_id": 187,
+      "render_start_bi_id": 184,
+      "render_end_bi_id": 187,
+      "zone_mode": "fixed_first_three_overlap",
+      "zs_low": 28.41,
+      "zs_high": 28.48,
+      "peak_low": 28.39,
+      "peak_high": 28.49,
+      "start_ts": "2026-09-11T13:42:00",
+      "end_ts": "2026-09-11T14:31:00",
+      "is_terminated": false,
+      "superseded_by_zs_id": null,
+      "is_reabsorbed_by_larger_expansion": false
+    },
+    "lei_zhongshus": [
+      {
+        "zs_id": 0,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 0,
+        "core_bi_ids": [
+          1,
+          2,
+          3
+        ],
+        "bi_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 1,
+        "end_bi_id": 10,
+        "render_start_bi_id": 1,
+        "render_end_bi_id": 10,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.16,
+        "zs_high": 28.2,
+        "peak_low": 28.1,
+        "peak_high": 28.33,
+        "start_ts": "2026-08-24T13:14:00",
+        "end_ts": "2026-08-25T10:16:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 1,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 11,
+        "core_bi_ids": [
+          12,
+          13,
+          14
+        ],
+        "bi_ids": [
+          12,
+          13,
+          14
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 12,
+        "end_bi_id": 14,
+        "render_start_bi_id": 12,
+        "render_end_bi_id": 14,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.26,
+        "zs_high": 28.3,
+        "peak_low": 28.13,
+        "peak_high": 28.38,
+        "start_ts": "2026-08-25T10:42:00",
+        "end_ts": "2026-08-25T13:26:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 2,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 17,
+        "core_bi_ids": [
+          18,
+          19,
+          20
+        ],
+        "bi_ids": [
+          18,
+          19,
+          20
+        ],
+        "exit_bi_id": 21,
+        "start_bi_id": 18,
+        "end_bi_id": 20,
+        "render_start_bi_id": 18,
+        "render_end_bi_id": 20,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.19,
+        "zs_high": 28.24,
+        "peak_low": 28.14,
+        "peak_high": 28.24,
+        "start_ts": "2026-08-25T14:12:00",
+        "end_ts": "2026-08-26T09:31:00",
+        "is_terminated": true,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 3,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 21,
+        "core_bi_ids": [
+          22,
+          23,
+          24
+        ],
+        "bi_ids": [
+          22,
+          23,
+          24
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 22,
+        "end_bi_id": 24,
+        "render_start_bi_id": 22,
+        "render_end_bi_id": 24,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.4,
+        "zs_high": 28.46,
+        "peak_low": 28.2,
+        "peak_high": 28.48,
+        "start_ts": "2026-08-26T10:09:00",
+        "end_ts": "2026-08-26T13:06:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 4,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 25,
+        "core_bi_ids": [
+          26,
+          27,
+          28
+        ],
+        "bi_ids": [
+          26,
+          27,
+          28,
+          29
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 26,
+        "end_bi_id": 29,
+        "render_start_bi_id": 26,
+        "render_end_bi_id": 29,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.26,
+        "zs_high": 28.3,
+        "peak_low": 28.24,
+        "peak_high": 28.35,
+        "start_ts": "2026-08-26T13:23:00",
+        "end_ts": "2026-08-26T14:47:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 5,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 34,
+        "core_bi_ids": [
+          35,
+          36,
+          37
+        ],
+        "bi_ids": [
+          35,
+          36,
+          37
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 35,
+        "end_bi_id": 37,
+        "render_start_bi_id": 35,
+        "render_end_bi_id": 37,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 27.94,
+        "zs_high": 27.99,
+        "peak_low": 27.91,
+        "peak_high": 28.03,
+        "start_ts": "2026-08-27T10:44:00",
+        "end_ts": "2026-08-27T13:05:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 6,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 41,
+        "core_bi_ids": [
+          42,
+          43,
+          44
+        ],
+        "bi_ids": [
+          42,
+          43,
+          44
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 42,
+        "end_bi_id": 44,
+        "render_start_bi_id": 42,
+        "render_end_bi_id": 44,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.07,
+        "zs_high": 28.13,
+        "peak_low": 28.01,
+        "peak_high": 28.14,
+        "start_ts": "2026-08-27T13:34:00",
+        "end_ts": "2026-08-27T14:28:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 7,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 45,
+        "core_bi_ids": [
+          46,
+          47,
+          48
+        ],
+        "bi_ids": [
+          46,
+          47,
+          48
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 46,
+        "end_bi_id": 48,
+        "render_start_bi_id": 46,
+        "render_end_bi_id": 48,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.04,
+        "zs_high": 28.07,
+        "peak_low": 27.87,
+        "peak_high": 28.1,
+        "start_ts": "2026-08-27T14:33:00",
+        "end_ts": "2026-08-28T09:51:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 8,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 49,
+        "core_bi_ids": [
+          50,
+          51,
+          52
+        ],
+        "bi_ids": [
+          50,
+          51,
+          52
+        ],
+        "exit_bi_id": 53,
+        "start_bi_id": 50,
+        "end_bi_id": 52,
+        "render_start_bi_id": 50,
+        "render_end_bi_id": 52,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 27.94,
+        "zs_high": 27.96,
+        "peak_low": 27.9,
+        "peak_high": 27.98,
+        "start_ts": "2026-08-28T10:13:00",
+        "end_ts": "2026-08-28T11:20:00",
+        "is_terminated": true,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 9,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 53,
+        "core_bi_ids": [
+          54,
+          55,
+          56
+        ],
+        "bi_ids": [
+          54,
+          55,
+          56,
+          57,
+          58,
+          59
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 54,
+        "end_bi_id": 59,
+        "render_start_bi_id": 54,
+        "render_end_bi_id": 59,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 27.98,
+        "zs_high": 28.02,
+        "peak_low": 27.98,
+        "peak_high": 28.13,
+        "start_ts": "2026-08-28T13:18:00",
+        "end_ts": "2026-08-31T09:32:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 10,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 60,
+        "core_bi_ids": [
+          61,
+          62,
+          63
+        ],
+        "bi_ids": [
+          61,
+          62,
+          63
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 61,
+        "end_bi_id": 63,
+        "render_start_bi_id": 61,
+        "render_end_bi_id": 63,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 27.89,
+        "zs_high": 27.96,
+        "peak_low": 27.81,
+        "peak_high": 28.09,
+        "start_ts": "2026-08-31T09:45:00",
+        "end_ts": "2026-08-31T11:01:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 11,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 64,
+        "core_bi_ids": [
+          65,
+          66,
+          67
+        ],
+        "bi_ids": [
+          65,
+          66,
+          67,
+          68
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 65,
+        "end_bi_id": 68,
+        "render_start_bi_id": 65,
+        "render_end_bi_id": 68,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 27.97,
+        "zs_high": 28.01,
+        "peak_low": 27.93,
+        "peak_high": 28.05,
+        "start_ts": "2026-08-31T11:23:00",
+        "end_ts": "2026-08-31T14:19:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 12,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 71,
+        "core_bi_ids": [
+          72,
+          73,
+          74
+        ],
+        "bi_ids": [
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80
+        ],
+        "exit_bi_id": 81,
+        "start_bi_id": 72,
+        "end_bi_id": 80,
+        "render_start_bi_id": 72,
+        "render_end_bi_id": 80,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.26,
+        "zs_high": 28.34,
+        "peak_low": 28.17,
+        "peak_high": 28.36,
+        "start_ts": "2026-09-01T10:00:00",
+        "end_ts": "2026-09-01T14:10:00",
+        "is_terminated": true,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 13,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 81,
+        "core_bi_ids": [
+          82,
+          83,
+          84
+        ],
+        "bi_ids": [
+          82,
+          83,
+          84
+        ],
+        "exit_bi_id": 85,
+        "start_bi_id": 82,
+        "end_bi_id": 84,
+        "render_start_bi_id": 82,
+        "render_end_bi_id": 84,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.38,
+        "zs_high": 28.45,
+        "peak_low": 28.35,
+        "peak_high": 28.56,
+        "start_ts": "2026-09-01T14:27:00",
+        "end_ts": "2026-09-02T09:40:00",
+        "is_terminated": true,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 14,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 87,
+        "core_bi_ids": [
+          88,
+          89,
+          90
+        ],
+        "bi_ids": [
+          88,
+          89,
+          90,
+          91,
+          92,
+          93
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 88,
+        "end_bi_id": 93,
+        "render_start_bi_id": 88,
+        "render_end_bi_id": 93,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.72,
+        "zs_high": 28.79,
+        "peak_low": 28.68,
+        "peak_high": 28.84,
+        "start_ts": "2026-09-02T10:19:00",
+        "end_ts": "2026-09-02T13:14:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 15,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 94,
+        "core_bi_ids": [
+          95,
+          96,
+          97
+        ],
+        "bi_ids": [
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103
+        ],
+        "exit_bi_id": 104,
+        "start_bi_id": 95,
+        "end_bi_id": 103,
+        "render_start_bi_id": 95,
+        "render_end_bi_id": 103,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.69,
+        "zs_high": 28.72,
+        "peak_low": 28.62,
+        "peak_high": 28.82,
+        "start_ts": "2026-09-02T13:50:00",
+        "end_ts": "2026-09-03T11:05:00",
+        "is_terminated": true,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 16,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 106,
+        "core_bi_ids": [
+          107,
+          108,
+          109
+        ],
+        "bi_ids": [
+          107,
+          108,
+          109
+        ],
+        "exit_bi_id": 110,
+        "start_bi_id": 107,
+        "end_bi_id": 109,
+        "render_start_bi_id": 107,
+        "render_end_bi_id": 109,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.42,
+        "zs_high": 28.51,
+        "peak_low": 28.38,
+        "peak_high": 28.59,
+        "start_ts": "2026-09-03T14:07:00",
+        "end_ts": "2026-09-04T09:48:00",
+        "is_terminated": true,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 17,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 110,
+        "core_bi_ids": [
+          111,
+          112,
+          113
+        ],
+        "bi_ids": [
+          111,
+          112,
+          113,
+          114,
+          115,
+          116
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 111,
+        "end_bi_id": 116,
+        "render_start_bi_id": 111,
+        "render_end_bi_id": 116,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.37,
+        "zs_high": 28.41,
+        "peak_low": 28.34,
+        "peak_high": 28.43,
+        "start_ts": "2026-09-04T10:18:00",
+        "end_ts": "2026-09-04T13:02:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 18,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 117,
+        "core_bi_ids": [
+          118,
+          119,
+          120
+        ],
+        "bi_ids": [
+          118,
+          119,
+          120,
+          121
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 118,
+        "end_bi_id": 121,
+        "render_start_bi_id": 118,
+        "render_end_bi_id": 121,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.46,
+        "zs_high": 28.48,
+        "peak_low": 28.44,
+        "peak_high": 28.55,
+        "start_ts": "2026-09-04T13:19:00",
+        "end_ts": "2026-09-04T13:51:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 19,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 132,
+        "core_bi_ids": [
+          133,
+          134,
+          135
+        ],
+        "bi_ids": [
+          133,
+          134,
+          135,
+          136,
+          137,
+          138,
+          139,
+          140,
+          141
+        ],
+        "exit_bi_id": 142,
+        "start_bi_id": 133,
+        "end_bi_id": 141,
+        "render_start_bi_id": 133,
+        "render_end_bi_id": 141,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 27.84,
+        "zs_high": 27.88,
+        "peak_low": 27.78,
+        "peak_high": 27.94,
+        "start_ts": "2026-09-07T11:28:00",
+        "end_ts": "2026-09-08T09:51:00",
+        "is_terminated": true,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 20,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 142,
+        "core_bi_ids": [
+          143,
+          144,
+          145
+        ],
+        "bi_ids": [
+          143,
+          144,
+          145
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 143,
+        "end_bi_id": 145,
+        "render_start_bi_id": 143,
+        "render_end_bi_id": 145,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 27.7,
+        "zs_high": 27.76,
+        "peak_low": 27.63,
+        "peak_high": 27.88,
+        "start_ts": "2026-09-08T10:37:00",
+        "end_ts": "2026-09-08T13:52:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 21,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 146,
+        "core_bi_ids": [
+          147,
+          148,
+          149
+        ],
+        "bi_ids": [
+          147,
+          148,
+          149,
+          150
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 147,
+        "end_bi_id": 150,
+        "render_start_bi_id": 147,
+        "render_end_bi_id": 150,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 27.81,
+        "zs_high": 27.85,
+        "peak_low": 27.7,
+        "peak_high": 27.87,
+        "start_ts": "2026-09-08T14:06:00",
+        "end_ts": "2026-09-09T10:04:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 22,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 153,
+        "core_bi_ids": [
+          154,
+          155,
+          156
+        ],
+        "bi_ids": [
+          154,
+          155,
+          156,
+          157,
+          158,
+          159,
+          160
+        ],
+        "exit_bi_id": 161,
+        "start_bi_id": 154,
+        "end_bi_id": 160,
+        "render_start_bi_id": 154,
+        "render_end_bi_id": 160,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 27.96,
+        "zs_high": 27.97,
+        "peak_low": 27.92,
+        "peak_high": 28.07,
+        "start_ts": "2026-09-09T11:10:00",
+        "end_ts": "2026-09-10T09:35:00",
+        "is_terminated": true,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 23,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 161,
+        "core_bi_ids": [
+          162,
+          163,
+          164
+        ],
+        "bi_ids": [
+          162,
+          163,
+          164
+        ],
+        "exit_bi_id": 165,
+        "start_bi_id": 162,
+        "end_bi_id": 164,
+        "render_start_bi_id": 162,
+        "render_end_bi_id": 164,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.0,
+        "zs_high": 28.04,
+        "peak_low": 27.99,
+        "peak_high": 28.14,
+        "start_ts": "2026-09-10T09:39:00",
+        "end_ts": "2026-09-10T10:46:00",
+        "is_terminated": true,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 24,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 165,
+        "core_bi_ids": [
+          166,
+          167,
+          168
+        ],
+        "bi_ids": [
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172
+        ],
+        "exit_bi_id": 173,
+        "start_bi_id": 166,
+        "end_bi_id": 172,
+        "render_start_bi_id": 166,
+        "render_end_bi_id": 172,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.06,
+        "zs_high": 28.1,
+        "peak_low": 27.98,
+        "peak_high": 28.14,
+        "start_ts": "2026-09-10T11:03:00",
+        "end_ts": "2026-09-11T09:37:00",
+        "is_terminated": true,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 25,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 173,
+        "core_bi_ids": [
+          174,
+          175,
+          176
+        ],
+        "bi_ids": [
+          174,
+          175,
+          176
+        ],
+        "exit_bi_id": 177,
+        "start_bi_id": 174,
+        "end_bi_id": 176,
+        "render_start_bi_id": 174,
+        "render_end_bi_id": 176,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.36,
+        "zs_high": 28.37,
+        "peak_low": 28.22,
+        "peak_high": 28.45,
+        "start_ts": "2026-09-11T09:50:00",
+        "end_ts": "2026-09-11T10:38:00",
+        "is_terminated": true,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 26,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 179,
+        "core_bi_ids": [
+          180,
+          181,
+          182
+        ],
+        "bi_ids": [
+          180,
+          181,
+          182
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 180,
+        "end_bi_id": 182,
+        "render_start_bi_id": 180,
+        "render_end_bi_id": 182,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.49,
+        "zs_high": 28.54,
+        "peak_low": 28.44,
+        "peak_high": 28.55,
+        "start_ts": "2026-09-11T11:07:00",
+        "end_ts": "2026-09-11T13:34:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      },
+      {
+        "zs_id": 27,
+        "structure_level": "bi",
+        "recognition_mode": "fixed_first_three_overlap",
+        "render_mode": "core_plus_extension",
+        "entering_bi_id": 183,
+        "core_bi_ids": [
+          184,
+          185,
+          186
+        ],
+        "bi_ids": [
+          184,
+          185,
+          186,
+          187
+        ],
+        "exit_bi_id": null,
+        "start_bi_id": 184,
+        "end_bi_id": 187,
+        "render_start_bi_id": 184,
+        "render_end_bi_id": 187,
+        "zone_mode": "fixed_first_three_overlap",
+        "zs_low": 28.41,
+        "zs_high": 28.48,
+        "peak_low": 28.39,
+        "peak_high": 28.49,
+        "start_ts": "2026-09-11T13:42:00",
+        "end_ts": "2026-09-11T14:31:00",
+        "is_terminated": false,
+        "superseded_by_zs_id": null,
+        "is_reabsorbed_by_larger_expansion": false
+      }
+    ]
+  },
+  "structure_state": {
+    "last_completed": {
+      "type": "up",
+      "status": "completed",
+      "start_ts": "2026-08-27T10:44:00",
+      "end_ts": "2026-09-04T10:18:00",
+      "latest_ts": "2026-09-04T10:18:00",
+      "zs_count": 2,
+      "zs_count_so_far": 2,
+      "confirmation_basis": "confirmed_by_following_same_level_structure",
+      "start_zs_id": 1,
+      "end_zs_id": 2
+    },
+    "current_ongoing": {
+      "type": "range",
+      "status": "ongoing",
+      "start_ts": "2026-09-07T13:45:00",
+      "end_ts": null,
+      "latest_ts": "2026-09-11T15:00:00",
+      "zs_count": 1,
+      "zs_count_so_far": 1,
+      "confirmation_basis": "single_active_zhongshu",
+      "start_zs_id": 3,
+      "end_zs_id": 3
+    },
+    "relationship": {
+      "kind": "completed_then_new_type_ongoing",
+      "transition_state": "candidate_new_type",
+      "note": "上一段同级别走势已结束，当前新的同级别走势仍处候选待确认阶段。"
+    },
+    "current_structure_status": "candidate_completed_waiting_stability",
+    "consumption_level": "pending",
+    "type_chain": [
+      {
+        "type": "range",
+        "status": "completed",
+        "zs_count": 1,
+        "start_zs_id": 0,
+        "end_zs_id": 0,
+        "start_ts": "2026-08-24T14:27:00",
+        "end_ts": "2026-08-26T14:00:00"
+      },
+      {
+        "type": "up",
+        "status": "completed",
+        "zs_count": 2,
+        "start_zs_id": 1,
+        "end_zs_id": 2,
+        "start_ts": "2026-08-27T10:44:00",
+        "end_ts": "2026-09-04T10:18:00"
+      },
+      {
+        "type": "range",
+        "status": "ongoing",
+        "zs_count": 1,
+        "start_zs_id": 3,
+        "end_zs_id": 3,
+        "start_ts": "2026-09-07T13:45:00",
+        "end_ts": null
+      }
+    ],
+    "decomposition_selector": {
+      "mode": "dual_interpretation_pending",
+      "alternatives": [],
+      "selected": null,
+      "selection_reason": "前段已完成、当前为新类型候选（单中枢未确认）；同级别分解具唯一性，无几何多解，待确认即可。"
+    }
+  },
+  "same_level_decomposition_mode": "dual_interpretation_pending",
+  "same_level_consumption_level": "pending",
+  "post_divergence_route": null,
+  "route_level_from": "1m",
+  "route_level_to": null,
+  "divergence": {
+    "top": {
+      "active": false,
+      "signal_bi_id": 187,
+      "time": "2026-09-11T14:31:00",
+      "price": 28.48
+    },
+    "bottom": {
+      "active": false,
+      "signal_bi_id": 188,
+      "time": "2026-09-11T14:52:00",
+      "price": 28.39
+    },
+    "trend": {
+      "active": false,
+      "direction": null,
+      "signal_bi_id": null,
+      "time": null,
+      "price": null,
+      "basis": null,
+      "strict": false,
+      "reference_zs_id": null,
+      "departure_confirmed": null,
+      "strength_comparison": null
+    },
+    "range": {
+      "active": false,
+      "direction": null,
+      "signal_bi_id": null,
+      "time": null,
+      "price": null,
+      "basis": null,
+      "strict": false,
+      "reference_zs_id": null,
+      "touches_boundary": null,
+      "strength_comparison": null
+    }
+  },
+  "zs_monitor_alert": "pre_breakout",
+  "zs_monitor_midline": 27.83,
+  "zs_monitor_bias": "strong",
+  "summary": {
+    "operation_level": "1M",
+    "conclusion": "观察，等待确认。",
+    "suggestion": "先按观察态处理，等待离开-回抽或级别闭合后再决定是否升级。",
+    "score": 66,
+    "rating": "B",
+    "bias": "观察",
+    "score_breakdown": {
+      "structure": 26,
+      "location": 18,
+      "signal": 18,
+      "divergence": 4,
+      "execution": 0
+    },
+    "buy_points": [
+      "buy3"
+    ],
+    "sell_points": [],
+    "signal_points": [
+      {
+        "point": "buy3",
+        "active": true,
+        "lifecycle_state": "confirmed",
+        "invalidated_reason": null,
+        "signal_bi_id": 172,
+        "time": "2026-09-11T09:37:00",
+        "price": 27.98,
+        "basis": "leave_zs_then_pullback_holds_upper_edge",
+        "related_zs_id": 3,
+        "related_bi_ids": [
+          17,
+          18,
+          19,
+          20
+        ]
+      }
+    ],
+    "signal_catalog": [
+      {
+        "point": "buy1",
+        "active": false,
+        "lifecycle_state": null,
+        "invalidated_reason": null,
+        "signal_bi_id": 188,
+        "time": "2026-09-11T14:52:00",
+        "price": null,
+        "basis": null,
+        "related_zs_id": null,
+        "related_bi_ids": []
+      },
+      {
+        "point": "buy2",
+        "active": false,
+        "lifecycle_state": null,
+        "invalidated_reason": null,
+        "signal_bi_id": 188,
+        "time": "2026-09-11T14:52:00",
+        "price": null,
+        "basis": null,
+        "related_zs_id": null,
+        "related_bi_ids": []
+      },
+      {
+        "point": "buy3",
+        "active": true,
+        "lifecycle_state": "confirmed",
+        "invalidated_reason": null,
+        "signal_bi_id": 172,
+        "time": "2026-09-11T09:37:00",
+        "price": 27.98,
+        "basis": "leave_zs_then_pullback_holds_upper_edge",
+        "related_zs_id": 3,
+        "related_bi_ids": [
+          17,
+          18,
+          19,
+          20
+        ]
+      },
+      {
+        "point": "sell1",
+        "active": false,
+        "lifecycle_state": null,
+        "invalidated_reason": null,
+        "signal_bi_id": 187,
+        "time": "2026-09-11T14:31:00",
+        "price": null,
+        "basis": null,
+        "related_zs_id": null,
+        "related_bi_ids": []
+      },
+      {
+        "point": "sell2",
+        "active": false,
+        "lifecycle_state": null,
+        "invalidated_reason": null,
+        "signal_bi_id": 187,
+        "time": "2026-09-11T14:31:00",
+        "price": null,
+        "basis": null,
+        "related_zs_id": null,
+        "related_bi_ids": []
+      },
+      {
+        "point": "sell3",
+        "active": false,
+        "lifecycle_state": null,
+        "invalidated_reason": null,
+        "signal_bi_id": 187,
+        "time": "2026-09-11T14:31:00",
+        "price": null,
+        "basis": null,
+        "related_zs_id": null,
+        "related_bi_ids": []
+      },
+      {
+        "point": "buy2like",
+        "active": false,
+        "lifecycle_state": null,
+        "invalidated_reason": null,
+        "signal_bi_id": 188,
+        "time": "2026-09-11T14:52:00",
+        "price": null,
+        "basis": null,
+        "related_zs_id": null,
+        "related_bi_ids": []
+      },
+      {
+        "point": "sell2like",
+        "active": false,
+        "lifecycle_state": null,
+        "invalidated_reason": null,
+        "signal_bi_id": 187,
+        "time": "2026-09-11T14:31:00",
+        "price": null,
+        "basis": null,
+        "related_zs_id": null,
+        "related_bi_ids": []
+      },
+      {
+        "point": "buy1like",
+        "active": false,
+        "lifecycle_state": null,
+        "invalidated_reason": null,
+        "signal_bi_id": 188,
+        "time": "2026-09-11T14:52:00",
+        "price": null,
+        "basis": null,
+        "related_zs_id": null,
+        "related_bi_ids": []
+      },
+      {
+        "point": "sell1like",
+        "active": false,
+        "lifecycle_state": null,
+        "invalidated_reason": null,
+        "signal_bi_id": 187,
+        "time": "2026-09-11T14:31:00",
+        "price": null,
+        "basis": null,
+        "related_zs_id": null,
+        "related_bi_ids": []
+      }
+    ],
+    "forming_points": [],
+    "invalidated_points": [],
+    "signal_repaint_violations": [],
+    "lifecycle_frame": {
+      "signal_points": [
+        {
+          "point": "buy3",
+          "signal_bi_id": 172,
+          "price": 27.98,
+          "time": "2026-09-11T09:37:00",
+          "lifecycle_state": "confirmed"
+        }
+      ],
+      "latest_down_low": 28.39,
+      "latest_up_high": 28.48,
+      "zs_high": 27.88,
+      "zs_low": 27.78
+    },
+    "structure_state": {
+      "last_completed": {
+        "type": "up",
+        "status": "completed",
+        "start_ts": "2026-08-27T10:44:00",
+        "end_ts": "2026-09-04T10:18:00",
+        "latest_ts": "2026-09-04T10:18:00",
+        "zs_count": 2,
+        "zs_count_so_far": 2,
+        "confirmation_basis": "confirmed_by_following_same_level_structure",
+        "start_zs_id": 1,
+        "end_zs_id": 2
+      },
+      "current_ongoing": {
+        "type": "range",
+        "status": "ongoing",
+        "start_ts": "2026-09-07T13:45:00",
+        "end_ts": null,
+        "latest_ts": "2026-09-11T15:00:00",
+        "zs_count": 1,
+        "zs_count_so_far": 1,
+        "confirmation_basis": "single_active_zhongshu",
+        "start_zs_id": 3,
+        "end_zs_id": 3
+      },
+      "relationship": {
+        "kind": "completed_then_new_type_ongoing",
+        "transition_state": "candidate_new_type",
+        "note": "上一段同级别走势已结束，当前新的同级别走势仍处候选待确认阶段。"
+      },
+      "current_structure_status": "candidate_completed_waiting_stability",
+      "consumption_level": "pending",
+      "type_chain": [
+        {
+          "type": "range",
+          "status": "completed",
+          "zs_count": 1,
+          "start_zs_id": 0,
+          "end_zs_id": 0,
+          "start_ts": "2026-08-24T14:27:00",
+          "end_ts": "2026-08-26T14:00:00"
+        },
+        {
+          "type": "up",
+          "status": "completed",
+          "zs_count": 2,
+          "start_zs_id": 1,
+          "end_zs_id": 2,
+          "start_ts": "2026-08-27T10:44:00",
+          "end_ts": "2026-09-04T10:18:00"
+        },
+        {
+          "type": "range",
+          "status": "ongoing",
+          "zs_count": 1,
+          "start_zs_id": 3,
+          "end_zs_id": 3,
+          "start_ts": "2026-09-07T13:45:00",
+          "end_ts": null
+        }
+      ],
+      "decomposition_selector": {
+        "mode": "dual_interpretation_pending",
+        "alternatives": [],
+        "selected": null,
+        "selection_reason": "前段已完成、当前为新类型候选（单中枢未确认）；同级别分解具唯一性，无几何多解，待确认即可。"
+      }
+    },
+    "same_level_decomposition_mode": "dual_interpretation_pending",
+    "same_level_consumption_level": "pending",
+    "same_level_consumption_level_label": "待确认消费",
+    "same_level_consumption_level_note": "当前已有结构线索，但还不能直接升级为同级别强确认结论。",
+    "post_divergence_route": null,
+    "oscillation_rhythm_state": "down_bias",
+    "divergence": {
+      "top": {
+        "active": false,
+        "signal_bi_id": 187,
+        "time": "2026-09-11T14:31:00",
+        "price": 28.48
+      },
+      "bottom": {
+        "active": false,
+        "signal_bi_id": 188,
+        "time": "2026-09-11T14:52:00",
+        "price": 28.39
+      },
+      "trend": {
+        "active": false,
+        "direction": null,
+        "signal_bi_id": null,
+        "time": null,
+        "price": null,
+        "basis": null,
+        "strict": false,
+        "reference_zs_id": null,
+        "departure_confirmed": null,
+        "strength_comparison": null
+      },
+      "range": {
+        "active": false,
+        "direction": null,
+        "signal_bi_id": null,
+        "time": null,
+        "price": null,
+        "basis": null,
+        "strict": false,
+        "reference_zs_id": null,
+        "touches_boundary": null,
+        "strength_comparison": null
+      }
+    },
+    "zs_monitor_alert": "pre_breakout",
+    "zs_monitor_midline": 27.83,
+    "zs_monitor_bias": "strong",
+    "route_level_from": null,
+    "route_level_to": null,
+    "transition_state": "candidate_new_type",
+    "transition_state_label": "新走势候选",
+    "transition_state_note": "前段走势已完成，但当前新走势仍处候选待确认阶段。"
+  },
+  "analysis_text": "【长江电力 1M 缠论观察】\n\n概览：\n- 时间区间：2026-08-24 11:25 到 2026-09-11 15:00\n- K线数量：共 3500 根 1M K线\n- 中枢数量：当前识别到 4 个中枢\n- 最新中枢：27.78-27.88，覆盖 09-07 13:45 到 09-09 09:31\n- 上一个已完成走势类型：up，起于 2026-08-27 10:44，止于 2026-09-04 10:18\n- 当前正在进行走势类型：range，起于 2026-09-07 13:45，最新时间 2026-09-11 15:00\n\n结构：\n- 最新确认向上笔：09-11 14:18 到 09-11 14:31，高点 28.48\n- 未确认向下笔：09-11 14:31 到 09-11 14:52，低点 28.39\n- 最新中枢结构：本体三线段(core_bi_ids)：17,18,19；扩展参与线段(bi_ids)：17,18,19,20；进入线段：16；离开线段：未出现\n- 走势连接判断：上一段同级别走势已结束，当前新的同级别走势仍处候选待确认阶段。\n- 切分状态：前段走势已具备完成候选，但边界仍待右侧结构确认稳定。\n- 消费等级：待确认消费，当前已有结构线索，但还不能直接升级为同级别强确认结论。\n- 转场状态：新走势候选，前段走势已完成，但当前新走势仍处候选待确认阶段。\n\n信号：\n- 顶背驰：无\n- 底背驰：无\n- 趋势背驰：无\n- 盘整背驰：无\n- 买点：三买\n- 卖点：当前无确认一二三类卖点\n- 信号细化：三买，离开中枢后回踩上沿未失守，参考价 27.98，关联中枢 ZS3\n\n观察重点：\n- 观察重点：是否重新站回中枢 27.78-27.88，以及后续一笔是否形成有效突破",
+  "advice_text": "【长江电力 1M 操作建议】\n结论：观察，等待确认。\n理由：已出现 三买，但当前同级别结构仍处待确认消费，不能直接上升为已确认买点。\n建议：先按观察态处理，等待离开-回抽或级别闭合后再决定是否升级。\n结构说明：本体三线段(core_bi_ids)：17,18,19；扩展参与线段(bi_ids)：17,18,19,20；进入线段：16；离开线段：未出现。\n监视器：中枢中线 27.83，当前偏强，预警状态 向上预警。\n信号说明：三买，离开中枢后回踩上沿未失守，参考价 27.98，关联中枢 ZS3。\n消费说明：当前同级别结构处于 待确认消费，当前已有结构线索，但还不能直接升级为同级别强确认结论。\n转场说明：新走势候选，前段走势已完成，但当前新走势仍处候选待确认阶段。。\n节奏监视：节奏偏弱，当前只作辅助观察，不单独升级主结论。\n说明：以上仅基于缠论结构与 MACD 强弱，不构成投资建议。",
+  "artifacts": {
+    "raw_csv": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\analyze\\600900_1m_20260824_to_20260911.csv",
+    "normalized_csv": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\analyze\\600900_1m_20260824_to_20260911_normalized.csv",
+    "fractals_csv": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\analyze\\600900_1m_20260824_to_20260911_normalized_fractals.csv",
+    "confirmed_fractals_csv": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\analyze\\600900_1m_20260824_to_20260911_normalized_confirmed_fractals.csv",
+    "bis_csv": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\analyze\\600900_1m_20260824_to_20260911_normalized_bis.csv",
+    "segments_csv": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\analyze\\600900_1m_20260824_to_20260911_normalized_segments.csv",
+    "zhongshu_csv": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\analyze\\600900_1m_20260824_to_20260911_normalized_zhongshu.csv",
+    "lei_zhongshu_csv": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\analyze\\600900_1m_20260824_to_20260911_normalized_zhongshu_lei.csv",
+    "macd_csv": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\analyze\\600900_1m_20260824_to_20260911_normalized_macd.csv",
+    "structure_svg": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\structure.svg",
+    "structure_png": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\structure.png",
+    "structure_jpg": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\structure.jpg",
+    "report_txt": "C:\\sandbox\\sinba\\stock\\data\\reports\\600900\\1m\\report.txt"
+  }
+}
