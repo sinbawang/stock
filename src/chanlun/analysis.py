@@ -1826,7 +1826,9 @@ def classify_confirmed_disappearance(
 
     - `reanchored`：同一 `point` 在本帧仍 confirmed，但锚点已换 —— 设计 §3 明文允许的
       「被更晚的点替换」。
-    - `zs_superseded`：参考中枢被更替（`zs_id` 变化）—— 设计 §3 的「中枢换锚」。
+    - `zs_superseded`：中枢链结构发生变化（`zs_id` 变化）。注意 `zs_id` 是**扫描序号**
+      （`zhongshus[-1].zs_id == len(zhongshus) - 1`），故该证据应读作「中枢链变了」，
+      而非「某个中枢被后继中枢身份更替」（详见 design §4.2.10）。
     - `sibling_new_anchor`：**其他** `point` 在本帧新增了确认锚点（新结构产出新点）。
 
     **刻意排除**：本点自己的位置型门控变化（`hold_s3` / `ls2_anchor` 等）**不构成证据** ——
