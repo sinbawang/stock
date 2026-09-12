@@ -1486,6 +1486,16 @@ def analyze_chanlun_signals(
         "signal_points": signal_points,
         "signal_catalog": signal_catalog,
         "forming_points": forming_points,
+        # RS0 增量6：结构型前提依据（跨帧回放用）。这四项与「价格前提」无关，
+        # 而是判定「类二 / 三类点赖以成立的结构是否仍存在」：
+        # 类二为隔段背驰锚点（同级别分解退出 single_confirmed 时即为 None），
+        # 三类为回试 / 反抽段（hold 段）。均为「存在即非 None」，与是否已发点无关。
+        "signal_gate_anchors": {
+            "buy3_hold": getattr(buy3_hold_bi, "bi_id", None),
+            "sell3_hold": getattr(sell3_hold_bi, "bi_id", None),
+            "buy2like_anchor": getattr(buy2like_anchor_bi, "bi_id", None),
+            "sell2like_anchor": getattr(sell2like_anchor_bi, "bi_id", None),
+        },
         "structure_state": structure_state,
         "same_level_decomposition_mode": same_level_decomposition_mode,
         "same_level_consumption_level": same_level_consumption_level,
@@ -1722,6 +1732,15 @@ _SIGNAL_INVALIDATION_REASON_BY_POINT = {
     "sell2like": SignalInvalidatedReason.GAP_DIVERGENCE_LOST.value,
 }
 
+# RS0 增量6：点类型 → 它自己那条「结构依据」门控名（见 `signal_gate_anchors`）。
+# 仅供 `_structural_premise_broken` 使用；未列出的点类型没有结构型前提。
+_STRUCTURAL_GATE_BY_POINT = {
+    "buy3": "buy3_hold",
+    "sell3": "sell3_hold",
+    "buy2like": "buy2like_anchor",
+    "sell2like": "sell2like_anchor",
+}
+
 
 def _signal_point_side(point: str) -> str | None:
     if point.startswith("buy"):
@@ -1837,11 +1856,14 @@ def classify_confirmed_disappearance(
 
 
 def _signal_premise_broken(point: str, price: float, frame: dict[str, object]) -> bool:
-    """判定某确认点在给定帧里成立前提是否已被破坏（spec §2.8 §3.2）。
+    """判定某确认点在给定帧里成立前提是否已被破坏（spec §2.8 §3.2）—— **价格前提**。
 
     一 / 二 / 类一 / 类二：买点被后续新低跌破（`latest_down.low < price`）、卖点被新高升破；
     三类：回抽 / 反抽重新回到中枢（买三回落到 `zs_high` 之下、卖三反抽到 `zs_low` 之上）。
     帧可为 `analyze_chanlun_signals` 输出（对象）或 `to_lifecycle_frame` 压缩帧（标量，供持久化）。
+
+    本函数只管**价格**前提；类二 / 三类还另有一条**结构**前提，见
+    `_structural_premise_broken`。
     """
     side = _signal_point_side(point)
     if side is None:
@@ -1859,6 +1881,32 @@ def _signal_premise_broken(point: str, price: float, frame: dict[str, object]) -
         return low is not None and low < float(price)
     high = _frame_latest_high(frame)
     return high is not None and high > float(price)
+
+
+def _structural_premise_broken(point: str, frame: dict[str, object]) -> bool:
+    """判定某确认点的**结构型前提**是否已不再成立（RS0 增量6，design §4.2.8）。
+
+    类二 / 三类点的成立前提**不只是价格**，还包括「当前结构仍满足该形态」：
+
+    - 类二（`buy2like` / `sell2like`）：隔段背驰锚点（`lb2_anchor` / `ls2_anchor`）必须仍存在；
+      同级别分解退出 `single_confirmed` 时锚点即为 None —— 与既有 reason 文案
+      「隔段背驰前提消失或同级别分解退出 single_confirmed」完全一致。
+    - 三类（`buy3` / `sell3`）：回试 / 反抽段（`hold_b3` / `hold_s3`）必须仍存在。
+
+    新线段确认 / 未确认尾部重切后这两条可能不再成立 → 点**应当**消失，
+    但届时应判 `invalidated`（而非让回放层报 repaint 违规）。
+
+    **fail closed**：帧缺 `signal_gate_anchors`（旧压缩帧）或缺对应门控键时一律返回 False，
+    即**不得据此豁免**，仍交由 supersede / 违规分支处理。
+    未列在 `_STRUCTURAL_GATE_BY_POINT` 的点类型没有结构型前提，同样返回 False。
+    """
+    gate = _STRUCTURAL_GATE_BY_POINT.get(point)
+    if gate is None:
+        return False
+    anchors = frame.get("signal_gate_anchors")
+    if not isinstance(anchors, dict) or gate not in anchors:
+        return False
+    return anchors.get(gate) is None
 
 
 def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[str, object]:
@@ -1931,8 +1979,28 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
                 continue
             point = str(record["point"])
             price = record["price"]
-            if price is not None and _signal_premise_broken(point, float(price), frame):
-                reason = _SIGNAL_INVALIDATION_REASON_BY_POINT.get(point)
+            reason = _SIGNAL_INVALIDATION_REASON_BY_POINT.get(point)
+            price_broken = price is not None and _signal_premise_broken(point, float(price), frame)
+            evidence: str | None = None
+            if not price_broken and not window_changed:
+                evidence = classify_confirmed_disappearance(
+                    frames[idx - 1],
+                    frame,
+                    point=point,
+                    signal_bi_id=key[1],
+                    current_anchors=current_anchors,
+                )
+            # RS0 增量6：结构型前提（类二隔段背驰依据 / 三类 hold 段）会随新线段确认而消失，
+            # 这属「点失效」而非「凭空消失」。**仅在无更替证据时**才据此判失效，
+            # 否则会把结构自然更替那 28 条错报成失效（方向相反的错误）。
+            structural_broken = (
+                not price_broken
+                and not window_changed
+                and evidence is None
+                and _structural_premise_broken(point, frame)
+            )
+            if price_broken or structural_broken:
+                premise = "price" if price_broken else "structure"
                 record["status"] = "invalidated"
                 invalidated.append(
                     {
@@ -1941,11 +2009,19 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
                         "price": price,
                         "lifecycle_state": SignalLifecycleState.INVALIDATED.value,
                         "invalidated_reason": reason,
+                        "invalidated_premise": premise,
                         "invalidated_frame": idx,
                     }
                 )
                 timeline.append(
-                    {"frame": idx, "point": point, "signal_bi_id": key[1], "transition": "invalidated", "invalidated_reason": reason}
+                    {
+                        "frame": idx,
+                        "point": point,
+                        "signal_bi_id": key[1],
+                        "transition": "invalidated",
+                        "invalidated_reason": reason,
+                        "invalidated_premise": premise,
+                    }
                 )
             elif window_changed:
                 # K 线窗口重基（全量重抓 / 重算导致笔编号重排）：锚点消失不构成 repaint 违规。
@@ -1953,13 +2029,6 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
                 rebased.append({"frame": idx, "point": point, "signal_bi_id": key[1], "kind": "vanished_on_rebase"})
                 timeline.append({"frame": idx, "point": point, "signal_bi_id": key[1], "transition": "rebased"})
             else:
-                evidence = classify_confirmed_disappearance(
-                    frames[idx - 1],
-                    frame,
-                    point=point,
-                    signal_bi_id=key[1],
-                    current_anchors=current_anchors,
-                )
                 if evidence is not None:
                     record["status"] = "superseded"
                     superseded.append(
@@ -2028,6 +2097,7 @@ def to_lifecycle_frame(signals: dict[str, object], *, data_window: str | None = 
         "zs_high": getattr(current_zs, "zs_high", None),
         "zs_low": getattr(current_zs, "zs_low", None),
         "zs_id": getattr(current_zs, "zs_id", None),
+        "signal_gate_anchors": dict(signals.get("signal_gate_anchors") or {}),
         "data_window": data_window,
     }
 
@@ -2066,6 +2136,7 @@ def derive_signal_lifecycle_transitions(
             "active": False,
             "lifecycle_state": SignalLifecycleState.INVALIDATED.value,
             "invalidated_reason": entry.get("invalidated_reason"),
+            "invalidated_premise": entry.get("invalidated_premise"),
             "signal_bi_id": entry.get("signal_bi_id"),
             "price": entry.get("price"),
             "time": None,

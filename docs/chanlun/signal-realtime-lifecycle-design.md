@@ -86,10 +86,9 @@ stateDiagram-v2
 - 已为 `superseded` 建**显式、可审计**分支（见 §3.5），按「独立于本次消失」的结构推进证据分流：
   `reanchored` 16 + `zs_superseded` 7 + `sibling_new_anchor` 5 = **28 条**，均属设计文档 §3
   明文允许的终态「`confirmed --> [*]`：结构自然更替（被更晚的点替换 / 中枢换锚）」。
-- 余 **2 条无任何独立证据**，仍判 repaint 违规（fail closed），为本轮唯一存量：
-  `00700 day f10 buy3@77`、`03690 5m f9 sell2like@77`—— 均为「本点自己的门控转为 None、
-  兄弟点与参考中枢均未变，但笔链继续推进」；**已定性为真 repaint 缺陷，见 §4.2.8**（共享根因：
-  三类 / 类二的门控把锚点定义在**尾部相对位置**上，未确认尾部重切时锚点滑动）。
+- 余 **2 条无任何独立证据**，为本轮唯一存量：`00700 day f10 buy3@77`、`03690 5m f9 sell2like@77`；
+  已定性为真缺陷（§4.2.8）并**已修复** → 改判 `invalidated`（结构型前提失效，§3.6），
+  使 `vanished_without_break` **2 → 0**。
 - 另有 **2 条** `reconfirm_after_invalidated`（另一类违规），未受本次改动影响。
 - 回放探针（均不提交）：`build/probe_signal_lifecycle_replay.py`（固定窗口起点，使 `data_window`
   恒定，避免被「窗口重基」豁免路径掩盖）、`build/probe_repaint_cases_detail.py`、
@@ -140,6 +139,37 @@ invalidated（前提被破坏） → rebased（窗口重基） → superseded（
 
 `derive_signal_lifecycle_transitions` 透出 `superseded_points`（附 `superseded_evidence`），
 summary 侧新增 `lifecycle_superseded_points`（additive）。
+
+### 3.6 结构型前提失效（RS0 增量6，2026-09-12）
+
+§3.5 的 `superseded` 解决「结构推进导致的自然更替」；但类二 / 三类点还有一类消失是
+**结构型前提不再成立** —— 点**应当**消失，只是不该被报成 repaint：
+
+- 类二（`buy2like` / `sell2like`）：隔段背驰锚点（`lb2_anchor` / `ls2_anchor`）必须仍存在；
+  同级别分解退出 `single_confirmed` 时锚点即为 `None`（与既有 reason 文案
+  「隔段背驰前提消失**或同级别分解退出 single_confirmed**」一致）。
+- 三类（`buy3` / `sell3`）：回试 / 反抽段（`hold_b3` / `hold_s3`）必须仍存在。
+
+实现：`analysis._structural_premise_broken(point, frame)`，依据 `analyze_chanlun_signals`
+新增透出的 `signal_gate_anchors`（`buy3_hold` / `sell3_hold` / `buy2like_anchor` /
+`sell2like_anchor`；**存在即非 None，与是否已发点无关**），并随 `to_lifecycle_frame` 持久化。
+
+判定优先级（新分支插在**更替之后、违规之前**）：
+
+```
+price premise → rebased → superseded → structural premise → repaint_violation
+```
+
+**为何必须放在 supersede 之后**：有更替证据时应判更替。反过来会把那 28 条自然更替错报成失效
+（方向相反的错误）。已由 `test_replay_prefers_superseded_over_structural_invalidated` 钉住。
+
+**fail closed**：帧缺 `signal_gate_anchors`（旧压缩帧）或缺对应门控键 → 不判失效，
+仍按违规处理（`test_replay_does_not_invalidate_without_structural_evidence`）。
+
+**实测收敛**：`vanished_without_break` **2 → 0**；`superseded` 保持 **28**（未被误吞，
+证据分布仍为 16/7/5）；`invalidated` 39 → 41。
+`invalidated` 记录新增 `invalidated_premise`（`price` / `structure`）供审计，`derive` 透出同名字段。
+**发点零变化**（已确认集合与基线完全一致），故无「发过期点」风险。
 
 ## 4. 实时预备态（RS1）
 
@@ -419,7 +449,7 @@ summary 侧新增 `lifecycle_superseded_points`（additive）。
 
 | 方案 | 做法 | 效果 | 代价 | 结论 |
 | --- | --- | --- | --- | --- |
-| **D（推荐）** | 扩展前提模型：把「锚点结构依据是否**仍成立**」纳入 `_signal_premise_broken`（类二：力度衰减在当前段不成立；三类：hold 段已不存在） | repaint 2 → 0，改判为 `invalidated` + 既有 reason 码 | **发点零变化**（已确认集合与基线一致），无过期点风险 | 待实现；需先证明不误吞那 28 条 superseded（要求「依据**消失**」而非「依据**改变**」） |
+| **D（推荐）** | 扩展前提模型：把「锚点结构依据是否**仍成立**」纳入（见 §3.6） | repaint 2 → 0，改判为 `invalidated` + 既有 reason 码 | **发点零变化**（已确认集合与基线一致），无过期点风险 | **已实现（2026-09-12）**：`vanished_without_break` 2→0、`superseded` 保持 28、`invalidated` 39→41；新增 8 项单测 |
 | A | 门控锚点改为「最近一个满足条件的已确认结构」 | repaint 2 → 0；`sell3` −34、`buy3` −12、类二 +47（8/21 窗口末帧可见变化） | **锚点陈旧度最远 13 段**，与「当下」契约冲突 | **否决** |
 | B | 不改发点，仅把「锚点相对滑动导致的撤回」记为独立观测（`gate_slid`）+ 上界断言 | 缺陷仍在，但被量化监控 | 不修缺陷 | 备选 |
 | C | 仅登记为已知缺陷 | 零风险 | 缺陷留存 | 备选 |

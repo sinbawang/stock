@@ -17,7 +17,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from chanlun.analysis import _build_zs_monitor_state, _is_first_reverse_hold, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
+from chanlun.analysis import _build_zs_monitor_state, _is_first_reverse_hold, _structural_premise_broken, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
 
@@ -2779,14 +2779,20 @@ def _lifecycle_frame(
     latest_confirmed_up: Bi | None = None,
     current_zs: Zhongshu | None = None,
     data_window: str | None = None,
+    gate_anchors: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    return {
+    frame: dict[str, object] = {
         "signal_points": signal_points,
         "latest_down": latest_down,
         "latest_confirmed_up": latest_confirmed_up,
         "current_zs": current_zs,
         "data_window": data_window,
     }
+    # 仅在显式传入时才带 `signal_gate_anchors`：旧压缩帧本来就没有这个键，
+    # 默认省略可顺带覆盖 fail closed 路径。
+    if gate_anchors is not None:
+        frame["signal_gate_anchors"] = gate_anchors
+    return frame
 
 
 def _confirmed_point(point: str, signal_bi_id: int, price: float) -> dict[str, object]:
@@ -3105,6 +3111,156 @@ def test_to_lifecycle_frame_persists_zs_id() -> None:
 
     assert to_lifecycle_frame(signals)["zs_id"] == 3
     assert to_lifecycle_frame({"signal_points": []})["zs_id"] is None
+
+
+def test_to_lifecycle_frame_persists_signal_gate_anchors() -> None:
+    """RS0 增量6：压缩帧持久化 signal_gate_anchors（类二/三类的结构型前提依据）。"""
+    signals = {
+        "signal_points": [],
+        "signal_gate_anchors": {"buy3_hold": 77, "sell3_hold": None},
+    }
+
+    assert to_lifecycle_frame(signals)["signal_gate_anchors"] == {"buy3_hold": 77, "sell3_hold": None}
+    assert to_lifecycle_frame({"signal_points": []})["signal_gate_anchors"] == {}
+
+
+def test_structural_premise_broken_reads_own_gate_anchor() -> None:
+    """RS0 增量6：类二/三类的结构型前提看的是**它自己**那条门控；其他点类型无此前提。"""
+    frame = _lifecycle_frame(
+        [],
+        gate_anchors={
+            "buy3_hold": None,
+            "sell3_hold": 77,
+            "buy2like_anchor": None,
+            "sell2like_anchor": 64,
+        },
+    )
+
+    assert _structural_premise_broken("buy3", frame) is True
+    assert _structural_premise_broken("buy2like", frame) is True
+    assert _structural_premise_broken("sell3", frame) is False
+    assert _structural_premise_broken("sell2like", frame) is False
+    assert _structural_premise_broken("buy1", frame) is False  # 无结构型前提
+    assert _structural_premise_broken("buy2", frame) is False
+
+
+def test_structural_premise_is_fail_closed_without_gate_anchors() -> None:
+    """RS0 增量6 fail closed：旧压缩帧缺 `signal_gate_anchors` / 缺该键 → 一律不判失效。"""
+    legacy = _lifecycle_frame([])
+    assert "signal_gate_anchors" not in legacy
+    assert _structural_premise_broken("buy3", legacy) is False
+
+    partial = _lifecycle_frame([], gate_anchors={"sell3_hold": None})
+    assert _structural_premise_broken("buy3", partial) is False  # 缺 buy3_hold 键
+    assert _structural_premise_broken("sell3", partial) is True
+
+
+def test_replay_marks_gap_point_invalidated_when_structural_basis_gone() -> None:
+    """RS0 增量6：类二点隔段背驰依据消失 -> invalidated（gap_divergence_lost，premise=structure）。
+
+    对应 design §4.2.8 的残留之一：点**应当**消失（当前段已不满足隔段背驰形态），
+    但不应被回放层错报成 repaint 违规。
+    """
+    frame_a = _lifecycle_frame(
+        [_confirmed_point("sell2like", 77, 12.0)],
+        gate_anchors={"sell2like_anchor": 77},
+    )
+    frame_b = _lifecycle_frame([], gate_anchors={"sell2like_anchor": None})
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["repaint_violations"] == []
+    assert result["superseded"] == []
+    assert len(result["invalidated"]) == 1
+    inv = result["invalidated"][0]
+    assert inv["point"] == "sell2like"
+    assert inv["signal_bi_id"] == 77
+    assert inv["invalidated_reason"] == "gap_divergence_lost"
+    assert inv["invalidated_premise"] == "structure"
+
+
+def test_replay_marks_third_class_point_invalidated_when_hold_segment_gone() -> None:
+    """RS0 增量6：三类点回试/反抽段依据消失 -> invalidated（third_class_reentered_zs）。"""
+    frame_a = _lifecycle_frame(
+        [_confirmed_point("buy3", 77, 11.0)],
+        gate_anchors={"buy3_hold": 77},
+    )
+    frame_b = _lifecycle_frame([], gate_anchors={"buy3_hold": None})
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["repaint_violations"] == []
+    assert result["superseded"] == []
+    assert [p["invalidated_reason"] for p in result["invalidated"]] == ["third_class_reentered_zs"]
+    assert result["invalidated"][0]["invalidated_premise"] == "structure"
+
+
+def test_replay_prefers_superseded_over_structural_invalidated() -> None:
+    """RS0 增量6 **顺序保证**：有更替证据时必须判更替，不得改判失效。
+
+    否则那 28 条「结构自然更替」会被错报成失效 —— 方向相反的错误。
+    """
+    frame_a = _lifecycle_frame(
+        [_confirmed_point("sell2like", 77, 12.0)],
+        gate_anchors={"sell2like_anchor": 77},
+    )
+    frame_b = _lifecycle_frame(
+        [_confirmed_point("sell2like", 90, 12.0)],  # 同点换锚 -> reanchored
+        gate_anchors={"sell2like_anchor": None},  # 结构依据**同时**也消失了
+    )
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert [p["evidence"] for p in result["superseded"]] == ["reanchored"]
+    assert result["invalidated"] == []
+    assert result["repaint_violations"] == []
+
+
+def test_replay_does_not_invalidate_without_structural_evidence() -> None:
+    """RS0 增量6 fail closed：**无结构型前提证据**时不得默认判失效，仍报 repaint 违规。"""
+    frame_a = _lifecycle_frame([_confirmed_point("sell2like", 77, 12.0)])
+    frame_b = _lifecycle_frame([])  # 两帧均无 signal_gate_anchors
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["invalidated"] == []
+    assert result["superseded"] == []
+    assert len(result["repaint_violations"]) == 1
+    assert result["repaint_violations"][0]["kind"] == "vanished_without_break"
+
+
+def test_derive_signal_lifecycle_transitions_reports_invalidated_premise() -> None:
+    """RS0 增量6：derive 透出 invalidated_premise（additive，区分 price / structure）。"""
+    previous_frame = {
+        "signal_points": [{"point": "sell2like", "signal_bi_id": 77, "price": 12.0, "lifecycle_state": "confirmed"}],
+        "latest_down_low": None,
+        "latest_up_high": None,
+        "zs_high": None,
+        "zs_low": None,
+        "zs_id": None,
+        "signal_gate_anchors": {"sell2like_anchor": 77},
+        "data_window": "2026-08-21T09:30:00",
+    }
+    current_signals = {
+        "signal_points": [],
+        "latest_down": None,
+        "latest_confirmed_up": None,
+        "current_zs": None,
+        "signal_gate_anchors": {"sell2like_anchor": None},
+    }
+
+    result = derive_signal_lifecycle_transitions(
+        previous_frame,
+        current_signals,
+        data_window="2026-08-21T09:30:00",
+    )
+
+    assert result["repaint_violations"] == []
+    assert len(result["invalidated_points"]) == 1
+    inv = result["invalidated_points"][0]
+    assert inv["point"] == "sell2like"
+    assert inv["invalidated_reason"] == "gap_divergence_lost"
+    assert inv["invalidated_premise"] == "structure"
 
 
 def test_derive_signal_lifecycle_transitions_reports_superseded_points() -> None:
