@@ -91,8 +91,22 @@ break   # ← 首个候选 pending 即整体停扫
 该窗口下首个候选种子为 bi 19（仍 pending），而其后共有 50 个候选、其中 44 个可确认
 （最近的 bi 20 即可确认）。旧的 `break` 使这 44 个可用锚点全部不可达。
 
-注：`strict_segment_rules=False` 时首个候选（bi 18）恰好可确认，因此该缺陷只在 strict（默认、
-且 pipeline 实际使用）下暴露。
+注：`strict_segment_rules=False` 时首个候选（bi 18）恰好可确认，因此该缺陷只在
+`strict_segment_rules=True`（默认值；pipeline 调用时显式传入）下暴露。
+
+### 影响范围
+
+- **pipeline 产出不受影响**：`scripts/**` 没有任何调用方传 `termination_mode`，一律走
+  `DEFAULT_SEGMENT_TERMINATION_MODE = theory`；theory 分支在 pending 段后是
+  `index = effective_end_idx + 1; continue`，不存在该 `break`，因此不会截断段链。
+  仓库内 `data/reports/**` 的既存产物不因本修复而失真。
+- **实际受影响的是 practical 模式的消费方与回归**：
+  `tests/segment_regression_support.py` 默认 `termination_mode="practical"`，
+  以及 `tests/test_segment*.py`、`tests/test_zhongshu_regression_real_fixtures.py` 等显式
+  practical 用例；文档 [segment-mode-consumer-examples.md](segment-mode-consumer-examples.md)
+  也把 practical 列为消费接入示例。这些路径此前会在中段 pending 时静默丢弃其后全部笔。
+- 结论：这是 **practical 模式的正确性缺陷**（使 40+ 个 practical 回归长期失真），
+  而不是线上报告的数据丢失。修复后 practical 与 theory 的段数不再出现量级塌陷。
 
 ### 修复
 
