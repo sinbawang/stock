@@ -265,9 +265,12 @@ PRECISION_BAR_CARDS = (
     },
 )
 
-# 文档记录：该档在**已冻结语料**上仍未观测到（密集网格 2812 帧）。
-# 注意 `third_class_confirmed`（S 组）与 `actionable`（A 组）**不在此列**——两者均已证实可达。
-UNOBSERVED_HIGHER_STATES = ("higher_level_confirmed",)
+# 文档记录：`higher_level_confirmed` 在**根目录冻结窗口的稀疏网格**（`analysis_cutoffs`，
+# 5 标的 × 6 组合）上仍未观测到。
+# ⚠ 这**不代表**该档不可达：H 组卡片已在其独立 fixture（`precision/`）上正向钉住；
+# `third_class_confirmed`（S 组）与 `actionable`（A 组）同理，均不在此列。
+# 本常量只作「本网格行为变更探测」：若该档开始在本网格出现，说明语料或规则发生了非预期变化。
+SPARSE_GRID_UNOBSERVED_STATES = ("higher_level_confirmed",)
 
 # **precision 分组**卡片（`tests/fixtures/real/precision/`）：钉住 `status = actionable`。
 #
@@ -289,6 +292,79 @@ PRECISION_ACTIONABLE_CARDS = (
         "trigger": "sell3",
         "dynamic_grade": "no_operational_value",
         "higher_consumption": "confirmed",
+        "in_window_points": ("sell3",),
+    },
+)
+
+# **precision 分组**卡片（H 组）：钉住 `small_to_large_status = higher_level_confirmed`
+# **_and_** `small_to_large_reverse_confirm.active = True`（区间套反向确认）。
+#
+# 背景：该档曾两度被记为「未观测到」（先 `analysis_cutoffs` 126 帧，再 5 标的 2812 帧）。
+# 2026-09-13 把语料扩到本地全部 16 标的（`data/cache/kline`，4 组合 × 4665 帧，`build/probe_hlc_wide.py`）
+# 后出现 3 帧（`00700 5m->1m` k=1980/2000、`09988 1m->5m` k=3340），三帧均满足结构闭环三子条件
+# （route=`higher_level_reverse_trend`、上级别 `completed_then_new_type`、消费等级 `confirmed`）。
+# 即**第三次**「语料覆盖不足造成的假象」，不是功能缺口。冻结语义下的复现与字段核验见
+# `build/probe_hlc_card_verify.py`（含「重建幂等」检查：既有 A1 两个文件字节不变）。
+#
+# 邻域行为（同一 combo）：`00700` k=1960 已是 `actionable` 但 stl 仍为 None（route=`last_zs_extension`）；
+# k=1980/2000 升为 HLC；k=2020 起 stl 回落 None、k=2040 已无窗口内点——即该档是**稀疏过渡态**，
+# 三张卡片钉住的正是这段「进入→保持」的真实窗口。
+PRECISION_HLC_CARDS = (
+    {
+        "card": "区间套 H1 · 00700 5m->1m 区间套反向确认（首帧）",
+        "symbol": "00700",
+        "higher": "5m",
+        "lower": "1m",
+        "cutoff": 1980,
+        "last_bar_ts": "2026-09-02 13:30:00",
+        "status": "actionable",
+        "small_to_large": "higher_level_confirmed",
+        "window_basis": "中枢到锚点窗口",
+        "side": "sell",
+        "trigger": "sell2like",
+        "dynamic_grade": "no_operational_value",
+        "higher_consumption": "confirmed",
+        "reverse_confirm_active": True,
+        "reverse_confirm_basis": "lower_third_class_and_higher_structure_closed",
+        "reverse_confirm_higher_status": "completed_then_new_type",
+        "in_window_points": ("sell3",),
+    },
+    {
+        "card": "区间套 H2 · 00700 5m->1m 区间套反向确认（保持 20 杆）",
+        "symbol": "00700",
+        "higher": "5m",
+        "lower": "1m",
+        "cutoff": 2000,
+        "last_bar_ts": "2026-09-02 15:10:00",
+        "status": "actionable",
+        "small_to_large": "higher_level_confirmed",
+        "window_basis": "中枢到锚点窗口",
+        "side": "sell",
+        "trigger": "sell2like",
+        "dynamic_grade": "no_operational_value",
+        "higher_consumption": "confirmed",
+        "reverse_confirm_active": True,
+        "reverse_confirm_basis": "lower_third_class_and_higher_structure_closed",
+        "reverse_confirm_higher_status": "completed_then_new_type",
+        "in_window_points": ("sell3",),
+    },
+    {
+        "card": "区间套 H3 · 09988 1m->5m 三卖 + 结构闭环升级",
+        "symbol": "09988",
+        "higher": "1m",
+        "lower": "5m",
+        "cutoff": 3340,
+        "last_bar_ts": "2026-09-08 13:10:00",
+        "status": "actionable",
+        "small_to_large": "higher_level_confirmed",
+        "window_basis": "中枢到锚点窗口",
+        "side": "sell",
+        "trigger": "sell3",
+        "dynamic_grade": "no_operational_value",
+        "higher_consumption": "confirmed",
+        "reverse_confirm_active": True,
+        "reverse_confirm_basis": "lower_third_class_and_higher_structure_closed",
+        "reverse_confirm_higher_status": "completed_then_new_type",
         "in_window_points": ("sell3",),
     },
 )
@@ -509,6 +585,67 @@ def test_precision_actionable_card_reproduces_on_precision_fixture(card: dict[st
     )
 
 
+def test_precision_higher_level_confirmed_is_reachable_on_precision_fixtures() -> None:
+    """非空转守卫：H 组卡片必须真的把 `higher_level_confirmed` + 反向确认同时钉住。
+
+    该档在被冻结的 5 个多级别标的上（`analysis_cutoffs` 网格）从未出现，因此必须靠本组
+    独立 fixture 守护——若卡片不再产生该档，要么规则变了，要么 precision fixture 失效。
+    同时要求双标的（`00700` / `09988`）与「保持 20 杆」的持续帧，避免退化成单帧偶合。
+    """
+    states = {c["small_to_large"] for c in PRECISION_HLC_CARDS}
+    assert "higher_level_confirmed" in states, "H 组卡片的存在意义就是钉住 higher_level_confirmed"
+    assert len(PRECISION_HLC_CARDS) >= 2
+    assert len({c["symbol"] for c in PRECISION_HLC_CARDS}) >= 2, "避免退化成单标的偶合"
+    assert all(c["reverse_confirm_active"] for c in PRECISION_HLC_CARDS), (
+        "`small_to_large_reverse_confirm` 只在 HLC 基础上产出；卡片必须同时钉住该反向确认"
+    )
+
+
+@pytest.mark.parametrize("card", PRECISION_HLC_CARDS, ids=[c["card"] for c in PRECISION_HLC_CARDS])
+def test_precision_hlc_card_reproduces_on_precision_fixture(card: dict[str, object]) -> None:
+    """H 组卡片：钉住 `higher_level_confirmed` 与区间套反向确认的真实锚点。"""
+    higher_all = clean_bars(read_bars_from_csv(str(precision_fixture_csv(card["symbol"], card["higher"]))))
+    lower_all = clean_bars(read_bars_from_csv(str(precision_fixture_csv(card["symbol"], card["lower"]))))
+    cutoff = int(card["cutoff"])
+    entry = _precision_entry_from(higher_all, lower_all, card["higher"], card["lower"], cutoff)
+
+    nested = entry.get("nested_from") or {}
+    actual = {
+        "status": entry.get("status"),
+        "small_to_large": entry.get("small_to_large_status"),
+        "window_basis": entry.get("window_basis_label"),
+        "side": nested.get("side"),
+        "trigger": nested.get("trigger"),
+        "dynamic_grade": entry.get("dynamic_grade"),
+        "higher_consumption": entry.get("higher_consumption_level"),
+    }
+    expected = {key: card[key] for key in actual}
+    assert actual == expected, (
+        f"{card['card']}: precision fixture 上 higher_level_confirmed 卡片已变化（cutoff={cutoff} 杆）；"
+        f"期望 {expected}，实得 {actual}。规则变更请同步更新卡片与案例库 §7.2（H 组），不要放宽本断言。"
+    )
+    assert str(getattr(higher_all[cutoff - 1], "ts")) == card["last_bar_ts"], (
+        f"{card['card']}: cutoff 杆序号对应的末杆时间已变（窗口被重新冻结？）"
+    )
+    in_window = tuple(str(p.get("point")) for p in (entry.get("signal_points") or []))
+    assert in_window == card["in_window_points"], (
+        f"{card['card']}: 窗口内点已变（期望 {card['in_window_points']}，实得 {in_window}）"
+    )
+
+    reverse_confirm = entry.get("small_to_large_reverse_confirm") or {}
+    assert reverse_confirm.get("active") is True, (
+        f"{card['card']}: 区间套反向确认不再激活（{reverse_confirm!r}）——"
+        "该档已进入案例库 §7.1 覆盖矩阵，非有意变更请按回归缺陷处理"
+    )
+    assert reverse_confirm.get("basis") == card["reverse_confirm_basis"], (
+        f"{card['card']}: 反向确认依据码已变（{reverse_confirm.get('basis')!r}）"
+    )
+    assert reverse_confirm.get("higher_structure_status") == card["reverse_confirm_higher_status"], (
+        f"{card['card']}: 反向确认的上级别结构状态已变（{reverse_confirm.get('higher_structure_status')!r}）"
+    )
+    assert reverse_confirm.get("note"), f"{card['card']}: 反向确认必须带说明文案（消费端要透出）"
+
+
 def test_precision_actionable_is_reachable_on_real_windows() -> None:
     """非空转守卫：A 组卡片必须真的把 `status` 推到 `actionable`。
 
@@ -521,13 +658,15 @@ def test_precision_actionable_is_reachable_on_real_windows() -> None:
 
 
 def test_precision_unreached_states_stay_unreached_on_real_windows() -> None:
-    """**稀疏网格变更探测器**：已冻结的 5 个多级别标的上，`higher_level_confirmed` 仍未出现。
+    """**稀疏网格变更探测器**：根目录冻结窗口的 `analysis_cutoffs` 网格上，
+    `higher_level_confirmed` 仍未出现。
 
     边界说明（重要）：
     - 本用例只在本仓已有的 5 标的 × `analysis_cutoffs` 网格上运行。
-    - 它**不是**可达性结论：`third_class_confirmed`（S 组卡片）与 `actionable`（A 组卡片）
-      都曾因该语料覆盖不足而被误判为「不可达」，现均已用独立 fixture 正向钉住。
-    - 因此本用例的定位是「本网格内的行为变更探测器」：若这两档开始在**本网格**出现，
+    - 它**不是**可达性结论：`third_class_confirmed`（S 组卡片）、`actionable`（A 组卡片）与
+      `higher_level_confirmed` + 反向确认（H 组卡片）都曾因该语料覆盖不足而被误判为「不可达」，
+      现均已用独立 fixture 正向钉住。
+    - 因此本用例的定位是「本网格内的行为变更探测器」：若该档开始在**本网格**出现，
       说明语料或规则发生了非预期变化，应同步更新案例库 §7.1/§7.3 的计数。
     """
     status_counts: dict[str, int] = {}
@@ -568,10 +707,10 @@ def test_precision_unreached_states_stay_unreached_on_real_windows() -> None:
         "注意 actionable 本身**可达**（A 组卡片已钉住），本断言只是网格变更探测器——"
         "请同步更新案例库 §7.1/§7.3 的计数，不要删掉 A 组卡片。"
     )
-    for state in UNOBSERVED_HIGHER_STATES:
+    for state in SPARSE_GRID_UNOBSERVED_STATES:
         assert state not in small_to_large_counts, (
             f"small_to_large_status 在本网格出现了 {state}（{small_to_large_counts}）；"
-            "案例库 §7.1/§7.3 的覆盖矩阵需更新，并考虑补对应真实卡片。"
+            "案例库 §7.1/§7.3 的覆盖矩阵需更新（该档已有 H 组真实卡片，本断言只作网格变更探测）。"
         )
 
 

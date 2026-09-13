@@ -132,16 +132,28 @@ REPLAY_FIXTURES: tuple[tuple[str, str, str], ...] = (
 )
 REPLAY_FIXTURES_ROOT = FIXTURES_ROOT / "replay"
 
-# 区间套 `actionable` 样本所需的窗口。
+# 区间套高位档样本所需的窗口。
 #
-# 背景：`actionable` 需要同时满足「上级别消费等级 = confirmed」与「次级别有落在窗口内的同向点」。
-# 实测（见 tests/test_example_library_real_cases.py 的 A 组卡片与案例库 §7.5）：已冻结的 5 个多级别
-# 标的 × 2812 帧上**一次都不出现**，而在本地全部 16 标的的语料上会出现——属**语料覆盖不足**，
-# 不是功能缺口（该分支的构造回归一直绿）。本组就是为把该档钉成真实锚点而单独冻结的。
+# 背景（两档同组，来源相同）：
+# - `actionable`：需要同时满足「上级别消费等级 = confirmed」与「次级别有落在窗口内的同向点」。
+#   实测（见 tests/test_example_library_real_cases.py 的 A 组卡片与案例库 §7.5）：已冻结的 5 个多级别
+#   标的 × 2812 帧上**一次都不出现**，而在本地全部 16 标的的语料上会出现——属**语料覆盖不足**，
+#   不是功能缺口（该分支的构造回归一直绿）。
+# - `higher_level_confirmed` + `small_to_large_reverse_confirm`：需在 `third_class_confirmed`
+#   基础上再满足结构闭环（route ∈ higher_level_*、上级别 `completed_then_new_type`、
+#   消费等级 `confirmed`）。16 标的 × 4665 帧上出现 3 帧（00700 5m->1m k=1980/2000、
+#   09988 1m->5m k=3340），同样属**语料覆盖不足**（第三次同类误判）。
+# 两组都从 `data/cache/kline`（保留尾部窗口）取数，单独分组、单独重建：
+#
+#     python scripts/freeze_real_fixtures.py --only precision
 PRECISION_FIXTURES: tuple[tuple[str, str, str], ...] = (
     # (symbol, timeframe, market)
     ("000651", "1m", "A"),
     ("000651", "5m", "A"),
+    ("00700", "5m", "HK"),
+    ("00700", "1m", "HK"),
+    ("09988", "1m", "HK"),
+    ("09988", "5m", "HK"),
 )
 PRECISION_FIXTURES_ROOT = FIXTURES_ROOT / "precision"
 

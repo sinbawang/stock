@@ -112,9 +112,12 @@ PRECISION_FIXTURES_ROOT = FIXTURES_ROOT / "precision"
 def precision_fixture_csv(symbol: str, timeframe: str) -> Path:
     """`precision/` 下的区间套高位档 fixture。
 
-    只有 `actionable` 样本需要这一组：该状态要求「上级别消费等级 = confirmed」与「次级别有落在
-    窗口内的同向点」同时成立，而已冻结的 5 个多级别标的在 2812 帧上一次都不出现（属语料覆盖
-    不足，不是功能缺口）。样本来自 `data/cache/kline`，因此单独分组、单独重建：
+    两组高位档样本需要这一组（都属「语料覆盖不足曾被误判为不可达」）：
+    - `actionable`：要求「上级别消费等级 = confirmed」与「次级别有落在窗口内的同向点」
+      同时成立；已冻结的 5 个多级别标的在 2812 帧上一次都不出现。
+    - `higher_level_confirmed` + `small_to_large_reverse_confirm`：需在 `third_class_confirmed`
+      基础上再满足结构闭环；16 标的 4665 帧上仅 3 帧（2026-09-13 首次观测到）。
+    样本来自 `data/cache/kline`，因此单独分组、单独重建：
 
         python scripts/freeze_real_fixtures.py --only precision
 
