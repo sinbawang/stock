@@ -385,10 +385,13 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 > **决定（2026-09-13 重启）：RS1 forming 重新上线为「纯结构条件」预备态。**
 > 用户决策：forming 只满足结构条件、不叠任何附加确认，**允许漂移失效**，目标是**即时提示**符合
 > 理论的买卖点；确认校验的增强后置到后续迭代（§4.2.7 item 2 的前置条件由此满足，但该项仍暂缓）。
-> 实现：三类（`buy_3`/`sell_3`）改**尾部口径**（`_find_buy3_tail_pair` / `_find_sell3_tail_pair`：
-> 「离开 level 后回试 / 反抽不破仍在活跃尾部」），其余族按「结构条件 ∧ 确认条件」拆分 forming 分支；
-> forming 经 `signal_points` 透传（`lifecycle_state=forming` / `active=False`），同族已确认点优先；
-> 旧 `forming_points` 槽位废弃恒空。confirmed 集合**零变化**（发射快照 129 行逐字节一致）。详见 §4.1.5。
+> 实现：三类（`buy_3`/`sell_3`）的 forming 判据与 confirmed **同源线段口径**——「离开线段 + 回试 /
+> 反抽**线段**不进入中枢」且线段对仍在活跃尾部（`_find_buy3_tail_segment_pair` /
+> `_find_sell3_tail_segment_pair`，rev2；不再接受笔级对，见 §4.1.5）；其余族按「结构条件 ∧ 确认条件」
+> 拆分 forming 分支；forming 经 `signal_points` 透传（`lifecycle_state=forming` / `active=False`），
+> 同族已确认点优先；旧 `forming_points` 槽位废弃恒空。confirmed 集合**零变化**（发射快照 129 行逐字节一致）。
+> **rev2（2026-09-13 同日）**：用户上报 7 例「三卖预备」误报（笔级对 / 混合口径）→ 判据改线段口径，
+> 7 例全部消除；并实测三类 forming 在当前 confirmed 规则下被同帧遮蔽（已知边界，见 §4.1.5）。
 >
 > ~~**决定：RS1 forming 下架，标为不做。**（2026-09-12）~~ 真实链路恒不可达（287 帧冻结窗口 0 次，
 > 见 §4.1），且合取「背驰已现 ∧ 待转折确认」构造互斥、无法在不改分段/中枢层的前提下修复。当时已删除
@@ -479,7 +482,7 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 
 | 族 | forming 结构条件 | 与 confirmed 的关系 |
 | --- | --- | --- |
-| 三类 `buy_3`/`sell_3` | **尾部口径**：向上（向下）离开 level 后，回试 / 反抽笔守边界且仍在活跃尾部（回试笔为尾笔或其前一格） | 独立判据；不动 confirmed 的「历史首个匹配」扫描 |
+| 三类 `buy_3`/`sell_3` | **线段口径（rev2）**：离开线段（low < 下沿 / high > 上沿）+ 回试 / 反抽**线段**守边界（`_find_buy3_tail_segment_pair` / `_find_sell3_tail_segment_pair`），线段对仍在活跃尾部 | 与 confirmed 同源结构（线段对）；**不采用笔级对**（用户否决） |
 | 一类 / 类一 / 类二 | 「背驰 / 隔段力度衰减 ∧ 离开」结构条件成立、反向转折确认未成立 | 结构条件当前 ⊂ 确认条件（§4.1.2 判别式恒真）→ 实测 **0 帧**可达，待该族确认条件收紧后成对生效 |
 | 二类 | 前置成立 + 回抽 / 反抽不破、尚未再度走强 / 走弱 | 同上（语料零样本） |
 
@@ -488,9 +491,10 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 时跳过 forming）；`forming_points` 旧槽废弃恒空（**旧「独立列表契约」红线随之废止**，§4.0 的
 「独立列表 / 不进 signal_points」口径由本节取代；消费口径「一律 watch 档、文案显式待确认」不变）。
 
-实测（`build/probe_forming_fine.py`，逐 bar 快照 **31897 帧 / 21 窗口**）：
+实测（rev1 笔级口径，`build/probe_forming_fine.py`，逐 bar 快照 **31897 帧 / 21 窗口**）
+——**该口径已被 rev2 取代，数据保留备查**：
 
-- buy_3 forming **2100 帧**、sell_3 forming **3386 帧**（同期 confirmed 4453 / 11376 帧）；
+- buy_3 forming 2100 帧、sell_3 forming 3386 帧（同期 confirmed 4453 / 11376 帧）；
 - 同帧同族 confirmed+forming 影子遮蔽 **0**、串表不变量违规 **0**；
 - confirmed 发射快照与重启前**逐字节一致**（129 行，`build/_emit_revert.txt` vs
   `build/_emit_after_forming.txt`）；
@@ -503,8 +507,25 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 - buy_1 / buy_1like / buy_2like / sell_2like forming **0 帧**：结构 ⊆ 确认（判别式恒真）所致，
   已知状态，待各族确认条件收紧后成对生效。
 
-测试与消费链（同一提交）：`tests/test_signal_forming_reachability.py` 重写为重启契约（可达性
-buy3/sell3 计数 > 0 + 载荷不变量 + 旧槽恒空 + 反空转，287 帧回放带缓存）；发布包新增 3 用例
+**rev2 实测（线段口径，2026-09-13；探针 `build/probe_forming_seg_diag.py`，4566 帧 / step=7）**：
+
+- **用户 7 例误报全部消除**：`000651-1m` / `00981-30m` / `03690-30m` / `00700-30m` / `00175-30m` /
+  `002555-30m` / `300124-30m` 的 sell3 在各自上报时间点回放，线段口径均**不命中**
+  （`build/probe_sell3_forming_replay.py`；旧笔级口径命中的「离开笔+反抽笔 / 离开线段+反抽笔」
+  结构不再被接受）；
+- **三类 forming 被 confirmed 同帧遮蔽（当前 renewal 规则下的已知边界）**：线段对结构大量存在
+  （sell 1570 帧 / buy 515 帧）但**全部**与 confirmed 同帧共存——confirmed 锚点就是同一个 hold 段
+  末笔，且 renewal（hold 末笔之后存在更晚反向笔）1570/1570、515/515 恒成立 → forming 被
+  「同族 confirmed 优先」覆盖；
+- 结构必因：段层尾部永远落后于笔链（`segments[-1].end_bi_id != bis[-1].bi_id` 实测 4566/4566 帧），
+  尾段之后必有 pending 反向笔 → renewal 恒真；
+- 结论：当前规则下**三类 forming 是 confirmed 的真子集且窗口为空**；待 confirmed 收累
+  （§4.2.7 item 2 / renewal 重定义）后重新度量；**不得用笔级判据重新打开**（用户已否决）。
+
+测试与消费链：`tests/test_signal_forming_reachability.py` 契约含四类——载荷不变量（生命周期 /
+active / 不混门控名单 / 旧槽恒空）、冻结语料**被遮蔽边界**（confirmed 三类计数 > 0 且 forming 三类 == 0，
+防空转靠 confirmed 计数）、**线段判据纯函数用例**（接受合格线段对；拒绝反抽进入中枢 / 离开未破沿 /
+离开早于中枢起点；买卖对称）、回放非空转；发布包新增 3 用例
 （forming 不进「最近买 / 卖点」/ 同点 confirmed 优先 / `cards.*.signal_points` 原样透传）；
 `build_miniapp_publish_bundle.py` 的 `latest_buy` / `latest_sell` / `latest_overall` /
 `recent_active` 均排除 forming（防「预备点冒充确认点」），预备文案行改由 `signal_points` 提供、

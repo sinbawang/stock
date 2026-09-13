@@ -104,7 +104,7 @@
 | `zhongshus` | 标准中枢主口径 | `confirmed_or_pending_main` | 主口径来源。 | 与 `lei_zhongshus` 混写为同一层。 | 对外主结论默认引用它。 |
 | `lei_zhongshus` | 类中枢辅助口径 | `auxiliary` | 只能作辅助，不得单独升级。 | 文案里直接简称“中枢”。 | 明示“类中枢/辅助”，不得单独产出 confirmed signal。 |
 | `signal_points[].lifecycle_state` | 信号生命周期层（spec §2.8） | `forming_or_confirmed_or_invalidated` | 值域 `forming | confirmed | invalidated`。当前 `signal_points`/`signal_catalog` 内已随每点透出；active 确认点为 `confirmed`。 | 把 `forming` 当成确认买卖点直接展示。 | `confirmed` 才允许按主结构确认口径输出；`invalidated` 按失效处理。 |
-| `forming_points` | 实时预备态层（spec §2.8，RS1；`2026-09-13` 重启后口径变更） | `deprecated_slot` | **废弃恒空槽**（仅作旧发布链回退）。forming 现经 `signal_points` 载荷透传：`lifecycle_state=forming`、`active=False`，锚点可为未确认笔；同帧同族 confirmed 优先；三类（`buy3`/`sell3`）以尾部口径判据产出，其余族待确认条件收紧后成对生效。 | 把 `forming_points` 误当现行载体；把 `forming` 载荷计入确认买卖点。 | 一律 watch 档展示（如「买卖点预备：…待转折确认，非确认点」），`latest_buy` / `latest_sell` / `recent_active` 等确认语义字段不得收 forming。 |
+| `forming_points` | 实时预备态层（spec §2.8，RS1；`2026-09-13` 重启后口径变更） | `deprecated_slot` | **废弃恒空槽**（仅作旧发布链回退）。forming 现经 `signal_points` 载荷透传：`lifecycle_state=forming`、`active=False`，锚点可为未确认笔；同帧同族 confirmed 优先。三类（`buy3`/`sell3`）以**线段口径**判据产出（离开线段 + 反抽线段不进入中枢，与 confirmed 同源；笔级对已被用户否决），实测冻结语料上与 confirmed 同帧共存（被优先规则遮蔽）；其余族待确认条件收累后成对生效。 | 把 `forming_points` 误当现行载体；把 `forming` 载荷计入确认买卖点；用笔级对重开三类 forming。 | 一律 watch 档展示（如「买卖点预备：…待转折确认，非确认点」），`latest_buy` / `latest_sell` / `recent_active` 等确认语义字段不得收 forming。 |
 
 #### 3.4.2 报告文本字段映射
 

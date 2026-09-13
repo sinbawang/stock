@@ -365,6 +365,7 @@ def _find_buy3_tail_pair(bis: list[Bi], level: float, min_bi_id: int | None) -> 
     只回看尾笔及其前一格：回试笔为尾笔（回试进行中），或尾笔是回试后的第一笔
     （刚确认）。保证「即时」语义而非黏住历史结构；破位 / 远离后自然消失（允许漂移失效）。
     `min_bi_id` 为宽松下界（离开笔不得早于中枢起点），None 时不做该过滤。
+    仅用于**笔级中枢**回退路径；段级中枢请用 `_find_buy3_tail_segment_pair`（线段口径）。
     返回 (leave_up_bi, hold_down_bi)。
     """
     if len(bis) >= 2 and bis[-1].is_down():
@@ -384,7 +385,10 @@ def _find_buy3_tail_pair(bis: list[Bi], level: float, min_bi_id: int | None) -> 
 
 
 def _find_sell3_tail_pair(bis: list[Bi], level: float, min_bi_id: int | None) -> tuple[Bi | None, Bi | None]:
-    """尾部口径三卖结构：「向下离开 level 后向上反抽不破 level」仍在活跃尾部（与买侧对称）。"""
+    """尾部口径三卖结构：「向下离开 level 后向上反抽不破 level」仍在活跃尾部（与买侧对称）。
+
+    仅用于**笔级中枢**回退路径；段级中枢请用 `_find_sell3_tail_segment_pair`（线段口径）。
+    """
     if len(bis) >= 2 and bis[-1].is_up():
         down_bi, up_bi = bis[-2], bis[-1]
     elif len(bis) >= 3 and bis[-2].is_up():
@@ -398,6 +402,56 @@ def _find_sell3_tail_pair(bis: list[Bi], level: float, min_bi_id: int | None) ->
         and up_bi.high <= level
     ):
         return down_bi, up_bi
+    return None, None
+
+
+def _find_buy3_tail_segment_pair(
+    segments: list[Segment], level: float, min_segment_id: int | None
+) -> tuple[Segment | None, Segment | None]:
+    """尾部口径三类结构（**线段级**）：「向上离开 level 后向下回试不破 level」仍在活跃尾部。
+
+    与 confirmed（`_find_buy3_segment_leave_hold`）同源线段口径：离开与回试都必须是**线段**，
+    不允许笔级替代（用户 2026-09-13 放行：三类预备必须是「线段 + 线段」结构）。
+    只回看尾段及其前一格：回试段为尾段（回试进行中），或尾段是回试段之后的第一段。
+    `min_segment_id` 为宽松下界（离开段不得早于中枢起点），None 时不做该过滤。
+    返回 (leave_up_seg, hold_down_seg)。
+    """
+    if len(segments) >= 2 and segments[-1].is_down():
+        up_seg, down_seg = segments[-2], segments[-1]
+    elif len(segments) >= 3 and segments[-2].is_down():
+        up_seg, down_seg = segments[-3], segments[-2]
+    else:
+        return None, None
+    if (
+        up_seg.is_up()
+        and (min_segment_id is None or up_seg.segment_id >= min_segment_id)
+        and up_seg.high > level
+        and down_seg.low >= level
+    ):
+        return up_seg, down_seg
+    return None, None
+
+
+def _find_sell3_tail_segment_pair(
+    segments: list[Segment], level: float, min_segment_id: int | None
+) -> tuple[Segment | None, Segment | None]:
+    """尾部口径三卖结构（**线段级**）：「向下离开 level 后向上反抽不破 level」仍在活跃尾部（与买侧对称）。
+
+    与 confirmed（`_find_sell3_segment_leave_hold`）同源线段口径，与买侧对称。
+    """
+    if len(segments) >= 2 and segments[-1].is_up():
+        down_seg, up_seg = segments[-2], segments[-1]
+    elif len(segments) >= 3 and segments[-2].is_up():
+        down_seg, up_seg = segments[-3], segments[-2]
+    else:
+        return None, None
+    if (
+        down_seg.is_down()
+        and (min_segment_id is None or down_seg.segment_id >= min_segment_id)
+        and down_seg.low < level
+        and up_seg.high <= level
+    ):
+        return down_seg, up_seg
     return None, None
 
 
@@ -1303,18 +1357,41 @@ def analyze_chanlun_signals(
                     sell3_signal_bi = hold_bi
                     sell_points.append("sell_3")
 
-    # RS1 重启（三类）：尾部口径 forming —— 「离开后回试」仍活跃（回试笔为尾笔或其前一笔）且
-    # 尚无已确认三类点时给预备提示；回试破位 / 确认后自然消失（允许漂移失效）。
+    # RS1 重启（三类）：尾部口径 forming —— 「离开后回试 / 反抽」仍活跃且尚未确认时给预备提示；
+    # 回试破位 / 确认后自然消失（允许漂移失效）。
+    # 口径与 confirmed 同源：**段级中枢用线段级尾部对**（离开线段 + 回试 / 反抽线段不破边沿，
+    # 不允许笔级替代），笔级中枢才回退笔级尾部对。用户 2026-09-13 验收：三类预备必须是
+    # 「线段 + 线段」结构，笔级露出（如单笔离开 + 单笔反抽）不得成行。
     # `start_bi_id` 兼容两类口径：笔级中枢为 bi_id、段级中枢为 segment_id（见 identify_zhongshu 约定），
-    # 此处仅作「离开笔不得早于中枢起点」的宽松下界；字段缺失（测试假对象）时不做该过滤。
+    # 此处仅作「离开段 / 笔不得早于中枢起点」的宽松下界；字段缺失（测试假对象）时不做该过滤。
     if current_zs is not None:
         zs_start_bi_id = getattr(current_zs, "start_bi_id", None)
         if "buy_3" not in buy_points:
-            _tail_up, buy3_tail_hold = _find_buy3_tail_pair(bis, current_zs.zs_high, zs_start_bi_id)
+            if use_segment_divergence and segments:
+                _tail_seg, buy3_tail_hold_seg = _find_buy3_tail_segment_pair(
+                    segments, current_zs.zs_high, zs_start_bi_id
+                )
+                buy3_tail_hold = (
+                    _bi_by_id(buy3_tail_hold_seg.end_bi_id, bis) or _bi_by_id(buy3_tail_hold_seg.start_bi_id, bis)
+                    if buy3_tail_hold_seg is not None
+                    else None
+                )
+            else:
+                _tail_up, buy3_tail_hold = _find_buy3_tail_pair(bis, current_zs.zs_high, zs_start_bi_id)
             if buy3_tail_hold is not None:
                 forming_candidates.append(("buy_3", buy3_tail_hold))
         if "sell_3" not in sell_points:
-            _tail_down, sell3_tail_hold = _find_sell3_tail_pair(bis, current_zs.zs_low, zs_start_bi_id)
+            if use_segment_divergence and segments:
+                _tail_seg, sell3_tail_hold_seg = _find_sell3_tail_segment_pair(
+                    segments, current_zs.zs_low, zs_start_bi_id
+                )
+                sell3_tail_hold = (
+                    _bi_by_id(sell3_tail_hold_seg.end_bi_id, bis) or _bi_by_id(sell3_tail_hold_seg.start_bi_id, bis)
+                    if sell3_tail_hold_seg is not None
+                    else None
+                )
+            else:
+                _tail_down, sell3_tail_hold = _find_sell3_tail_pair(bis, current_zs.zs_low, zs_start_bi_id)
             if sell3_tail_hold is not None:
                 forming_candidates.append(("sell_3", sell3_tail_hold))
 

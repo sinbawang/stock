@@ -1,4 +1,4 @@
-"""RS1 实时预备态（forming）闸门（spec §2.8）——**2026-09-13 重启版契约**。
+"""RS1 实时预备态（forming）闸门（spec §2.8）——**2026-09-13 重启版契约（rev2：线段口径）**。
 
 背景
 ----
@@ -6,23 +6,32 @@ RS1 第一版（已下架 2026-09-12）：confirmed / forming 共用同一判别
 实时尾部比——锚点之后必然已有后续笔（笔严格交替），判别式恒等于「已确认」→ confirmed 永远先赢、
 forming 被同类型去重遮蔽。287 帧冻结真实窗口 forming=0，合取构造不可达。
 
-重启（2026-09-13，用户决策）：forming 定义为**纯结构条件**（不叠任何附加确认），允许漂移失效，
-目标「即时提示符合理论的买卖点」；确认校验的增强后置到后续迭代。实现要点：
-- 三类（buy_3 / sell_3）改**尾部口径**判据（离开 level 后回试 / 反抽不破仍在活跃尾部），
-  不再与 confirmed 共用「历史首个匹配」判据 → 同帧可先出 forming、后出 confirmed；
-- 发射契约：forming 经 `signal_points` 透传（`lifecycle_state=forming` / `active=False`），
-  同族已确认点优先（同点遮蔽禁止）；旧 `forming_points` 槽位废弃恒空；
-- confirmed 集合零变化（严格可加）；漂移（forming 后未见同族 confirmed）按设计允许，不回撤。
+重启（2026-09-13）：forming 定义为**纯结构条件**（不叠任何附加确认），允许漂移失效，目标即时提示。
+rev2 修正（2026-09-13，用户上报 7 例误报后）：三类（buy_3 / sell_3）的 forming 判据改为与
+confirmed **同源的线段口径**——「离开线段 + 反试 / 反抽线段不进入中枢」，**不再接受笔级尾部对**
+（旧笔级口径在 7 个持仓案例上误报：离开笔+反抽笔、离开线段+反抽笔均被判成立）。
 
-实证（build/probe_forming_fine.py，逐 bar 快照 31897 帧 / 21 窗口）：buy_3 forming 2100 帧、
-sell_3 forming 3386 帧；同帧 confirmed+forming 影子遮蔽 0；串表不变量违规 0；confirmed 发射快照
-与重启前逐字节一致（129 行）。buy_1 / buy_1like / buy_2like / sell_2like 因确认条件当前恒真、
-暂无 forming 空间（0 帧），属已知状态——待该族确认条件收紧后成对生效，见设计文档 §4.1。
+发射契约：forming 经 `signal_points` 透传（`lifecycle_state=forming` / `active=False`）；
+同族已确认点优先（同点遮蔽禁止）；旧 `forming_points` 槽位废弃恒空；confirmed 集合零变化
+（发射快照 129 行与重启前逐字节一致）。
 
-本闸门钉住三件事：
-1. 真实窗口 forming 可达（buy_3 / sell_3 计数 > 0）；
-2. forming 载荷不变量（生命周期 / active / 不混入门控名单 / 旧槽恒空）；
-3. 回放非空转（帧数 / confirmed 点存在）。
+rev2 实测（build/probe_forming_seg_diag.py，4566 帧 / step=7）：
+- 线段对结构大量存在（sell 1570 帧 / buy 515 帧），但**全部与 confirmed 同帧共存**：
+  confirmed 锚点就是同一个 hold 段末笔，且 renewal（hold 末笔之后存在更晚反向笔）恒已成立
+  （1570/1570、515/515）→ forming 被「confirmed 优先」规则覆盖；
+- 结构必因：段层尾部永远落后于笔链（`segments[-1].end_bi_id != bis[-1].bi_id` 实测 4566/4566 帧），
+  尾段之后必有 pending 反向笔 → renewal 恒真；
+- 结论：**三类 forming 是 confirmed 的真子集且窗口为空**（当前 renewal 规则下），属已知边界——
+  待 confirmed 收累（非单调性、renewal 重定义）后再重新度量；不得用笔级判据重新打开（用户已否决）。
+- 7 个用户案例（000651-1m / 00981-30m / 03690-30m / 00700-30m / 00175-30m / 002555-30m /
+  300124-30m 的 sell3）在各自上报时间点回放：线段口径均**不命中**，误报消除
+  （build/probe_sell3_forming_replay.py）。
+
+本闸门钉住四件事：
+1. forming 载荷不变量（生命周期 / active / 不混入门控名单 / 旧槽恒空）；
+2. 三类 forming 在冻结语料的**被遮蔽边界**（confirmed > 0 且 forming == 0，防空转靠 confirmed 计数）；
+3. 线段判据纯函数语义（接受合格对；拒绝反抽笔 / 反抽进入中枢 / 离开早于中枢起点）；
+4. 回放非空转（帧数 / confirmed 点存在）。
 
 spec_id: SPEC.BUY_SELL.CORE。
 """
@@ -40,7 +49,11 @@ for _extra in (SRC, SCRIPTS):
     if str(_extra) not in sys.path:
         sys.path.insert(0, str(_extra))
 
-from chanlun.analysis import analyze_chanlun_signals  # noqa: E402
+from chanlun.analysis import (  # noqa: E402
+    _find_buy3_tail_segment_pair,
+    _find_sell3_tail_segment_pair,
+    analyze_chanlun_signals,
+)
 from chanlun.bi import identify_bis  # noqa: E402
 from chanlun.data import read_bars_from_csv  # noqa: E402
 from chanlun.data.cleaner import clean_bars  # noqa: E402
@@ -69,6 +82,7 @@ class FormingEvidence:
     legacy_forming_seen: int = 0
     forming_violations: list[str] = field(default_factory=list)
     forming_by_point: dict[str, int] = field(default_factory=dict)
+    confirmed_by_point: dict[str, int] = field(default_factory=dict)
 
 
 def _bootstrap_for(timeframe: str) -> str:
@@ -165,11 +179,13 @@ def _replay_all_uncached() -> FormingEvidence:
                 bars, bis, zhongshus, calculate_macd(bars), segments=segments
             )
             evidence.frames += 1
-            evidence.confirmed_seen += sum(
-                1
-                for p in signals.get("signal_points") or []
-                if p.get("lifecycle_state") == "confirmed"
-            )
+            confirmed = [
+                p for p in signals.get("signal_points") or [] if p.get("lifecycle_state") == "confirmed"
+            ]
+            evidence.confirmed_seen += len(confirmed)
+            for payload in confirmed:
+                key = str(payload.get("point"))
+                evidence.confirmed_by_point[key] = evidence.confirmed_by_point.get(key, 0) + 1
             forming = [
                 p
                 for p in signals.get("signal_points") or []
@@ -201,18 +217,24 @@ def test_replay_is_not_vacuous() -> None:
     assert evidence.confirmed_seen > 0, "回放未产出任何 confirmed 点，回放口径可能已失效"
 
 
-def test_forming_reachable_on_frozen_windows() -> None:
-    """RS1 重启（2026-09-13）：三类 forming 在真实窗口可达（纯结构条件、尾部口径）。
+def test_three_class_forming_shadowed_by_confirmed_on_frozen_windows() -> None:
+    """rev2 边界（2026-09-13）：三类 forming 是 confirmed 的真子集，冻结语料上窗口为空。
 
-    细粒度探针（build/probe_forming_fine.py，逐 bar 31897 帧）实测 buy_3 forming 2100 帧、
-    sell_3 forming 3386 帧；本闸门以 12 帧/窗口的粗采样钉住「非零可达」。
+    实测（build/probe_forming_seg_diag.py，4566 帧）：线段对结构 sell 1570 / buy 515 帧
+    **全部**与 confirmed 同帧共存（confirmed 锚点 = 同一 hold 段末笔；renewal 1570/1570、515/515
+    恒真）→ forming 被「同族 confirmed 优先」规则覆盖。结构必因：段层尾部永远落后于笔链
+    （`segments[-1].end_bi_id != bis[-1].bi_id` 实测 4566/4566 帧），尾段之后必有 pending 反向笔。
+
+    防空转：confirmed 三类计数必须 > 0（否则本断言无意义）；一旦未来 confirmed 收累打开 forming
+    窗口，本用例会失败并强制回到设计文档重新决策。
     """
     evidence = replay_all()
 
     # 载荷 point 为无下划线格式（buy3 / sell3）。
-    assert evidence.forming_seen > 0, "真实窗口未产出任何 forming（重启契约已失效？）"
-    assert evidence.forming_by_point.get("buy3", 0) > 0, "三买 forming 在真实窗口不可达"
-    assert evidence.forming_by_point.get("sell3", 0) > 0, "三卖 forming 在真实窗口不可达"
+    assert evidence.confirmed_by_point.get("buy3", 0) > 0, "冻结语料未产出 confirmed 三买，判据口径可能已失效"
+    assert evidence.confirmed_by_point.get("sell3", 0) > 0, "冻结语料未产出 confirmed 三卖，判据口径可能已失效"
+    assert evidence.forming_by_point.get("buy3", 0) == 0, "三买 forming 出现：confirmed 遮蔽机制已被改变，需重新决策"
+    assert evidence.forming_by_point.get("sell3", 0) == 0, "三卖 forming 出现：confirmed 遮蔽机制已被改变，需重新决策"
 
 
 def test_legacy_forming_points_slot_stays_empty() -> None:
@@ -220,3 +242,79 @@ def test_legacy_forming_points_slot_stays_empty() -> None:
     evidence = replay_all()
 
     assert evidence.legacy_forming_seen == 0, "旧 forming_points 槽位应为空（forming 经 signal_points 透传）"
+
+
+@dataclass
+class FakeSegment:
+    """线段判据纯函数用例的最小假段（只含判据读取的字段）。"""
+
+    segment_id: int
+    direction: str
+    start_bi_id: int
+    end_bi_id: int
+    high: float
+    low: float
+    is_confirmed: bool = True
+
+    def is_up(self) -> bool:
+        return self.direction == "up"
+
+    def is_down(self) -> bool:
+        return self.direction == "down"
+
+
+def _seg(segment_id: int, direction: str, *, high: float, low: float) -> FakeSegment:
+    return FakeSegment(
+        segment_id=segment_id,
+        direction=direction,
+        start_bi_id=segment_id * 10,
+        end_bi_id=segment_id * 10 + 2,
+        high=high,
+        low=low,
+    )
+
+
+def test_sell3_tail_segment_pair_accepts_valid_leave_and_hold() -> None:
+    """rev2：尾部段对 = 离开线段（low < 中枢下沿）+ 反抽线段（high <= 中枢下沿，仍在尾部）→ 命中。"""
+    leave = _seg(1, "down", high=10.8, low=9.0)
+    hold = _seg(2, "up", high=10.0, low=9.2)
+
+    assert _find_sell3_tail_segment_pair([leave, hold], 10.0, 1) == (leave, hold)
+    # 尾部为「反抽段已完成、新下跌段刚起步」时回看前一对（hold 为倒数第二段）。
+    tail = _seg(3, "down", high=10.2, low=8.8)
+    assert _find_sell3_tail_segment_pair([leave, hold, tail], 10.0, 1) == (leave, hold)
+
+
+def test_sell3_tail_segment_pair_rejects_hold_reentering_zhongshu() -> None:
+    """rev2：反抽线段进入中枢（high > 中枢下沿，哪怕只超 0.05）→ 不得判成立（000651 用户案例形状）。"""
+    leave = _seg(1, "down", high=10.8, low=9.0)
+    hold = _seg(2, "up", high=10.05, low=9.2)
+
+    assert _find_sell3_tail_segment_pair([leave, hold], 10.0, 1) == (None, None)
+
+
+def test_sell3_tail_segment_pair_rejects_leave_not_below_level() -> None:
+    """rev2：离开段 low 必须严格低于中枢下沿（相等不算离开）→ 不得判成立。"""
+    leave = _seg(1, "down", high=10.8, low=10.0)
+    hold = _seg(2, "up", high=10.0, low=9.2)
+
+    assert _find_sell3_tail_segment_pair([leave, hold], 10.0, 1) == (None, None)
+
+
+def test_sell3_tail_segment_pair_rejects_pair_before_zhongshu_start() -> None:
+    """rev2：离开段早于中枢起点（segment_id < min_segment_id）→ 不得判成立。"""
+    leave = _seg(1, "down", high=10.8, low=9.0)
+    hold = _seg(2, "up", high=10.0, low=9.2)
+
+    assert _find_sell3_tail_segment_pair([leave, hold], 10.0, 2) == (None, None)
+
+
+def test_buy3_tail_segment_pair_accepts_and_rejects_mirror() -> None:
+    """rev2（买侧对称）：离开线段（high > 中枢上沿）+ 回试线段（low >= 中枢上沿）命中；回试跌回中枢则拒绝。"""
+    leave = _seg(1, "up", high=11.0, low=9.5)
+    hold = _seg(2, "down", high=10.8, low=10.0)
+
+    assert _find_buy3_tail_segment_pair([leave, hold], 10.0, 1) == (leave, hold)
+
+    dipping_hold = _seg(2, "down", high=10.8, low=9.95)
+    assert _find_buy3_tail_segment_pair([leave, dipping_hold], 10.0, 1) == (None, None)
