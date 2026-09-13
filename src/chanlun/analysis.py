@@ -266,11 +266,18 @@ def _has_segment_top_divergence(
 
 
 def _has_reverse_turn_after(signal_bi: Bi | None, *, direction: str, bis: list[Bi]) -> bool:
+    """signal_bi（锚点）之后是否已出现反向转折笔。
+
+    2026-09-13 用户决策：反向转折笔**不要求已确认**（与二 / 三类的「新笔不要求确认」对齐）——
+    只要锚点之后已出现方向相反、且未破坏锚点极值（`low >= 锚点低` / `high <= 锚点高`）的笔
+    （含 effective 未确认尾笔）即视为转折已现；允许后续漂移 / 失效由生命周期（invalidated）承载。
+    锚点自身的确认要求仍由调用方（`*.is_confirmed`）把关，§3.3 红线不变。
+    """
     if signal_bi is None:
         return False
     signal_id = signal_bi.bi_id
     for candidate in bis:
-        if candidate.bi_id <= signal_id or not candidate.is_confirmed:
+        if candidate.bi_id <= signal_id:
             continue
         if direction == "down" and candidate.is_up() and candidate.low >= signal_bi.low:
             return True

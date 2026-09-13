@@ -162,8 +162,8 @@
 | `test_analyze_chanlun_signals_flags_first_sell_on_top_divergence_above_zs_high` | 正例 | 中枢上沿上方的顶背驰 → 一卖 |
 | `test_analyze_chanlun_signals_buy1_anchors_on_exit_segment_end_bi` | 正例（锚点） | 一买锚定**离开段末端笔**，不是最近笔 |
 | `test_analyze_chanlun_signals_does_not_flag_buy1_on_boundary_touch_without_divergence` | **反例** | **仅触边不背驰**不得报一买（spec §2.2 红线） |
-| `test_analyze_chanlun_signals_requires_up_turn_confirmation_before_buy1` | **反例** | 未出现反向转折笔时不得确认 |
-| `test_analyze_chanlun_signals_buy1_and_sell1_require_confirmed_departure_and_turn` | **反例** | 离开段未确认 / 未转折 → 不发点，买卖两侧对称 |
+| `test_analyze_chanlun_signals_no_buy_1_without_reverse_turn_stays_forming` | 边界 | 无任何反向笔时不确认（列 forming）（`2026-09-13` 前为「未出现反向转折笔时不得确认」反例） |
+| `test_analyze_chanlun_signals_buy1_and_sell1_require_confirmed_anchor` | **反例** | 锚点（离开段末笔）未确认 → 不发确认点（列 forming），买卖两侧对称（§3.3 红线） |
 | `test_analyze_chanlun_signals_buy1_uses_segment_divergence_strict_strength` | 严格性 | 力度口径必须是**段级** MACD 面积衰减 |
 | `test_analyze_chanlun_signals_buy1_requires_segment_strength_decay` | 严格性 | 无段级力度衰减不发点 |
 | `test_analyze_chanlun_signals_sell1_uses_segment_divergence_strict_strength` | 严格性 | 一卖侧同口径 |
@@ -201,7 +201,9 @@
 | `test_analyze_chanlun_signals_flags_sell_1like_on_range_consolidation_divergence` | 正例 | 类一卖侧 |
 | `test_analyze_chanlun_signals_buy_1_not_buy_1like_under_down_trend_gate` | **易混淆** | 下跌趋势门控下走**标准一买**，不降级为类一买（互斥门控） |
 | `test_analyze_chanlun_signals_no_buy_1like_without_consolidation_divergence` | **反例** | 无盘整背驰 |
-| `test_analyze_chanlun_signals_no_buy_1like_without_reverse_turn` | **反例** | 无反向转折 |
+| `test_analyze_chanlun_signals_buy_1like_fires_with_unconfirmed_reverse_turn` | 正例 | 向上转折笔**未确认**也发类一买（`2026-09-13` 「新笔不要求确认」；锚点已确认） |
+| `test_analyze_chanlun_signals_sell_1like_fires_with_unconfirmed_reverse_turn` | 正例 | 类一卖侧对称 |
+| `test_analyze_chanlun_signals_buy_1like_forming_before_reverse_turn` | 边界 | 盘整背驰成立、无任何反向笔 → forming 不确认（旧「无反向转折不发点」已升级为 forming 契约） |
 | `test_analyze_chanlun_signals_no_buy_1like_when_structure_status_candidate` | **反例** | `candidate_completed_waiting_stability` 下只观察不发点（spec §2.5 门控） |
 | `test_analyze_chanlun_signals_no_sell_1like_without_consolidation_divergence` | **反例** | 类一卖侧对称 |
 
@@ -213,7 +215,9 @@
 | `test_analyze_chanlun_signals_flags_buy_2like_when_pullback_holds_prev_low` | 正例 | **不破前低也成立**（与标准二买的关键差异） |
 | `test_analyze_chanlun_signals_flags_sell_2like_on_gap_segment_divergence` | 正例 | 类二卖侧 |
 | `test_analyze_chanlun_signals_no_buy_2like_without_gap_divergence` | **反例** | 无隔段力度衰减 |
-| `test_analyze_chanlun_signals_no_buy_2like_when_pullback_not_ended` | **反例** | 回踩未结束不发点 |
+| `test_analyze_chanlun_signals_buy_2like_fires_with_unconfirmed_reverse_turn` | 正例 | 回踩未结束（向上转折笔**未确认**）也发类二买（`2026-09-13` 放开；锚点已确认） |
+| `test_analyze_chanlun_signals_sell_2like_fires_with_unconfirmed_reverse_turn` | 正例 | 类二卖侧对称 |
+| `test_analyze_chanlun_signals_buy_2like_forming_before_reverse_turn` | 边界 | 隔段背驰 + 锚点成立、无任何反向笔 → forming 不确认（旧「回踩未结束不发点」已升级为 forming 契约） |
 | `test_analyze_chanlun_signals_no_buy_2like_when_decomposition_pending` | **反例** | `dual_interpretation_pending` 下不发机械类二类点（spec §2.6 门控） |
 | `test_analyze_chanlun_signals_no_sell_2like_without_gap_divergence` | **反例** | 类二卖侧 |
 

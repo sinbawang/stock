@@ -30,8 +30,8 @@
 
 ```mermaid
 stateDiagram-v2
-    [*] --> forming: 背驰/离开/隔段力度衰减已现，反向转折未确认
-    forming --> confirmed: 反向转折笔已确认（锚定已确认笔/线段）
+    [*] --> forming: 背驰/离开/隔段力度衰减已现，反向转折笔尚未出现（或锚点未确认）
+    forming --> confirmed: 反向转折笔出现（可未确认尾笔）且锚点已确认
     forming --> invalidated: 前提被破坏（背驰前提消失/离开段被反向吞没）
     confirmed --> invalidated: 失效条件命中（见 §3.2）
     confirmed --> [*]: 结构自然更替（被更晚的点替换/中枢换锚）
@@ -42,8 +42,8 @@ stateDiagram-v2
 
 | 状态 | 语义 | 消费档 | 锚定要求 |
 | --- | --- | --- | --- |
-| `forming` | 预备态：核心背驰 / 离开条件成立，待反向转折确认 | watch（不得升 confirmed） | 可锚定进行中笔 |
-| `confirmed` | 确认态：反向转折已确认 | actionable（受多级别降级约束） | 必须锚定已确认笔 / 线段 |
+| `forming` | 预备态：核心背驰 / 离开条件成立，反向转折笔尚未出现（或锚点未确认） | watch（不得升 confirmed） | 可锚定进行中笔 |
+| `confirmed` | 确认态：反向转折笔已出现（证据笔可未确认），锚点必须已确认 | actionable（受多级别降级约束） | 必须锚定已确认笔 / 线段 |
 | `invalidated` | 失效态：确认后前提被破坏 | 不操作 / 撤单提示 | 保留原 `signal_bi_id` + `invalidated_reason` |
 
 ### 3.2 各点类型失效条件（应然候选，待评审）
@@ -521,6 +521,24 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
   尾段之后必有 pending 反向笔 → renewal 恒真；
 - 结论：当前规则下**三类 forming 是 confirmed 的真子集且窗口为空**；待 confirmed 收累
   （§4.2.7 item 2 / renewal 重定义）后重新度量；**不得用笔级判据重新打开**（用户已否决）。
+
+**rev3（1 / 1L / 2L 反向转折笔确认要求放开，2026-09-13 用户决策）**：
+
+- 决策：一类 / 类一 / 类二的反向转折笔**不要求已确认**（对齐二 / 三类「新笔不要求确认」）——
+  `_has_reverse_turn_after` 不再要求候选笔 `is_confirmed`；锚点（`signal_bi_id`）确认要求不变
+  （§3.3 红线）；结构成立而锚点后**尚无任何反向笔**时仍列 forming。
+- 实测（探针 `build/probe_reverse_turn_loosen.py`）：冻结语料 4566 帧（step=7）+ 实时 64 文件
+  （最新帧 / 尾 90 bar×step3 / 尾 45 bar×step1，共 4928 帧）**全部零差异**——旧「已确认」要求在
+  实链路中不设限（段级背驰可算时，转折证据笔已必然确认）。
+- 构造对照证明差异确实存在（同一帧：旧口径 = forming / 新口径 = confirmed）；相应行为已落为单测
+  （断言新口径为 confirmed 且锚点已确认）：`test_analyze_chanlun_signals_buy_1like_fires_with_unconfirmed_reverse_turn`、
+  `test_analyze_chanlun_signals_buy_2like_fires_with_unconfirmed_reverse_turn` 及卖侧对称；
+  「无反向笔 → forming」「锚点未确认 → forming」由
+  `test_analyze_chanlun_signals_no_buy_1_without_reverse_turn_stays_forming` /
+  `test_analyze_chanlun_signals_buy1_and_sell1_require_confirmed_anchor` /
+  `..._forming_before_reverse_turn` 系列钉住。
+- 含义：该放开为**语义对齐 + 未来防御**（一旦段层 / 背驰口径让转折笔可先于确认出现，信号不再
+  滞后）；在当前数据上用户可见产出不变。
 
 测试与消费链：`tests/test_signal_forming_reachability.py` 契约含四类——载荷不变量（生命周期 /
 active / 不混门控名单 / 旧槽恒空）、冻结语料**被遮蔽边界**（confirmed 三类计数 > 0 且 forming 三类 == 0，

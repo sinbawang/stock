@@ -17,7 +17,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from chanlun.analysis import _build_zs_monitor_state, _is_first_reverse_hold, _signal_premise_broken, _structural_premise_broken, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
+from chanlun.analysis import _build_zs_monitor_state, _has_reverse_turn_after, _is_first_reverse_hold, _signal_premise_broken, _structural_premise_broken, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
 
@@ -1787,78 +1787,23 @@ def test_analyze_chanlun_signals_flags_first_sell_on_top_divergence_above_zs_hig
     assert signals["top_divergence"] is True
 
 
-def test_analyze_chanlun_signals_buy1_and_sell1_require_confirmed_departure_and_turn() -> None:
-    """BS2 严格口径：一类点必须同时满足：离开笔已确认 + 背驰 + 反向转折确认。
+def test_analyze_chanlun_signals_buy1_and_sell1_require_confirmed_anchor() -> None:
+    """BS2（2026-09-13 用户决策）：一类点锚点（离开段末笔）仍须已确认，未确认 → 只列 forming。
 
-    只有在出离段后出现反向确认笔，才允许形成 buy_1 / sell_1；
-    若离开笔未确认，或未出现转折确认，则不得报一类点。
+    「反向转折笔必须已确认」已放开为「出现即可（可为 effective 未确认尾笔）」；
+    但锚点确认要求不变（§3.3 红线）：离开段末笔未确认时不得报 buy_1 / sell_1，
+    只作 watch 档预备（active=False），买卖两侧对称。
     """
-    # 买方：唯一跌破下沿的 down 离开笔未确认，且无后续向上确认笔 -> 不触发 buy_1
-    buy_zs = _zhongshu(11, zs_low=10.0, zs_high=10.8, day=1)
+    # 买方：离开段末笔 bi22（未确认）-> forming buy1（不写 buy_points）
+    prev_zs = _segment_zhongshu(0, entering_segment_id=0, exit_segment_id=0, zs_low=11.6, zs_high=12.2)
+    zs = _segment_zhongshu(1, entering_segment_id=1, exit_segment_id=2, zs_low=10.0, zs_high=10.8)
+    entering = _segment(1, BiDirection.DOWN, high=11.2, low=10.6, start_day=1)
+    exit_seg = _segment(2, BiDirection.DOWN, high=10.9, low=9.8, start_day=3)
     buy_bis = [
-        _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=1),
-        _bi(2, BiDirection.UP, high=10.9, low=10.4, day=2),
-        _bi(3, BiDirection.DOWN, high=11.0, low=10.2, day=3),
-        _bi(4, BiDirection.UP, high=11.3, low=10.3, day=4),
+        _bi(11, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(12, BiDirection.UP, high=10.9, low=10.4, day=2),
         Bi(
-            bi_id=5,
-            direction=BiDirection.DOWN,
-            start_fx_id=5,
-            end_fx_id=6,
-            start_ts=datetime(2026, 5, 5, 10, 30),
-            end_ts=datetime(2026, 5, 5, 14, 30),
-            high=11.0,
-            low=9.8,
-            norm_bar_range=(5, 6),
-            is_confirmed=False,
-        ),
-    ]
-    buy_macd = [
-        SimpleNamespace(ts=buy_bis[0].end_ts, macd=-5.0, dif=-1.0),
-        SimpleNamespace(ts=buy_bis[2].end_ts, macd=-2.5, dif=-0.6),
-        SimpleNamespace(ts=buy_bis[4].end_ts, macd=-1.0, dif=-0.4),
-    ]
-    buy_signals = analyze_chanlun_signals([], buy_bis, [buy_zs], buy_macd)
-    assert buy_signals["buy_points"] == []
-
-    # 卖方：唯一越上沿的 up 离开笔未确认，且无后续向下确认笔 -> 不触发 sell_1
-    sell_zs = _zhongshu(12, zs_low=10.0, zs_high=10.8, day=1)
-    sell_bis = [
-        _bi(1, BiDirection.UP, high=10.5, low=10.1, day=1),
-        _bi(2, BiDirection.DOWN, high=10.6, low=10.0, day=2),
-        _bi(3, BiDirection.UP, high=10.7, low=10.2, day=3),
-        _bi(4, BiDirection.DOWN, high=10.5, low=10.0, day=4),
-        Bi(
-            bi_id=5,
-            direction=BiDirection.UP,
-            start_fx_id=5,
-            end_fx_id=6,
-            start_ts=datetime(2026, 5, 5, 10, 30),
-            end_ts=datetime(2026, 5, 5, 14, 30),
-            high=11.2,
-            low=10.4,
-            norm_bar_range=(5, 6),
-            is_confirmed=False,
-        ),
-    ]
-    sell_macd = [
-        SimpleNamespace(ts=sell_bis[0].end_ts, macd=5.0, dif=1.0),
-        SimpleNamespace(ts=sell_bis[2].end_ts, macd=3.0, dif=0.8),
-        SimpleNamespace(ts=sell_bis[4].end_ts, macd=2.0, dif=0.6),
-    ]
-    sell_signals = analyze_chanlun_signals([], sell_bis, [sell_zs], sell_macd)
-    assert sell_signals["top_divergence"] is True
-    assert sell_signals["sell_points"] == []
-
-
-def test_analyze_chanlun_signals_requires_up_turn_confirmation_before_buy1() -> None:
-    """BS2 严格口径：底背驰但未出现向上转折确认，不得确认 buy_1。"""
-    current_zs = _zhongshu(13, zs_low=10.0, zs_high=10.8, day=1)
-    bis = [
-        _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=1),
-        _bi(2, BiDirection.UP, high=10.9, low=10.4, day=2),
-        Bi(
-            bi_id=3,
+            bi_id=22,
             direction=BiDirection.DOWN,
             start_fx_id=3,
             end_fx_id=4,
@@ -1870,15 +1815,152 @@ def test_analyze_chanlun_signals_requires_up_turn_confirmation_before_buy1() -> 
             is_confirmed=False,
         ),
     ]
+    buy_macd = [
+        SimpleNamespace(ts=entering.end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=exit_seg.end_ts, macd=-1.0, dif=-0.4),
+    ]
+    buy_signals = analyze_chanlun_signals([], buy_bis, [prev_zs, zs], buy_macd, segments=[entering, exit_seg])
+    assert buy_signals["buy_points"] == []
+    buy_payload = next(p for p in buy_signals["signal_points"] if p["point"] == "buy1")
+    assert buy_payload["lifecycle_state"] == "forming"
+    assert buy_payload["active"] is False
+    assert buy_payload["signal_bi_id"] == 22
+    assert buy_payload["price"] == 9.8
+
+    # 卖方（对称）：离开段末笔 bi22（未确认）-> forming sell1
+    prev_zs_s = _segment_zhongshu(2, entering_segment_id=0, exit_segment_id=0, zs_low=8.2, zs_high=8.8)
+    zs_s = _segment_zhongshu(3, entering_segment_id=1, exit_segment_id=2, zs_low=10.0, zs_high=10.8)
+    entering_s = _segment(1, BiDirection.UP, high=10.6, low=9.9, start_day=1)
+    exit_seg_s = _segment(2, BiDirection.UP, high=11.2, low=10.3, start_day=3)
+    sell_bis = [
+        _bi(11, BiDirection.UP, high=10.6, low=9.9, day=1),
+        _bi(12, BiDirection.DOWN, high=10.5, low=10.0, day=2),
+        Bi(
+            bi_id=22,
+            direction=BiDirection.UP,
+            start_fx_id=3,
+            end_fx_id=4,
+            start_ts=datetime(2026, 5, 3, 10, 30),
+            end_ts=datetime(2026, 5, 3, 14, 30),
+            high=11.2,
+            low=10.3,
+            norm_bar_range=(3, 4),
+            is_confirmed=False,
+        ),
+    ]
+    sell_macd = [
+        SimpleNamespace(ts=entering_s.end_ts, macd=5.0, dif=1.0),
+        SimpleNamespace(ts=exit_seg_s.end_ts, macd=1.0, dif=0.4),
+    ]
+    sell_signals = analyze_chanlun_signals(
+        [], sell_bis, [prev_zs_s, zs_s], sell_macd, segments=[entering_s, exit_seg_s]
+    )
+    assert sell_signals["sell_points"] == []
+    sell_payload = next(p for p in sell_signals["signal_points"] if p["point"] == "sell1")
+    assert sell_payload["lifecycle_state"] == "forming"
+    assert sell_payload["active"] is False
+    assert sell_payload["signal_bi_id"] == 22
+    assert sell_payload["price"] == 11.2
+
+
+def test_has_reverse_turn_after_accepts_unconfirmed_candidate() -> None:
+    """2026-09-13 用户决策：反向转折笔不要求已确认——effective 未确认尾笔也视为转折已现。"""
+    anchor = _bi(5, BiDirection.DOWN, high=11.0, low=9.9, day=5)
+    candidate = Bi(
+        bi_id=6,
+        direction=BiDirection.UP,
+        start_fx_id=7,
+        end_fx_id=8,
+        start_ts=datetime(2026, 5, 6, 10, 30),
+        end_ts=datetime(2026, 5, 6, 14, 30),
+        high=11.5,
+        low=9.95,
+        norm_bar_range=(7, 8),
+        is_confirmed=False,
+    )
+
+    assert _has_reverse_turn_after(anchor, direction="down", bis=[anchor, candidate]) is True
+
+
+def test_has_reverse_turn_after_rejects_candidate_breaking_anchor_extreme() -> None:
+    """转折证据笔必须守住锚点极值：向上笔 low < 锚点 low（破坏极值）不算转折。"""
+    anchor = _bi(5, BiDirection.DOWN, high=11.0, low=9.9, day=5)
+    candidate = Bi(
+        bi_id=6,
+        direction=BiDirection.UP,
+        start_fx_id=7,
+        end_fx_id=8,
+        start_ts=datetime(2026, 5, 6, 10, 30),
+        end_ts=datetime(2026, 5, 6, 14, 30),
+        high=11.5,
+        low=9.5,
+        norm_bar_range=(7, 8),
+        is_confirmed=True,
+    )
+
+    assert _has_reverse_turn_after(anchor, direction="down", bis=[anchor, candidate]) is False
+
+
+def test_has_reverse_turn_after_sell_side_mirror() -> None:
+    """卖侧对称：向下转折笔（可未确认）且 high <= 锚点 high 视为转折已现；升破锚点高点不算。"""
+    anchor = _bi(5, BiDirection.UP, high=11.2, low=10.3, day=5)
+    ok = Bi(
+        bi_id=6,
+        direction=BiDirection.DOWN,
+        start_fx_id=7,
+        end_fx_id=8,
+        start_ts=datetime(2026, 5, 6, 10, 30),
+        end_ts=datetime(2026, 5, 6, 14, 30),
+        high=11.0,
+        low=10.4,
+        norm_bar_range=(7, 8),
+        is_confirmed=False,
+    )
+    broken = Bi(
+        bi_id=6,
+        direction=BiDirection.DOWN,
+        start_fx_id=7,
+        end_fx_id=8,
+        start_ts=datetime(2026, 5, 6, 10, 30),
+        end_ts=datetime(2026, 5, 6, 14, 30),
+        high=11.4,
+        low=10.4,
+        norm_bar_range=(7, 8),
+        is_confirmed=True,
+    )
+
+    assert _has_reverse_turn_after(anchor, direction="up", bis=[anchor, ok]) is True
+    assert _has_reverse_turn_after(anchor, direction="up", bis=[anchor, broken]) is False
+
+
+def test_analyze_chanlun_signals_no_buy_1_without_reverse_turn_stays_forming() -> None:
+    """BS2（2026-09-13 用户决策）：段级一类——离开段后**尚无任何反向笔**时不确认，只列 forming。
+
+    「反向转折笔必须已确认」已放开为「出现即可（可为 effective 未确认尾笔）」；
+    「反向笔尚未出现」仍不足以确认，落为 watch 档预备（不写 buy_points）。
+    """
+    prev_zs = _segment_zhongshu(0, entering_segment_id=0, exit_segment_id=0, zs_low=11.6, zs_high=12.2)
+    zs = _segment_zhongshu(1, entering_segment_id=1, exit_segment_id=2, zs_low=10.0, zs_high=10.8)
+    entering = _segment(1, BiDirection.DOWN, high=11.2, low=10.6, start_day=1)
+    exit_seg = _segment(2, BiDirection.DOWN, high=10.9, low=9.8, start_day=3)
+    bis = [
+        _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(2, BiDirection.UP, high=10.9, low=10.4, day=2),
+        _bi(3, BiDirection.DOWN, high=11.0, low=9.8, day=3),
+    ]
     macd_points = [
-        SimpleNamespace(ts=bis[0].end_ts, macd=-5.0, dif=-1.0),
-        SimpleNamespace(ts=bis[2].end_ts, macd=-1.0, dif=-0.4),
+        SimpleNamespace(ts=entering.end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=exit_seg.end_ts, macd=-1.0, dif=-0.4),
     ]
 
-    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+    signals = analyze_chanlun_signals([], bis, [prev_zs, zs], macd_points, segments=[entering, exit_seg])
 
-    assert signals["bottom_divergence"] is True
     assert signals["buy_points"] == []
+    payload = next(p for p in signals["signal_points"] if p["point"] == "buy1")
+    assert payload["lifecycle_state"] == "forming"
+    assert payload["active"] is False
+    assert payload["signal_bi_id"] == 3
+    assert payload["price"] == 9.8
 
 
 def test_analyze_chanlun_signals_buy1_uses_segment_divergence_strict_strength() -> None:
@@ -2198,8 +2280,11 @@ def test_analyze_chanlun_signals_no_buy_2like_without_gap_divergence() -> None:
     assert "buy_2like" not in signals["buy_points"]
 
 
-def test_analyze_chanlun_signals_no_buy_2like_when_pullback_not_ended() -> None:
-    """BS7 类二买反例（回踩未结束）：A_{i+2} 末笔后无已确认向上转折 -> 不报 buy_2like。"""
+def test_analyze_chanlun_signals_buy_2like_fires_with_unconfirmed_reverse_turn() -> None:
+    """BS7（2026-09-13 用户决策）：类二「新笔不要求确认」——回踩未结束（转折笔未确认）也发 buy_2like。
+
+    锚点（隔段背驰段末笔 bi32）已确认（§3.3 红线）；转折证据笔 bi33 为 effective 未确认尾笔。
+    """
     segments = _lb2_gap_segments()
     zhongshus = _down_trend_zhongshus()
     bis = [
@@ -2216,7 +2301,7 @@ def test_analyze_chanlun_signals_no_buy_2like_when_pullback_not_ended() -> None:
             high=10.5,
             low=9.9,
             norm_bar_range=(33, 34),
-            is_confirmed=False,  # 反向转折笔尚未确认，回踩未结束
+            is_confirmed=False,  # 反向转折笔尚未确认（回踩未结束）
         ),
     ]
     macd_points = [
@@ -2226,7 +2311,34 @@ def test_analyze_chanlun_signals_no_buy_2like_when_pullback_not_ended() -> None:
 
     signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
 
+    assert "buy_2like" in signals["buy_points"]
+    payload = next(p for p in signals["signal_points"] if p["point"] == "buy2like")
+    assert payload["lifecycle_state"] == "confirmed"
+    assert payload["active"] is True
+    assert payload["signal_bi_id"] == 32
+
+
+def test_analyze_chanlun_signals_buy_2like_forming_before_reverse_turn() -> None:
+    """BS7：类二 forming——隔段背驰 + 锚点成立、锚点之后尚无任何反向笔 → forming 预备（非确认）。"""
+    segments = _lb2_gap_segments()
+    zhongshus = _down_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(22, BiDirection.UP, high=11.0, low=10.4, day=3),
+        _bi(32, BiDirection.DOWN, high=10.9, low=9.8, day=5),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=segments[2].end_ts, macd=-1.0, dif=-0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
     assert "buy_2like" not in signals["buy_points"]
+    payload = next(p for p in signals["signal_points"] if p["point"] == "buy2like")
+    assert payload["lifecycle_state"] == "forming"
+    assert payload["active"] is False
+    assert payload["signal_bi_id"] == 32
 
 
 def test_analyze_chanlun_signals_no_buy_2like_when_decomposition_pending() -> None:
@@ -2385,8 +2497,11 @@ def test_analyze_chanlun_signals_no_buy_1like_without_consolidation_divergence()
     assert "buy_1like" not in signals["buy_points"]
 
 
-def test_analyze_chanlun_signals_no_buy_1like_without_reverse_turn() -> None:
-    """BS8 类一买反例（无反向转折）：离开末笔后无已确认向上转折 -> 不报 buy_1like。"""
+def test_analyze_chanlun_signals_buy_1like_fires_with_unconfirmed_reverse_turn() -> None:
+    """BS8（2026-09-13 用户决策）：类一「新笔不要求确认」——向上转折笔未确认也发 buy_1like。
+
+    锚点（离开段末笔 bi5）已确认（§3.3 红线）；转折证据笔 bi6 为 effective 未确认尾笔。
+    """
     current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)
     bis = _lb1_range_bis()[:5] + [
         Bi(
@@ -2406,7 +2521,95 @@ def test_analyze_chanlun_signals_no_buy_1like_without_reverse_turn() -> None:
 
     signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
 
+    assert "buy_1like" in signals["buy_points"]
+    payload = next(p for p in signals["signal_points"] if p["point"] == "buy1like")
+    assert payload["lifecycle_state"] == "confirmed"
+    assert payload["active"] is True
+    assert payload["signal_bi_id"] == 5
+
+
+def test_analyze_chanlun_signals_buy_1like_forming_before_reverse_turn() -> None:
+    """BS8：类一 forming——盘整背驰 + 边界成立、锚点之后尚无任何反向笔 → forming 预备。"""
+    current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)
+    bis = _lb1_range_bis()[:5]  # 去掉 bi6（向上反向转折）
+    macd_points = _lb1_divergence_macd(_lb1_range_bis())[:3]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
     assert "buy_1like" not in signals["buy_points"]
+    payload = next(p for p in signals["signal_points"] if p["point"] == "buy1like")
+    assert payload["lifecycle_state"] == "forming"
+    assert payload["active"] is False
+    assert payload["signal_bi_id"] == 5
+
+
+def test_analyze_chanlun_signals_sell_1like_fires_with_unconfirmed_reverse_turn() -> None:
+    """BS8 对称：类一卖向下转折笔未确认也发 sell_1like（锚点 bi3 已确认，§3.3 红线）。"""
+    current_zs = _zhongshu(2, zs_low=10.0, zs_high=10.8, day=10)
+    bis = [
+        _bi(1, BiDirection.UP, high=10.6, low=10.1, day=10),
+        _bi(2, BiDirection.DOWN, high=10.5, low=10.0, day=11),
+        _bi(3, BiDirection.UP, high=11.2, low=10.3, day=12),  # 离开末笔越上沿，创新高
+        Bi(
+            bi_id=4,
+            direction=BiDirection.DOWN,
+            start_fx_id=5,
+            end_fx_id=6,
+            start_ts=datetime(2026, 5, 5, 10, 30),
+            end_ts=datetime(2026, 5, 5, 14, 30),
+            high=11.0,
+            low=10.4,
+            norm_bar_range=(5, 6),
+            is_confirmed=False,  # 向下转折笔尚未确认
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=bis[0].end_ts, macd=5.0, dif=1.2),
+        SimpleNamespace(ts=bis[2].end_ts, macd=3.0, dif=0.8),  # 离开末笔力度衰减 -> 顶背驰
+    ]
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert "sell_1like" in signals["sell_points"]
+    payload = next(p for p in signals["signal_points"] if p["point"] == "sell1like")
+    assert payload["lifecycle_state"] == "confirmed"
+    assert payload["active"] is True
+    assert payload["signal_bi_id"] == 3
+
+
+def test_analyze_chanlun_signals_sell_2like_fires_with_unconfirmed_reverse_turn() -> None:
+    """BS7 对称：类二卖向下转折笔未确认也发 sell_2like（锚点 bi32 已确认，§3.3 红线）。"""
+    segments = _ls2_gap_segments()
+    zhongshus = _up_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.UP, high=10.6, low=9.9, day=1),
+        _bi(22, BiDirection.DOWN, high=10.4, low=9.6, day=3),
+        _bi(32, BiDirection.UP, high=11.2, low=10.3, day=5),  # A_{i+2} 反抽末笔（高点）
+        Bi(
+            bi_id=33,
+            direction=BiDirection.DOWN,
+            start_fx_id=33,
+            end_fx_id=34,
+            start_ts=datetime(2026, 5, 6, 10, 30),
+            end_ts=datetime(2026, 5, 6, 14, 30),
+            high=11.1,
+            low=10.4,
+            norm_bar_range=(33, 34),
+            is_confirmed=False,  # 向下转折笔尚未确认
+        ),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=5.0, dif=1.0),
+        SimpleNamespace(ts=segments[2].end_ts, macd=1.0, dif=0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "sell_2like" in signals["sell_points"]
+    payload = next(p for p in signals["signal_points"] if p["point"] == "sell2like")
+    assert payload["lifecycle_state"] == "confirmed"
+    assert payload["active"] is True
+    assert payload["signal_bi_id"] == 32
 
 
 def test_analyze_chanlun_signals_no_buy_1like_when_structure_status_candidate() -> None:

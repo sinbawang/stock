@@ -109,13 +109,16 @@
 1. 最近中枢绑定：`reference_zs_id` 必须指向最近标准中枢（非类中枢 / 辅助结构）。
 2. 离开段确认：离开笔必须已确认（`is_confirmed=True`），且方向与中枢方向相反（向下离开 -> 一买，向上离开 -> 一卖）。
 3. 背驰确认：离开段相对进入段力度衰减（严格力度比较口径，非 macd_sum_abs 近似）。
-4. 转折确认：背驰后出现反向转折笔（一买需向上笔、一卖需向下笔）。
+4. 转折出现：背驰后出现反向转折笔（一买需向上笔、一卖需向下笔；**可为未确认尾笔**——
+   `2026-09-13` 用户决策「新笔不要求确认」，与二 / 三类口径对齐）。
 5. 证据字段：`departure_bi_id`、`reference_zs_id`、`divergence_decayed`、`turn_bi_id` 可回溯。
 
 预警 vs 确认边界（当前实然）：
 
 - `zs_monitor_alert=pre_breakout/pre_breakdown` 是预警层，不等价于 buy_1/sell_1 确认（已有 replay gate 锁定）。
-- buy_1/sell_1 已要求「已确认离开笔 + `_has_reverse_turn_after` 反向转折确认」，未确认离开或无转折笔时不再触发一类点。
+- buy_1/sell_1 要求「已确认离开笔（锚点）+ `_has_reverse_turn_after` 反向转折笔**出现**
+  （`2026-09-13` 起不要求转折笔已确认）」；离开笔（锚点）未确认或无任何转折笔时不发确认点，
+  列 `forming` 预备（watch）。
 - 双边已对称：buy_1 用 `latest_down.is_confirmed`、sell_1 用 `latest_confirmed_up`（均已确认）。
 
 待收口（按优先级）：
@@ -223,7 +226,7 @@
    `strength(A_{i+2}) < strength(A_i)`）。**不要求** `A_{i+2}` 破前低 / 前高（贴合
    「不需要破前低/前高」）。
 3. 回踩结束：`A_{i+2}` 末笔（`_bi_by_id(A_{i+2}.end_bi_id, bis)`）后
-   `_has_reverse_turn_after(anchor, ...)` 出现反向转折。
+   `_has_reverse_turn_after(anchor, ...)` 出现反向转折（**可为未确认尾笔**，`2026-09-13` 放开）。
 4. 门控：仅在 `same_level_decomposition_mode == single_confirmed` 时给点；`pending` 状态只观察。
 5. 生成：信号锚点 = `A_{i+2}` 末笔（回踩 / 反抽极值），`related_zs_id = current_zs.zs_id`。
 
@@ -295,7 +298,8 @@ spec + design + tasks + testcases + code + 回归均已落地（`analysis_contra
    `buy_signal_bi`（= `exit_end_bi`），且 `buy_signal_bi.low <= current_zs.zs_low`（跌破下沿）。
 2. 趋势门控改为 range：`ongoing_type == "range"`（中枢震荡 / 中枢扩张），而非标准一买的
    `== "down"`。这正是标准一买（`== "down"`）因趋势门控缺席的场景。
-3. 反向转折：`_has_reverse_turn_after(buy_signal_bi, direction="down", bis)` 出现向上转折。
+3. 反向转折：`_has_reverse_turn_after(buy_signal_bi, direction="down", bis)` 出现向上转折
+   （**可为未确认尾笔**，`2026-09-13` 放开；锚点（离开段末笔）仍须已确认）。
 4. 门控：仅在单中枢中枢震荡（`ongoing_type == "range"` 且
    `structure_state["current_structure_status"] == "ongoing_same_type"`）时给点；
    `candidate_completed_waiting_stability` 等过渡态只观察。注：range 走势在同级别分解里
@@ -345,7 +349,8 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 - **LB1 反例（趋势门控 down）**：同背驰结构但 `ongoing_type == down`（两中枢不重叠不回探 → 下跌
   趋势）→ 报标准 `buy_1`，不报 `buy_1like`（趋势背驰归一买）。
 - **LB1 反例（无背驰）**：离开段力度不弱于进入段（`segment_bottom_divergence == False`）→ 不报 `buy_1like`。
-- **LB1 反例（无反向转折）**：离开段末笔后无向上转折笔（`_has_reverse_turn_after == False`）→ 不报 `buy_1like`。
+- **LB1 反例（无反向转折）**：离开段末笔后**无任何**反向笔（`_has_reverse_turn_after == False`）→
+  不发确认点，列 `forming` 预备；转折笔未确认（但已出现）自 `2026-09-13` 起**发** `buy_1like`。
 - **LB1 门控反例**：前段已完成、当前为新类型候选未确认（`current_structure_status ==
   candidate_completed_waiting_stability`）→ 只观察，不报 `buy_1like`。
 - **LS1 正例（对称）**：`ongoing_type == range` + 向上离开段升破 `zs_high` + `segment_top_divergence` +
@@ -374,7 +379,8 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
   **纯结构条件**，经 `signal_points`（`lifecycle_state=forming`、`active=False`）透传、同族 confirmed
   优先、confirmed 集合零变化（129 行发射快照逐字节一致）。三类判据经用户上报 7 例误报后改为
   **线段口径（rev2）**（离开线段 + 反抽线段不进入中枢，与 confirmed 同源；不再接受笔级对），
-  7 例全部消除。**残余已知边界**：① 一类 / 类一 / 类二 / 二类 forming 0 帧（结构条件 ⊂ 确认条件）；
+  7 例全部消除。**残余已知边界**：① 一类 / 类一 / 类二 / 二类 forming 0 帧（rev3 放开转折笔
+  确认要求后，其 forming 窗口 = 锚点未确认 ∨ 无任何反向笔，实测仍 0 帧）；
   ② 三类 forming 在冻结语料上被 confirmed 同帧遮蔽（sell 1570/1570、buy 515/515 帧与 confirmed 共存；
   段层尾部永远落后于笔链，renewal 恒真）——暂无可展示窗口（当前 renewal 规则下），保留分支以俟
   confirmed 收累后成对生效。详见
@@ -385,6 +391,12 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
   的宣称存在张力。**尚未断言一类 / 二类 / 三类点被高估**：需按
   [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §4.2 的入口，
   从冻结窗口取确认样本逐例人工判定「确认是否名副其实」后，再决定是否收紧判别式。
+- **`2026-09-13` 用户决策（rev3）**：一类 / 类一 / 类二的反向转折笔**不要求已确认**
+  （对齐二 / 三类「新笔不要求确认」，`_has_reverse_turn_after` 不再要求候选笔 `is_confirmed`）；
+  锚点确认（§3.3）不变，结构成立而锚点后尚无任何反向笔时仍列 `forming`。实测（冻结 4566 帧 +
+  实时 4928 帧：最新帧 / 尾 90×step3 / 尾 45×step1）与旧口径**零差异**——旧「已确认」要求在实链路
+  中不设限（段级背驰可算时转折证据笔已必然确认）；差异仅见于构造帧（旧 = forming / 新 = confirmed，
+  已落单测）。详见 [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §4.1.5 rev3。
 
 ## 推荐执行顺序
 
