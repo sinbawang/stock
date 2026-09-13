@@ -801,6 +801,102 @@ def test_build_latest_signal_summary_surfaces_forming_pre_signal_line() -> None:
     assert any("买卖点预备：" in line and "待转折确认，非确认点" in line for line in summary["lines"])
 
 
+def test_build_latest_signal_summary_keeps_forming_out_of_confirmed_fields() -> None:
+    """RS1 重启（2026-09-13）：forming 经 signal_points 透传，但不得冒充「最近买 / 卖点」。"""
+    summary = module.build_latest_signal_summary(
+        {
+            "summary": {
+                "signal_points": [
+                    {
+                        "point": "buy_2",
+                        "time": "2026-05-05T14:30:00",
+                        "price": 9.5,
+                        "active": True,
+                        "lifecycle_state": "confirmed",
+                    },
+                    {
+                        "point": "buy_3",
+                        "time": "2026-05-06T10:30:00",
+                        "price": 10.2,
+                        "active": False,
+                        "lifecycle_state": "forming",
+                    },
+                ],
+                "signal_catalog": [],
+            }
+        }
+    )
+
+    # forming 时间更新，但「最近买点 / 最近信号」必须仍是 confirmed 点。
+    assert summary["latest_buy"]["point"] == "buy_2"
+    assert summary["latest_overall"]["point"] == "buy_2"
+    assert [item["point"] for item in summary["recent_active"]] == ["buy_2"]
+    assert [item["point"] for item in summary["forming"]] == ["buy_3"]
+    assert summary["forming"][0]["lifecycle_state"] == "forming"
+    assert any("最近买点：二买" in line for line in summary["lines"])
+    assert any("买卖点预备：" in line and "待转折确认，非确认点" in line for line in summary["lines"])
+
+
+def test_build_latest_signal_summary_suppresses_forming_when_same_point_confirmed() -> None:
+    """同族已确认点优先：forming 与 confirmed 同点并存时只保留确认语义（兜底去重）。"""
+    summary = module.build_latest_signal_summary(
+        {
+            "summary": {
+                "signal_points": [
+                    {
+                        "point": "buy_3",
+                        "time": "2026-05-06T10:30:00",
+                        "price": 10.2,
+                        "active": False,
+                        "lifecycle_state": "forming",
+                    },
+                    {
+                        "point": "buy_3",
+                        "time": "2026-05-07T10:30:00",
+                        "price": 10.4,
+                        "active": True,
+                        "lifecycle_state": "confirmed",
+                    },
+                ],
+                "signal_catalog": [],
+            }
+        }
+    )
+
+    assert summary["latest_buy"]["point"] == "buy_3"
+    assert summary["latest_buy"]["lifecycle_state"] == "confirmed"
+    assert summary["forming"] == []
+    assert all("买卖点预备：" not in line for line in summary["lines"])
+
+
+def test_build_technical_section_publishes_forming_signal_points_for_list_rows() -> None:
+    """买卖点页面列表行（spec §2.8）：cards 的 signal_points 原样透传，forming 不被过滤且带 lifecycle 字段。"""
+    section = module.build_technical_section(
+        {
+            "timeframe": "30m",
+            "summary": {
+                "signal_points": [
+                    {
+                        "point": "buy_3",
+                        "time": "2026-05-06T10:30:00",
+                        "price": 10.2,
+                        "active": False,
+                        "lifecycle_state": "forming",
+                    }
+                ],
+                "signal_catalog": [],
+            },
+        }
+    )
+
+    points = section["signal_points"]
+    assert [item["point"] for item in points] == ["buy_3"]
+    assert points[0]["lifecycle_state"] == "forming"
+    assert points[0]["active"] is False
+    assert section["latest_signal_summary"]["latest_buy"] is None
+    assert [item["point"] for item in section["latest_signal_summary"]["forming"]] == ["buy_3"]
+
+
 def test_build_latest_signal_summary_surfaces_invalidated_line() -> None:
     """RS0：invalidated 失效态（spec §2.8）透出到买卖点摘要文本与 invalidated 列表，带失效原因。"""
     summary = module.build_latest_signal_summary(

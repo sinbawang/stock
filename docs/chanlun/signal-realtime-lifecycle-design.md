@@ -382,8 +382,16 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 唯一正确修法仍是段层（§4.2.13），二次确认了「专项分段工程」的定位。此路（distance gate）
 **不要再试**。
 
-> **决定：RS1 forming 下架，标为不做。** 真实链路恒不可达（287 帧冻结窗口 0 次，见 §4.1），
-> 且合取「背驰已现 ∧ 待转折确认」构造互斥、无法在不改分段/中枢层的前提下修复。已删除
+> **决定（2026-09-13 重启）：RS1 forming 重新上线为「纯结构条件」预备态。**
+> 用户决策：forming 只满足结构条件、不叠任何附加确认，**允许漂移失效**，目标是**即时提示**符合
+> 理论的买卖点；确认校验的增强后置到后续迭代（§4.2.7 item 2 的前置条件由此满足，但该项仍暂缓）。
+> 实现：三类（`buy_3`/`sell_3`）改**尾部口径**（`_find_buy3_tail_pair` / `_find_sell3_tail_pair`：
+> 「离开 level 后回试 / 反抽不破仍在活跃尾部」），其余族按「结构条件 ∧ 确认条件」拆分 forming 分支；
+> forming 经 `signal_points` 透传（`lifecycle_state=forming` / `active=False`），同族已确认点优先；
+> 旧 `forming_points` 槽位废弃恒空。confirmed 集合**零变化**（发射快照 129 行逐字节一致）。详见 §4.1.5。
+>
+> ~~**决定：RS1 forming 下架，标为不做。**（2026-09-12）~~ 真实链路恒不可达（287 帧冻结窗口 0 次，
+> 见 §4.1），且合取「背驰已现 ∧ 待转折确认」构造互斥、无法在不改分段/中枢层的前提下修复。当时已删除
 > `analyze_chanlun_signals` 的 forming 生产逻辑（保留空 `forming_points` 契约槽 + `SignalLifecycleState.FORMING`
 > 枚举，后者是 §3.3 锚点门控兜底的载体，与本 RS1 无关）。原可达性 strict xfail
 > （`tests/test_signal_forming_reachability.py`）改为「下架后恒空」正向断言：真实窗口 `forming_points`
@@ -460,6 +468,48 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 3. **承认不可达并下架**：删除 `forming_points` 及其发布 / 前端链路，RS1 标为不做。
 
 在此之前保持 strict xfail：不得用「改成宽条件」把红灯刷绿。
+
+#### 4.1.5 2026-09-13 重启实现与实测（已收口）
+
+决策来源：用户拍板「forming 只要满足结构条件就好，不需要满足任何附加确认要求，允许漂移失效，
+目标能即时提示符合理论的买卖点」。§4.1.4 的三个方向里选**方向 1 的变体**（三类不再与 confirmed
+共用判别式），并以**纯结构条件**为口径。
+
+实现（`src/chanlun/analysis.py`）：
+
+| 族 | forming 结构条件 | 与 confirmed 的关系 |
+| --- | --- | --- |
+| 三类 `buy_3`/`sell_3` | **尾部口径**：向上（向下）离开 level 后，回试 / 反抽笔守边界且仍在活跃尾部（回试笔为尾笔或其前一格） | 独立判据；不动 confirmed 的「历史首个匹配」扫描 |
+| 一类 / 类一 / 类二 | 「背驰 / 隔段力度衰减 ∧ 离开」结构条件成立、反向转折确认未成立 | 结构条件当前 ⊂ 确认条件（§4.1.2 判别式恒真）→ 实测 **0 帧**可达，待该族确认条件收紧后成对生效 |
+| 二类 | 前置成立 + 回抽 / 反抽不破、尚未再度走强 / 走弱 | 同上（语料零样本） |
+
+发射契约：forming 候选统一进入 `signal_points`（`lifecycle_state=forming`、`active=False`，
+锚点可为未确认笔——§3.3 允许，仅 watch）；同帧同族已确认点优先（`point in buy_points+sell_points`
+时跳过 forming）；`forming_points` 旧槽废弃恒空（**旧「独立列表契约」红线随之废止**，§4.0 的
+「独立列表 / 不进 signal_points」口径由本节取代；消费口径「一律 watch 档、文案显式待确认」不变）。
+
+实测（`build/probe_forming_fine.py`，逐 bar 快照 **31897 帧 / 21 窗口**）：
+
+- buy_3 forming **2100 帧**、sell_3 forming **3386 帧**（同期 confirmed 4453 / 11376 帧）；
+- 同帧同族 confirmed+forming 影子遮蔽 **0**、串表不变量违规 **0**；
+- confirmed 发射快照与重启前**逐字节一致**（129 行，`build/_emit_revert.txt` vs
+  `build/_emit_after_forming.txt`）；
+- 提前量样本（同窗口同族首次 forming vs 首次 confirmed）：`00728 day buy3 +224 bar`、
+  `600900 1m sell3 +989 bar`、`03690 30m sell3 +271 bar`；负值样本 = 窗口内 confirmed 先出现
+  （forming 不是升级来路），允许；
+- 逐锚点升级样本 **0**：forming 锚「活跃尾部回试笔」、confirmed 锚「首个匹配 hold 段末笔」，
+  锚点口径天然不同——**不做锚点级升级断言**，「预备 → 确认」以事件级衔接（提前量）钉住；
+- 漂移（窗口内 forming 后未见同族 confirmed）**27 例**：按决策**允许**（纯结构条件、不 repaint）；
+- buy_1 / buy_1like / buy_2like / sell_2like forming **0 帧**：结构 ⊆ 确认（判别式恒真）所致，
+  已知状态，待各族确认条件收紧后成对生效。
+
+测试与消费链（同一提交）：`tests/test_signal_forming_reachability.py` 重写为重启契约（可达性
+buy3/sell3 计数 > 0 + 载荷不变量 + 旧槽恒空 + 反空转，287 帧回放带缓存）；发布包新增 3 用例
+（forming 不进「最近买 / 卖点」/ 同点 confirmed 优先 / `cards.*.signal_points` 原样透传）；
+`build_miniapp_publish_bundle.py` 的 `latest_buy` / `latest_sell` / `latest_overall` /
+`recent_active` 均排除 forming（防「预备点冒充确认点」），预备文案行改由 `signal_points` 提供、
+旧 `forming_points` 仅作回退。小程序侧**零改动**：`buyPoints` 页按 `signal_points` 成行，
+`lifecycle-badge-forming`（「预备」）现有渲染即生效。
 
 ### 4.2 待评估（2026-09-12）：确认判别式的强度与「未确认笔」隐患
 
@@ -586,7 +636,19 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
    **遗留**：那 2 条残留（`00700 day f10 buy3@77`、`03690 5m f9 sell2like@77`）需单独定性 ——
    其特征是「本点自己的门控转 None、兄弟点与参考中枢均未变、笔链继续推进」。
    **已完成，见 §4.2.8：结论是两者都是真 repaint 缺陷。**
-2. 给三类 / 二类判据补 `is_confirmed`（4.2.2 的独立隐患）；**代价**：已确认三类 / 二类点会收缩。
+2. **暂缓 / 已撤回（2026-09-13 决策）**：给三类 / 二类判据补 `is_confirmed`。
+   原因：当时 **forming 未实现**（RS1 已下架），收紧只会让买卖点**滞后出现**、失去操作意义；
+   原文理论的买卖点本身不带附加条件、允许后续漂移 / 失效。
+   **前置条件「先落地 forming」已于 2026-09-13 满足（§4.1.5 重启）**，但本项**仍暂缓**——
+   重启决策明确「确认校验的增强后置到后续迭代」，重做前需再与用户单独决策，
+   并重跑下列影响面实测（过渡 gap / 卡片重锚）。
+   实测影响（供将来重做时直接引用；探针 `build/probe_confirm_guard_impact.py`、
+   `build/probe_emit_dump.py`）：21 窗 × 287 帧发点 **129 → 114**（`buy3` 28→23、`sell3` 73→63；
+   `buy2` / `sell2` 零样本），回放 repaint 保持基线 —— 但会新增 1 条过渡 gap
+   （hold 段终点前移导致，需配套给 `_structural_premise_broken` 加「锚点前移」判定才归零）；
+   3 张已提交卡片（`3S · 000591 day`、区间套 S1/S2）需重锚。
+   ⚠ 实现要点（若将来重做）：**不要**写成 `latest_up.is_confirmed`（违反单调性，会制造全新的
+   「确认后消失」闪烁），必须写成「anchor 之后存在**已确认**的延续笔」（单调、严格收紧）。
 3. 最后再决定是否收紧判别式强度（要求反向笔突破锚点极值 / 形成反向线段）。
 
 #### 4.2.8 2 条残留的定性（已完成，2026-09-12）——**确认是真 repaint 缺陷**

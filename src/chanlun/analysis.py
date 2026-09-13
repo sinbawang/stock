@@ -327,6 +327,16 @@ def _renewed_beyond_previous(latest_bi: Bi, pullback_bi: Bi, bis: list[Bi]) -> b
     return latest_bi.low < prior.low
 
 
+def _has_forming_candidate(candidates: list[tuple[str, Bi]], point: str, *, bi_id: int | None = None) -> bool:
+    """RS1 重启（2026-09-13）：查询 forming 候选登记，用于同族 / 同锚去重（confirmed 优先）。"""
+    for name, bi in candidates:
+        if name != point:
+            continue
+        if bi_id is None or getattr(bi, "bi_id", None) == bi_id:
+            return True
+    return False
+
+
 def _find_buy3_bi_leave_hold(bis: list[Bi], level: float) -> tuple[Bi | None, Bi | None]:
     """笔级：向上离开（high > level）后紧随的向下回试不破 level。"""
     for i, bi in enumerate(bis):
@@ -346,6 +356,48 @@ def _find_sell3_bi_leave_hold(bis: list[Bi], level: float) -> tuple[Bi | None, B
         next_bi = bis[i + 1] if i + 1 < len(bis) else None
         if next_bi is not None and next_bi.is_up() and next_bi.high <= level:
             return bi, next_bi
+    return None, None
+
+
+def _find_buy3_tail_pair(bis: list[Bi], level: float, min_bi_id: int | None) -> tuple[Bi | None, Bi | None]:
+    """尾部口径三类结构：「向上离开 level 后向下回试不破 level」仍在活跃尾部。
+
+    只回看尾笔及其前一格：回试笔为尾笔（回试进行中），或尾笔是回试后的第一笔
+    （刚确认）。保证「即时」语义而非黏住历史结构；破位 / 远离后自然消失（允许漂移失效）。
+    `min_bi_id` 为宽松下界（离开笔不得早于中枢起点），None 时不做该过滤。
+    返回 (leave_up_bi, hold_down_bi)。
+    """
+    if len(bis) >= 2 and bis[-1].is_down():
+        up_bi, down_bi = bis[-2], bis[-1]
+    elif len(bis) >= 3 and bis[-2].is_down():
+        up_bi, down_bi = bis[-3], bis[-2]
+    else:
+        return None, None
+    if (
+        up_bi.is_up()
+        and (min_bi_id is None or up_bi.bi_id >= min_bi_id)
+        and up_bi.high > level
+        and down_bi.low >= level
+    ):
+        return up_bi, down_bi
+    return None, None
+
+
+def _find_sell3_tail_pair(bis: list[Bi], level: float, min_bi_id: int | None) -> tuple[Bi | None, Bi | None]:
+    """尾部口径三卖结构：「向下离开 level 后向上反抽不破 level」仍在活跃尾部（与买侧对称）。"""
+    if len(bis) >= 2 and bis[-1].is_up():
+        down_bi, up_bi = bis[-2], bis[-1]
+    elif len(bis) >= 3 and bis[-2].is_up():
+        down_bi, up_bi = bis[-3], bis[-2]
+    else:
+        return None, None
+    if (
+        down_bi.is_down()
+        and (min_bi_id is None or down_bi.bi_id >= min_bi_id)
+        and down_bi.low < level
+        and up_bi.high <= level
+    ):
+        return down_bi, up_bi
     return None, None
 
 
@@ -1110,6 +1162,10 @@ def analyze_chanlun_signals(
             current_zs_exit_bi = next((bi for bi in bis if bi.bi_id == current_zs.exit_bi_id), None)
     buy_points: list[str] = []
     sell_points: list[str] = []
+    # RS1 重启（2026-09-13）：forming 候选 = 「结构条件成立、确认条件未至」的即时预备点。
+    # 只登记 (point, anchor_bi)，由 `build_signal_point_payloads` 统一构建 watch 档载荷；
+    # 同族已 confirmed 时在载荷层抑制（confirmed 优先，永不倒灌确认集合）。
+    forming_candidates: list[tuple[str, Bi]] = []
     use_segment_divergence = current_zs is not None and current_zs.structure_level == "segment" and bool(segments)
     # RS3 级别收敛：标准一/二类点是操作级别信号，须依附段级中枢；笔级中枢比线段级低半级，
     # 仅供执行级别/区间套次级别定位，不冒充操作级别点。故一/二类发点统一门控在 use_segment_divergence，
@@ -1128,28 +1184,33 @@ def analyze_chanlun_signals(
                 buy_signal_bi = exit_end_bi
             else:
                 sell_signal_bi = exit_end_bi
+    # RS1 重启：一类点拆分为「结构条件（背驰 + 边界 + 趋势门控）」与「确认条件（锚点已确认 +
+    # 反向转折已确认）」。结构成立、确认未至 → forming（watch 档，允许漂移失效）；
+    # confirmed 判定与原有合取完全一致（零变化，确认集合严格可加）。
     if (
         current_zs
         and use_segment_divergence
         and ongoing_type == "down"
         and buy_signal_bi
-        and buy_signal_bi.is_confirmed
         and buy_divergence
         and buy_signal_bi.low <= current_zs.zs_low
-        and _has_reverse_turn_after(buy_signal_bi, direction="down", bis=bis)
     ):
-        buy_points.append("buy_1")
+        if buy_signal_bi.is_confirmed and _has_reverse_turn_after(buy_signal_bi, direction="down", bis=bis):
+            buy_points.append("buy_1")
+        else:
+            forming_candidates.append(("buy_1", buy_signal_bi))
     if (
         current_zs
         and use_segment_divergence
         and ongoing_type == "up"
         and sell_signal_bi
-        and sell_signal_bi.is_confirmed
         and sell_divergence
         and sell_signal_bi.high >= current_zs.zs_high
-        and _has_reverse_turn_after(sell_signal_bi, direction="up", bis=bis)
     ):
-        sell_points.append("sell_1")
+        if sell_signal_bi.is_confirmed and _has_reverse_turn_after(sell_signal_bi, direction="up", bis=bis):
+            sell_points.append("sell_1")
+        else:
+            forming_candidates.append(("sell_1", sell_signal_bi))
     previous_buy1_active = (
         current_zs is not None
         and latest_confirmed_down is not None
@@ -1171,10 +1232,12 @@ def analyze_chanlun_signals(
         and latest_down.bi_id != buy2_anchor.bi_id
         and latest_down.low > buy2_anchor.low
         and _is_first_reverse_hold(buy2_anchor, latest_down, bis)
-        and latest_up.bi_id > latest_down.bi_id
-        and _renewed_beyond_previous(latest_up, latest_down, bis)
     ):
-        buy_points.append("buy_2")
+        # 确认条件 = 回抽已确认（其后有向上笔）且再度走强；未至 → forming（首次回抽不破前低已成立）。
+        if latest_up.bi_id > latest_down.bi_id and _renewed_beyond_previous(latest_up, latest_down, bis):
+            buy_points.append("buy_2")
+        else:
+            forming_candidates.append(("buy_2", buy2_anchor))
     buy3_signal_bi: Bi | None = None
     buy3_hold_bi: Bi | None = None
     if current_zs and latest_up:
@@ -1214,10 +1277,12 @@ def analyze_chanlun_signals(
         and latest_up.bi_id != sell2_anchor.bi_id
         and latest_up.high < sell2_anchor.high
         and _is_first_reverse_hold(sell2_anchor, latest_up, bis)
-        and latest_down.bi_id > latest_up.bi_id
-        and _renewed_beyond_previous(latest_down, latest_up, bis)
     ):
-        sell_points.append("sell_2")
+        # 确认条件 = 反抽已确认（其后有向下笔）且再度走弱；未至 → forming（首次反抽不破前高已成立）。
+        if latest_down.bi_id > latest_up.bi_id and _renewed_beyond_previous(latest_down, latest_up, bis):
+            sell_points.append("sell_2")
+        else:
+            forming_candidates.append(("sell_2", sell2_anchor))
     sell3_signal_bi: Bi | None = None
     sell3_hold_bi: Bi | None = None
     if current_zs and latest_down:
@@ -1238,6 +1303,21 @@ def analyze_chanlun_signals(
                     sell3_signal_bi = hold_bi
                     sell_points.append("sell_3")
 
+    # RS1 重启（三类）：尾部口径 forming —— 「离开后回试」仍活跃（回试笔为尾笔或其前一笔）且
+    # 尚无已确认三类点时给预备提示；回试破位 / 确认后自然消失（允许漂移失效）。
+    # `start_bi_id` 兼容两类口径：笔级中枢为 bi_id、段级中枢为 segment_id（见 identify_zhongshu 约定），
+    # 此处仅作「离开笔不得早于中枢起点」的宽松下界；字段缺失（测试假对象）时不做该过滤。
+    if current_zs is not None:
+        zs_start_bi_id = getattr(current_zs, "start_bi_id", None)
+        if "buy_3" not in buy_points:
+            _tail_up, buy3_tail_hold = _find_buy3_tail_pair(bis, current_zs.zs_high, zs_start_bi_id)
+            if buy3_tail_hold is not None:
+                forming_candidates.append(("buy_3", buy3_tail_hold))
+        if "sell_3" not in sell_points:
+            _tail_down, sell3_tail_hold = _find_sell3_tail_pair(bis, current_zs.zs_low, zs_start_bi_id)
+            if sell3_tail_hold is not None:
+                forming_candidates.append(("sell_3", sell3_tail_hold))
+
     # 三买与三卖针对同一中枢互斥：若两者同时触发，仅保留更晚的「离开-回试」，
     # 较新的信号覆盖较早的信号（例如先向上离开成三买、随后反转向下跌破成三卖）。
     if buy3_signal_bi is not None and sell3_signal_bi is not None:
@@ -1249,6 +1329,13 @@ def analyze_chanlun_signals(
             sell3_signal_bi = None
             if "sell_3" in sell_points:
                 sell_points.remove("sell_3")
+
+    # forming 口径同互斥规则：三买 / 三卖预备点同时成立时，仅保留更晚的「离开-回试」。
+    if _has_forming_candidate(forming_candidates, "buy_3") and _has_forming_candidate(forming_candidates, "sell_3"):
+        forming_buy3 = next(bi for name, bi in forming_candidates if name == "buy_3")
+        forming_sell3 = next(bi for name, bi in forming_candidates if name == "sell_3")
+        drop = "buy_3" if forming_sell3.bi_id > forming_buy3.bi_id else "sell_3"
+        forming_candidates = [item for item in forming_candidates if item[0] != drop]
 
     # 类二类买卖点（LB2/LS2）：同级别隔段背驰（A_i vs A_{i+2}）+ 回踩/反抽结束即生成，
     # 无前置一类点、不设破前低/前高，与标准二类点去重（标准点已成立时不重复标记）。
@@ -1273,6 +1360,10 @@ def analyze_chanlun_signals(
                     if _has_reverse_turn_after(anchor, direction="down", bis=bis):
                         buy2like_signal_bi = anchor
                         buy_points.append("buy_2like")
+                    elif not _has_forming_candidate(forming_candidates, "buy_2"):
+                        # 结构（隔段背驰 + 锚点）成立、反向转折未确认 → forming；
+                        # 标准二类已 confirmed / forming 时不重复标记。
+                        forming_candidates.append(("buy_2like", anchor))
         if "sell_2" not in sell_points:
             ls2_seg = _find_ls2_gap_divergence(segments, like_segment_strengths)
             if ls2_seg is not None:
@@ -1282,6 +1373,8 @@ def analyze_chanlun_signals(
                     if _has_reverse_turn_after(anchor, direction="up", bis=bis):
                         sell2like_signal_bi = anchor
                         sell_points.append("sell_2like")
+                    elif not _has_forming_candidate(forming_candidates, "sell_2"):
+                        forming_candidates.append(("sell_2like", anchor))
 
     # 类一类买卖点（LB1/LS1）：盘整背驰（离开段 vs 进入段，range 门控）+ 反向转折即生成，
     # 补标准一类点因趋势门控（ongoing_type==down/up）缺席的场景（spec §2.5，第27/65课）。
@@ -1298,32 +1391,41 @@ def analyze_chanlun_signals(
         if (
             "buy_1" not in buy_points
             and buy_signal_bi is not None
-            and buy_signal_bi.is_confirmed
             and buy_divergence
             and buy_signal_bi.low <= current_zs.zs_low
             and (buy2like_signal_bi is None or buy2like_signal_bi.bi_id != buy_signal_bi.bi_id)
-            and _has_reverse_turn_after(buy_signal_bi, direction="down", bis=bis)
         ):
-            buy1like_signal_bi = buy_signal_bi
-            buy_points.append("buy_1like")
+            if buy_signal_bi.is_confirmed and _has_reverse_turn_after(buy_signal_bi, direction="down", bis=bis):
+                buy1like_signal_bi = buy_signal_bi
+                buy_points.append("buy_1like")
+            elif (
+                not _has_forming_candidate(forming_candidates, "buy_1")
+                and not _has_forming_candidate(forming_candidates, "buy_2like", bi_id=buy_signal_bi.bi_id)
+            ):
+                # 结构（盘整背驰 + 边界）成立、反向转折未确认 → forming；
+                # 标准一类 / 类二类同锚时不重复标记。
+                forming_candidates.append(("buy_1like", buy_signal_bi))
         if (
             "sell_1" not in sell_points
             and sell_signal_bi is not None
-            and sell_signal_bi.is_confirmed
             and sell_divergence
             and sell_signal_bi.high >= current_zs.zs_high
             and (sell2like_signal_bi is None or sell2like_signal_bi.bi_id != sell_signal_bi.bi_id)
-            and _has_reverse_turn_after(sell_signal_bi, direction="up", bis=bis)
         ):
-            sell1like_signal_bi = sell_signal_bi
-            sell_points.append("sell_1like")
+            if sell_signal_bi.is_confirmed and _has_reverse_turn_after(sell_signal_bi, direction="up", bis=bis):
+                sell1like_signal_bi = sell_signal_bi
+                sell_points.append("sell_1like")
+            elif (
+                not _has_forming_candidate(forming_candidates, "sell_1")
+                and not _has_forming_candidate(forming_candidates, "sell_2like", bi_id=sell_signal_bi.bi_id)
+            ):
+                forming_candidates.append(("sell_1like", sell_signal_bi))
 
-    # RS1 实时预备态（forming）已下架（2026-09-12，见 signal-realtime-lifecycle-design.md §4.1）。
-    # 真实链路上恒为空（287 帧冻结窗口 0 次）：confirmed / forming 共用同一判别式，历史锚点之后必已有
-    # 后续笔，判别式恒真 → confirmed 永远先赢、forming 被同类型去重遮蔽；背驰又只在已终结中枢可算，
-    # 与「未终结中枢待转折」互斥。合取构造不可达，故删除生产逻辑，保留空 `forming_points` 契约槽。
-    # 注：`SignalLifecycleState.FORMING` 仍保留 —— 它是 §3.3 锚点门控兜底（active 点锚在未确认笔时
-    # 降级为 forming）的载体，与本 RS1 独立列表无关。
+    # RS1 重启（2026-09-13）：forming 预备态以「结构条件与确认条件拆分」重新上线——
+    # 各族门控内结构成立、确认未至 → 登记 forming 候选（允许漂移失效）；confirmed 判定与
+    # 原有合取完全一致（零变化，确认集合严格可加）。载荷经 `signal_points` 承载
+    # （lifecycle_state=forming、active=False），小程序买卖点页以「预备」徽标观看；
+    # `forming_points` 旧槽降级为废弃透传槽，保持为空（旧「独立列表契约」红线随之废止）。
     forming_points: list[dict[str, object]] = []
 
     same_level_decomposition_mode = _build_same_level_decomposition_mode(structure_state)
@@ -1363,6 +1465,7 @@ def analyze_chanlun_signals(
         sell2like_signal_bi=sell2like_signal_bi,
         buy1like_signal_bi=buy1like_signal_bi,
         sell1like_signal_bi=sell1like_signal_bi,
+        forming_candidates=forming_candidates,
     )
     zs_monitor_state = _build_zs_monitor_state(
         raw_bars,
@@ -1422,6 +1525,7 @@ def build_signal_point_payloads(
     sell2like_signal_bi: Bi | None = None,
     buy1like_signal_bi: Bi | None = None,
     sell1like_signal_bi: Bi | None = None,
+    forming_candidates: list[tuple[str, Bi]] | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     signal_points: list[dict[str, object]] = []
     signal_catalog: list[dict[str, object]] = []
@@ -1498,6 +1602,31 @@ def build_signal_point_payloads(
                 basis=sell_basis_by_point.get(point),
                 related_zs_id=related_zs_id,
                 related_bi_ids=related_bi_ids,
+            )
+        )
+
+    # RS1 重启（2026-09-13）：forming 预备点载荷（watch 档）。
+    # 结构与确认拆分后，同族 confirmed 已成立时不再输出 forming（confirmed 优先去重，防影子遮蔽）。
+    # 价格口径与确认点一致（买锚点 low / 卖锚点 high）；锚点可为未确认笔（§3.3 允许，仅 watch）。
+    seen_forming: set[tuple[str, int | None]] = set()
+    for point, anchor in forming_candidates or []:
+        if point in (buy_points + sell_points):
+            continue
+        key = (point, getattr(anchor, "bi_id", None))
+        if key in seen_forming:
+            continue
+        seen_forming.add(key)
+        is_buy = point.startswith("buy")
+        signal_points.append(
+            _build_signal_point_detail(
+                point,
+                anchor,
+                getattr(anchor, "low", None) if is_buy else getattr(anchor, "high", None),
+                active=False,
+                basis=(buy_basis_by_point.get(point) if is_buy else sell_basis_by_point.get(point)),
+                related_zs_id=related_zs_id,
+                related_bi_ids=related_bi_ids,
+                lifecycle_state=SignalLifecycleState.FORMING.value,
             )
         )
 

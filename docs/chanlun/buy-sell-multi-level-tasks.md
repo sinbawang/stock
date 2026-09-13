@@ -370,11 +370,13 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 
 - 最近标准中枢和趋势 / 盘整背驰若未先稳定，买卖点严格确认会持续漂移。
 - 当前消费端已有工程规则痕迹，必须先把差异表写清，再逐项替换。
-- **RS1 forming 预备态在真实链路上不可达**（`2026-09-12` 实测：287 帧 0 次；本地 96 个真实
-  `tech.json` 中 64 个带字段、非空 0 个）：判别式空洞导致 **forming 被 confirmed 全局遮蔽**，
-  8 个族全部为 0（含三类 / 类二）。一类 / 类一已改判实时尾部（forming-only，零影响 confirmed）；
-  类二 / 三类需先决策（改判别式会收缩已确认点）。详见
-  [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §4.1。
+- ~~**RS1 forming 预备态在真实链路上不可达**~~ **已解除（`2026-09-13` 重启）**：forming 改为
+  **纯结构条件**（三类走尾部口径，不在 confirmed 扫描上做改动），真实窗口可达（逐 bar 31897 帧实测
+  buy_3 forming 2100 帧 / sell_3 forming 3386 帧），经 `signal_points`（`lifecycle_state=forming`、
+  `active=False`）透传、同族 confirmed 优先、confirmed 集合零变化（129 行发射快照逐字节一致）。
+  **残余已知边界**：一类 / 类一 / 类二 / 二类 forming 0 帧（结构条件 ⊂ 确认条件，待各族确认条件
+  收紧后成对生效）。详见
+  [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §4.1.5。
 - **待评估：确认判别式可能本身过宽**。同一批实测显示 `_has_reverse_turn_after`（42/42）、
   类二锚点判别（19/19）、三类 `latest_up.bi_id > hold_bi.bi_id`（101/101）在真实窗口上**恒真**，
   即「反向转折已确认」可能只等价于「锚点之后还有一根已确认同向笔」。与「RS3 已收口既有工程近似」
@@ -418,7 +420,7 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 | ID | 任务 | 类别 | 优先级 | 覆盖点类型 | ROI 理由 | 状态 |
 | --- | --- | --- | --- | --- | --- | --- |
 | RS0 | 信号生命周期与 repaint 安全契约 | 准确性 + 实时 | P0 | 1/2/3 + 类一 / 类二 | 横切全部点类型；补「确认→失效」回路 + 跨帧不翻转护栏，直接降低事后被打脸的假信号 | 完成（契约 + confirmed + 跨帧 invalidated/repaint + 管道 + 发布前闸门）。`2026-09-12` 核对修正（三项）：① **锚点红线此前实际被违反**——一类点发点门控校验的是离开段末笔，但 `build_signal_point_payloads` 的 `buy_1` / `buy_2` / `sell_2` 没有专用锚点参数，落到 `latest_down` / `latest_up`（可能正是未确认尾笔），再被「active 即 confirmed」的兜底盖成确认态；已在 21 个冻结窗口中检出（`000591 day` cutoff=1010 `buy1` 锚在未确认 bi 95），已补专用锚点参数并让生命周期兜底 fail closed（锚点未确认只能给 `forming`）。② 原「发布前闸门」只读 gitignored 的 `data/reports/**`、无报告即 `skip`，在干净检出 / CI 中**实际空转**；已补冻结 fixture 版确定性闸门 `tests/test_signal_lifecycle_anchor_gate.py`（24 项，已注册进 `signal-lifecycle` 安全闸门）。③ 跨帧 repaint 已收口（`2026-09-12`）：为 `superseded` 建**可审计**分支后，32 条 `vanished_without_break` → **28 条 superseded**（`reanchored` 16 + `zs_superseded` 7 + `sibling_new_anchor` 5）；余 **2 条**（`00700 day f10 buy3@77`、`03690 5m f9 sell2like@77`）定性为真缺陷后**已修复**——新增**结构型前提**（类二隔段背驰依据 / 三类 hold 段不再存在 → `invalidated`，`vanished_without_break` **2 → 0**，发点零变化）；另有 2 条 `reconfirm_after_invalidated` 未受影响。详见 [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §3.5 / §3.6 / §4.2.8。 |
-| RS1 | 实时「预备态」（imminent / forming）分层 | 实时 | P1 | 1/2/3 + 类一 / 类二 | 把「背驰已现、待转折确认」升级为 watch 档可操作提示，盘中更早预警且不 repaint | **不做 / 已下架**（`2026-09-12`：原标「完成」→ 核对后降级「进行中」→ 复核确认真实链路构造不可达，决定下架）。真实链路恒为空：287 帧冻结真实窗口产出 `forming` **0 次**。根因：confirmed / forming 共用同一判别式（拿历史锚点比实时尾部，历史锚点之后必已有后续笔 → 判别式恒真 → confirmed 永远先赢、forming 被同类型去重遮蔽），且背驰只在已终结中枢可算、与「未终结中枢待转折」互斥，合取构造不可达。**已删除 `analyze_chanlun_signals` 的 forming 生产逻辑**（保留空 `forming_points` 契约槽 + `SignalLifecycleState.FORMING` 枚举——后者是 §3.3 锚点门控兜底载体，与本 RS1 无关）；`tests/test_signal_forming_reachability.py` 由 strict xfail 改为「下架后恒空」正向断言（20 fixture 参数化，若有人重新引入非空 forming 即失败）。详见 [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §4。 |
+| RS1 | 实时「预备态」（imminent / forming）分层 | 实时 | P1 | 1/2/3 + 类一 / 类二 | 把「背驰已现、待转折确认」升级为 watch 档可操作提示，盘中更早预警且不 repaint | **重启完成（`2026-09-13`）**。原下架结论（`2026-09-12`：判别式空洞 → forming 被 confirmed 全局遮蔽、8 族全 0）保留备查；重启决策改为**纯结构条件**（不加任何附加确认、允许漂移失效、目标即时提示）：三类 `buy_3`/`sell_3` 用**尾部口径**判据（离开 level 后回试 / 反抽不破仍活跃在尾部），其余族拆出结构条件 forming 分支。forming 经 `signal_points` 透传（`lifecycle_state=forming`、`active=False`），同族 confirmed 优先，旧 `forming_points` 槽废弃恒空。实测：逐 bar 31897 帧 buy_3 forming 2100 / sell_3 forming 3386；confirmed 零变化（129 行发射快照逐字节一致）；影子遮蔽 0、串表违规 0；漂移 27 例按设计允许。残余已知边界：一类 / 类一 / 类二 / 二类 forming 0 帧（结构 ⊆ 确认，待各族确认条件收紧后成对生效）。闸门重写为重启契约（可达性 + 载荷不变量 + 旧槽恒空 + 反空转）。详见 [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §4.1.5。 |
 | RS2 | 多级别双向联立（小转大自动升级 + 区间套反向确认） | 准确性 | P2 | 1/2/3（尤其 3 类 / 类二） | 现只单向降级；补下级别→上级别确认，减少高级别转折漏报 | 完成（小转大升级 higher_level_confirmed + 区间套反向确认 + 回归） |
 | RS3 | 收口既有「工程近似」（笔级中枢级别收敛 / 二类首次回抽窗口 / 三类回中枢失效） | 准确性 | P3 | 1/2/3 | 关闭 BS1 差异表遗留近似，降低边界假信号 | 完成（item1 级别收敛 + item2 首次回抽窗口均已落地 / item3 由 RS0 覆盖） |
 | RS4 | 增量重算稳健性（跳空 / 停牌 / overlap 失配） | 实时 / 性能 | P3 | 全部（数据层） | 保证极端行情下缓存不污染信号，避免全量回退降级 | 完成（跨帧不连续检测 + 回退全量重抓 + 回归） |
@@ -522,6 +524,30 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 - 闸门：`tests/test_signal_forming_reachability.py`（strict xfail 钉可达性；一旦可达会 XPASS→失败强制收尾）。
 - 同源待评估项：判别式恒真意味着「已确认」可能只等价于「后面还有笔」，见
   [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §4.2。
+
+进展（增量4，2026-09-13——**重启落地，取代下架结论**）：
+
+- 决策（用户）：forming 只满足**结构条件**即可，不叠任何附加确认；允许漂移失效；目标是即时提示
+  符合理论的买卖点。确认校验增强后置（§4.2.7 item 2 仍暂缓）。
+- 实现：三类改**尾部口径**——`_find_buy3_tail_pair` / `_find_sell3_tail_pair`（「离开 level 后
+  回试 / 反抽不破」仍在活跃尾部：回试笔为尾笔或其前一格），不再与 confirmed 共用「历史首个匹配」
+  扫描（旧下架的根因正是共用判别式恒真）；其余族按「结构条件 ∧ 确认条件」拆出 forming 分支，
+  结构条件成立而确认未成立即产出 forming（fail open 于 forming、仍不放松 confirmed）。
+- 发射契约变更：forming 由独立 `forming_points` 槽**迁移**到 `signal_points` 载荷
+  （`lifecycle_state=forming`、`active=False`、锚点可为未确认笔——§3.3 允许，仅 watch）；
+  同帧同族 confirmed 优先（门控名单命中时跳过 forming）；`forming_points` 旧槽**废弃恒空**，
+  旧「独立列表契约」红线随之废止（§4.0 历史设想被取代）。
+- 实测（`build/probe_forming_fine.py`，逐 bar 31897 帧 / 21 窗口）：buy_3 forming 2100 帧、
+  sell_3 forming 3386 帧；影子遮蔽 0、串表不变量违规 0；confirmed 发射快照与重启前**逐字节一致**
+  （129 行）；提前量如 `00728 day buy3 +224 bar`、`600900 1m sell3 +989 bar`；漂移 27 例（允许）。
+  残余已知边界：buy_1 / buy_1like / buy_2like / sell_2like forming **0 帧**（结构 ⊆ 确认所致，
+  待各族确认条件收紧后成对生效）；逐锚点升级样本 0（forming 锚尾部回试笔 vs confirmed 锚 hold 段
+  末笔，锚点口径天然不同，以事件级提前量钉住衔接）。
+- 消费链：发布包 `latest_buy` / `latest_sell` / `latest_overall` / `recent_active` 排除 forming
+  （防预备点冒充确认点），预备文案行改由 `signal_points` 提供（旧 `forming_points` 仅回退）；
+  小程序 `buyPoints` 页按 `signal_points` 成行、`lifecycle-badge-forming`「预备」渲染即生效（零改动）。
+- 回归：闸门重写为重启契约（可达性 buy3/sell3 > 0 + 载荷不变量 + 旧槽恒空 + 反空转，287 帧回放
+  带缓存）；发布包新增 3 用例（forming 不进最近买卖点 / 同点 confirmed 优先 / 原样透传）。
 
 ### RS2 多级别双向联立（P2）
 

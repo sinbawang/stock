@@ -882,6 +882,10 @@ def build_same_level_decomposition(tech_payload: dict[str, Any]) -> dict[str, An
     }
 
 
+def _is_forming_signal(item: dict[str, Any] | None) -> bool:
+    return bool(item) and safe_text(item.get("lifecycle_state")).lower() == "forming"
+
+
 def build_latest_signal_summary(tech_payload: dict[str, Any]) -> dict[str, Any]:
     summary = tech_payload.get("summary") or {}
     active_signals = [normalize_signal_point(item) for item in (summary.get("signal_points") or [])]
@@ -897,10 +901,12 @@ def build_latest_signal_summary(tech_payload: dict[str, Any]) -> dict[str, Any]:
         seen.add(key)
         deduped.append(item)
 
-    deduped.sort(key=lambda item: safe_text(item.get("time")), reverse=True)
-    latest_buy = next((item for item in deduped if safe_text(item.get("point")).startswith("buy")), None)
-    latest_sell = next((item for item in deduped if safe_text(item.get("point")).startswith("sell")), None)
-    latest_overall = deduped[0] if deduped else None
+    # RS1 重启（2026-09-13）：forming 预备态只作观察，不得进入「最近买 / 卖点」等确认语义字段。
+    confirmed_only = [item for item in deduped if not _is_forming_signal(item)]
+    confirmed_only.sort(key=lambda item: safe_text(item.get("time")), reverse=True)
+    latest_buy = next((item for item in confirmed_only if safe_text(item.get("point")).startswith("buy")), None)
+    latest_sell = next((item for item in confirmed_only if safe_text(item.get("point")).startswith("sell")), None)
+    latest_overall = confirmed_only[0] if confirmed_only else None
 
     lines: list[str] = []
     if latest_buy:
@@ -910,9 +916,15 @@ def build_latest_signal_summary(tech_payload: dict[str, Any]) -> dict[str, Any]:
         sell_price = f"，价格 {latest_sell['price']:.2f}" if latest_sell.get("price") is not None else ""
         lines.append(f"最近卖点：{latest_sell['label']} {safe_text(latest_sell.get('time'))}{sell_price}")
 
-    # RS1 预备态（spec §2.8）：背驰已现、待转折确认，仅 watch 观察，不构成确认买卖点。
-    forming_points = [normalize_signal_point(item) for item in (summary.get("forming_points") or [])]
-    forming_points = [item for item in forming_points if item and item.get("point")]
+    # RS1 预备态（spec §2.8）：结构条件成立、待确认，仅 watch 观察，不构成确认买卖点。
+    # 新契约（2026-09-13）：forming 经 signal_points 透传（active=False / lifecycle_state=forming，
+    # 见 §4.1 重启决策）；同族已确认点优先，旧 bundle 的 forming_points 仅作回退。
+    forming_points = [item for item in active_signals if item and item.get("point") and _is_forming_signal(item)]
+    if not forming_points:
+        forming_points = [normalize_signal_point(item) for item in (summary.get("forming_points") or [])]
+        forming_points = [item for item in forming_points if item and item.get("point")]
+    confirmed_point_names = {safe_text(item.get("point")) for item in confirmed_only}
+    forming_points = [item for item in forming_points if safe_text(item.get("point")) not in confirmed_point_names]
     for item in forming_points:
         forming_price = f"，价格 {item['price']:.2f}" if item.get("price") is not None else ""
         lines.append(f"买卖点预备：{item['label']} {safe_text(item.get('time'))}{forming_price}（待转折确认，非确认点）")
@@ -969,7 +981,7 @@ def build_latest_signal_summary(tech_payload: dict[str, Any]) -> dict[str, Any]:
         "latest_buy": latest_buy,
         "latest_sell": latest_sell,
         "latest_overall": latest_overall,
-        "recent_active": deduped[:3],
+        "recent_active": confirmed_only[:3],
         "forming": forming_points,
         "invalidated": invalidated_points,
         "lines": lines,
