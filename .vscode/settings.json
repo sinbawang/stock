@@ -1,0 +1,25 @@
+{
+  "python.analysis.indexing": "partial",
+  "python.analysis.useLibraryCodeForTypes": false,
+  "python.analysis.diagnosticMode": "openFilesOnly",
+  "python.analysis.maxAnalysisTime": 30,
+  "python.analysis.completeFunctionParens": false,
+  "python.analysis.typeCheckingMode": "basic",
+  "copilot.mcp.enabledServers": ["github.copilot.chat-context"],
+  "copilot.mcp.overrideServers": {
+    "pylance": {
+      "disabled": true
+    }
+  },
+  "files.watcherExclude": {
+    "**/build/**": true,
+    "**/data/**": true,
+    "**/log/**": true,
+    "**/__pycache__/**": true,
+    "**/*.pkl": true,
+    "**/*.parquet": true
+  },
+  "terminal.integrated.env.windows": {
+    "PYTHONUNBUFFERED": "1"
+  }
+}
