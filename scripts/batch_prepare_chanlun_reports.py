@@ -45,8 +45,9 @@ from chanlun.data import read_bars_from_csv
 from chanlun.data.cleaner import clean_bars
 from chanlun.data.hk_fetcher import fetch_hk_daily, save_to_csv as save_hk_daily_csv
 from chanlun.data.hk_minute_fetcher import fetch_hk_minute_with_policy, get_last_fetch_metadata as get_last_hk_fetch_metadata, save_to_csv as save_hk_minute_csv
+from chanlun.data.hk_phantom_gate import GATE_TIMEFRAMES as HK_PHANTOM_GATE_TIMEFRAMES, run_hk_phantom_gate
 from chanlun.data.kline_fetcher import fetch_kline, get_last_fetch_metadata, save_to_csv as save_kline_csv
-from chanlun.data.local_bar_store import detect_incremental_discontinuity, infer_incremental_start, load_local_rows, tail_rows, upsert_local_rows
+from chanlun.data.local_bar_store import MergeStats, detect_incremental_discontinuity, infer_incremental_start, load_local_rows, tail_rows, upsert_local_rows
 from chanlun.data.source_profiles import describe_source_chain, resolve_a_share_intraday_source_label, resolve_hk_minute_source_selection
 from chanlun.fractal import filter_consecutive_fractals, identify_fractals
 from chanlun.models import Bar
@@ -508,6 +509,41 @@ def _rows_to_bars(rows: list[dict]) -> list[Bar]:
     ]
 
 
+def _maybe_apply_hk_phantom_gate(
+    security: Security,
+    timeframe: str,
+    rows: list[dict],
+    fetch_meta: dict[str, object],
+    *,
+    local_store_root: Path | None,
+) -> list[dict]:
+    """港股 1m/5m/30m：以本地日线为锚执行幽灵价闸门（结果写入 fetch_meta）。
+
+    首根陈旧开盘价 / 首尾越界极值会被修复（优先用 1m 成分重聚合）；
+    轻微越界只记录 soft。闸门失败不阻断主流程。
+    """
+    if security.market != "HK" or timeframe not in HK_PHANTOM_GATE_TIMEFRAMES or not rows:
+        return rows
+    try:
+        gated, summary = run_hk_phantom_gate(
+            security.symbol,
+            timeframe,
+            rows,
+            store_root=local_store_root,
+        )
+    except Exception as exc:  # noqa: BLE001 - 闸门异常不阻断报告生成
+        fetch_meta["hk_phantom_gate"] = {
+            "applied": False,
+            "skipped": f"error:{type(exc).__name__}",
+            "repaired": 0,
+            "soft": 0,
+            "events": [],
+        }
+        return rows
+    fetch_meta["hk_phantom_gate"] = summary
+    return gated
+
+
 def _fetch_with_optional_local_store(
     security: Security,
     *,
@@ -534,7 +570,7 @@ def _fetch_with_optional_local_store(
 
     if use_local_store and local_store_read_only and local_before > 0:
         analysis_rows = tail_rows(local_rows, bar_count)
-        return analysis_rows, {
+        readonly_payload: dict[str, object] = {
             "source": "local_store_read_only",
             "actual_source": "local_store_read_only",
             "source_attempts": [],
@@ -557,6 +593,16 @@ def _fetch_with_optional_local_store(
                 "analysis_rows": len(analysis_rows),
             },
         }
+        analysis_rows = _maybe_apply_hk_phantom_gate(
+            security,
+            timeframe,
+            analysis_rows,
+            readonly_payload,
+            local_store_root=local_store_root,
+        )
+        readonly_payload["actual_bar_count"] = len(analysis_rows)
+        readonly_payload["local_store"]["analysis_rows"] = len(analysis_rows)  # type: ignore[index]
+        return analysis_rows, readonly_payload
 
     remote_probe_min_rows = bar_count
     if use_local_store and local_covers_target and timeframe != "day":
@@ -570,6 +616,13 @@ def _fetch_with_optional_local_store(
     else:
         rows, fetch_meta = remote_fetcher(effective_start, remote_probe_min_rows)
     if not use_local_store:
+        rows = _maybe_apply_hk_phantom_gate(
+            security,
+            timeframe,
+            rows,
+            fetch_meta,
+            local_store_root=local_store_root,
+        )
         return rows, fetch_meta
 
     # RS4 增量重算稳健性：增量窗口若与本地缓存不连续（跳空 / 停牌 / 源漂移导致远端最早一根晚于缓存末根），
@@ -590,6 +643,31 @@ def _fetch_with_optional_local_store(
         rows,
         root=local_store_root,
     )
+    if security.market == "HK" and timeframe in HK_PHANTOM_GATE_TIMEFRAMES:
+        gate_meta: dict[str, object] = {}
+        merged_rows = _maybe_apply_hk_phantom_gate(
+            security,
+            timeframe,
+            merged_rows,
+            gate_meta,
+            local_store_root=local_store_root,
+        )
+        gate_summary = gate_meta.get("hk_phantom_gate") or {}
+        if isinstance(gate_summary, dict) and int(gate_summary.get("repaired") or 0) > 0:
+            # 闸门修复了仓库中的历史幽灵价 -> 回写一次仓库，保证 store 自身也被洗净
+            merged_rows, fix_stats, store_path = upsert_local_rows(
+                security.symbol,
+                security.market,
+                timeframe,
+                merged_rows,
+                root=local_store_root,
+            )
+            merge_stats = MergeStats(
+                added=merge_stats.added,
+                updated=merge_stats.updated + fix_stats.updated,
+                total=fix_stats.total,
+            )
+        fetch_meta["hk_phantom_gate"] = gate_summary
     analysis_rows = tail_rows(merged_rows, bar_count)
     payload = dict(fetch_meta)
     payload["local_store"] = {

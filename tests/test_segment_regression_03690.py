@@ -55,7 +55,7 @@ def test_03690_30m_segments_keep_gap_landmarks_and_tail() -> None:
         ("up", 55, 77, "feature_sequence_fractal", True, (404, 575)),
         ("down", 78, 94, "feature_sequence_fractal", True, (575, 714)),
         ("up", 95, 97, "feature_sequence_gap_fractal", True, (714, 738)),
-        ("down", 98, 100, "exhausted_confirmed_bis", False, (738, 764)),
+        ("down", 98, 100, "exhausted_confirmed_bis", False, (738, 763)),
     ]
 
 

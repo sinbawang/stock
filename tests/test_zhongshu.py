@@ -221,14 +221,13 @@ def _load_segments_from_normalized_csv(path: Path) -> list[Segment]:
     return segments
 
 
-def test_03690_5m_same_level_decomp_down_trend_and_expansion_detected_separately() -> None:
-    """第20课真实锚点：ZS0/ZS1 区间不重叠但波动回探，ZS1/ZS2 构成下跌趋势。
+def test_03690_5m_same_level_decomp_down_trend_without_false_expansion() -> None:
+    """03690 5m 真实窗口（首根幽灵价修复后）：三中枢同向下移 → 判「下跌趋势进行中」。
 
-    同级别分解不处理扩张 → ZS0/ZS1 按区间不重叠判 up，扩张由独立的「按中枢」层
-    identify_expanded_zhongshus 单独检出，不改变同级别分解的类型；s6 为 ZS0 的
-    走出段（第三类买点），ZS1=(s7,s8,s9)=[92.05,93.95] 复用 s6 为进入段，随后
-    s11 反向跌破 ZD 触发趋势反转，ZS2=(s12,s13,s14)=[85.7,88.75] 成型，最终走势
-    类型为「ZS0 盘整 + ZS1/ZS2 下跌趋势」。
+    旧断言里钉住的 (zs1, zs2) 扩张是 09-11 09:35 幽灵价 84.629 制造的假象：幽灵值把
+    ZS2 的 peak_high 抬到 84.629，与 ZS1 的 peak_low（84.05）形成 GG/DD 回探重叠。
+    2026-09-14 修复后 peak_high=83.85 与 ZS1 真不重叠 → 无扩张、同级别分解为单一 down
+    趋势。扩张功能的正面/反面锚点由上方合成用例继续承担。
     """
     path = frozen_segments_csv("03690", "5m")
     segments = _load_segments_from_normalized_csv(path)
@@ -242,11 +241,9 @@ def test_03690_5m_same_level_decomp_down_trend_and_expansion_detected_separately
         (1, 85.7, 88.75),
         (2, 76.9, 79.5),
     ]
-    assert len(expanded) == 1
-    assert expanded[0].sub_zs_ids == [1, 2]
-    assert round(expanded[0].expanded_low, 6) == 84.05
-    assert round(expanded[0].expanded_high, 6) == 84.629
-    assert state["current_ongoing"]["type"] == "range"
+    # 幽灵价修复后：zs1 极值 [84.05, 89.35] 与 zs2 极值 [73.65, 83.85] 不重叠 → 无扩张。
+    assert expanded == []
+    assert state["current_ongoing"]["type"] == "down"
 
 
 def test_300124_30m_directional_departure_captures_reversed_leave_center() -> None:

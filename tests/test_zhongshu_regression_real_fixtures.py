@@ -197,47 +197,42 @@ def test_03690_5m_segment_zhongshu_keeps_disjoint_centers_without_false_reabsorp
 
 
 def test_03690_5m_structure_state_keeps_real_completed_then_new_type_chain() -> None:
-    """03690 5m（首选级别，冻结快照 03690_5m_20260731_to_20260911）：down completed -> range ongoing。"""
+    """03690 5m（首选级别，冻结快照 03690_5m_20260731_to_20260911）：down 趋势进行中（3 中枢）。
+
+    2026-09-14 修复首根幽灵价（09-11 09:35 high 84.629 -> 74.3）：幽灵值此前把 ZS2 的
+    peak_high 抬到 84.629，恰好与 ZS1 的 peak_low（84.05）回探重叠，被 is_zhongshu_expansion
+    误判为中枢扩张 -> zs1/zs2 关系错判 range，切分出「down completed -> range ongoing」。
+    修复后 peak_high=83.85 与 ZS1 真不重叠，三中枢为干净同向下移趋势，状态回落为 down ongoing(3)。
+    """
     segments = identify_segments_from_csv(SAMPLE_03690_5M_CSV)
 
     zhongshus = identify_zhongshu(segments, structure_level="segment")
     structure_state = build_structure_state([], zhongshus)
 
-    assert structure_state["last_completed"] == {
+    assert structure_state["last_completed"] is None
+    assert structure_state["current_ongoing"] == {
         "type": "down",
-        "status": "completed",
+        "status": "ongoing",
         "start_ts": "2026-08-03T11:30:00",
-        "end_ts": "2026-08-20T09:50:00",
-        "latest_ts": "2026-08-20T09:50:00",
-        "zs_count": 2,
-        "zs_count_so_far": 2,
-        "confirmation_basis": "confirmed_by_following_same_level_structure",
+        "end_ts": None,
+        "latest_ts": "2026-09-11T10:45:00",
+        "zs_count": 3,
+        "zs_count_so_far": 3,
+        "confirmation_basis": "forming_next_same_level_zhongshu",
         "start_zs_id": 0,
-        "end_zs_id": 1,
+        "end_zs_id": 2,
     }
-    assert structure_state["current_ongoing"]["type"] == "range"
-    assert structure_state["current_ongoing"]["zs_count_so_far"] == 1
-    assert structure_state["current_ongoing"]["confirmation_basis"] == "single_active_zhongshu"
-    assert structure_state["relationship"]["kind"] == "completed_then_new_type_ongoing"
-    assert structure_state["relationship"]["transition_state"] == "candidate_new_type"
-    assert structure_state["consumption_level"] == "pending"
+    assert structure_state["relationship"]["kind"] == "undetermined"
+    assert structure_state["relationship"]["transition_state"] == "none"
+    assert structure_state["consumption_level"] == "confirmed"
     assert structure_state["type_chain"] == [
         {
             "type": "down",
-            "status": "completed",
-            "zs_count": 2,
-            "start_zs_id": 0,
-            "end_zs_id": 1,
-            "start_ts": "2026-08-03T11:30:00",
-            "end_ts": "2026-08-20T09:50:00",
-        },
-        {
-            "type": "range",
             "status": "ongoing",
-            "zs_count": 1,
-            "start_zs_id": 2,
+            "zs_count": 3,
+            "start_zs_id": 0,
             "end_zs_id": 2,
-            "start_ts": "2026-08-28T09:50:00",
+            "start_ts": "2026-08-03T11:30:00",
             "end_ts": None,
         },
     ]
