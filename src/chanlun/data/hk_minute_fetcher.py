@@ -81,6 +81,11 @@ def _normalize_symbol(symbol: str) -> str:
     return normalized
 
 
+def _xueqiu_symbol(symbol: str) -> str:
+    normalized = _normalize_symbol(symbol)
+    return f"HK{normalized}" if is_hk_index_symbol(normalized) else normalized
+
+
 def _parse_dt(value: Optional[str], default: str) -> str:
     """规范化为 'YYYY-MM-DD HH:MM:SS'，AKShare 要求该格式。"""
     if not value:
@@ -301,6 +306,7 @@ def _fetch_hk_minute_xueqiu(
         raise ValueError("雪球分钟线当前仅支持不复权或前复权(qfq)")
 
     code = _normalize_symbol(symbol)
+    xueqiu_symbol = _xueqiu_symbol(code)
     start_dt = datetime.strptime(_parse_dt(start, "1990-01-01 00:00:00"), "%Y-%m-%d %H:%M:%S")
     end_dt = datetime.strptime(
         _parse_dt(end, datetime.now(_HK_MARKET_TZ).strftime("%Y-%m-%d %H:%M:%S")),
@@ -313,7 +319,7 @@ def _fetch_hk_minute_xueqiu(
     response = session.get(
         "https://stock.xueqiu.com/v5/stock/chart/kline.json",
         params={
-            "symbol": code,
+            "symbol": xueqiu_symbol,
             "begin": str(_datetime_to_epoch_ms(end_dt, _HK_MARKET_TZ)),
             "period": _map_xueqiu_period(period),
             "type": "before",
