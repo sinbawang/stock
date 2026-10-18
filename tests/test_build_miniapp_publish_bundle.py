@@ -4,10 +4,12 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import sys
 
 from tests.real_fixture_support import frozen_tech_json
 from tests.replay_support import load_replay_rows, replay
+from storage_layout import now_iso
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,6 +62,10 @@ Generated at: 2026-05-30T20:05:33
     assert payload["counts"]["watch_pool"] == 1
     assert payload["sections"][1]["items"][0]["symbol"] == "000651"
     assert payload["notes"] == ["priority/action 只用于排序"]
+
+
+def test_now_iso_includes_timezone_offset() -> None:
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$", now_iso())
 
 
 def test_load_holdings_preserves_hk_index_symbol(tmp_path: Path) -> None:

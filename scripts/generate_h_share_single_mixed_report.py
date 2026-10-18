@@ -53,6 +53,7 @@ from storage_layout import (
     CAPITAL_FLOW_CACHE_DIR,
     canonical_symbol,
     is_hk_index_symbol,
+    now_iso,
     stock_base_report_path,
     stock_fund_report_path,
     stock_overview_report_path,
@@ -89,7 +90,7 @@ def _build_technical_only_placeholder_path(path: Path, symbol: str, name: str, r
         "report_type": report_type,
         "symbol": _report_symbol(symbol),
         "name": name,
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "generated_at": now_iso(),
         "summary": {},
         "analysis_mode": "technical_only",
         "note": "港股指数当前仅支持技术分析；基本面与资金面未生成。",
@@ -397,7 +398,7 @@ def _write_lower_precision_report(
             "symbol": symbol,
             "name": name,
             "timeframe": LOWER_PRECISION_TIMEFRAME,
-            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "generated_at": now_iso(),
             "source": source,
             "source_actual": actual_source,
             "data_fetch": {
@@ -595,7 +596,7 @@ def _save_technical_report(
             "symbol": symbol,
             "name": name,
             "timeframe": PRIMARY_TECHNICAL_TIMEFRAME,
-            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "generated_at": now_iso(),
             "source": used_source,
             "source_actual": actual_source,
             "data_fetch": {
@@ -738,7 +739,7 @@ def main() -> None:
                 "report_type": "fundamental",
                 "symbol": report_symbol,
                 "name": args.name,
-                "generated_at": datetime.now().isoformat(timespec="seconds"),
+                "generated_at": now_iso(),
                 "summary": {
                     "score": fundamental_result.blended.blended_total_score,
                     "rating": fundamental_result.blended.blended_rating,
@@ -831,7 +832,7 @@ def main() -> None:
                 "report_type": "capital_flow",
                 "symbol": report_symbol,
                 "name": args.name,
-                "generated_at": datetime.now().isoformat(timespec="seconds"),
+                "generated_at": now_iso(),
                 "summary": {
                     "score": capital_flow_result.scorecard.total_score,
                     "rating": capital_flow_result.scorecard.rating,

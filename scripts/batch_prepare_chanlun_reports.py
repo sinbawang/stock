@@ -69,7 +69,7 @@ from export_structures_with_boxes import (
 )
 from report_json import write_json
 from run_hk_60m_chanlun_report import analyze_current_state, compute_bi_strengths, write_normalized_csv
-from storage_layout import REPORTS_DIR, REPORTS_META_DIR, canonical_symbol, holdings_file, stock_report_dir, timeframe_report_paths
+from storage_layout import REPORTS_DIR, REPORTS_META_DIR, canonical_symbol, holdings_file, now_iso, stock_report_dir, timeframe_report_paths
 
 
 @dataclass(frozen=True)
@@ -1237,7 +1237,7 @@ def export_case(
             "symbol": security.symbol,
             "name": security.name,
             "timeframe": timeframe,
-            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "generated_at": now_iso(),
             "source": (data_fetch or {}).get("source"),
             "data_fetch": data_fetch,
             "pending_reverse_mode": pending_reverse_mode,

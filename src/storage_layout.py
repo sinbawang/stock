@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +13,10 @@ DATA_DIR = ROOT / "data"
 REPORTS_DIR = DATA_DIR / "reports"
 REPORTS_META_DIR = REPORTS_DIR / "_meta"
 DATA_META_DIR = DATA_DIR / "_meta"
+
+
+def now_iso() -> str:
+    return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 def _resolve_kline_cache_dir() -> Path:

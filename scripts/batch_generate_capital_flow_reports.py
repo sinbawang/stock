@@ -16,7 +16,7 @@ from capital_flow.reporting import save_capital_flow_text
 from capital_flow.services import fetch_and_analyze_cn_flow
 from report_json import write_json
 from report_retention import prune_older_outputs
-from storage_layout import CAPITAL_FLOW_CACHE_DIR, REPORTS_META_DIR, holdings_file, stock_fund_report_path
+from storage_layout import CAPITAL_FLOW_CACHE_DIR, REPORTS_META_DIR, holdings_file, now_iso, stock_fund_report_path
 
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
@@ -149,7 +149,7 @@ def generate_one(
             "report_type": "capital_flow",
             "symbol": target.symbol,
             "name": target.name,
-            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "generated_at": now_iso(),
             "summary": {
                 "score": result.scorecard.total_score,
                 "rating": result.scorecard.rating,

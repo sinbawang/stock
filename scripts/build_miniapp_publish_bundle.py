@@ -39,7 +39,7 @@ from chanlun.segment import (
     is_theory_confirmed_stop_reason,
     summarize_stop_reason_outcome,
 )
-from storage_layout import REPORTS_DIR, REPORTS_META_DIR, canonical_symbol, holdings_file
+from storage_layout import REPORTS_DIR, REPORTS_META_DIR, canonical_symbol, holdings_file, now_iso
 
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
@@ -378,7 +378,7 @@ def build_missing_artifacts_payload(
         by_kind[kind] = by_kind.get(kind, 0) + 1
     return {
         "schema_version": "missing-artifacts-v1",
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "generated_at": now_iso(),
         "counts": {
             "total": len(alerts),
             "by_reason": by_reason,
@@ -2255,7 +2255,7 @@ def generate_bundle(
                 copy_chart_assets(chart_specs, stock_target_dir)
 
         portfolio_payload = build_portfolio_group(summary_payloads, group_item_map)
-        generated_at = datetime.now().isoformat(timespec="seconds")
+        generated_at = now_iso()
         index_payload = build_index_payload(summary_payloads, generated_at)
         missing_payload = build_missing_artifacts_payload(
             alerts=missing_alerts,

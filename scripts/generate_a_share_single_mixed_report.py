@@ -50,7 +50,7 @@ from generate_a_share_combined_overview import (
 )
 from run_cn_60m_chanlun_report import analyze_current_state, build_paths, write_normalized_csv
 from report_json import write_json
-from storage_layout import CAPITAL_FLOW_CACHE_DIR, stock_base_report_path, stock_fund_report_path, stock_overview_report_path, stock_report_dir, timeframe_report_paths
+from storage_layout import CAPITAL_FLOW_CACHE_DIR, now_iso, stock_base_report_path, stock_fund_report_path, stock_overview_report_path, stock_report_dir, timeframe_report_paths
 
 
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "_meta"
@@ -371,7 +371,7 @@ def _save_technical_report(
             "symbol": normalized_symbol,
             "name": name,
             "timeframe": PRIMARY_TECHNICAL_TIMEFRAME,
-            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "generated_at": now_iso(),
             "source": report_source,
             "source_actual": actual_source,
             "data_fetch": {
@@ -507,7 +507,7 @@ def main() -> None:
                 "report_type": "fundamental",
                 "symbol": normalized_symbol,
                 "name": args.name,
-                "generated_at": datetime.now().isoformat(timespec="seconds"),
+                "generated_at": now_iso(),
                 "summary": {
                     "score": fundamental_result.blended.blended_total_score,
                     "rating": fundamental_result.blended.blended_rating,
@@ -588,7 +588,7 @@ def main() -> None:
                 "report_type": "capital_flow",
                 "symbol": normalized_symbol,
                 "name": args.name,
-                "generated_at": datetime.now().isoformat(timespec="seconds"),
+                "generated_at": now_iso(),
                 "summary": {
                     "score": capital_flow_result.scorecard.total_score,
                     "rating": capital_flow_result.scorecard.rating,
