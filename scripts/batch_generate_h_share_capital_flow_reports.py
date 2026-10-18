@@ -16,7 +16,7 @@ from capital_flow.reporting import save_capital_flow_text
 from capital_flow.services import fetch_and_analyze_hk_flow
 from report_json import write_json
 from report_retention import prune_older_outputs
-from storage_layout import CAPITAL_FLOW_CACHE_DIR, REPORTS_META_DIR, holdings_file, stock_fund_report_path
+from storage_layout import CAPITAL_FLOW_CACHE_DIR, REPORTS_META_DIR, holdings_file, is_hk_index_symbol, normalize_hk_symbol, stock_fund_report_path
 
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
@@ -64,13 +64,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def _normalize_hk_symbol(symbol: str) -> str:
-    text = symbol.strip().upper()
-    if text.startswith("HK"):
-        text = text[2:]
-    if text.endswith(".HK"):
-        text = text[:-3]
-    text = text.strip(".")
-    return text.zfill(5)
+    return normalize_hk_symbol(symbol)
 
 
 def discover_targets_from_holdings_file(holdings_file: Path) -> list[CapitalFlowTarget]:
@@ -88,6 +82,8 @@ def discover_targets_from_holdings_file(holdings_file: Path) -> list[CapitalFlow
         if not symbol or not name:
             continue
         normalized_symbol = _normalize_hk_symbol(symbol)
+        if is_hk_index_symbol(normalized_symbol):
+            continue
         dedup[f"{normalized_symbol}:{name}"] = CapitalFlowTarget(symbol=normalized_symbol, name=name)
     return list(dedup.values())
 

@@ -69,7 +69,7 @@ from export_structures_with_boxes import (
 )
 from report_json import write_json
 from run_hk_60m_chanlun_report import analyze_current_state, compute_bi_strengths, write_normalized_csv
-from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file, stock_report_dir, timeframe_report_paths
+from storage_layout import REPORTS_DIR, REPORTS_META_DIR, canonical_symbol, holdings_file, stock_report_dir, timeframe_report_paths
 
 
 @dataclass(frozen=True)
@@ -357,10 +357,11 @@ def load_securities(holdings_file: Path | None = None) -> list[Security]:
         name = str(entry.get("name") or "").strip()
         if not symbol or not name:
             continue
+        market = _market_code_to_security_market(str(market_code or "").upper(), symbol)
         dedup[f"{symbol}:{name}"] = Security(
-            symbol=symbol,
+            symbol=canonical_symbol(symbol, market),
             name=name,
-            market=_market_code_to_security_market(str(market_code or "").upper(), symbol),
+            market=market,
         )
     return list(dedup.values()) or SECURITIES
 

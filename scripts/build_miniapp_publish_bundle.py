@@ -39,7 +39,7 @@ from chanlun.segment import (
     is_theory_confirmed_stop_reason,
     summarize_stop_reason_outcome,
 )
-from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
+from storage_layout import REPORTS_DIR, REPORTS_META_DIR, canonical_symbol, holdings_file
 
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
@@ -148,7 +148,7 @@ def load_holdings(path: Path) -> list[Holding]:
             symbol = str(item.get("symbol") or "").strip()
             if not symbol:
                 continue
-            normalized = symbol.zfill(5) if market == "HK" else symbol.zfill(6)
+            normalized = canonical_symbol(symbol, market)
             name = str(item.get("name") or "").strip()
             if not name:
                 continue
@@ -619,6 +619,82 @@ def first_non_empty(*values: Any) -> str:
         if text:
             return text
     return ""
+
+
+SIGNAL_POINT_FIELDS = ("signal_points", "forming_points", "invalidated_points")
+
+
+def _signal_lifecycle_key(value: Any, *, active: bool = False) -> str:
+    lifecycle = safe_text(value).lower()
+    if lifecycle:
+        return lifecycle
+    return "confirmed" if active else ""
+
+
+def build_signal_detected_key(signal: dict[str, Any] | None) -> str:
+    if not isinstance(signal, dict):
+        return ""
+
+    point = safe_text(signal.get("point")).lower()
+    time = safe_text(signal.get("time"))
+    if not point or not time:
+        return ""
+
+    lifecycle = _signal_lifecycle_key(signal.get("lifecycle_state"), active=safe_bool(signal.get("active")))
+    return "|".join((point, time, lifecycle))
+
+
+def build_previous_detected_at_map(section: dict[str, Any] | None) -> dict[str, str]:
+    previous_detected_at_by_key: dict[str, str] = {}
+    source = section if isinstance(section, dict) else {}
+
+    for field in SIGNAL_POINT_FIELDS:
+        for item in source.get(field) or []:
+            if not isinstance(item, dict):
+                continue
+            key = build_signal_detected_key(item)
+            detected_at = first_non_empty(item.get("detected_at"), item.get("detectedAt"))
+            if key and detected_at and key not in previous_detected_at_by_key:
+                previous_detected_at_by_key[key] = detected_at
+
+    return previous_detected_at_by_key
+
+
+def attach_signal_detected_at(
+    section: dict[str, Any],
+    fallback_section: dict[str, Any] | None,
+    default_detected_at: str,
+) -> dict[str, Any]:
+    previous_detected_at_by_key = build_previous_detected_at_map(fallback_section)
+    default_value = safe_text(default_detected_at)
+    merged = dict(section)
+
+    for field in SIGNAL_POINT_FIELDS:
+        values = merged.get(field)
+        if not isinstance(values, list):
+            continue
+
+        normalized_values: list[Any] = []
+        for item in values:
+            if not isinstance(item, dict):
+                normalized_values.append(item)
+                continue
+
+            normalized_item = dict(item)
+            key = build_signal_detected_key(normalized_item)
+            detected_at = first_non_empty(
+                previous_detected_at_by_key.get(key),
+                normalized_item.get("detected_at"),
+                normalized_item.get("detectedAt"),
+                default_value,
+            )
+            if detected_at:
+                normalized_item["detected_at"] = detected_at
+            normalized_values.append(normalized_item)
+
+        merged[field] = normalized_values
+
+    return merged
 
 
 def trend_type_label(value: Any) -> str:
@@ -1181,6 +1257,18 @@ def build_timeframe_technical_sections(
         section["operation_level"] = section.get("operation_level") or label
         sections.append(section)
     return sections
+
+
+def build_technical_section_map(payload: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    source = payload if isinstance(payload, dict) else {}
+    mapped: dict[str, dict[str, Any]] = {}
+    for section in source.get("sections") or []:
+        if not isinstance(section, dict):
+            continue
+        key = safe_text(section.get("key"))
+        if key.startswith("technical"):
+            mapped[key] = section
+    return mapped
 
 
 def build_chart_specs(
@@ -1789,6 +1877,11 @@ def build_summary_payload(
     charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes, include_chart_images=include_chart_images)
     cover_chart_path = chart_publish_path(charts, primary_technical_timeframe) or chart_publish_path(charts, PRIMARY_TECHNICAL_TIMEFRAME)
     primary_technical_label = TIMEFRAME_LABELS.get(primary_technical_timeframe, primary_technical_timeframe.upper())
+    updated_at = max(
+        safe_text(base_payload.get("generated_at")),
+        safe_text(fund_payload.get("generated_at")),
+        latest_generated_technical_at(stock_dir),
+    )
 
     has_day_or_30m_local = any((stock_dir / timeframe / "tech.json").exists() for timeframe in ("day", "30m"))
     fallback_technical = (((fallback_summary_payload or {}).get("cards") or {}).get("technical") or {})
@@ -1841,11 +1934,7 @@ def build_summary_payload(
             "precision_window_basis_description": precision_entry.get("window_basis_description") or (precision_entry.get("nested_from") or {}).get("window_basis_description"),
             "precision_window_display": precision_window_display,
         }
-    updated_at = max(
-        safe_text(base_payload.get("generated_at")),
-        safe_text(fund_payload.get("generated_at")),
-        latest_generated_technical_at(stock_dir),
-    )
+        tech_card_payload = attach_signal_detected_at(tech_card_payload, fallback_technical, updated_at)
     return {
         "schema_version": "v1",
         "symbol": holding.symbol,
@@ -1890,6 +1979,11 @@ def build_detail_payload(
     base_payload = read_json_if_exists(stock_dir / "base.json")
     fund_payload = read_json_if_exists(stock_dir / "fund.json")
     primary_technical_timeframe, tech_payload = resolve_primary_technical_payload(stock_dir)
+    updated_at = max(
+        safe_text(base_payload.get("generated_at")),
+        safe_text(fund_payload.get("generated_at")),
+        latest_generated_technical_at(stock_dir),
+    )
     charts = build_chart_specs(stock_dir, publish_timeframes=publish_timeframes, include_chart_images=include_chart_images)
     fundamental = build_fundamental_section(base_payload)
     technical_sections = build_timeframe_technical_sections(
@@ -1897,8 +1991,19 @@ def build_detail_payload(
         DETAIL_TECHNICAL_TIMEFRAMES,
         primary_timeframe=primary_technical_timeframe,
     )
+    fallback_technical_sections = build_technical_section_map(fallback_detail_payload)
+    technical_sections = [
+        attach_signal_detected_at(section, fallback_technical_sections.get(safe_text(section.get("key"))), updated_at)
+        if isinstance(section, dict) and safe_text(section.get("key")).startswith("technical")
+        else section
+        for section in technical_sections
+    ]
     technical_sections = merge_technical_sections_with_fallback(technical_sections, fallback_detail_payload)
-    technical = next((section for section in technical_sections if section.get("key") == "technical"), None) or build_technical_section(tech_payload)
+    technical = next((section for section in technical_sections if section.get("key") == "technical"), None) or attach_signal_detected_at(
+        build_technical_section(tech_payload),
+        fallback_technical_sections.get("technical"),
+        updated_at,
+    )
     segment_stop_line = (
         build_latest_segment_stop_reason_line(stock_dir, primary_technical_timeframe, tech_payload)
         if tech_payload
@@ -1930,11 +2035,6 @@ def build_detail_payload(
     if transition_overview_bullet:
         overview_bullets.append(transition_overview_bullet)
     overview_bullets.append(f"资金面 {safe_text(capital_flow.get('score'), 'missing')}/{safe_text(capital_flow.get('rating'), 'missing')}")
-    updated_at = max(
-        safe_text(base_payload.get("generated_at")),
-        safe_text(fund_payload.get("generated_at")),
-        latest_generated_technical_at(stock_dir),
-    )
     payload = {
         "schema_version": "v1",
         "symbol": holding.symbol,

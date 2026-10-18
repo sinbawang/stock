@@ -49,7 +49,16 @@ from generate_h_share_combined_overview import (
 )
 from run_hk_60m_chanlun_report import analyze_current_state, build_paths, write_normalized_csv
 from report_json import write_json
-from storage_layout import CAPITAL_FLOW_CACHE_DIR, stock_base_report_path, stock_fund_report_path, stock_overview_report_path, stock_report_dir, timeframe_report_paths
+from storage_layout import (
+    CAPITAL_FLOW_CACHE_DIR,
+    canonical_symbol,
+    is_hk_index_symbol,
+    stock_base_report_path,
+    stock_fund_report_path,
+    stock_overview_report_path,
+    stock_report_dir,
+    timeframe_report_paths,
+)
 
 
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "_meta"
@@ -69,6 +78,23 @@ LOWER_PRECISION_LABEL = "5M"
 LOWER_PRECISION_PENDING_REVERSE_MODE = "effective_only"
 LOWER_PRECISION_SOURCE_PROBE_MIN_ROWS = 480
 LAST_TECHNICAL_TIMINGS: dict[str, float] = {}
+
+
+def _report_symbol(symbol: str) -> str:
+    return canonical_symbol(symbol, "HK")
+
+
+def _build_technical_only_placeholder_path(path: Path, symbol: str, name: str, report_type: str) -> Path:
+    payload = {
+        "report_type": report_type,
+        "symbol": _report_symbol(symbol),
+        "name": name,
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "summary": {},
+        "analysis_mode": "technical_only",
+        "note": "港股指数当前仅支持技术分析；基本面与资金面未生成。",
+    }
+    return write_json(path, payload)
 
 
 def _resolve_primary_and_aux_zhongshus(bis, segments):
@@ -132,6 +158,13 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Whether to generate 5M lower-precision entry under mixed 30M technical analysis.",
+    )
+    parser.add_argument(
+        "--technical-only",
+        dest="technical_only",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Skip fundamental and capital-flow generation and only build technical analysis.",
     )
     return parser.parse_args()
 
@@ -243,7 +276,7 @@ def _build_lower_precision_entry(
     if not rows:
         return None
 
-    stock_root = None if output_dir == stock_report_dir(symbol.zfill(5)) else output_dir
+    stock_root = None if output_dir == stock_report_dir(_report_symbol(symbol)) else output_dir
     lower_layout = timeframe_report_paths(symbol, LOWER_PRECISION_TIMEFRAME, rows, stock_root=stock_root)
     save_hk_minute_csv(rows, str(lower_layout.raw_csv))
 
@@ -450,7 +483,7 @@ def _save_technical_report(
     if not rows:
         raise RuntimeError("未抓到任何30M数据")
 
-    stock_root = None if output_dir == stock_report_dir(symbol.zfill(5)) else output_dir
+    stock_root = None if output_dir == stock_report_dir(_report_symbol(symbol)) else output_dir
     layout = timeframe_report_paths(symbol, PRIMARY_TECHNICAL_TIMEFRAME, rows, stock_root=stock_root)
     paths = {
         "base_dir": layout.root_dir,
@@ -678,15 +711,20 @@ def _save_combined_report(
 
 def main() -> None:
     args = parse_args()
-    output_dir = stock_report_dir(args.symbol.zfill(5)) if Path(args.output_dir) == DEFAULT_OUTPUT_DIR else Path(args.output_dir)
+    report_symbol = _report_symbol(args.symbol)
+    technical_only = bool(getattr(args, "technical_only", False) or is_hk_index_symbol(report_symbol))
+    output_dir = stock_report_dir(report_symbol) if Path(args.output_dir) == DEFAULT_OUTPUT_DIR else Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    manual_supplement_path = _resolve_manual_supplement_path(args.symbol.zfill(5), args.manual_supplement_path)
+    manual_supplement_path = None if technical_only else _resolve_manual_supplement_path(report_symbol, args.manual_supplement_path)
 
-    base_path = stock_base_report_path(args.symbol.zfill(5)) if output_dir == stock_report_dir(args.symbol.zfill(5)) else output_dir / "base.json"
+    base_path = stock_base_report_path(report_symbol) if output_dir == stock_report_dir(report_symbol) else output_dir / "base.json"
     started_fundamental = time.perf_counter()
-    fundamental_ref = _load_existing_fundamental_ref(base_path) if args.skip_gen_base else None
+    fundamental_ref = None if technical_only else (_load_existing_fundamental_ref(base_path) if args.skip_gen_base else None)
     fundamental_path = base_path
-    if fundamental_ref is None:
+    if technical_only:
+        fundamental_path = _build_technical_only_placeholder_path(base_path, report_symbol, args.name, "fundamental")
+        fundamental_ref = FundamentalBriefRef(path=fundamental_path)
+    elif fundamental_ref is None:
         fundamental_result = fetch_and_analyze_hk_blended_fundamentals(
             args.symbol,
             name=args.name,
@@ -698,7 +736,7 @@ def main() -> None:
             base_path,
             {
                 "report_type": "fundamental",
-                "symbol": args.symbol.zfill(5),
+                "symbol": report_symbol,
                 "name": args.name,
                 "generated_at": datetime.now().isoformat(timespec="seconds"),
                 "summary": {
@@ -727,6 +765,8 @@ def main() -> None:
         fallback_sources=tuple(args.fallback_source) if args.fallback_source else None,
         source_profile=getattr(args, "source_profile", None),
     )
+    if technical_only and is_hk_index_symbol(report_symbol):
+        resolved_fallback_sources = None
 
     technical_path = output_dir / PRIMARY_TECHNICAL_TIMEFRAME / "tech.json"
     if args.skip_gen_tech:
@@ -763,9 +803,12 @@ def main() -> None:
     technical_timings = dict(LAST_TECHNICAL_TIMINGS)
 
     started_capital_flow = time.perf_counter()
-    capital_flow_path = stock_fund_report_path(args.symbol.zfill(5)) if output_dir == stock_report_dir(args.symbol.zfill(5)) else output_dir / "fund.json"
-    capital_flow_ref = _load_existing_capital_flow_ref(capital_flow_path) if getattr(args, "skip_gen_fund", False) else None
-    if capital_flow_ref is None:
+    capital_flow_path = stock_fund_report_path(report_symbol) if output_dir == stock_report_dir(report_symbol) else output_dir / "fund.json"
+    capital_flow_ref = None if technical_only else (_load_existing_capital_flow_ref(capital_flow_path) if getattr(args, "skip_gen_fund", False) else None)
+    if technical_only:
+        capital_flow_path = _build_technical_only_placeholder_path(capital_flow_path, report_symbol, args.name, "capital_flow")
+        capital_flow_ref = CapitalFlowRef(source="technical_only", bucket="missing", path=capital_flow_path)
+    elif capital_flow_ref is None:
         capital_flow_result = fetch_and_analyze_hk_flow(
             args.symbol,
             args.name,
@@ -786,7 +829,7 @@ def main() -> None:
             capital_flow_path,
             {
                 "report_type": "capital_flow",
-                "symbol": args.symbol.zfill(5),
+                "symbol": report_symbol,
                 "name": args.name,
                 "generated_at": datetime.now().isoformat(timespec="seconds"),
                 "summary": {
@@ -811,7 +854,7 @@ def main() -> None:
         print(f"capital_flow_reused= {capital_flow_path}")
     capital_flow_seconds = time.perf_counter() - started_capital_flow
 
-    target = CombinedTarget(symbol=args.symbol.zfill(5), name=args.name)
+    target = CombinedTarget(symbol=report_symbol, name=args.name)
     started_combined = time.perf_counter()
     combined_bucket, combined_comment = _build_combined_view(fundamental_ref, technical_ref, capital_flow_ref)
     row = CombinedOverviewRow(

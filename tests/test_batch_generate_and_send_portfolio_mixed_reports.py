@@ -100,3 +100,51 @@ def test_generate_bundle_runs_four_timeframe_chart_pipeline(monkeypatch, tmp_pat
     assert (report_root / "15m" / "structure.jpg").exists()
     assert (report_root / "5m" / "structure.jpg").exists()
     assert (report_root / "1m" / "structure.jpg").exists()
+
+
+def test_generate_bundle_marks_hstech_as_technical_only(monkeypatch, tmp_path):
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    monkeypatch.setattr(module, "SCRIPTS", tmp_path / "scripts")
+    (tmp_path / "scripts").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / "_meta").mkdir(parents=True, exist_ok=True)
+
+    report_root = tmp_path / "data" / "reports" / "HSTECH"
+    technical_report = report_root / "60m" / "tech.json"
+
+    commands: list[list[str]] = []
+
+    def fake_run_command(command: list[str]) -> str:
+        commands.append(command)
+        if any(part.endswith("generate_h_share_single_mixed_report.py") for part in command):
+            technical_report.parent.mkdir(parents=True, exist_ok=True)
+            technical_report.write_text("{}", encoding="utf-8")
+            return "\n".join(
+                [
+                    f"fundamental_brief={report_root / 'base.json'}",
+                    f"technical_report={technical_report}",
+                    f"capital_flow_report={report_root / 'fund.json'}",
+                    f"combined_report={report_root / 'overview.txt'}",
+                    "combined_bucket=watch",
+                ]
+            )
+
+        if any(part.endswith("batch_prepare_chanlun_reports.py") for part in command):
+            holdings_path = Path(command[command.index("--holdings-file") + 1])
+            payload = json.loads(holdings_path.read_text(encoding="utf-8"))
+            assert payload == {
+                "markets": {
+                    "CN": [],
+                    "HK": [{"symbol": "HSTECH", "name": "恒生科技指数"}],
+                }
+            }
+            return "Prepared 恒生科技指数"
+
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(module, "_run_command", fake_run_command)
+    monkeypatch.setattr(module, "_should_reuse_existing_base", lambda holding, skip_gen_base: False)
+
+    bundle = module.generate_bundle(module.Holding(market="HK", symbol="HSTECH", name="恒生科技指数"))
+
+    assert "--technical-only" in commands[0]
+    assert bundle.technical_report == technical_report

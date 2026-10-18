@@ -12,12 +12,12 @@ import json
 import random
 import re
 import ssl
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 from urllib.request import Request, build_opener, ProxyHandler, HTTPSHandler
 
-from storage_layout import REPORTS_DIR
+from storage_layout import REPORTS_DIR, is_hk_index_symbol, normalize_hk_symbol
 
 
 def _make_opener() -> object:
@@ -25,6 +25,91 @@ def _make_opener() -> object:
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     return build_opener(ProxyHandler({}), HTTPSHandler(context=ctx))
+
+
+def _fetch_hk_index_daily_xueqiu(
+    symbol: str,
+    *,
+    start: str,
+    end: str | None,
+    limit: int = 1000,
+) -> list[dict]:
+    import requests
+
+    from chanlun.data.hk_minute_fetcher import _raise_xueqiu_cookie_error, _resolve_xueqiu_cookies
+
+    normalized = normalize_hk_symbol(symbol)
+    session = requests.Session()
+    session.trust_env = False
+    session.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Referer": f"https://xueqiu.com/S/HK{normalized}",
+            "Accept": "application/json, text/plain, */*",
+        }
+    )
+    cookies, cookie_source = _resolve_xueqiu_cookies()
+    session.cookies.update(cookies)
+    if cookie_source == "browser":
+        session.get(f"https://xueqiu.com/S/HK{normalized}", timeout=15)
+
+    response = session.get(
+        "https://stock.xueqiu.com/v5/stock/chart/kline.json",
+        params={
+            "symbol": f"HK{normalized}",
+            "begin": str(int(datetime.now().timestamp() * 1000)),
+            "period": "day",
+            "type": "normal",
+            "count": str(-max(1, int(limit))),
+            "indicator": "kline",
+        },
+        timeout=20,
+    )
+    if response.status_code >= 400:
+        if response.status_code in {401, 403}:
+            _raise_xueqiu_cookie_error(cookie_source, f"HTTP {response.status_code}")
+        raise RuntimeError(f"雪球接口返回 HTTP {response.status_code}: {response.text[:300]}")
+
+    payload = response.json()
+    if payload.get("error_code") not in (None, 0):
+        error_code = payload.get("error_code")
+        if error_code in {400016, 401, 403}:
+            _raise_xueqiu_cookie_error(cookie_source, f"error_code={error_code}")
+        raise RuntimeError(f"雪球抓取失败: {payload}")
+
+    data = payload.get("data") or {}
+    columns = data.get("column") or []
+    items = data.get("item") or []
+    if not columns or not items:
+        return []
+
+    column_map = {name: idx for idx, name in enumerate(columns)}
+    required = ["timestamp", "open", "high", "low", "close", "volume"]
+    missing = [name for name in required if name not in column_map]
+    if missing:
+        raise RuntimeError(f"雪球返回缺少字段: {missing}; 实际列: {columns}")
+
+    start_text = start.strip()
+    end_text = (end or date.today().strftime("%Y-%m-%d")).strip()
+    rows = []
+    for item in items:
+        ts_ms = int(item[column_map["timestamp"]])
+        trade_day = datetime.fromtimestamp(ts_ms / 1000).strftime("%Y-%m-%d")
+        if trade_day < start_text or trade_day > end_text:
+            continue
+        rows.append(
+            {
+                "ts": trade_day,
+                "open": float(item[column_map["open"]]),
+                "high": float(item[column_map["high"]]),
+                "low": float(item[column_map["low"]]),
+                "close": float(item[column_map["close"]]),
+                "volume": int(float(item[column_map["volume"]]) if item[column_map["volume"]] is not None else 0),
+            }
+        )
+    rows.sort(key=lambda row: row["ts"])
+    return rows[-max(1, int(limit)) :]
 
 
 def fetch_hk_daily(
@@ -47,10 +132,14 @@ def fetch_hk_daily(
     Returns:
         OHLCV 字典列表，字段: ts, open, high, low, close, volume
     """
+    normalized_symbol = normalize_hk_symbol(symbol)
+    if is_hk_index_symbol(normalized_symbol):
+        return _fetch_hk_index_daily_xueqiu(normalized_symbol, start=start, end=end, limit=limit)
+
     if end is None:
         end = date.today().strftime("%Y-%m-%d")
 
-    code = symbol.lstrip("0").zfill(5)  # 保证5位，如 03690
+    code = normalized_symbol.lstrip("0").zfill(5)  # 保证5位，如 03690
     effective_limit = max(1, int(limit))
     adj_key = "qfqday" if adjust == "qfq" else "day"
     var_name = f"kline_dayfqhk{code}"
@@ -140,7 +229,8 @@ def main():
     if args.output:
         save_to_csv(rows, args.output)
     else:
-        default_path = REPORTS_DIR / args.symbol.zfill(5) / "day" / "analyze" / f"{args.symbol}_daily_{args.start}_{args.end or 'today'}.csv"
+        normalized_symbol = normalize_hk_symbol(args.symbol)
+        default_path = REPORTS_DIR / normalized_symbol / "day" / "analyze" / f"{normalized_symbol}_daily_{args.start}_{args.end or 'today'}.csv"
         save_to_csv(rows, default_path)
 
 

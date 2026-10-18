@@ -62,6 +62,28 @@ Generated at: 2026-05-30T20:05:33
     assert payload["notes"] == ["priority/action 只用于排序"]
 
 
+def test_load_holdings_preserves_hk_index_symbol(tmp_path: Path) -> None:
+    holdings_path = tmp_path / "stock_holdings.json"
+    holdings_path.write_text(
+        json.dumps(
+            {
+                "markets": {
+                    "HK": [{"symbol": "HSTECH", "name": "恒生科技指数"}],
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    holdings = module.load_holdings(holdings_path)
+
+    assert len(holdings) == 1
+    assert holdings[0].market == "HK"
+    assert holdings[0].symbol == "HSTECH"
+    assert holdings[0].name == "恒生科技指数"
+
+
 def test_generate_bundle_writes_index_groups_and_stock_payloads(tmp_path: Path) -> None:
     holdings_path = tmp_path / "stock_holdings.json"
     holdings_path.write_text(
@@ -586,6 +608,111 @@ def test_stock_payload_updated_at_uses_latest_available_technical_timeframe(tmp_
 
     assert summary_payload["updated_at"] == "2026-08-17T10:05:00"
     assert detail_payload["updated_at"] == "2026-08-17T10:05:00"
+
+
+def test_stock_payload_preserves_existing_signal_detected_at_and_fills_new_ones(tmp_path: Path) -> None:
+    stock_dir = tmp_path / "00700"
+    (stock_dir / "30m").mkdir(parents=True)
+    (stock_dir / "base.json").write_text(
+        json.dumps({"generated_at": "2026-08-17T09:00:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "fund.json").write_text(
+        json.dumps({"generated_at": "2026-08-17T09:30:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "30m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-08-17T10:05:00",
+                "timeframe": "30m",
+                "summary": {
+                    "score": 60,
+                    "rating": "C",
+                    "bias": "中性",
+                    "score_breakdown": {},
+                    "conclusion": "观察中",
+                    "suggestion": "等待确认",
+                    "buy_points": ["buy_1", "buy_2"],
+                    "sell_points": [],
+                    "signal_points": [
+                        {"point": "buy1", "active": True, "time": "2026-08-17T09:45:00", "price": 10.1, "lifecycle_state": "confirmed"},
+                        {"point": "buy2", "active": True, "time": "2026-08-17T10:00:00", "price": 10.2, "lifecycle_state": "confirmed"},
+                    ],
+                    "signal_catalog": [],
+                    "forming_points": [
+                        {"point": "buy3", "active": False, "time": "2026-08-17T10:03:00", "price": 10.3, "lifecycle_state": "forming"}
+                    ],
+                    "invalidated_points": [
+                        {"point": "sell1", "active": False, "time": "2026-08-17T09:15:00", "price": 10.5, "lifecycle_state": "invalidated"}
+                    ],
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    fallback_summary_payload = {
+        "cards": {
+            "technical": {
+                "signal_points": [
+                    {"point": "buy1", "time": "2026-08-17T09:45:00", "lifecycle_state": "confirmed", "detected_at": "2026-08-17T09:50:00"}
+                ],
+                "forming_points": [
+                    {"point": "buy3", "time": "2026-08-17T10:03:00", "lifecycle_state": "forming", "detected_at": "2026-08-17T10:04:00"}
+                ],
+                "invalidated_points": [
+                    {"point": "sell1", "time": "2026-08-17T09:15:00", "lifecycle_state": "invalidated", "detected_at": "2026-08-17T09:20:00"}
+                ],
+            }
+        }
+    }
+    fallback_detail_payload = {
+        "sections": [
+            {
+                "key": "technical",
+                "signal_points": [
+                    {"point": "buy1", "time": "2026-08-17T09:45:00", "lifecycle_state": "confirmed", "detected_at": "2026-08-17T09:50:00"}
+                ],
+                "forming_points": [
+                    {"point": "buy3", "time": "2026-08-17T10:03:00", "lifecycle_state": "forming", "detected_at": "2026-08-17T10:04:00"}
+                ],
+                "invalidated_points": [
+                    {"point": "sell1", "time": "2026-08-17T09:15:00", "lifecycle_state": "invalidated", "detected_at": "2026-08-17T09:20:00"}
+                ],
+            }
+        ]
+    }
+
+    holding = module.Holding(symbol="00700", name="腾讯", market="HK")
+
+    summary_payload = module.build_summary_payload(
+        holding,
+        stock_dir,
+        None,
+        include_chart_images=False,
+        fallback_summary_payload=fallback_summary_payload,
+    )
+    detail_payload, _ = module.build_detail_payload(
+        holding,
+        stock_dir,
+        None,
+        include_chart_images=False,
+        fallback_detail_payload=fallback_detail_payload,
+    )
+
+    technical_card = summary_payload["cards"]["technical"]
+    technical_section = next(section for section in detail_payload["sections"] if section.get("key") == "technical")
+
+    assert technical_card["signal_points"][0]["detected_at"] == "2026-08-17T09:50:00"
+    assert technical_card["signal_points"][1]["detected_at"] == "2026-08-17T10:05:00"
+    assert technical_card["forming_points"][0]["detected_at"] == "2026-08-17T10:04:00"
+    assert technical_card["invalidated_points"][0]["detected_at"] == "2026-08-17T09:20:00"
+    assert technical_section["signal_points"][0]["detected_at"] == "2026-08-17T09:50:00"
+    assert technical_section["signal_points"][1]["detected_at"] == "2026-08-17T10:05:00"
+    assert technical_section["forming_points"][0]["detected_at"] == "2026-08-17T10:04:00"
+    assert technical_section["invalidated_points"][0]["detected_at"] == "2026-08-17T09:20:00"
 
 
 def test_build_same_level_decomposition_labels_same_type_extension_as_confirmed_slice() -> None:

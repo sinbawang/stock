@@ -146,6 +146,49 @@ def test_main_passes_default_minute_fallback_to_technical_step(monkeypatch, tmp_
     assert captured_manual["path"] == str(tmp_path / "00700.json")
 
 
+def test_main_skips_fundamental_and_capital_flow_for_hstech(monkeypatch, tmp_path: Path) -> None:
+    args = argparse.Namespace(
+        symbol="HSTECH",
+        name="恒生科技指数",
+        start="2026-01-01 09:30",
+        end=None,
+        adjust="",
+        source="xueqiu",
+        source_profile=None,
+        fallback_source=None,
+        quote_overlay_source=None,
+        manual_supplement_path=None,
+        output_dir=str(tmp_path),
+        cache_dir=str(tmp_path / "cache"),
+        max_cache_age_days=7,
+        skip_gen_base=True,
+        skip_gen_fund=False,
+        skip_gen_tech=False,
+        export_structure_images=True,
+        generate_lower_precision=True,
+        technical_only=False,
+    )
+    monkeypatch.setattr(module, "parse_args", lambda: args)
+    monkeypatch.setattr(module, "fetch_and_analyze_hk_blended_fundamentals", lambda *a, **k: (_ for _ in ()).throw(AssertionError("fundamental should be skipped")))
+    monkeypatch.setattr(module, "fetch_and_analyze_hk_flow", lambda *a, **k: (_ for _ in ()).throw(AssertionError("capital flow should be skipped")))
+    monkeypatch.setattr(
+        module,
+        "_save_technical_report",
+        lambda **kwargs: (module.TechnicalRef(conclusion="偏多", suggestion="观察", path=tmp_path / "30m" / "tech.json"), tmp_path / "30m" / "tech.json"),
+    )
+    monkeypatch.setattr(module, "_save_combined_report", lambda **kwargs: tmp_path / "overview.txt")
+
+    module.main()
+
+    base_payload = json.loads((tmp_path / "base.json").read_text(encoding="utf-8"))
+    fund_payload = json.loads((tmp_path / "fund.json").read_text(encoding="utf-8"))
+
+    assert base_payload["analysis_mode"] == "technical_only"
+    assert fund_payload["analysis_mode"] == "technical_only"
+    assert base_payload["symbol"] == "HSTECH"
+    assert fund_payload["symbol"] == "HSTECH"
+
+
 def test_save_combined_report_writes_latest_overview_file(tmp_path: Path) -> None:
     row = SimpleNamespace(
         target=SimpleNamespace(symbol="00700", name="腾讯"),
@@ -363,4 +406,3 @@ def test_save_technical_report_respects_custom_output_dir_and_writes_artifacts(t
     else:
         assert payload["precision_window_display"] is None
         assert payload["summary"]["precision_window_display"] is None
-

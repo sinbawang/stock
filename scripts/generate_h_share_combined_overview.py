@@ -14,7 +14,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from report_retention import prune_older_outputs
-from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
+from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file, normalize_hk_symbol
 
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
@@ -73,13 +73,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def _normalize_hk_symbol(symbol: str) -> str:
-    text = symbol.strip().upper()
-    if text.startswith("HK"):
-        text = text[2:]
-    if text.endswith(".HK"):
-        text = text[:-3]
-    text = text.strip(".")
-    return text.zfill(5)
+    return normalize_hk_symbol(symbol)
 
 
 def discover_targets_from_holdings_file(holdings_file: Path) -> list[CombinedTarget]:

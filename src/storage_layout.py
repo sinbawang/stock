@@ -29,6 +29,11 @@ def _resolve_kline_cache_dir() -> Path:
 KLINE_CACHE_DIR = _resolve_kline_cache_dir()
 HOLDINGS_FILE = CONFIG_DIR / "stock_holdings.json"
 CAPITAL_FLOW_CACHE_DIR = DATA_META_DIR / "capital_flow_cache"
+HK_INDEX_SYMBOL_ALIASES = {
+    "HSTECH": "HSTECH",
+    "HKHSTECH": "HSTECH",
+    "HSTECH.HK": "HSTECH",
+}
 
 
 def holdings_file() -> Path:
@@ -44,6 +49,35 @@ def holdings_file() -> Path:
 def ensure_reports_meta_dir() -> Path:
     REPORTS_META_DIR.mkdir(parents=True, exist_ok=True)
     return REPORTS_META_DIR
+
+
+def normalize_hk_symbol(symbol: str) -> str:
+    text = symbol.strip().upper()
+    if not text:
+        return ""
+    if text in HK_INDEX_SYMBOL_ALIASES:
+        return HK_INDEX_SYMBOL_ALIASES[text]
+
+    if text.startswith("HK") and text not in HK_INDEX_SYMBOL_ALIASES:
+        text = text[2:]
+    if text.endswith(".HK") and text not in HK_INDEX_SYMBOL_ALIASES:
+        text = text[:-3]
+    text = text.strip(".")
+    alias = HK_INDEX_SYMBOL_ALIASES.get(text)
+    if alias:
+        return alias
+    return text.zfill(5) if text.isdigit() else text
+
+
+def is_hk_index_symbol(symbol: str) -> bool:
+    return normalize_hk_symbol(symbol) in set(HK_INDEX_SYMBOL_ALIASES.values())
+
+
+def canonical_symbol(symbol: str, market: str) -> str:
+    normalized_market = market.strip().upper()
+    if normalized_market == "HK":
+        return normalize_hk_symbol(symbol)
+    return symbol.strip().zfill(6) if normalized_market == "CN" else symbol.strip()
 
 
 def stock_report_dir(symbol: str) -> Path:

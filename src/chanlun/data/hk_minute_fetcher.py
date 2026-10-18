@@ -32,7 +32,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from storage_layout import REPORTS_DIR
+from storage_layout import REPORTS_DIR, is_hk_index_symbol, normalize_hk_symbol
 
 _ALLOWED_PERIODS = {"1", "5", "15", "30", "60"}
 _ALLOWED_ADJUSTS = {"", "qfq", "hfq"}
@@ -70,15 +70,15 @@ def _datetime_to_epoch_ms(value: datetime, market_tz: ZoneInfo) -> int:
 
 
 def _normalize_symbol(symbol: str) -> str:
-    """统一为 5 位数字（AKShare 东方财富港股要求，例如 '03690'、'00700'）。"""
-    s = symbol.strip().lower()
-    if s.startswith("hk"):
-        s = s[2:]
-    if "." in s:
-        s = s.split(".", 1)[0]
-    if not s.isdigit():
+    """统一港股 symbol；个股返回 5 位代码，港股指数返回其规范代码。"""
+    normalized = normalize_hk_symbol(symbol)
+    if not normalized:
         raise ValueError(f"无法识别港股代码: {symbol}")
-    return s.zfill(5)
+    if is_hk_index_symbol(normalized):
+        return normalized
+    if not normalized.isdigit():
+        raise ValueError(f"无法识别港股代码: {symbol}")
+    return normalized
 
 
 def _parse_dt(value: Optional[str], default: str) -> str:

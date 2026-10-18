@@ -20,7 +20,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from fundamental.data import fetch_cn_available_report_periods, fetch_hk_available_report_periods
-from storage_layout import holdings_file
+from storage_layout import canonical_symbol, holdings_file, is_hk_index_symbol
 
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
@@ -119,7 +119,7 @@ def load_holdings(path: Path, market_filter: str = "ALL") -> list[Holding]:
             name = str(entry.get("name") or "").strip()
             if not symbol or not name:
                 continue
-            holdings.append(Holding(market=market, symbol=symbol, name=name))
+            holdings.append(Holding(market=market, symbol=canonical_symbol(symbol, market), name=name))
     return holdings
 
 
@@ -234,7 +234,7 @@ def _generate_all_timeframe_charts(
 
 
 def _symbol_reports_dir(holding: Holding) -> Path:
-    symbol = holding.symbol.zfill(5) if holding.market == "HK" else holding.symbol
+    symbol = canonical_symbol(holding.symbol, holding.market)
     return ROOT / "data" / "reports" / symbol
 
 
@@ -263,7 +263,7 @@ def _validate_generated_artifacts(
 
 
 def _existing_base_path(holding: Holding) -> Path:
-    symbol = holding.symbol.zfill(5) if holding.market == "HK" else holding.symbol
+    symbol = canonical_symbol(holding.symbol, holding.market)
     return ROOT / "data" / "reports" / symbol / "base.json"
 
 
@@ -285,6 +285,8 @@ def _load_existing_base_periods(base_path: Path) -> ExistingBasePeriods | None:
 
 def _should_reuse_existing_base(holding: Holding, skip_gen_base: bool) -> bool:
     if not skip_gen_base:
+        return False
+    if holding.market == "HK" and is_hk_index_symbol(holding.symbol):
         return False
 
     base_path = _existing_base_path(holding)
@@ -323,6 +325,7 @@ def generate_bundle(
     run_lower_precision = run_primary_technical and (LOWER_PRECISION_TIMEFRAME in requested_timeframes)
 
     reuse_existing_base = bool(skip_gen_base and trust_existing_base) or _should_reuse_existing_base(holding, skip_gen_base)
+    technical_only = holding.market == "HK" and is_hk_index_symbol(holding.symbol)
     started_mixed = time.perf_counter()
     if holding.market == "CN":
         mixed_command = [
@@ -359,6 +362,8 @@ def generate_bundle(
             f"--{'skip-gen-tech' if not run_primary_technical else 'no-skip-gen-tech'}",
             f"--{'generate-lower-precision' if run_lower_precision else 'no-generate-lower-precision'}",
         ]
+        if technical_only:
+            mixed_command.append("--technical-only")
         if not export_structure_images:
             mixed_command.append("--no-export-structure-images")
         mixed_stdout = _run_command(
