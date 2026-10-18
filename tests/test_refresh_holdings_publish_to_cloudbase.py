@@ -103,6 +103,50 @@ def test_upload_publish_bundle_prints_structured_summary_on_retry_failure(monkey
     assert "publish_stage_failure stage=upload_attempt_2 code=incomplete_bundle_missing_entry_files" in captured.out
 
 
+def test_upload_publish_bundle_uses_frozen_snapshot_source(monkeypatch, tmp_path: Path) -> None:
+    source_dir = tmp_path / "latest"
+    (source_dir / "stocks" / "HSTECH" / "charts").mkdir(parents=True)
+    payload_path = source_dir / "stocks" / "HSTECH" / "charts" / "30m.json"
+    payload_path.write_text('{"version":"original"}\n', encoding="utf-8")
+
+    args = argparse.Namespace(
+        cloud_prefix="miniapp-publish/latest",
+        env_id=None,
+        region=None,
+        api_key=None,
+        api_key_name=None,
+        api_key_expire_in=None,
+        delete_created_api_key=False,
+        force_upload=False,
+        upload_chart_timeframes=None,
+        upload_symbols=None,
+        upload_include_stock_meta=True,
+        upload_include_index_groups=True,
+        upload_dry_run=False,
+    )
+
+    captured: dict[str, Path] = {}
+
+    def fake_run_command(command):
+        snapshot_dir = Path(command[command.index("--source-dir") + 1])
+        captured["snapshot_dir"] = snapshot_dir
+        assert snapshot_dir != source_dir
+        assert snapshot_dir.parent.name == ".upload-staging"
+        snap_payload = snapshot_dir / "stocks" / "HSTECH" / "charts" / "30m.json"
+        assert snap_payload.read_text(encoding="utf-8") == '{"version":"original"}\n'
+
+        payload_path.write_text('{"version":"mutated-after-freeze"}\n', encoding="utf-8")
+        assert snap_payload.read_text(encoding="utf-8") == '{"version":"original"}\n'
+        return ""
+
+    monkeypatch.setattr(module, "_run_command", fake_run_command)
+
+    module.upload_publish_bundle(args, source_dir)
+
+    assert payload_path.read_text(encoding="utf-8") == '{"version":"mutated-after-freeze"}\n'
+    assert not captured["snapshot_dir"].exists()
+
+
 def test_write_timing_report_persists_publish_failures(tmp_path: Path, monkeypatch) -> None:
     meta_dir = tmp_path / "meta"
     monkeypatch.setattr(module, "REPORTS_META_DIR", meta_dir)

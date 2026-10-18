@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from datetime import datetime
 import json
 import shlex
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -363,6 +365,20 @@ def _run_command(command: list[str]) -> str:
     return completed.stdout
 
 
+@contextmanager
+def _frozen_upload_source_dir(source_dir: Path):
+    frozen_root = source_dir.parent / ".upload-staging"
+    frozen_root.mkdir(parents=True, exist_ok=True)
+    frozen_dir = frozen_root / f"{source_dir.name}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+    shutil.copytree(source_dir, frozen_dir)
+    print(f"upload_source_snapshot={frozen_dir}", flush=True)
+    try:
+        yield frozen_dir
+    finally:
+        if frozen_dir.exists():
+            shutil.rmtree(frozen_dir, ignore_errors=True)
+
+
 def _classify_publish_failure(message: str) -> dict[str, str]:
     text = str(message or "")
     normalized = text.lower()
@@ -639,55 +655,56 @@ def upload_publish_bundle(
     source_dir: Path,
     publish_failures: list[dict[str, object]] | None = None,
 ) -> None:
-    command = [
-        sys.executable,
-        str(DEFAULT_UPLOAD_SCRIPT),
-        "--source-dir",
-        str(source_dir),
-        "--cloud-prefix",
-        args.cloud_prefix,
-    ]
-    if args.env_id:
-        command.extend(["--env-id", args.env_id])
-    if args.region:
-        command.extend(["--region", args.region])
-    if args.api_key:
-        command.extend(["--api-key", args.api_key])
-    if args.api_key_name:
-        command.extend(["--api-key-name", args.api_key_name])
-    if args.api_key_expire_in is not None:
-        command.extend(["--api-key-expire-in", str(args.api_key_expire_in)])
-    if args.delete_created_api_key:
-        command.append("--delete-created-api-key")
-    if bool(getattr(args, "force_upload", False)):
-        command.append("--force-upload")
-    upload_chart_timeframes = getattr(args, "upload_chart_timeframes", None)
-    if upload_chart_timeframes:
-        command.extend(["--chart-timeframes", *[str(value) for value in upload_chart_timeframes]])
-    upload_symbols = getattr(args, "upload_symbols", None)
-    if upload_symbols:
-        command.extend(["--symbols", *[str(value) for value in upload_symbols]])
-    if not bool(getattr(args, "upload_include_stock_meta", True)):
-        command.append("--no-include-stock-meta")
-    if not bool(getattr(args, "upload_include_index_groups", True)):
-        command.append("--no-include-index-groups")
-    if args.upload_dry_run:
-        command.append("--dry-run")
-    try:
-        _run_command(command)
-    except RuntimeError as exc:
-        event = _print_publish_stage_failure_summary(stage="upload_attempt_1", error=exc, source_dir=source_dir)
-        if publish_failures is not None:
-            publish_failures.append(event)
-        print(f"upload attempt 1 failed: {exc}", flush=True)
-        print("retrying upload once...", flush=True)
+    with _frozen_upload_source_dir(source_dir) as upload_source_dir:
+        command = [
+            sys.executable,
+            str(DEFAULT_UPLOAD_SCRIPT),
+            "--source-dir",
+            str(upload_source_dir),
+            "--cloud-prefix",
+            args.cloud_prefix,
+        ]
+        if args.env_id:
+            command.extend(["--env-id", args.env_id])
+        if args.region:
+            command.extend(["--region", args.region])
+        if args.api_key:
+            command.extend(["--api-key", args.api_key])
+        if args.api_key_name:
+            command.extend(["--api-key-name", args.api_key_name])
+        if args.api_key_expire_in is not None:
+            command.extend(["--api-key-expire-in", str(args.api_key_expire_in)])
+        if args.delete_created_api_key:
+            command.append("--delete-created-api-key")
+        if bool(getattr(args, "force_upload", False)):
+            command.append("--force-upload")
+        upload_chart_timeframes = getattr(args, "upload_chart_timeframes", None)
+        if upload_chart_timeframes:
+            command.extend(["--chart-timeframes", *[str(value) for value in upload_chart_timeframes]])
+        upload_symbols = getattr(args, "upload_symbols", None)
+        if upload_symbols:
+            command.extend(["--symbols", *[str(value) for value in upload_symbols]])
+        if not bool(getattr(args, "upload_include_stock_meta", True)):
+            command.append("--no-include-stock-meta")
+        if not bool(getattr(args, "upload_include_index_groups", True)):
+            command.append("--no-include-index-groups")
+        if args.upload_dry_run:
+            command.append("--dry-run")
         try:
             _run_command(command)
-        except RuntimeError as retry_exc:
-            retry_event = _print_publish_stage_failure_summary(stage="upload_attempt_2", error=retry_exc, source_dir=source_dir)
+        except RuntimeError as exc:
+            event = _print_publish_stage_failure_summary(stage="upload_attempt_1", error=exc, source_dir=upload_source_dir)
             if publish_failures is not None:
-                publish_failures.append(retry_event)
-            raise
+                publish_failures.append(event)
+            print(f"upload attempt 1 failed: {exc}", flush=True)
+            print("retrying upload once...", flush=True)
+            try:
+                _run_command(command)
+            except RuntimeError as retry_exc:
+                retry_event = _print_publish_stage_failure_summary(stage="upload_attempt_2", error=retry_exc, source_dir=upload_source_dir)
+                if publish_failures is not None:
+                    publish_failures.append(retry_event)
+                raise
 
 
 def _print_upload_verification_summary(manifest_path: Path, focus_symbols: list[str] | None) -> None:
