@@ -639,8 +639,13 @@ def build_signal_detected_key(signal: dict[str, Any] | None) -> str:
     return "|".join((point, time))
 
 
-def build_previous_detected_at_map(section: dict[str, Any] | None) -> dict[str, str]:
-    previous_detected_at_by_key: dict[str, str] = {}
+def _build_previous_signal_time_map(
+    section: dict[str, Any] | None,
+    *,
+    field_name: str,
+    camel_name: str,
+) -> dict[str, str]:
+    previous_time_by_key: dict[str, str] = {}
     source = section if isinstance(section, dict) else {}
 
     for field in SIGNAL_POINT_FIELDS:
@@ -648,11 +653,28 @@ def build_previous_detected_at_map(section: dict[str, Any] | None) -> dict[str, 
             if not isinstance(item, dict):
                 continue
             key = build_signal_detected_key(item)
-            detected_at = first_non_empty(item.get("detected_at"), item.get("detectedAt"))
-            if key and detected_at and key not in previous_detected_at_by_key:
-                previous_detected_at_by_key[key] = detected_at
+            value = first_non_empty(item.get(field_name), item.get(camel_name))
+            if key and value and key not in previous_time_by_key:
+                previous_time_by_key[key] = value
 
-    return previous_detected_at_by_key
+    return previous_time_by_key
+
+
+def build_previous_detected_at_map(section: dict[str, Any] | None) -> dict[str, str]:
+    return _build_previous_signal_time_map(section, field_name="detected_at", camel_name="detectedAt")
+
+
+def build_previous_confirmed_at_map(section: dict[str, Any] | None) -> dict[str, str]:
+    return _build_previous_signal_time_map(section, field_name="confirmed_at", camel_name="confirmedAt")
+
+
+def is_confirmed_signal(signal: dict[str, Any] | None) -> bool:
+    if not isinstance(signal, dict):
+        return False
+    lifecycle = safe_text(signal.get("lifecycle_state")).lower()
+    if lifecycle:
+        return lifecycle == "confirmed"
+    return safe_bool(signal.get("active"))
 
 
 def attach_signal_detected_at(
@@ -661,6 +683,7 @@ def attach_signal_detected_at(
     default_detected_at: str,
 ) -> dict[str, Any]:
     previous_detected_at_by_key = build_previous_detected_at_map(fallback_section)
+    previous_confirmed_at_by_key = build_previous_confirmed_at_map(fallback_section)
     default_value = safe_text(default_detected_at)
     merged = dict(section)
 
@@ -685,6 +708,21 @@ def attach_signal_detected_at(
             )
             if detected_at:
                 normalized_item["detected_at"] = detected_at
+
+            # confirmed_at 只在点真正进入 confirmed 时落定；forming 阶段必须为空，
+            # invalidated 时若曾有 confirmed_at 则保留（用于“确认 → 失效”追溯）。
+            confirmed_at = first_non_empty(
+                previous_confirmed_at_by_key.get(key),
+                normalized_item.get("confirmed_at"),
+                normalized_item.get("confirmedAt"),
+                default_value if is_confirmed_signal(normalized_item) else "",
+            )
+            if confirmed_at:
+                normalized_item["confirmed_at"] = confirmed_at
+            else:
+                normalized_item.pop("confirmed_at", None)
+                normalized_item.pop("confirmedAt", None)
+
             normalized_values.append(normalized_item)
 
         merged[field] = normalized_values

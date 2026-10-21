@@ -699,6 +699,10 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
   （已并入 `signal-lifecycle` 安全闸门）。
 - **检出时间语义**：`build_signal_detected_key` 由 `point|time|lifecycle` 改为 `point|time`。
   否则 forming → confirmed 会重置 `detected_at`，页面的「检出」仍显示确认时刻，早期预警不可见。
+- **确认时间单列（2026-10-21）**：发布包新增 `confirmed_at`（首次进入 `confirmed` 的运行时刻）。
+  `detected_at` = 首次检出（含 forming），`confirmed_at` = 首次确认；forming 行为空，
+  invalidated 行保留历史确认时刻。小程序买卖点表拆为「检出 / 确认」两行，避免把确认时刻
+  误读为检出时刻。
 - **否决**：`termination_mode=practical` 对 00981 可提前到 14:30，但 06088 15:00 仍未发，
   收益不一致且会全局改动线段切分（回归风险高），不作为聚焦修法。
 

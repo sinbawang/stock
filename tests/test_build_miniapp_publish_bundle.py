@@ -663,13 +663,13 @@ def test_stock_payload_preserves_existing_signal_detected_at_and_fills_new_ones(
         "cards": {
             "technical": {
                 "signal_points": [
-                    {"point": "buy1", "time": "2026-08-17T09:45:00", "lifecycle_state": "confirmed", "detected_at": "2026-08-17T09:50:00"}
+                    {"point": "buy1", "time": "2026-08-17T09:45:00", "lifecycle_state": "confirmed", "detected_at": "2026-08-17T09:50:00", "confirmed_at": "2026-08-17T09:50:00"}
                 ],
                 "forming_points": [
                     {"point": "buy3", "time": "2026-08-17T10:03:00", "lifecycle_state": "forming", "detected_at": "2026-08-17T10:04:00"}
                 ],
                 "invalidated_points": [
-                    {"point": "sell1", "time": "2026-08-17T09:15:00", "lifecycle_state": "invalidated", "detected_at": "2026-08-17T09:20:00"}
+                    {"point": "sell1", "time": "2026-08-17T09:15:00", "lifecycle_state": "invalidated", "detected_at": "2026-08-17T09:20:00", "confirmed_at": "2026-08-17T09:16:00"}
                 ],
             }
         }
@@ -679,13 +679,13 @@ def test_stock_payload_preserves_existing_signal_detected_at_and_fills_new_ones(
             {
                 "key": "technical",
                 "signal_points": [
-                    {"point": "buy1", "time": "2026-08-17T09:45:00", "lifecycle_state": "confirmed", "detected_at": "2026-08-17T09:50:00"}
+                    {"point": "buy1", "time": "2026-08-17T09:45:00", "lifecycle_state": "confirmed", "detected_at": "2026-08-17T09:50:00", "confirmed_at": "2026-08-17T09:50:00"}
                 ],
                 "forming_points": [
                     {"point": "buy3", "time": "2026-08-17T10:03:00", "lifecycle_state": "forming", "detected_at": "2026-08-17T10:04:00"}
                 ],
                 "invalidated_points": [
-                    {"point": "sell1", "time": "2026-08-17T09:15:00", "lifecycle_state": "invalidated", "detected_at": "2026-08-17T09:20:00"}
+                    {"point": "sell1", "time": "2026-08-17T09:15:00", "lifecycle_state": "invalidated", "detected_at": "2026-08-17T09:20:00", "confirmed_at": "2026-08-17T09:16:00"}
                 ],
             }
         ]
@@ -712,13 +712,21 @@ def test_stock_payload_preserves_existing_signal_detected_at_and_fills_new_ones(
     technical_section = next(section for section in detail_payload["sections"] if section.get("key") == "technical")
 
     assert technical_card["signal_points"][0]["detected_at"] == "2026-08-17T09:50:00"
+    assert technical_card["signal_points"][0]["confirmed_at"] == "2026-08-17T09:50:00"
     assert technical_card["signal_points"][1]["detected_at"] == "2026-08-17T10:05:00"
+    assert technical_card["signal_points"][1]["confirmed_at"] == "2026-08-17T10:05:00"
     assert technical_card["forming_points"][0]["detected_at"] == "2026-08-17T10:04:00"
+    assert "confirmed_at" not in technical_card["forming_points"][0]
     assert technical_card["invalidated_points"][0]["detected_at"] == "2026-08-17T09:20:00"
+    assert technical_card["invalidated_points"][0]["confirmed_at"] == "2026-08-17T09:16:00"
     assert technical_section["signal_points"][0]["detected_at"] == "2026-08-17T09:50:00"
+    assert technical_section["signal_points"][0]["confirmed_at"] == "2026-08-17T09:50:00"
     assert technical_section["signal_points"][1]["detected_at"] == "2026-08-17T10:05:00"
+    assert technical_section["signal_points"][1]["confirmed_at"] == "2026-08-17T10:05:00"
     assert technical_section["forming_points"][0]["detected_at"] == "2026-08-17T10:04:00"
+    assert "confirmed_at" not in technical_section["forming_points"][0]
     assert technical_section["invalidated_points"][0]["detected_at"] == "2026-08-17T09:20:00"
+    assert technical_section["invalidated_points"][0]["confirmed_at"] == "2026-08-17T09:16:00"
 
 
 def test_signal_detected_key_is_stable_across_lifecycle_transitions() -> None:
@@ -812,6 +820,45 @@ def test_stock_payload_preserves_detected_at_when_forming_becomes_confirmed(tmp_
 
     technical_card = summary_payload["cards"]["technical"]
     assert technical_card["signal_points"][0]["detected_at"] == "2026-10-20T14:14:00"
+    assert technical_card["signal_points"][0]["confirmed_at"] == "2026-10-20T15:10:00"
+
+
+def test_attach_signal_detected_at_preserves_confirmed_at_and_omits_it_for_forming() -> None:
+    """confirmed_at 跨轮保持；forming 阶段不得提前落 confirmed_at。"""
+    previous = {
+        "signal_points": [
+            {
+                "point": "buy2like",
+                "time": "2026-10-20T14:06:00",
+                "lifecycle_state": "confirmed",
+                "detected_at": "2026-10-20T14:14:00",
+                "confirmed_at": "2026-10-20T15:10:00",
+            }
+        ],
+        "forming_points": [
+            {
+                "point": "sell2like",
+                "time": "2026-10-20T15:20:00",
+                "lifecycle_state": "forming",
+                "detected_at": "2026-10-20T15:25:00",
+            }
+        ],
+    }
+    current = {
+        "signal_points": [
+            {"point": "buy2like", "time": "2026-10-20T14:06:00", "lifecycle_state": "confirmed", "active": True}
+        ],
+        "forming_points": [
+            {"point": "sell2like", "time": "2026-10-20T15:20:00", "lifecycle_state": "forming", "active": False}
+        ],
+    }
+
+    merged = module.attach_signal_detected_at(current, previous, "2026-10-20T15:40:00")
+
+    assert merged["signal_points"][0]["detected_at"] == "2026-10-20T14:14:00"
+    assert merged["signal_points"][0]["confirmed_at"] == "2026-10-20T15:10:00"
+    assert merged["forming_points"][0]["detected_at"] == "2026-10-20T15:25:00"
+    assert "confirmed_at" not in merged["forming_points"][0]
 
 
 def test_build_same_level_decomposition_labels_same_type_extension_as_confirmed_slice() -> None:
