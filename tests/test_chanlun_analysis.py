@@ -44,7 +44,15 @@ def _zhongshu(zs_id: int, *, zs_low: float, zs_high: float, day: int) -> Zhongsh
     )
 
 
-def _bi(bi_id: int, direction: BiDirection, *, high: float, low: float, day: int) -> Bi:
+def _bi(
+    bi_id: int,
+    direction: BiDirection,
+    *,
+    high: float,
+    low: float,
+    day: int,
+    is_confirmed: bool = True,
+) -> Bi:
     start_ts = datetime(2026, 5, day, 10, 30)
     end_ts = datetime(2026, 5, day, 14, 30)
     return Bi(
@@ -57,11 +65,19 @@ def _bi(bi_id: int, direction: BiDirection, *, high: float, low: float, day: int
         high=high,
         low=low,
         norm_bar_range=(bi_id, bi_id + 1),
-        is_confirmed=True,
+        is_confirmed=is_confirmed,
     )
 
 
-def _segment(segment_id: int, direction: BiDirection, *, high: float, low: float, start_day: int) -> Segment:
+def _segment(
+    segment_id: int,
+    direction: BiDirection,
+    *,
+    high: float,
+    low: float,
+    start_day: int,
+    is_confirmed: bool = True,
+) -> Segment:
     start_ts = datetime(2026, 5, start_day, 10, 30)
     end_ts = datetime(2026, 5, start_day + 1, 14, 30)
     return Segment(
@@ -77,7 +93,7 @@ def _segment(segment_id: int, direction: BiDirection, *, high: float, low: float
         low=low,
         norm_bar_range=(segment_id * 10, segment_id * 10 + 2),
         bi_ids=[segment_id * 10, segment_id * 10 + 1, segment_id * 10 + 2],
-        is_confirmed=True,
+        is_confirmed=is_confirmed,
     )
 
 
@@ -2338,7 +2354,121 @@ def test_analyze_chanlun_signals_buy_2like_forming_before_reverse_turn() -> None
     payload = next(p for p in signals["signal_points"] if p["point"] == "buy2like")
     assert payload["lifecycle_state"] == "forming"
     assert payload["active"] is False
+
+
+def _lb2_tail_gap_segments() -> list[Segment]:
+    # 与 _lb2_gap_segments 同结构，但 A_{i+2} 尚未被确认为线段（1m 实链路常见：
+    # 低点已出、尾段仍 pending）。
+    return [
+        _segment(1, BiDirection.DOWN, high=11.2, low=10.6, start_day=1),
+        _segment(2, BiDirection.UP, high=11.0, low=10.4, start_day=3),
+        _segment(3, BiDirection.DOWN, high=10.9, low=9.8, start_day=5, is_confirmed=False),
+    ]
+
+
+def _ls2_tail_gap_segments() -> list[Segment]:
+    return [
+        _segment(1, BiDirection.UP, high=10.6, low=9.9, start_day=1),
+        _segment(2, BiDirection.DOWN, high=10.4, low=9.6, start_day=3),
+        _segment(3, BiDirection.UP, high=11.2, low=10.3, start_day=5, is_confirmed=False),
+    ]
+
+
+def test_analyze_chanlun_signals_buy_2like_tail_segment_forming_before_segment_confirmation() -> None:
+    """类二买尾段 forming：线段未确认、但锚点笔已确认 + 反向转折已现 → 给预备态。
+
+    实测动机（00981 2026-10-20）：低点 14:05 的笔 14:14 已确认，但线段直到 15:10 才确认；
+    若 forming 也要求已确认线段，盘中 56 分钟内连预警都没有。
+    """
+    segments = _lb2_tail_gap_segments()
+    zhongshus = _down_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(22, BiDirection.UP, high=11.0, low=10.4, day=3),
+        _bi(32, BiDirection.DOWN, high=10.9, low=9.8, day=5),  # 锚点笔已确认
+        _bi(33, BiDirection.UP, high=10.5, low=9.9, day=6),  # 反向转折笔
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=segments[2].end_ts, macd=-1.0, dif=-0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "buy_2like" not in signals["buy_points"]
+    payload = next(p for p in signals["signal_points"] if p["point"] == "buy2like")
+    assert payload["lifecycle_state"] == "forming"
+    assert payload["active"] is False
     assert payload["signal_bi_id"] == 32
+    assert payload["price"] == 9.8
+    assert signals["signal_gate_anchors"]["buy2like_anchor"] == 32
+
+
+def test_analyze_chanlun_signals_sell_2like_tail_segment_forming_before_segment_confirmation() -> None:
+    """类二卖尾段 forming：与买侧对称（锚点笔已确认 + 反向转折笔已现）。"""
+    segments = _ls2_tail_gap_segments()
+    zhongshus = _up_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.UP, high=10.6, low=9.9, day=1),
+        _bi(22, BiDirection.DOWN, high=10.4, low=9.6, day=3),
+        _bi(32, BiDirection.UP, high=11.2, low=10.3, day=5),
+        _bi(33, BiDirection.DOWN, high=10.8, low=10.4, day=6),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=5.0, dif=1.0),
+        SimpleNamespace(ts=segments[2].end_ts, macd=1.0, dif=0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "sell_2like" not in signals["sell_points"]
+    payload = next(p for p in signals["signal_points"] if p["point"] == "sell2like")
+    assert payload["lifecycle_state"] == "forming"
+    assert payload["active"] is False
+    assert payload["signal_bi_id"] == 32
+    assert payload["price"] == 11.2
+    assert signals["signal_gate_anchors"]["sell2like_anchor"] == 32
+
+
+def test_analyze_chanlun_signals_tail_2like_forming_requires_confirmed_anchor_bi() -> None:
+    """尾段 forming 的锚点仍守 §3.3：锚点笔未确认 → 连 forming 都不发。"""
+    segments = _lb2_tail_gap_segments()
+    zhongshus = _down_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(22, BiDirection.UP, high=11.0, low=10.4, day=3),
+        _bi(32, BiDirection.DOWN, high=10.9, low=9.8, day=5, is_confirmed=False),
+        _bi(33, BiDirection.UP, high=10.5, low=9.9, day=6),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=segments[2].end_ts, macd=-1.0, dif=-0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "buy_2like" not in signals["buy_points"]
+    assert not any(payload["point"] == "buy2like" for payload in signals["signal_points"])
+
+
+def test_analyze_chanlun_signals_tail_2like_forming_requires_reverse_turn() -> None:
+    """尾段未确认时，没有反向转折笔就不发 forming（避免每个下跌尾段都刷预备）。"""
+    segments = _lb2_tail_gap_segments()
+    zhongshus = _down_trend_zhongshus()
+    bis = [
+        _bi(12, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(22, BiDirection.UP, high=11.0, low=10.4, day=3),
+        _bi(32, BiDirection.DOWN, high=10.9, low=9.8, day=5),
+    ]
+    macd_points = [
+        SimpleNamespace(ts=segments[0].end_ts, macd=-5.0, dif=-1.0),
+        SimpleNamespace(ts=segments[2].end_ts, macd=-1.0, dif=-0.4),
+    ]
+
+    signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
+
+    assert "buy_2like" not in signals["buy_points"]
+    assert not any(payload["point"] == "buy2like" for payload in signals["signal_points"])
 
 
 def test_analyze_chanlun_signals_no_buy_2like_when_decomposition_pending() -> None:

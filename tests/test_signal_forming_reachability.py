@@ -42,6 +42,8 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 SRC = ROOT / "src"
@@ -67,6 +69,7 @@ from chanlun.segment import (  # noqa: E402
 from chanlun.zhongshu import identify_zhongshu  # noqa: E402
 from export_structures_with_boxes import calculate_macd  # noqa: E402
 from tests.real_fixture_support import FIXTURES_ROOT  # noqa: E402
+from tests.replay_support import load_replay_rows, replay  # noqa: E402
 
 FRAMES_PER_WINDOW = 12
 MIN_BARS = 60
@@ -242,6 +245,57 @@ def test_legacy_forming_points_slot_stays_empty() -> None:
     evidence = replay_all()
 
     assert evidence.legacy_forming_seen == 0, "旧 forming_points 槽位应为空（forming 经 signal_points 透传）"
+
+
+@pytest.mark.parametrize(
+    ("symbol", "name", "before_cutoff", "forming_cutoff", "confirmed_cutoff", "anchor_time", "price"),
+    [
+        # 00981 中芯国际 2026-10-20：低点 14:05/50.65（冻结窗口锚点 14:06）、笔 14:14 确认，
+        # 线段直到 15:10 才确认。forming 必须在 14:14 出现，confirmed 仍钉在 15:10。
+        ("00981", "中芯国际", "2026-10-20 14:13", "2026-10-20 14:14", "2026-10-20 15:10", "2026-10-20T14:06:00", 50.65),
+        # 06088 鸿腾精密 2026-10-20：低点 14:00/3.99、笔 14:09 确认，线段直到 15:24 才确认。
+        ("06088", "鸿腾精密", "2026-10-20 14:08", "2026-10-20 14:09", "2026-10-20 15:24", "2026-10-20T14:00:00", 3.99),
+    ],
+)
+def test_real_1m_buy2like_tail_forming_precedes_segment_confirmation(
+    symbol: str,
+    name: str,
+    before_cutoff: str,
+    forming_cutoff: str,
+    confirmed_cutoff: str,
+    anchor_time: str,
+    price: float,
+) -> None:
+    """真实窗口：线段确认前先给 forming；confirmed 发点时刻保持不变（零变化）。
+
+    这两例是用户 2026-10-20 上报的「m1 类二买检出滞后 64/85 分钟」：
+    低点所在笔早已确认，但 `identify_segments` 要等 56/75 分钟才确认线段。
+    尾段版 forming 是唯一能在确认前给出预警的路径。
+    """
+    rows = load_replay_rows(symbol, "1m")
+
+    before = replay(symbol, name, before_cutoff, rows)
+    assert not any(
+        payload["point"] == "buy2like" and payload["time"] == anchor_time
+        for payload in before["signal_points"]
+    ), "锚点笔未确认前不得对该锚点发 forming"
+
+    forming = replay(symbol, name, forming_cutoff, rows)
+    assert forming["buy_points"] == []
+    forming_payload = next(payload for payload in forming["signal_points"] if payload["point"] == "buy2like")
+    assert forming_payload["lifecycle_state"] == "forming"
+    assert forming_payload["active"] is False
+    assert forming_payload["time"] == anchor_time
+    assert forming_payload["price"] == price
+    assert forming["signal_gate_anchors"]["buy2like_anchor"] is not None
+
+    confirmed = replay(symbol, name, confirmed_cutoff, rows)
+    assert confirmed["buy_points"] == ["buy_2like"]
+    confirmed_payload = next(payload for payload in confirmed["signal_points"] if payload["point"] == "buy2like")
+    assert confirmed_payload["lifecycle_state"] == "confirmed"
+    assert confirmed_payload["active"] is True
+    assert confirmed_payload["time"] == anchor_time
+    assert confirmed_payload["price"] == price
 
 
 @dataclass

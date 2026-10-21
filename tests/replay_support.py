@@ -146,6 +146,8 @@ def replay(symbol: str, name: str, cutoff: str, rows: list[dict[str, object]]) -
         "same_level_consumption_level": signals.get("same_level_consumption_level"),
         "buy_points": signals.get("buy_points"),
         "sell_points": signals.get("sell_points"),
+        "signal_points": signals.get("signal_points"),
+        "signal_gate_anchors": signals.get("signal_gate_anchors"),
         "conclusion": summary.get("conclusion"),
         "latest_zs_low": getattr(latest_zs, "zs_low", None),
         "latest_zs_high": getattr(latest_zs, "zs_high", None),

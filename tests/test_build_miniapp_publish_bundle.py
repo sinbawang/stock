@@ -721,6 +721,99 @@ def test_stock_payload_preserves_existing_signal_detected_at_and_fills_new_ones(
     assert technical_section["invalidated_points"][0]["detected_at"] == "2026-08-17T09:20:00"
 
 
+def test_signal_detected_key_is_stable_across_lifecycle_transitions() -> None:
+    """forming → confirmed 是同一信号推进，检出键不得把 lifecycle 计入。"""
+    forming = {
+        "point": "buy2like",
+        "time": "2026-10-20T14:06:00",
+        "lifecycle_state": "forming",
+        "active": False,
+    }
+    confirmed = {
+        "point": "buy2like",
+        "time": "2026-10-20T14:06:00",
+        "lifecycle_state": "confirmed",
+        "active": True,
+    }
+
+    assert module.build_signal_detected_key(forming) == module.build_signal_detected_key(confirmed)
+    assert module.build_signal_detected_key(forming) == "buy2like|2026-10-20T14:06:00"
+
+
+def test_stock_payload_preserves_detected_at_when_forming_becomes_confirmed(tmp_path: Path) -> None:
+    """同一 point+time 从 forming 升 confirmed 时，detected_at 保留首次检出时刻。"""
+    stock_dir = tmp_path / "01024"
+    (stock_dir / "30m").mkdir(parents=True)
+    (stock_dir / "base.json").write_text(
+        json.dumps({"generated_at": "2026-10-20T09:00:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "fund.json").write_text(
+        json.dumps({"generated_at": "2026-10-20T09:30:00", "summary": {}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stock_dir / "30m" / "tech.json").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-10-20T15:10:00",
+                "timeframe": "1m",
+                "summary": {
+                    "score": 60,
+                    "rating": "C",
+                    "bias": "中性",
+                    "score_breakdown": {},
+                    "conclusion": "观察中",
+                    "suggestion": "等待确认",
+                    "buy_points": ["buy_2like"],
+                    "sell_points": [],
+                    "signal_points": [
+                        {
+                            "point": "buy2like",
+                            "active": True,
+                            "time": "2026-10-20T14:06:00",
+                            "price": 50.65,
+                            "lifecycle_state": "confirmed",
+                        }
+                    ],
+                    "signal_catalog": [],
+                    "forming_points": [],
+                    "invalidated_points": [],
+                },
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    fallback_summary_payload = {
+        "cards": {
+            "technical": {
+                "signal_points": [],
+                "forming_points": [
+                    {
+                        "point": "buy2like",
+                        "time": "2026-10-20T14:06:00",
+                        "lifecycle_state": "forming",
+                        "detected_at": "2026-10-20T14:14:00",
+                    }
+                ],
+                "invalidated_points": [],
+            }
+        }
+    }
+
+    holding = module.Holding(symbol="01024", name="快手", market="HK")
+    summary_payload = module.build_summary_payload(
+        holding,
+        stock_dir,
+        None,
+        include_chart_images=False,
+        fallback_summary_payload=fallback_summary_payload,
+    )
+
+    technical_card = summary_payload["cards"]["technical"]
+    assert technical_card["signal_points"][0]["detected_at"] == "2026-10-20T14:14:00"
+
+
 def test_build_same_level_decomposition_labels_same_type_extension_as_confirmed_slice() -> None:
     decomposition = module.build_same_level_decomposition(
         {

@@ -532,6 +532,65 @@ def _find_ls2_gap_divergence(
     return None
 
 
+def _find_lb2_gap_divergence_including_tail(
+    segments: list[Segment],
+    segment_strengths: dict[int, dict[str, float]],
+    bis: list[Bi],
+) -> Segment | None:
+    """类二买（LB2）**forming 专用**：允许未确认尾段充当 A_{i+2}。
+
+    为什么需要它：`_find_lb2_gap_divergence` 只认「最后一个已确认线段」。1m 上级别线段
+    的确认可能比回踩低点晚数十分钟（实测 00981/06088 2026-10-20：低点后 56/75 分钟才
+    确认），确认前连 forming 预警都无法给出。本函数把未确认尾段也纳入隔段背驰判定，
+    但**只允许用于 forming**（调用方不得据此发 confirmed，§3.3 红线）。
+
+    锚点稳定性：要求尾段末笔 `is_confirmed=True`，避免锚在尚未走完的尾笔上；
+    尾段力度按当前已走出的窗口计算，后续若继续延伸/创新低，锚点与力度都可能漂移，
+    这正是 forming（watch 档）允许的语义。
+    """
+    if len(segments) < 3:
+        return None
+    tail = segments[-1]
+    if tail.is_confirmed:
+        # 已确认尾段由 `_find_lb2_gap_divergence` 处理；这里只在确认前补预备态，避免语义重叠。
+        return None
+    ai, ai1, ai2 = segments[-3], segments[-2], segments[-1]
+    if not (ai.is_down() and ai1.is_up() and ai2.is_down()):
+        return None
+    anchor = _bi_by_id(ai2.end_bi_id, bis)
+    if anchor is None or not anchor.is_confirmed:
+        return None
+    strength_ai = segment_strengths.get(ai.segment_id, {}).get("macd_sum_abs", 0.0)
+    strength_ai2 = segment_strengths.get(ai2.segment_id, {}).get("macd_sum_abs", 0.0)
+    if strength_ai > 0 and strength_ai2 < strength_ai:
+        return ai2
+    return None
+
+
+def _find_ls2_gap_divergence_including_tail(
+    segments: list[Segment],
+    segment_strengths: dict[int, dict[str, float]],
+    bis: list[Bi],
+) -> Segment | None:
+    """类二卖（LS2）**forming 专用**：与 `_find_lb2_gap_divergence_including_tail` 对称。"""
+    if len(segments) < 3:
+        return None
+    tail = segments[-1]
+    if tail.is_confirmed:
+        return None
+    ai, ai1, ai2 = segments[-3], segments[-2], segments[-1]
+    if not (ai.is_up() and ai1.is_down() and ai2.is_up()):
+        return None
+    anchor = _bi_by_id(ai2.end_bi_id, bis)
+    if anchor is None or not anchor.is_confirmed:
+        return None
+    strength_ai = segment_strengths.get(ai.segment_id, {}).get("macd_sum_abs", 0.0)
+    strength_ai2 = segment_strengths.get(ai2.segment_id, {}).get("macd_sum_abs", 0.0)
+    if strength_ai > 0 and strength_ai2 < strength_ai:
+        return ai2
+    return None
+
+
 def _build_signal_point_detail(
     point: str,
     signal_bi: Bi | None,
@@ -1437,27 +1496,55 @@ def analyze_chanlun_signals(
         like_segment_strengths = compute_segment_strengths(segments, macd_points)
         if "buy_2" not in buy_points:
             lb2_seg = _find_lb2_gap_divergence(segments, like_segment_strengths)
+            if lb2_seg is None:
+                # 线段确认可能滞后数十分钟（1m 实测 56/75 min）：确认前用未确认尾段给 forming。
+                lb2_seg = _find_lb2_gap_divergence_including_tail(
+                    segments, like_segment_strengths, bis
+                )
             if lb2_seg is not None:
                 anchor = _bi_by_id(lb2_seg.end_bi_id, bis)
                 if anchor is not None:
                     buy2like_anchor_bi = anchor
                     if _has_reverse_turn_after(anchor, direction="down", bis=bis):
-                        buy2like_signal_bi = anchor
-                        buy_points.append("buy_2like")
-                    elif not _has_forming_candidate(forming_candidates, "buy_2"):
+                        if lb2_seg.is_confirmed:
+                            buy2like_signal_bi = anchor
+                            buy_points.append("buy_2like")
+                        elif not _has_forming_candidate(
+                            forming_candidates, "buy_2"
+                        ) and not _has_forming_candidate(
+                            forming_candidates, "buy_2like", bi_id=anchor.bi_id
+                        ):
+                            # 尾段未确认 → 只能给 forming（§3.3：未确认结构不承载 confirmed）。
+                            forming_candidates.append(("buy_2like", anchor))
+                    elif lb2_seg.is_confirmed and not _has_forming_candidate(
+                        forming_candidates, "buy_2"
+                    ):
                         # 结构（隔段背驰 + 锚点）成立、反向转折未确认 → forming；
                         # 标准二类已 confirmed / forming 时不重复标记。
                         forming_candidates.append(("buy_2like", anchor))
         if "sell_2" not in sell_points:
             ls2_seg = _find_ls2_gap_divergence(segments, like_segment_strengths)
+            if ls2_seg is None:
+                ls2_seg = _find_ls2_gap_divergence_including_tail(
+                    segments, like_segment_strengths, bis
+                )
             if ls2_seg is not None:
                 anchor = _bi_by_id(ls2_seg.end_bi_id, bis)
                 if anchor is not None:
                     sell2like_anchor_bi = anchor
                     if _has_reverse_turn_after(anchor, direction="up", bis=bis):
-                        sell2like_signal_bi = anchor
-                        sell_points.append("sell_2like")
-                    elif not _has_forming_candidate(forming_candidates, "sell_2"):
+                        if ls2_seg.is_confirmed:
+                            sell2like_signal_bi = anchor
+                            sell_points.append("sell_2like")
+                        elif not _has_forming_candidate(
+                            forming_candidates, "sell_2"
+                        ) and not _has_forming_candidate(
+                            forming_candidates, "sell_2like", bi_id=anchor.bi_id
+                        ):
+                            forming_candidates.append(("sell_2like", anchor))
+                    elif ls2_seg.is_confirmed and not _has_forming_candidate(
+                        forming_candidates, "sell_2"
+                    ):
                         forming_candidates.append(("sell_2like", anchor))
 
     # 类一类买卖点（LB1/LS1）：盘整背驰（离开段 vs 进入段，range 门控）+ 反向转折即生成，

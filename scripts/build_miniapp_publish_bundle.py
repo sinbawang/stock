@@ -624,13 +624,6 @@ def first_non_empty(*values: Any) -> str:
 SIGNAL_POINT_FIELDS = ("signal_points", "forming_points", "invalidated_points")
 
 
-def _signal_lifecycle_key(value: Any, *, active: bool = False) -> str:
-    lifecycle = safe_text(value).lower()
-    if lifecycle:
-        return lifecycle
-    return "confirmed" if active else ""
-
-
 def build_signal_detected_key(signal: dict[str, Any] | None) -> str:
     if not isinstance(signal, dict):
         return ""
@@ -640,8 +633,10 @@ def build_signal_detected_key(signal: dict[str, Any] | None) -> str:
     if not point or not time:
         return ""
 
-    lifecycle = _signal_lifecycle_key(signal.get("lifecycle_state"), active=safe_bool(signal.get("active")))
-    return "|".join((point, time, lifecycle))
+    # 只认「点类型 + 锚点时间」，**不含 lifecycle**。
+    # forming → confirmed 是同一信号的推进，不是新信号；若把 lifecycle 计入 key，
+    # detected_at 会在确认时被重置为确认时刻，早期的预备预警就永远不可见。
+    return "|".join((point, time))
 
 
 def build_previous_detected_at_map(section: dict[str, Any] | None) -> dict[str, str]:
