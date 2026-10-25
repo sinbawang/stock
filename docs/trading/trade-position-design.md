@@ -8,22 +8,24 @@
 
 ```
 微信小程序 (westock)
+  ├─ pages/positionsOverview/index        顶部「仓位」标签页：各股持仓总览
   ├─ pages/positionManager/index         交易录入 + 配对列表 + 仓位表 + 上限编辑
   ├─ services/tradeStoreService.js       封装 wx.cloud.callFunction('tradeStore')
   └─ utils/
        ├─ tradeTime.js                    成交时间默认补时 / 解析
        ├─ tradePairing.js                 价差最优配对（纯函数）
-       ├─ positionAggregation.js          移动加权均成本 + FIFO 持有天数 + 仓位% + 报警
+       ├─ positionAggregation.js          移动加权均成本 + FIFO 持有天数 + 仓位% + 总览聚合
        └─ tradeValidation.js              录入校验 + 超限预检
           │
           ▼ wx.cloud.callFunction
 CloudBase 云函数 tradeStore (wx-server-sdk)
   └─ 动作: listTrades/addTrade/updateTrade/deleteTrade/getLimits/setLimits
+          listAllTrades/listAllLimits（总览用）
           │
           ▼
 CloudBase 文档数据库
   ├─ 集合 trades            (按 _openid 隔离)
-  └─ 集合 position_limits   (按 _openid 隔离)
+  └─ 集合 position_limits   (按 _openid 隔离，含 name/currentPrice)
 
 当前价来源（只读，复用已发布数据）
   └─ services/cloudbaseStorageRepository.js → 最近 K 线收盘价
@@ -62,7 +64,12 @@ CloudBase 文档数据库
 | `updateTrade` | `{ _id, ...fields }` | 仅更新归属本人的记录，刷新 `updatedAt` |
 | `deleteTrade` | `{ _id }` | 仅删除归属本人的记录 |
 | `getLimits` | `{ symbol }` | 返回上限配置；无则返回 `null`（前端回退默认） |
-| `setLimits` | `{ symbol, market, maxTotal, perLevel, holdingDaysThreshold }` | upsert |
+| `setLimits` | `{ symbol, market, name?, currentPrice?, maxTotal, perLevel, holdingDaysThreshold }` | upsert |
+| `listAllTrades` | `{}` | 返回该用户**全部股票**的交易（总览用，按 tradeTime 升序） |
+| `listAllLimits` | `{}` | 返回该用户全部 `position_limits` 文档（总览用） |
+
+- `trades` 文档可带可选 `name`（展示用）；`addTrade`/`updateTrade` 透传。
+- `position_limits` 文档新增可选 `name`、`currentPrice`（手动输入的最近价）。
 
 - 权限：`where({ _id, _openid })` 双条件，杜绝越权改他人数据。
 - 入参校验：云函数侧对 `level/direction/market` 做白名单校验，`price>0`、`quantity>0`、
@@ -184,15 +191,41 @@ overTotalLimit  = maxTotal!=null && Σ netQty > maxTotal
 - 超限预检：以「现有净持仓 + 本次买入」预估该级别与总仓位是否越限，越限返回 warning
   （不阻断，供 UI 高亮确认）。
 
+### 5.5 持仓总览聚合 `positionAggregation.aggregateSymbol`
+对某股票的**全部交易**（跨级别）按时间顺序做移动加权，得出整只股票的持仓视图：
+```
+aggregateSymbol(symbolTrades, { maxTotal, currentPrice, now }):
+  // 复用 aggregateLevel 的移动加权 + FIFO（级别无关，传入全部交易）
+  agg = aggregateLevel('__all__', symbolTrades, { limits:{maxTotal}, currentPrice, now })
+  netQty       = agg.quantity
+  avgCost      = agg.avgCost
+  positionPct  = agg.positionPct                 // netQty / maxTotal
+  marketValue  = currentPrice!=null && netQty>0 ? netQty*currentPrice : null
+  pnl          = agg.floatPnl                     // (currentPrice-avgCost)*netQty
+  pnlRate      = currentPrice!=null && avgCost>0 ? (currentPrice-avgCost)/avgCost : null
+  return { quantity, avgCost, maxTotal, positionPct, currentPrice,
+           marketValue, pnl, pnlSign, pnlRate, longestHoldingDays }
+```
+
 ## 6. 当前价获取
-- 复用 `cloudbaseStorageRepository` 读该股票已发布技术数据（detail/base），取最近一根
-  K 线收盘价：优先 1m 最新 close，缺失回退 day 最新 close。
-- 封装到 `tradeStoreService.getLatestPrice(symbol)` 或 positionManager 页加载时一并取。
-- 无法取到时 `currentPrice=null`，浮盈浮亏显示 `--`，不做红绿。
+- v1：在个股「仓位」Tab 手动输入「当前价」，点击保存写入 `position_limits.currentPrice`
+  （经 `setLimits`）。该值作为该股票浮盈浮亏与「仓位总览」的单一价格来源。
+- 读取：个股页加载时从 `getLimits` 预填 currentPrice；总览页从 `listAllLimits` 取各股
+  currentPrice。
+- 未设置时 `currentPrice=null`，浮盈浮亏 / 市值 / 盈亏显示 `--`。
+- Phase 2：自动取最近一根 K 线收盘价（复用 `cloudbaseStorageRepository` 已发布数据）作默认值。
 
 ## 7. 小程序页面
 
-### 7.1 `pages/positionManager/index`
+### 7.1 `pages/positionsOverview/index`（顶部「仓位」标签页）
+- 顶部复用 `pageNav` 导航条；`PRIMARY_PAGES` 新增 `仓位`。
+- 加载：`listAllTrades` + `listAllLimits` → 按 symbol 分组 → 对每只调用 `aggregateSymbol` →
+  仅保留净持仓 >0，按最新市值降序。
+- 卡片列：股票(name+代码) / 持仓数量 / 持仓上限 / 持仓比例 / 成本 / 现价 / 最新市值 /
+  币种 / 盈亏 / 盈亏率；盈亏红正绿负、超比例红标。
+- 点击卡片 `navigateTo` 个股 `positionManager`，带 `symbol/market/name/currentPrice`。
+
+### 7.2 `pages/positionManager/index`
 入参 `?symbol=&market=`。两个 Tab：
 - **交易 Tab**：
   - 录入表单：级别选择、方向切换、日期/时间、价格、数量、备注，含默认补时与校验。
@@ -203,9 +236,9 @@ overTotalLimit  = maxTotal!=null && Σ netQty > maxTotal
   - 顶部总仓位%（超总上限红标）。
   - 上限配置编辑入口（maxTotal / perLevel / holdingDaysThreshold）。
 
-### 7.2 入口
+### 7.3 入口
 - 在 `pages/stockDetail/index` 增加「仓位/交易」按钮，`navigateTo` 带 `symbol/market`。
-- `app.json` 注册新页面路由。
+- `app.json` 注册新页面路由（`positionsOverview`、`positionManager`）。
 
 ## 8. 测试策略
 - **纯函数单测（node，无 wx 依赖）**：`tradePairing` / `positionAggregation` / `tradeTime` /

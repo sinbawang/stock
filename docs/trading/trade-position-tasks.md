@@ -16,6 +16,7 @@
 | T3-SVC | `tradeStoreService` 封装 | 代码 | 待办 | T1-CF | 封装 callFunction + 当前价获取 + 错误处理 |
 | T4-PAGE | `positionManager` 页面 + 入口 | 代码 | 待办 | T2-UTIL, T3-SVC | 交易/仓位两 Tab 可用，stockDetail 入口接入 |
 | T5-TEST | 纯函数单元测试 | 测试 | 待办 | T2-UTIL | 覆盖 spec 示例与边界，node 可跑通 |
+| T6-OVERVIEW | 顶部「仓位」总览标签页 | 代码 | 待办 | T2-UTIL, T1-CF | 各股持仓总览卡片，点击进个股页；现价来自保存值 |
 
 ## 2. 任务明细
 
@@ -59,6 +60,16 @@
   - 仓位：示例四级别合计总仓位 90%；移动加权均成本多买一卖；清仓重置；FIFO 最长持有天数。
   - 报警：超级别上限、超总上限、超合理持仓天数、浮盈红/浮亏绿。
   - 补时：仅日期 buy→09:30、sell CN→15:00/HK→16:00；`MM-DD` 补当前年。
+  - 总览：`aggregateSymbol` 全仓成本/市值/盈亏/盈亏率。
+
+### T6-OVERVIEW 顶部「仓位」总览标签页
+- `utils/positionAggregation.js` 增 `aggregateSymbol`（全仓移动加权 + 市值/盈亏/盈亏率/比例）。
+- 云函数 `tradeStore` 增 `listAllTrades`/`listAllLimits`；`addTrade`/`updateTrade` 透传 `name`；
+  `setLimits` 支持 `name`/`currentPrice`。
+- `utils/pageNav.js` `PRIMARY_PAGES` 增「仓位」；`app.json` 注册 `pages/positionsOverview/index`。
+- 新页面 `pages/positionsOverview/index`：聚合各股持仓→卡片列表→点击进个股页。
+- `positionManager` 仓位 Tab：当前价预填 `limits.currentPrice` 并支持保存；录入/设限携带 `name`。
+- 完成定义：录完几只股票并在个股页存现价后，「仓位」页能正确展示各股总览并跳转。
 
 ## 3. 阶段与并行建议
 - 阶段 A（文档）：T0-SPEC → T0-DESIGN → T0-TASKS（已完成）。
