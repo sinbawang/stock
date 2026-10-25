@@ -207,13 +207,13 @@ aggregateSymbol(symbolTrades, { maxTotal, currentPrice, now }):
            marketValue, pnl, pnlSign, pnlRate, longestHoldingDays }
 ```
 
-## 6. 当前价获取
-- v1：在个股「仓位」Tab 手动输入「当前价」，点击保存写入 `position_limits.currentPrice`
-  （经 `setLimits`）。该值作为该股票浮盈浮亏与「仓位总览」的单一价格来源。
-- 读取：个股页加载时从 `getLimits` 预填 currentPrice；总览页从 `listAllLimits` 取各股
-  currentPrice。
-- 未设置时 `currentPrice=null`，浮盈浮亏 / 市值 / 盈亏显示 `--`。
-- Phase 2：自动取最近一根 K 线收盘价（复用 `cloudbaseStorageRepository` 已发布数据）作默认值。
+## 6. 当前价与名称获取
+- **现价（优先自动）**：读取已发布 `stocks/<symbol>/charts/1m.json`（`repository.loadChartData`），
+  取 `bars` 末根 `close` 作为最新 1m 价。总览页与个股页一致。
+- **回退**：取不到时用 `position_limits.currentPrice`（个股「仓位」Tab 手动输入后经 `setLimits`
+  保存）。两者皆无则 `currentPrice=null`，浮盈亏 / 市值 / 盈亏显示 `--`。
+- **名称/市场**：总览页从 `repository.loadIndex()` 的 `stocks[]` 取 `name`/`market`，
+  回退交易记录 / 代码推断。
 
 ## 7. 小程序页面
 
