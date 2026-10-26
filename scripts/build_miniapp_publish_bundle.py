@@ -700,21 +700,24 @@ def attach_signal_detected_at(
 
             normalized_item = dict(item)
             key = build_signal_detected_key(normalized_item)
+            # 结构时间优先：引擎已按笔尾 / 反向转折笔落种 detected_at / confirmed_at，
+            # 它是对 K 线的确定性重算，优先于上一版发布包里的旧值（旧值可能是历史跑批时刻），
+            # 最后才回退到本次 updated_at，彻底摆脱「检出 / 确认 = 跑批时刻」。
             detected_at = first_non_empty(
-                previous_detected_at_by_key.get(key),
                 normalized_item.get("detected_at"),
                 normalized_item.get("detectedAt"),
+                previous_detected_at_by_key.get(key),
                 default_value,
             )
             if detected_at:
                 normalized_item["detected_at"] = detected_at
 
             # confirmed_at 只在点真正进入 confirmed 时落定；forming 阶段必须为空，
-            # invalidated 时若曾有 confirmed_at 则保留（用于“确认 → 失效”追溯）。
+            # invalidated 时结构已不可重算，退回上一版发布包保留的确认时刻（用于“确认 → 失效”追溯）。
             confirmed_at = first_non_empty(
-                previous_confirmed_at_by_key.get(key),
                 normalized_item.get("confirmed_at"),
                 normalized_item.get("confirmedAt"),
+                previous_confirmed_at_by_key.get(key),
                 default_value if is_confirmed_signal(normalized_item) else "",
             )
             if confirmed_at:

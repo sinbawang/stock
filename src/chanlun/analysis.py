@@ -286,6 +286,25 @@ def _has_reverse_turn_after(signal_bi: Bi | None, *, direction: str, bis: list[B
     return False
 
 
+def _signal_confirm_ts(anchor_bi: Bi | None, *, is_buy: bool, bis: list[Bi] | None) -> datetime | None:
+    """confirmed 点的**结构确认时刻**（不依赖跨轮发布状态）。
+
+    取锚点之后首个「反向且守住锚点极值」的笔的 `end_ts`，口径与 `_has_reverse_turn_after` 一致
+    （买点→反向上行笔守住低点；卖点→反向下行笔守住高点）——该反向笔的完成即是本点被确认的结构事件。
+    取不到（尾部 / 边界）时回退锚点自身 `end_ts`，保证始终返回结构时间而非跑批时刻。
+    """
+    if anchor_bi is None:
+        return None
+    for candidate in bis or []:
+        if candidate.bi_id <= anchor_bi.bi_id:
+            continue
+        if is_buy and candidate.is_up() and candidate.low >= anchor_bi.low:
+            return candidate.end_ts
+        if (not is_buy) and candidate.is_down() and candidate.high <= anchor_bi.high:
+            return candidate.end_ts
+    return anchor_bi.end_ts
+
+
 def _is_first_reverse_hold(anchor: Bi, candidate: Bi, bis: list[Bi]) -> bool:
     """candidate 是否落在 anchor 之后「第一次确认性回抽 / 反抽」窗口内（spec §2.3）。
 
@@ -1637,6 +1656,7 @@ def analyze_chanlun_signals(
         buy1like_signal_bi=buy1like_signal_bi,
         sell1like_signal_bi=sell1like_signal_bi,
         forming_candidates=forming_candidates,
+        bis=bis,
     )
     zs_monitor_state = _build_zs_monitor_state(
         raw_bars,
@@ -1697,6 +1717,7 @@ def build_signal_point_payloads(
     buy1like_signal_bi: Bi | None = None,
     sell1like_signal_bi: Bi | None = None,
     forming_candidates: list[tuple[str, Bi]] | None = None,
+    bis: list[Bi] | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     signal_points: list[dict[str, object]] = []
     signal_catalog: list[dict[str, object]] = []
@@ -1887,6 +1908,37 @@ def build_signal_point_payloads(
                 continue
             payload["related_zs_low"] = current_zs.zs_low
             payload["related_zs_high"] = current_zs.zs_high
+
+    # 结构时间落种（spec 不依赖跨轮发布包）：
+    # detected_at = 锚点笔尾时间（forming/confirmed 的首见结构时刻，等于 `time`）；
+    # confirmed_at = 确认态点的反向转折笔结束时间（取不到时回退锚点时间）。
+    # 发布侧据此透传，使「检出/确认」反映结构 K 线时间而非跑批时刻。
+    def _seed_structural_times(items: list[dict[str, object]]) -> None:
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            state = item.get("lifecycle_state")
+            anchor_ts = item.get("time")
+            if (
+                state
+                in (
+                    SignalLifecycleState.CONFIRMED.value,
+                    SignalLifecycleState.FORMING.value,
+                )
+                and anchor_ts
+            ):
+                item.setdefault("detected_at", anchor_ts)
+            if state == SignalLifecycleState.CONFIRMED.value:
+                anchor = _bi_by_id(item.get("signal_bi_id"), bis or [])
+                confirm_ts = _signal_confirm_ts(
+                    anchor,
+                    is_buy=str(item.get("point") or "").startswith("buy"),
+                    bis=bis,
+                )
+                item["confirmed_at"] = _isoformat_ts(confirm_ts) or anchor_ts
+
+    _seed_structural_times(signal_points)
+    _seed_structural_times(signal_catalog)
     return signal_points, signal_catalog
 
 

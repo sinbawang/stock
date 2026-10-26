@@ -287,6 +287,9 @@ def test_real_1m_buy2like_tail_forming_precedes_segment_confirmation(
     assert forming_payload["active"] is False
     assert forming_payload["time"] == anchor_time
     assert forming_payload["price"] == price
+    # 结构落种：forming 的检出时刻 = 锚点笔尾，确认时刻尚未落定。
+    assert forming_payload["detected_at"] == anchor_time
+    assert "confirmed_at" not in forming_payload
     assert forming["signal_gate_anchors"]["buy2like_anchor"] is not None
 
     confirmed = replay(symbol, name, confirmed_cutoff, rows)
@@ -296,6 +299,10 @@ def test_real_1m_buy2like_tail_forming_precedes_segment_confirmation(
     assert confirmed_payload["active"] is True
     assert confirmed_payload["time"] == anchor_time
     assert confirmed_payload["price"] == price
+    # 结构落种：检出时刻仍钉在锚点笔尾；确认时刻来自锚点之后的反向转折笔（结构时间，非跑批时刻），
+    # 且晚于/等于锚点，从而「检出 ≤ 确认」且两者都是 K 线时间。
+    assert confirmed_payload["detected_at"] == anchor_time
+    assert confirmed_payload["confirmed_at"] >= anchor_time
 
 
 @dataclass

@@ -861,6 +861,40 @@ def test_attach_signal_detected_at_preserves_confirmed_at_and_omits_it_for_formi
     assert "confirmed_at" not in merged["forming_points"][0]
 
 
+def test_attach_signal_detected_at_prefers_engine_structural_time_over_stale_previous() -> None:
+    """引擎结构时间优先于上一版发布包的旧值（旧值可能是历史跑批时刻），也优先于本次 updated_at。"""
+    previous = {
+        "signal_points": [
+            {
+                "point": "buy2like",
+                "time": "2026-10-22T14:55:00",
+                "lifecycle_state": "confirmed",
+                # 旧包里 detected/confirmed 被错误地落成了跑批时刻（10-26 开盘）。
+                "detected_at": "2026-10-26T09:30:00",
+                "confirmed_at": "2026-10-26T09:30:00",
+            }
+        ],
+    }
+    current = {
+        "signal_points": [
+            {
+                "point": "buy2like",
+                "time": "2026-10-22T14:55:00",
+                "lifecycle_state": "confirmed",
+                "active": True,
+                # 引擎按结构 K 线时间落种。
+                "detected_at": "2026-10-22T14:55:00",
+                "confirmed_at": "2026-10-22T15:30:00",
+            }
+        ],
+    }
+
+    merged = module.attach_signal_detected_at(current, previous, "2026-10-26T09:30:00")
+
+    assert merged["signal_points"][0]["detected_at"] == "2026-10-22T14:55:00"
+    assert merged["signal_points"][0]["confirmed_at"] == "2026-10-22T15:30:00"
+
+
 def test_build_same_level_decomposition_labels_same_type_extension_as_confirmed_slice() -> None:
     decomposition = module.build_same_level_decomposition(
         {
