@@ -11,7 +11,7 @@
 | T0-SPEC | 编写 spec.md | 文档 | 完成 | — | 需求/行为/数据契约/验收齐备 |
 | T0-DESIGN | 编写 design.md | 文档 | 完成 | T0-SPEC | 架构/数据模型/算法/接口/页面/测试策略齐备 |
 | T0-TASKS | 编写 tasks.md | 文档 | 完成 | T0-DESIGN | 任务分解与依赖齐备 |
-| T1-CF | 云函数 `tradeStore` + 集合 | 代码 | 待办 | T0-DESIGN | CRUD + limits 读写，按 `_openid` 隔离，含白名单校验 |
+| T1-CF | 云函数 `tradeStore` + 集合 | 代码 | 待办 | T0-DESIGN | CRUD + limits 读写，家庭共享（`_openid` 仅标记录入人），含白名单校验 |
 | T2-UTIL | 小程序纯 JS 工具 | 代码 | 待办 | T0-DESIGN | 补时/配对/仓位聚合/校验 纯函数可用、可 node 单测 |
 | T3-SVC | `tradeStoreService` 封装 | 代码 | 待办 | T1-CF | 封装 callFunction + 当前价获取 + 错误处理 |
 | T4-PAGE | `positionManager` 页面 + 入口 | 代码 | 待办 | T2-UTIL, T3-SVC | 交易/仓位两 Tab 可用，stockDetail 入口接入 |
@@ -25,11 +25,12 @@
   （依赖 `wx-server-sdk`）。
 - 实现动作：`listTrades / addTrade / updateTrade / deleteTrade / getLimits / setLimits`
   （见 design §3）。
-- 每个动作内 `getWXContext().OPENID`，查询/写入均带 `_openid`；改删用 `{_id,_openid}` 双条件。
+- 每个动作内 `getWXContext().OPENID`；新增写入 `_openid` 作录入人标记，查询/改删不按
+  `_openid` 过滤（家庭共享账本）。
 - 白名单校验 `level/direction/market`，`price>0`、`quantity>0`、`tradeTime` 可解析。
 - 集合 `trades`、`position_limits` 首次调用自动建（或文档说明手动建），建议建复合索引
-  `(_openid,symbol,level,tradeTime)` 与 `(_openid,symbol)`。
-- 完成定义：本地/云端可完成一条交易的增改删查与 limits upsert，越权访问被拒。
+  `(symbol,tradeTime)` 与 `(symbol)`；同 `symbol` 的 `position_limits` 只保留最新一份。
+- 完成定义：本地/云端可完成一条交易的增改删查与 limits upsert；两个微信账号共享同一账本。
 
 ### T2-UTIL 小程序纯 JS 工具（CommonJS，不引用 wx）
 - `utils/tradeTime.js`：`normalizeTradeTime(input,{direction,market})`（design §5.1）。

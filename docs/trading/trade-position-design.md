@@ -24,15 +24,16 @@ CloudBase 云函数 tradeStore (wx-server-sdk)
           │
           ▼
 CloudBase 文档数据库
-  ├─ 集合 trades            (按 _openid 隔离)
-  └─ 集合 position_limits   (按 _openid 隔离，含 name/currentPrice)
+  ├─ 集合 trades            (家庭共享，_openid 仅标记为录入人)
+  └─ 集合 position_limits   (家庭共享，symbol 唯一，_openid 仅标记为录入人)
 
 当前价来源（只读，复用已发布数据）
   └─ services/cloudbaseStorageRepository.js → 最近 K 线收盘价
 ```
 
 ### 1.1 设计原则
-- **真源单一**：交易与上限配置以 CloudBase 文档库为唯一真源，按 `_openid` 隔离。
+- **真源单一**：交易与上限配置以 CloudBase 文档库为唯一真源，家庭成员共享读写；`_openid`
+  仅作录入人标记，不参与查询 / 权限过滤。
 - **计算在端**：配对与仓位聚合是纯函数，放小程序端，便于离线与 node 单测；不依赖 `wx`。
 - **容器不介入**：stock Python 容器保持只读发布分析数据，不存储 / 不计算交易数据。
 - **读写分离**：读分析数据走现有 `cloudbaseStorageRepository`（云存储）；读写交易数据走
@@ -44,34 +45,37 @@ CloudBase 文档数据库
 字段见 spec §4.1。约束与索引：
 - `quantity` 存正整数；方向由 `direction` 表达。
 - `market ∈ {CN, HK}`，`level ∈ {m1,m5,m30,md}`，`direction ∈ {buy,sell}`。
-- 复合索引：`(_openid, symbol, level, tradeTime)`，支持按股票 + 级别 + 时间排序拉取。
-- 所有写入由云函数用 `getWXContext().OPENID` 强制盖 `_openid`，前端不可伪造。
+- 复合索引：`(symbol, tradeTime)`，支持按股票拉取并按时间排序；总览可再建 `(tradeTime)`。
+- 新增时由云函数用 `getWXContext().OPENID` 盖 `_openid` 作为录入人标记；查询 / 改删不再按
+  `_openid` 过滤。
 
 ### 2.2 `position_limits`
 字段见 spec §4.2。约束与索引：
-- 唯一键逻辑：`(_openid, symbol)`；`setLimits` 用 upsert（存在则更新，否则插入）。
-- 复合索引：`(_openid, symbol)`。
+- 唯一键逻辑：`symbol`；`setLimits` 用 upsert（存在则更新最新一份，否则插入），并清理同
+  `symbol` 的历史重复配置。
+- 复合索引：`(symbol)`。
 
 ## 3. 云函数 `tradeStore` 接口
 
 统一入参 `{ action, payload }`，统一出参 `{ success, data?, errMsg? }`。全部动作内部
-`const { OPENID } = cloud.getWXContext()`，查询 / 写入都带 `_openid: OPENID`。
+`const { OPENID } = cloud.getWXContext()`；新增写入带 `_openid: OPENID` 标记录入人，
+查询 / 改删按 `symbol` / `_id`，不按 `_openid` 隔离。
 
 | action | payload | 说明 |
 | --- | --- | --- |
-| `listTrades` | `{ symbol }` | 返回该用户该股票全部交易（按 tradeTime 升序） |
+| `listTrades` | `{ symbol }` | 返回该股票全部交易（家庭共享，按 tradeTime 升序） |
 | `addTrade` | `{ symbol, market, level, direction, tradeTime, price, quantity, note? }` | 服务端盖 `_openid/createdAt/updatedAt` 后 insert |
-| `updateTrade` | `{ _id, ...fields }` | 仅更新归属本人的记录，刷新 `updatedAt` |
-| `deleteTrade` | `{ _id }` | 仅删除归属本人的记录 |
-| `getLimits` | `{ symbol }` | 返回上限配置；无则返回 `null`（前端回退默认） |
-| `setLimits` | `{ symbol, market, name?, currentPrice?, maxTotal, perLevel, holdingDaysThreshold }` | upsert |
-| `listAllTrades` | `{}` | 返回该用户**全部股票**的交易（总览用，按 tradeTime 升序） |
-| `listAllLimits` | `{}` | 返回该用户全部 `position_limits` 文档（总览用） |
+| `updateTrade` | `{ _id, ...fields }` | 按 `_id` 更新记录（共享账本，保留原 `_openid`），刷新 `updatedAt` |
+| `deleteTrade` | `{ _id }` | 按 `_id` 删除记录（共享账本） |
+| `getLimits` | `{ symbol }` | 返回上限配置；同 `symbol` 多份时取 `updatedAt` 最新；无则返回 `null` |
+| `setLimits` | `{ symbol, market, name?, currentPrice?, maxTotal, perLevel, holdingDaysThreshold }` | 按 `symbol` upsert，并清理重复配置 |
+| `listAllTrades` | `{}` | 返回**全部股票**的交易（总览用，按 tradeTime 升序） |
+| `listAllLimits` | `{}` | 返回全部 `position_limits` 文档（同 `symbol` 只保留最新一份） |
 
 - `trades` 文档可带可选 `name`（展示用）；`addTrade`/`updateTrade` 透传。
 - `position_limits` 文档新增可选 `name`、`currentPrice`（手动输入的最近价）。
 
-- 权限：`where({ _id, _openid })` 双条件，杜绝越权改他人数据。
+- 权限：家庭共享账本，改删按 `_id` 定位；`_openid` 只用于标记录入人，不参与权限判断。
 - 入参校验：云函数侧对 `level/direction/market` 做白名单校验，`price>0`、`quantity>0`、
   `tradeTime` 可解析，否则返回 `success:false`。
 - 复用策略：可在现有 `quickstartFunctions` 旁**新增独立函数** `tradeStore`，避免污染示例函数。
@@ -249,7 +253,7 @@ aggregateSymbol(symbolTrades, { maxTotal, currentPrice, now }):
   - FIFO 最长持有天数（卖出抵消最早买入）。
   - 超级别/总上限、超合理持仓天数、浮盈浮亏红绿。
   - 补时：仅日期时 buy→09:30、sell CN→15:00 / HK→16:00；MM-DD 补年。
-- **云函数**：手动 / 轻量集成验证 CRUD 与 `_openid` 隔离、白名单校验。
+- **云函数**：手动 / 轻量集成验证 CRUD 与家庭共享读写（不按 `_openid` 过滤）、白名单校验。
 - 运行方式：JS 单测用 `node` 直接跑（utils 导出为 CommonJS，不引用 `wx`）。
 
 ## 9. 风险与权衡
