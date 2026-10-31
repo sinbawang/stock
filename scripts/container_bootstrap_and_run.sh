@@ -28,6 +28,7 @@ INTRADAY_SCHEDULER_TIMEZONE="${INTRADAY_SCHEDULER_TIMEZONE:-Asia/Shanghai}"
 INTRADAY_SCHEDULER_GRACE_SECONDS="${INTRADAY_SCHEDULER_GRACE_SECONDS:-150}"
 INTRADAY_SCHEDULER_POLL_SECONDS="${INTRADAY_SCHEDULER_POLL_SECONDS:-30}"
 M5_INTRADAY_SCHEDULER_ENABLED="${M5_INTRADAY_SCHEDULER_ENABLED:-false}"
+M1_INTRADAY_SCHEDULER_ENABLED="${M1_INTRADAY_SCHEDULER_ENABLED:-false}"
 EOD_SCHEDULER_ENABLED="${EOD_SCHEDULER_ENABLED:-false}"
 EOD_SCHEDULER_TIMEZONE="${EOD_SCHEDULER_TIMEZONE:-Asia/Shanghai}"
 EOD_SCHEDULER_GRACE_SECONDS="${EOD_SCHEDULER_GRACE_SECONDS:-300}"
@@ -39,6 +40,7 @@ mkdir -p "$(dirname "${KLINE_SYNC_MANIFEST_PATH}")"
 backup_loop_pid=""
 scheduler_pid=""
 mini_scheduler_pid=""
+m1_scheduler_pid=""
 eod_scheduler_pid=""
 child_pid=""
 
@@ -105,6 +107,15 @@ start_m5_intraday_scheduler() {
   log "started m5 intraday scheduler (timezone=${INTRADAY_SCHEDULER_TIMEZONE})"
 }
 
+start_m1_intraday_scheduler() {
+  INTRADAY_SCHEDULER_TIMEZONE="${INTRADAY_SCHEDULER_TIMEZONE}" \
+  INTRADAY_SCHEDULER_GRACE_SECONDS="${M1_INTRADAY_SCHEDULER_GRACE_SECONDS:-45}" \
+  INTRADAY_SCHEDULER_POLL_SECONDS="${M1_INTRADAY_SCHEDULER_POLL_SECONDS:-15}" \
+  python /app/scripts/run_m30_intraday_scheduler.py --profile m1_intraday &
+  m1_scheduler_pid=$!
+  log "started m1 intraday scheduler (timezone=${INTRADAY_SCHEDULER_TIMEZONE})"
+}
+
 start_eod_scheduler() {
   INTRADAY_SCHEDULER_TIMEZONE="${EOD_SCHEDULER_TIMEZONE}" \
   INTRADAY_SCHEDULER_GRACE_SECONDS="${EOD_SCHEDULER_GRACE_SECONDS}" \
@@ -135,6 +146,11 @@ handle_shutdown() {
   if [ -n "${mini_scheduler_pid}" ] && kill -0 "${mini_scheduler_pid}" 2>/dev/null; then
     kill "${mini_scheduler_pid}" 2>/dev/null || true
     wait "${mini_scheduler_pid}" 2>/dev/null || true
+  fi
+
+  if [ -n "${m1_scheduler_pid}" ] && kill -0 "${m1_scheduler_pid}" 2>/dev/null; then
+    kill "${m1_scheduler_pid}" 2>/dev/null || true
+    wait "${m1_scheduler_pid}" 2>/dev/null || true
   fi
 
   if [ -n "${eod_scheduler_pid}" ] && kill -0 "${eod_scheduler_pid}" 2>/dev/null; then
@@ -191,6 +207,12 @@ if is_true "${M5_INTRADAY_SCHEDULER_ENABLED}"; then
   start_m5_intraday_scheduler
 else
   log "m5 intraday scheduler disabled"
+fi
+
+if is_true "${M1_INTRADAY_SCHEDULER_ENABLED}"; then
+  start_m1_intraday_scheduler
+else
+  log "m1 intraday scheduler disabled"
 fi
 
 if is_true "${EOD_SCHEDULER_ENABLED}"; then

@@ -120,7 +120,7 @@ bin\deploy_service.bat --env-id cloudbase-d9gplq92zc1d88ee6 --service-name chanl
 | 最小副本数 | `0` |
 | 最大副本数 | `2` |
 | 必填环境变量 | `CLOUDBASE_ENV_ID`、`CLOUDBASE_REGION`、`CLOUDBASE_APIKEY` |
-| 可选定时开关 | `INTRADAY_SCHEDULER_ENABLED`、`M5_INTRADAY_SCHEDULER_ENABLED`、`EOD_SCHEDULER_ENABLED` |
+| 可选定时开关 | `INTRADAY_SCHEDULER_ENABLED`、`M5_INTRADAY_SCHEDULER_ENABLED`、`M1_INTRADAY_SCHEDULER_ENABLED`、`EOD_SCHEDULER_ENABLED` |
 
 1. 进入 `https://console.cloud.tencent.com/tcbr`，切到目标环境 `CLOUDBASE_ENV_ID`。
 2. 新建服务，服务名填写 `chanlun-stock-service`，或者与你本地 `--service-name` 保持一致。
@@ -129,13 +129,13 @@ bin\deploy_service.bat --env-id cloudbase-d9gplq92zc1d88ee6 --service-name chanl
 5. 计算规格先用 `CPU 0.5`、`内存 1 GB`。
 6. 副本数先用 `最小 0`、`最大 2`。
 7. 环境变量至少补：`CLOUDBASE_ENV_ID`、`CLOUDBASE_REGION`、`CLOUDBASE_APIKEY`。
-8. 如果要启用容器内自动定时刷新，再额外补需要的开关：`INTRADAY_SCHEDULER_ENABLED=true`、`M5_INTRADAY_SCHEDULER_ENABLED=true`、`EOD_SCHEDULER_ENABLED=true`。
+8. 如果要启用容器内自动定时刷新，再额外补需要的开关：`INTRADAY_SCHEDULER_ENABLED=true`、`M5_INTRADAY_SCHEDULER_ENABLED=true`、`M1_INTRADAY_SCHEDULER_ENABLED=true`、`EOD_SCHEDULER_ENABLED=true`。
 9. 首次创建完成后，本地先执行一次服务查询，确认服务已存在。新版 CLI 可用：`tcb --env-id ENV_ID cloudrun list --serviceName SERVICE_NAME --json`。
 10. 然后再执行：`bin\deploy_service.bat --service-name chanlun-stock-service`。
 
 ## 容器内默认定时任务
 
-当前镜像入口 [scripts/container_bootstrap_and_run.sh](c:/sandbox/sinba/stock/scripts/container_bootstrap_and_run.sh) 已内置 3 条可选调度任务，默认全部关闭，按环境变量开关启用。
+当前镜像入口 [scripts/container_bootstrap_and_run.sh](c:/sandbox/sinba/stock/scripts/container_bootstrap_and_run.sh) 已内置 4 条可选调度任务，默认全部关闭，按环境变量开关启用。
 
 ### 最小启用方式
 
@@ -144,6 +144,7 @@ bin\deploy_service.bat --env-id cloudbase-d9gplq92zc1d88ee6 --service-name chanl
 ```text
 INTRADAY_SCHEDULER_ENABLED=true
 M5_INTRADAY_SCHEDULER_ENABLED=true
+M1_INTRADAY_SCHEDULER_ENABLED=true
 EOD_SCHEDULER_ENABLED=true
 ```
 
@@ -152,8 +153,10 @@ EOD_SCHEDULER_ENABLED=true
 1. `INTRADAY_SCHEDULER_ENABLED=true`
 	`30m intraday`：仅交易日运行，在 `09:30, 10:00, 10:30, 11:00, 11:30, 12:00, 13:00, 13:30, 14:00, 14:30, 15:00, 15:30` 触发。
 2. `M5_INTRADAY_SCHEDULER_ENABLED=true`
-	`m5 intraday`：仅交易日运行，在交易时段每 5 分钟触发一次，但自动排除每个 `:00` 和 `:30`，因此盘中由 `09:35` 跑到 `15:55`。
-3. `EOD_SCHEDULER_ENABLED=true`
+	`m5 intraday`：仅交易日运行，在交易时段每 5 分钟触发一次，但自动排除每个 `:00` 和 `:30`，因此盘中由 `09:35` 跑到 `16:05`。
+3. `M1_INTRADAY_SCHEDULER_ENABLED=true`
+	`m1 intraday`：仅交易日运行，在 `09:30~12:00` 与 `13:00~16:00` 两个窗口内逐分钟触发，但自动去掉 m5 / m30 已经覆盖的整 5 分钟档位（即只跑分钟数非 5 的倍数的点），只刷新 `1m` 分析。默认 `grace=45s`、`poll=15s`（可用 `M1_INTRADAY_SCHEDULER_GRACE_SECONDS` / `M1_INTRADAY_SCHEDULER_POLL_SECONDS` 覆盖）。注意：该任务刷新频次最高，务必确认容器算力（建议 ≥ 1 vCPU 或最小副本数 ≥ 1）能在 1 分钟内跑完一轮。
+4. `EOD_SCHEDULER_ENABLED=true`
 	`EOD`：仅交易日运行，在 `16:10` 触发一次，覆盖港股 `16:00~16:10` 集合竞价之后的收盘刷新。
 
 ### 推荐启用顺序
@@ -161,8 +164,9 @@ EOD_SCHEDULER_ENABLED=true
 新实例或新版本上线后，建议先手动跑一次 `EOD run` 建立完整 `day/30m` 基线，再交给自动调度接管盘中刷新。之后默认分工是：
 
 1. `30m intraday` 负责半小时主分析更新，到 `15:30` 为止。
-2. `m5 intraday` 负责更细粒度盘中刷新，到 `15:55` 为止，但不抢 `:00` / `:30` 的半小时档位。
-3. `EOD` 负责 `16:10` 的收盘后刷新。
+2. `m5 intraday` 负责更细粒度盘中刷新，到 `16:05` 为止，但不抢 `:00` / `:30` 的半小时档位。
+3. `m1 intraday` 负责逐分钟最细刷新，仅填补 m5 / m30 没覆盖的分钟点，避免重复。
+4. `EOD` 负责 `16:10` 的收盘后刷新。
 
 如果你不想在控制台手填运行时环境变量，也可以只把服务先创建出来，然后继续使用本地脚本在每次发布时通过 `--envParams` 注入。
 
@@ -1205,7 +1209,7 @@ tcb --env-id ENV_ID cloudrun deploy -s SERVICE_NAME --port 8000 --source REPO_RO
 
 说明：新版 CLI 的 `cloudrun deploy` 不会像旧版 `run deploy` 一样在命令行里直接更新运行时环境变量，因此 `CLOUDBASE_ENV_ID`、`CLOUDBASE_REGION`、`CLOUDBASE_APIKEY` 更适合预先配置在控制台的服务环境变量中。
 
-同理，若你启用了容器内调度，也建议把 `INTRADAY_SCHEDULER_ENABLED`、`M5_INTRADAY_SCHEDULER_ENABLED`、`EOD_SCHEDULER_ENABLED` 直接维护在控制台环境变量中，而不是依赖每次发布时注入。
+同理，若你启用了容器内调度，也建议把 `INTRADAY_SCHEDULER_ENABLED`、`M5_INTRADAY_SCHEDULER_ENABLED`、`M1_INTRADAY_SCHEDULER_ENABLED`、`EOD_SCHEDULER_ENABLED` 直接维护在控制台环境变量中，而不是依赖每次发布时注入。
 
 ## 已知限制
 

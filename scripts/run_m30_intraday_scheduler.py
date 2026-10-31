@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TIMEZONE = "Asia/Shanghai"
 DEFAULT_GRACE_SECONDS = 150
 DEFAULT_POLL_SECONDS = 30
-SchedulerProfile = Literal["intraday", "m5_intraday", "eod"]
+SchedulerProfile = Literal["intraday", "m5_intraday", "m1_intraday", "eod"]
 DEFAULT_INTRADAY_COMMAND = (
     "python",
     str(ROOT / "scripts" / "run_scheduled_technical_refresh.py"),
@@ -55,6 +55,18 @@ DEFAULT_M5_INTRADAY_COMMAND = (
     "--publish-json-only",
     "--no-export-structure-images",
 )
+DEFAULT_M1_INTRADAY_COMMAND = (
+    "python",
+    str(ROOT / "scripts" / "run_scheduled_technical_refresh.py"),
+    "--refresh-mode",
+    "m5_intraday",
+    "--tech-timeframes",
+    "1m",
+    "--publish-timeframes",
+    "1m",
+    "--publish-json-only",
+    "--no-export-structure-images",
+)
 DEFAULT_INTRADAY_SLOTS = (
     time(9, 30),
     time(10, 0),
@@ -73,14 +85,41 @@ DEFAULT_EOD_SLOTS = (time(16, 10),)
 DEFAULT_M5_INTRADAY_SLOTS = tuple(
     time(hour, minute)
     for hour, minutes in (
-        (9, (35, 40, 45, 50, 55)),
+        (9, (25, 35, 40, 45, 50, 55)),
         (10, (5, 10, 15, 20, 25, 35, 40, 45, 50, 55)),
         (11, (5, 10, 15, 20, 25, 35, 40, 45, 50, 55)),
         (13, (5, 10, 15, 20, 25, 35, 40, 45, 50, 55)),
         (14, (5, 10, 15, 20, 25, 35, 40, 45, 50, 55)),
         (15, (5, 10, 15, 20, 25, 35, 40, 45, 50, 55)),
+        (16, (0, 5)),
     )
     for minute in minutes
+)
+
+
+# m1 盘中：交易时段逐分钟触发，但去掉 m5 / m30 已经覆盖的整 5 分钟档位，避免重复刷新。
+_M1_INTRADAY_WINDOWS = (
+    (time(9, 30), time(12, 0)),
+    (time(13, 0), time(16, 0)),
+)
+_M5_M30_COVERED_SLOTS = frozenset(DEFAULT_INTRADAY_SLOTS) | frozenset(DEFAULT_M5_INTRADAY_SLOTS)
+
+
+def _session_minutes(start: time, end: time) -> list[time]:
+    cursor = datetime(2000, 1, 1, start.hour, start.minute)
+    stop = datetime(2000, 1, 1, end.hour, end.minute)
+    minutes: list[time] = []
+    while cursor <= stop:
+        minutes.append(cursor.time())
+        cursor += timedelta(minutes=1)
+    return minutes
+
+
+DEFAULT_M1_INTRADAY_SLOTS = tuple(
+    minute
+    for start, end in _M1_INTRADAY_WINDOWS
+    for minute in _session_minutes(start, end)
+    if minute not in _M5_M30_COVERED_SLOTS
 )
 
 
@@ -90,7 +129,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--profile",
-        choices=("intraday", "m5_intraday", "eod"),
+        choices=("intraday", "m5_intraday", "m1_intraday", "eod"),
         default=os.environ.get("SCHEDULER_PROFILE", "intraday"),
         help="Which built-in schedule profile to use when slots or command are not overridden.",
     )
@@ -147,6 +186,8 @@ def resolve_slots(args: argparse.Namespace) -> tuple[time, ...]:
         return DEFAULT_EOD_SLOTS
     if args.profile == "m5_intraday":
         return DEFAULT_M5_INTRADAY_SLOTS
+    if args.profile == "m1_intraday":
+        return DEFAULT_M1_INTRADAY_SLOTS
     return DEFAULT_INTRADAY_SLOTS
 
 
@@ -157,6 +198,8 @@ def resolve_label(args: argparse.Namespace) -> str:
         return "eod-scheduler"
     if args.profile == "m5_intraday":
         return "m5-intraday-scheduler"
+    if args.profile == "m1_intraday":
+        return "m1-intraday-scheduler"
     return "intraday-scheduler"
 
 
@@ -199,6 +242,8 @@ def build_command(args: argparse.Namespace) -> list[str]:
         template = DEFAULT_EOD_COMMAND
     elif args.profile == "m5_intraday":
         template = DEFAULT_M5_INTRADAY_COMMAND
+    elif args.profile == "m1_intraday":
+        template = DEFAULT_M1_INTRADAY_COMMAND
     else:
         template = DEFAULT_INTRADAY_COMMAND
     command = [python_bin if token == "python" else token for token in template]
@@ -206,6 +251,8 @@ def build_command(args: argparse.Namespace) -> list[str]:
         extra_env = "EOD_SCHEDULER_EXTRA_ARGS"
     elif args.profile == "m5_intraday":
         extra_env = "M5_INTRADAY_SCHEDULER_EXTRA_ARGS"
+    elif args.profile == "m1_intraday":
+        extra_env = "M1_INTRADAY_SCHEDULER_EXTRA_ARGS"
     else:
         extra_env = "INTRADAY_SCHEDULER_EXTRA_ARGS"
     extra_args = os.environ.get(extra_env, "").strip()
