@@ -13,7 +13,7 @@
   ├─ services/tradeStoreService.js       封装 wx.cloud.callFunction('tradeStore')
   └─ utils/
        ├─ tradeTime.js                    成交时间默认补时 / 解析
-       ├─ tradePairing.js                 价差最优配对（纯函数）
+       ├─ tradePairing.js                 向前平仓 + 价差最优配对（纯函数）
        ├─ positionAggregation.js          移动加权均成本 + FIFO 持有天数 + 仓位% + 总览聚合
        └─ tradeValidation.js              录入校验 + 超限预检
           │
@@ -114,7 +114,7 @@ normalizeTradeTime(input, { direction, market }):
   返回 ISO 本地时间字符串
 ```
 
-### 5.2 配对展示 `tradePairing.js`（价差最优 / max_profit）
+### 5.2 配对展示 `tradePairing.js`（向前平仓 + 价差最优）
 按 symbol 已给定，入参为该股票 trades。流程：
 ```
 pairAll(trades):
@@ -124,23 +124,26 @@ pairAll(trades):
     rows += pairLevel(level, buys, sells)
 
 pairLevel(level, buys, sells):
-  B = buys 按 price 升序（最低买价优先）
-  S = sells 按 price 降序（最高卖价优先）
-  i=j=0; rows=[]
-  while i<B.len and j<S.len:
-    q = min(B[i].remain, S[j].remain)
+  // 向前平仓：卖单只能平掉其成交时间之前（含同时）的买单。
+  candidates = { (b, s) | b.time <= s.time }           // 时间上合法的 买-卖 组合
+  candidates 按 spread=(s.price-b.price) 降序           // 价差最大优先成交
+            价差相同 → 更早的卖先平，再更早的买先平     // 稳定、可预期
+  rows = []
+  for c in candidates:
+    if c.buy.remain<=0 or c.sell.remain<=0: continue
+    q = min(c.buy.remain, c.sell.remain)
     rows.push({level, quantity:q,
-               buyTime:B[i].time, buyPrice:B[i].price,
-               sellTime:S[j].time, sellPrice:S[j].price,
-               status:'done', pnl:(S[j].price-B[i].price)*q})
-    B[i].remain-=q; S[j].remain-=q
-    if B[i].remain==0: i++
-    if S[j].remain==0: j++
+               buyTime:c.buy.time, buyPrice:c.buy.price,
+               sellTime:c.sell.time, sellPrice:c.sell.price,
+               status:'done', pnl:(c.sell.price-c.buy.price)*q})
+    c.buy.remain-=q; c.sell.remain-=q
   // 剩余净持仓
-  剩余 B（较高价买单）→ {status:'wait_sell'(待卖), buyTime/buyPrice, quantity}
-  剩余 S（较低价卖单）→ {status:'wait_buy'(待买), sellTime/sellPrice, quantity}
+  剩余 buy → {status:'wait_sell'(待卖), buyTime/buyPrice, quantity}
+  剩余 sell → {status:'wait_buy'(待买), sellTime/sellPrice, quantity}
 ```
-- 匹配股数 = `min(ΣbuyQty, ΣsellQty)`；排序保证实现盈亏最大化。
+- **向前平仓约束**：卖单不会平掉在它之后才买入的仓位；只有更早（或同时）的买单可被其抵消。
+- 在所有时间合法的组合里按价差最大优先成交，因此被平掉的是「之前买单中价差最大」的那一笔。
+- 时间比较把「日期 空格 时间」统一成 ISO（空格→T）后按字典序比较，避免跨端 `Date` 解析差异。
 - `done` 行可因部分成交拆成多行，buyTime/sellTime 取各自被匹配 lot 的时间。
 
 ### 5.3 仓位聚合 `positionAggregation.js`
@@ -257,7 +260,7 @@ aggregateSymbol(symbolTrades, { maxTotal, currentPrice, now }):
 - 运行方式：JS 单测用 `node` 直接跑（utils 导出为 CommonJS，不引用 `wx`）。
 
 ## 9. 风险与权衡
-- 价差最优配对与移动加权均成本口径不同，`待卖` 行里显示的「剩余买单」是较高价的那部分，
-  而均成本是移动加权值——两者数值不必相等，UI 文案需说明「配对盈亏 ≠ 持仓成本」。
+- 向前平仓配对与移动加权均成本口径不同，`待卖` 行里显示的「剩余买单」是未被更早卖单抵消的那部分
+  （通常是时间较晚的买入），而均成本是移动加权值——两者数值不必相等，UI 文案需说明「配对盈亏 ≠ 持仓成本」。
 - 当前价依赖已发布数据的时效；盘中与发布时刻可能有延迟，浮盈浮亏为参考值。
 - `maxTotal` 以「股数」为口径（与示例一致），非金额；若未来要金额口径需另行扩展。
