@@ -114,7 +114,7 @@ normalizeTradeTime(input, { direction, market }):
   返回 ISO 本地时间字符串
 ```
 
-### 5.2 配对展示 `tradePairing.js`（向前平仓 + 只平盈利 + 价差最优）
+### 5.2 配对展示 `tradePairing.js`（向前平仓按时间推进 + 只平盈利 + 价差最优）
 按 symbol 已给定，入参为该股票 trades。流程：
 ```
 pairAll(trades):
@@ -124,27 +124,30 @@ pairAll(trades):
     rows += pairLevel(level, buys, sells)
 
 pairLevel(level, buys, sells):
-  // 向前平仓 + 只平盈利：卖单只能平其成交时间之前（含同时）、且价差为正的买单。
-  candidates = { (b, s) | b.time <= s.time 且 (s.price-b.price) > 0 }
-  candidates 按 spread=(s.price-b.price) 降序           // 价差最大优先成交
-            价差相同 → 更早的卖先平，再更早的买先平     // 稳定、可预期
+  // 向前平仓按时间推进 + 只平盈利：卖单按成交时间从早到晚依次平仓。
+  sells 按 time 升序
   rows = []
-  for c in candidates:
-    if c.buy.remain<=0 or c.sell.remain<=0: continue
-    q = min(c.buy.remain, c.sell.remain)
-    rows.push({level, quantity:q,
-               buyTime:c.buy.time, buyPrice:c.buy.price,
-               sellTime:c.sell.time, sellPrice:c.sell.price,
-               status:'done', pnl:(c.sell.price-c.buy.price)*q})
-    c.buy.remain-=q; c.sell.remain-=q
+  for sell in sells:                                   // 早卖先平，后买不会被早卖抢平
+    while sell.remain > 0:
+      best = buys 中满足 { b.time <= sell.time 且 (sell.price-b.price) > 0 且 b.remain>0 }
+             里价差最大的一笔（价差相同取更早买入）
+      if best is None: break                           // 当时没有可盈利平仓的更早买单
+      q = min(sell.remain, best.remain)
+      rows.push({level, quantity:q,
+                 buyTime:best.time, buyPrice:best.price,
+                 sellTime:sell.time, sellPrice:sell.price,
+                 status:'done', pnl:(sell.price-best.price)*q})
+      best.remain-=q; sell.remain-=q
   // 剩余净持仓（含只能亏损成交、因此不配对的部分）
   剩余 buy → {status:'wait_sell'(待卖), buyTime/buyPrice, quantity}
   剩余 sell → {status:'wait_buy'(待买), sellTime/sellPrice, quantity}
 ```
 - **向前平仓约束**：卖单不会平掉在它之后才买入的仓位；只有更早（或同时）的买单可被其抵消。
-- **只平盈利**：只对价差为正（赚钱）的组合成交；若某卖单的更早买单都只能亏损成交，则不配对，
+- **按时间推进**：卖单按成交时间从早到晚依次平仓，早发生的卖先在「当时已持有」的买单里平仓，
+  后来的买单不会被更早的卖「抢平」（例：早卖先平早买，晚卖再平晚买）。
+- **只平盈利**：只对价差为正（赚钱）的组合成交；若某卖单当时没有可盈利平仓的更早买单，则不配对，
   双边各自以 `待卖` / `待买` 挂起（配对面板只反映已实现的盈利平仓，亏损不强行配对）。
-- 在所有合法组合里按价差最大优先成交，因此被平掉的是「之前买单中盈利价差最大」的那一笔。
+- 单张卖单内部，优先平「当时可平买单中盈利价差最大」的那一笔（价差相同取更早买入）。
 - 时间比较把「日期 空格 时间」统一成 ISO（空格→T）后按字典序比较，避免跨端 `Date` 解析差异。
 - `done` 行可因部分成交拆成多行，buyTime/sellTime 取各自被匹配 lot 的时间。
 
