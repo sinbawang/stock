@@ -234,3 +234,166 @@ def test_verify_uploaded_files_retries_download_errors(monkeypatch, tmp_path: Pa
 
     assert attempts["count"] == 2
     assert results[0].matched is True
+
+
+def _make_uploaded_item(tmp_path: Path, relative_path: str, payload: str = "{}") -> "module.UploadedItem":
+    local_path = tmp_path / relative_path.replace("/", "_")
+    local_path.write_text(payload, encoding="utf-8")
+    data = local_path.read_bytes()
+    local_file = module.LocalFile(
+        relative_path=relative_path,
+        local_path=local_path,
+        cloud_path=f"miniapp-publish/latest/{relative_path}",
+        size=len(data),
+        sha256=module.hashlib.sha256(data).hexdigest(),
+    )
+    return module.UploadedItem(file=local_file, file_id=f"cloud://{relative_path}")
+
+
+def test_run_uploads_parallel_preserves_plan_order(monkeypatch, tmp_path: Path) -> None:
+    upload_plan = []
+    for name in ("index.json", "stocks/00700/charts/1m.json", "stocks/00981/charts/1m.json"):
+        local_path = tmp_path / name.replace("/", "_")
+        local_path.write_text("{}", encoding="utf-8")
+        data = local_path.read_bytes()
+        upload_plan.append(
+            module.LocalFile(
+                relative_path=name,
+                local_path=local_path,
+                cloud_path=f"miniapp-publish/latest/{name}",
+                size=len(data),
+                sha256=module.hashlib.sha256(data).hexdigest(),
+            )
+        )
+
+    def fake_metadata(session, *, env_id, region, api_key, cloud_path):
+        return {"fileId": f"id::{cloud_path}", "url": "u", "token": "t", "authorization": "a", "cosFileId": "c"}
+
+    uploaded_calls: list[str] = []
+    lock = module.threading.Lock()
+
+    def fake_upload_bytes(session, *, cloud_path, local_path, metadata):
+        with lock:
+            uploaded_calls.append(cloud_path)
+
+    monkeypatch.setattr(module, "get_upload_metadata", fake_metadata)
+    monkeypatch.setattr(module, "upload_bytes", fake_upload_bytes)
+
+    pool = module._SessionPool()
+    try:
+        records, uploaded_items = module.run_uploads_parallel(
+            upload_plan,
+            env_id="env",
+            region="ap-guangzhou",
+            api_key="key",
+            concurrency=8,
+            pool=pool,
+        )
+    finally:
+        pool.close_all()
+
+    assert [record["relative_path"] for record in records] == [item.relative_path for item in upload_plan]
+    assert [item.file.relative_path for item in uploaded_items] == [item.relative_path for item in upload_plan]
+    assert all(record["status"] == "uploaded" for record in records)
+    assert sorted(uploaded_calls) == sorted(item.cloud_path for item in upload_plan)
+
+
+def test_select_items_to_verify_keeps_critical_and_samples_optional(tmp_path: Path) -> None:
+    items = [
+        _make_uploaded_item(tmp_path, "index.json"),
+        _make_uploaded_item(tmp_path, "groups/portfolio.json"),
+        _make_uploaded_item(tmp_path, "stocks/00700/base.json"),
+        _make_uploaded_item(tmp_path, "stocks/00700/charts/1m.json"),
+        _make_uploaded_item(tmp_path, "stocks/00981/charts/1m.json"),
+        _make_uploaded_item(tmp_path, "stocks/03690/charts/1m.json"),
+    ]
+
+    full = module._select_items_to_verify(items, 1.0)
+    assert len(full) == len(items)
+
+    critical_only = module._select_items_to_verify(items, 0.0)
+    critical_paths = {item.file.relative_path for item in critical_only}
+    # index.json, groups/*, and always-upload chart JSON are always verified.
+    assert "index.json" in critical_paths
+    assert "groups/portfolio.json" in critical_paths
+
+    sampled = module._select_items_to_verify(items, 0.5)
+    assert len(critical_only) <= len(sampled) <= len(items)
+
+
+def test_get_download_url_caches_winning_combo(monkeypatch) -> None:
+    module._download_combo_index = None
+    attempts: list[str] = []
+    winning_action = "storage.batchGetTempFileURL"
+
+    def fake_admin_request(session, *, env_id, region, api_key, action, payload):
+        attempts.append(action)
+        if action == winning_action and payload == {"file_list": ["cloud/path"]}:
+            return {"data": ["https://cdn.example/file"]}
+        raise module.CloudBaseUploadError("unsupported combo")
+
+    monkeypatch.setattr(module, "admin_request", fake_admin_request)
+    session = module.new_session()
+    try:
+        first = module.get_download_url(session, env_id="e", region="r", api_key="k", cloud_path="cloud/path")
+        first_attempts = len(attempts)
+        attempts.clear()
+        second = module.get_download_url(session, env_id="e", region="r", api_key="k", cloud_path="cloud/path")
+    finally:
+        session.close()
+        module._download_combo_index = None
+
+    assert first == "https://cdn.example/file"
+    assert second == "https://cdn.example/file"
+    assert first_attempts > 1
+    # Second call reuses the cached combo and succeeds on the first probe.
+    assert len(attempts) == 1
+
+
+def test_api_key_cache_round_trip_and_expiry(tmp_path: Path) -> None:
+    cache_path = tmp_path / "apikey.json"
+    created = module.CreatedApiKey(key_id="key-1", api_key="secret-value")
+
+    module.save_cached_api_key(cache_path, env_id="env", region="ap-guangzhou", created=created, expire_in=7200)
+    loaded = module.load_cached_api_key(cache_path, env_id="env", region="ap-guangzhou")
+    assert loaded is not None
+    assert loaded.api_key == "secret-value"
+    assert loaded.key_id == "key-1"
+
+    # Mismatched env/region must not reuse a cached key.
+    assert module.load_cached_api_key(cache_path, env_id="other", region="ap-guangzhou") is None
+
+    # A key with little remaining lifetime is treated as expired.
+    module.save_cached_api_key(cache_path, env_id="env", region="ap-guangzhou", created=created, expire_in=0)
+    assert module.load_cached_api_key(cache_path, env_id="env", region="ap-guangzhou") is None
+
+
+def test_verify_uploaded_files_parallel_matches_all(monkeypatch, tmp_path: Path) -> None:
+    items = [
+        _make_uploaded_item(tmp_path, "index.json", payload='{"i":0}'),
+        _make_uploaded_item(tmp_path, "stocks/00700/charts/1m.json", payload='{"i":1}'),
+        _make_uploaded_item(tmp_path, "stocks/00981/charts/1m.json", payload='{"i":2}'),
+        _make_uploaded_item(tmp_path, "stocks/03690/charts/1m.json", payload='{"i":3}'),
+    ]
+    by_file_id = {item.file_id: item.file.local_path.read_bytes() for item in items}
+
+    def fake_download(session, *, env_id, region, api_key, cloud_path):
+        return by_file_id[cloud_path]
+
+    monkeypatch.setattr(module, "download_cloud_bytes", fake_download)
+
+    results = module.verify_uploaded_files(
+        module.new_session(),
+        env_id="env",
+        region="ap-guangzhou",
+        api_key="key",
+        uploaded_items=items,
+        retries=1,
+        retry_wait_seconds=0.0,
+        concurrency=4,
+        sample_ratio=1.0,
+    )
+
+    assert len(results) == len(items)
+    assert all(result.matched for result in results)
+    assert {result.relative_path for result in results} == {item.file.relative_path for item in items}

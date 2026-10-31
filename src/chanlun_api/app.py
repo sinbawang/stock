@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 import tempfile
 import threading
+import time
 import traceback
 from typing import Any, Literal
 from uuid import uuid4
@@ -102,6 +103,7 @@ def _build_intraday_request_from_publish(request: "PublishRefreshRequest") -> "T
         latest_only=request.latest_only,
         skip_build=request.skip_build,
         skip_upload=request.skip_upload,
+        parallelism=request.parallelism,
         day_bars=request.day_bars,
         m60_bars=request.m60_bars,
         m30_bars=request.m30_bars,
@@ -124,6 +126,7 @@ def _build_intraday_request_from_publish(request: "PublishRefreshRequest") -> "T
         delete_created_api_key=request.delete_created_api_key,
         force_upload=request.force_upload,
         upload_dry_run=request.upload_dry_run,
+        verify_sample_ratio=request.verify_sample_ratio,
     )
 
 
@@ -167,6 +170,7 @@ class PublishRefreshRequest(BaseModel):
     delete_created_api_key: bool = False
     force_upload: bool = False
     upload_dry_run: bool = False
+    verify_sample_ratio: float = Field(default=1.0, ge=0.0, le=1.0)
     client_request_id: str | None = None
 
     @field_validator("local_store_read_only", mode="before")
@@ -215,6 +219,7 @@ class TechnicalRefreshRequest(BaseModel):
     delete_created_api_key: bool = False
     force_upload: bool = False
     upload_dry_run: bool = False
+    verify_sample_ratio: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
 class JobCreatedResponse(BaseModel):
@@ -334,6 +339,7 @@ def _build_publish_namespace(
     upload_symbols: list[str] | None = None,
     upload_include_stock_meta: bool = True,
     upload_include_index_groups: bool = True,
+    verify_sample_ratio: float = 1.0,
 ) -> Namespace:
     return Namespace(
         holdings_file=holdings_file,
@@ -358,6 +364,7 @@ def _build_publish_namespace(
         upload_symbols=tuple(upload_symbols) if upload_symbols else None,
         upload_include_stock_meta=upload_include_stock_meta,
         upload_include_index_groups=upload_include_index_groups,
+        verify_sample_ratio=verify_sample_ratio,
     )
 
 
@@ -428,11 +435,25 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
         delete_created_api_key=request.delete_created_api_key,
         force_upload=request.force_upload,
         upload_dry_run=request.upload_dry_run,
+        verify_sample_ratio=request.verify_sample_ratio,
     )
     regeneration_result: dict[str, Any] | None = None
+    stage_seconds: dict[str, float] = {}
+    total_started = time.perf_counter()
     if not args.skip_regenerate:
+        regenerate_started = time.perf_counter()
         regeneration_result = regenerate_holdings(args)
+        stage_seconds["regenerate_seconds"] = round(time.perf_counter() - regenerate_started, 2)
+    publish_started = time.perf_counter()
     result = _publish_build_and_upload(args)
+    stage_seconds["build_upload_seconds"] = round(time.perf_counter() - publish_started, 2)
+    stage_seconds["total_seconds"] = round(time.perf_counter() - total_started, 2)
+    print(
+        "publish_refresh_stage_seconds "
+        + " ".join(f"{key}={value}" for key, value in stage_seconds.items()),
+        flush=True,
+    )
+    result["stage_seconds"] = stage_seconds
     result["regenerated"] = not args.skip_regenerate
     result["generated_timeframes"] = list(args.tech_timeframes)
     if regeneration_result is not None:
@@ -443,6 +464,8 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
 def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
     tech_timeframes = _resolve_technical_timeframes(request.refresh_mode, request.tech_timeframes)
     publish_timeframes = _normalize_technical_publish_timeframes(request.publish_timeframes)
+    stage_seconds: dict[str, float] = {}
+    total_started = time.perf_counter()
     with _filtered_holdings_file(
         holdings_file=Path(request.holdings_file),
         market=request.market,
@@ -450,6 +473,7 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
         limit=request.limit,
     ) as filtered:
         filtered_holdings_path, holdings = filtered
+        prepare_started = time.perf_counter()
         prepare_result = run_batch_prepare(
             holdings_path=filtered_holdings_path,
             parallelism=request.parallelism,
@@ -470,6 +494,7 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             timeframes=tuple(tech_timeframes),
             export_structure_images=bool(request.export_structure_images),
         )
+        stage_seconds["fetch_analyze_seconds"] = round(time.perf_counter() - prepare_started, 2)
         publish_args = _build_publish_namespace(
             holdings_file=str(filtered_holdings_path),
             reports_root=request.reports_root,
@@ -493,10 +518,20 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             upload_symbols=[item.symbol for item in holdings],
             upload_include_stock_meta=True,
             upload_include_index_groups=True,
+            verify_sample_ratio=request.verify_sample_ratio,
         )
+        publish_started = time.perf_counter()
         publish_result = _publish_build_and_upload(publish_args)
+        stage_seconds["build_upload_seconds"] = round(time.perf_counter() - publish_started, 2)
+    stage_seconds["total_seconds"] = round(time.perf_counter() - total_started, 2)
+    print(
+        "technical_refresh_stage_seconds "
+        + " ".join(f"{key}={value}" for key, value in stage_seconds.items()),
+        flush=True,
+    )
     publish_result.update(
         {
+            "stage_seconds": stage_seconds,
             "security_count": prepare_result.security_count,
             "symbols": [item.symbol for item in holdings],
             "generated_timeframes": list(prepare_result.selected_timeframes),

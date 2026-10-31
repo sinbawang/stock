@@ -6,11 +6,14 @@ import json
 import mimetypes
 import os
 import fnmatch
+import random
 import re
 import sys
+import threading
 import time
 import uuid
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,6 +23,14 @@ import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_DIR = ROOT / "build" / "miniapp-publish" / "latest"
+DEFAULT_API_KEY_CACHE_PATH = ROOT / "build" / ".cloudbase-apikey-cache.json"
+DEFAULT_UPLOAD_CONCURRENCY = int(os.environ.get("CLOUDBASE_UPLOAD_CONCURRENCY") or 8)
+DEFAULT_VERIFY_CONCURRENCY = int(os.environ.get("CLOUDBASE_VERIFY_CONCURRENCY") or 8)
+
+# Cache the (action, payload-shape) combo that successfully returns a download URL
+# so post-upload verification does not re-probe every losing candidate per file.
+_download_combo_index: int | None = None
+_download_combo_lock = threading.Lock()
 DEFAULT_MANIFEST_PATH = ROOT / "build" / "miniapp-publish" / "cloudbase-upload-manifest.json"
 ALWAYS_UPLOAD_PATTERNS = (
     "index.json",
@@ -41,7 +52,7 @@ CHART_FILE_RE = re.compile(r"^stocks/([^/]+)/charts/([^/.]+)\.json$")
 STOCK_META_FILE_RE = re.compile(r"^stocks/([^/]+)/(base|summary|detail)\.json$")
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Upload the miniapp publish bundle to CloudBase storage.")
     parser.add_argument("--source-dir", default=str(DEFAULT_SOURCE_DIR), help="Local bundle directory to upload")
     parser.add_argument("--cloud-prefix", default="miniapp-publish/latest", help="Cloud storage prefix")
@@ -97,7 +108,42 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Whether incremental uploads should include index.json and groups/*.json.",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--upload-concurrency",
+        type=int,
+        default=DEFAULT_UPLOAD_CONCURRENCY,
+        help="Number of concurrent worker threads for uploading files (default 8).",
+    )
+    parser.add_argument(
+        "--verify-concurrency",
+        type=int,
+        default=DEFAULT_VERIFY_CONCURRENCY,
+        help="Number of concurrent worker threads for post-upload readback verification (default 8).",
+    )
+    parser.add_argument(
+        "--verify-sample-ratio",
+        type=float,
+        default=1.0,
+        help=(
+            "Fraction (0..1) of uploaded files to read back and verify. "
+            "Critical entry files (index.json, groups/*) are always verified. "
+            "Use <1.0 to sample for faster intraday runs; 0 skips readback entirely."
+        ),
+    )
+    parser.add_argument(
+        "--reuse-api-key",
+        action="store_true",
+        help=(
+            "Reuse a cached temporary API key across runs instead of creating and deleting one each run. "
+            "The key is cached (with its expiry) under build/ which is gitignored."
+        ),
+    )
+    parser.add_argument(
+        "--api-key-cache-path",
+        default=str(DEFAULT_API_KEY_CACHE_PATH),
+        help="Path to the cached temporary API key when --reuse-api-key is set.",
+    )
+    return parser.parse_args(argv)
 
 
 @dataclass(frozen=True)
@@ -339,6 +385,171 @@ def new_session() -> requests.Session:
     return session
 
 
+class _SessionPool:
+    """Provides one requests.Session per worker thread (requests.Session is not
+    guaranteed thread-safe), and tracks them so they can all be closed at the end."""
+
+    def __init__(self) -> None:
+        self._local = threading.local()
+        self._sessions: list[requests.Session] = []
+        self._lock = threading.Lock()
+
+    def get(self) -> requests.Session:
+        session = getattr(self._local, "session", None)
+        if session is None:
+            session = new_session()
+            self._local.session = session
+            with self._lock:
+                self._sessions.append(session)
+        return session
+
+    def close_all(self) -> None:
+        with self._lock:
+            sessions = list(self._sessions)
+            self._sessions.clear()
+        for session in sessions:
+            try:
+                session.close()
+            except Exception:
+                pass
+
+
+def _api_key_cache_min_remaining() -> int:
+    return 600
+
+
+def load_cached_api_key(cache_path: Path, *, env_id: str, region: str) -> CreatedApiKey | None:
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("env_id") != env_id or payload.get("region") != region:
+        return None
+    api_key = payload.get("api_key")
+    expires_at = payload.get("expires_at")
+    if not api_key or not isinstance(expires_at, (int, float)):
+        return None
+    if expires_at - time.time() < _api_key_cache_min_remaining():
+        return None
+    return CreatedApiKey(key_id=str(payload.get("key_id") or ""), api_key=str(api_key))
+
+
+def save_cached_api_key(
+    cache_path: Path,
+    *,
+    env_id: str,
+    region: str,
+    created: CreatedApiKey,
+    expire_in: int,
+) -> None:
+    payload = {
+        "env_id": env_id,
+        "region": region,
+        "key_id": created.key_id,
+        "api_key": created.api_key,
+        "expires_at": time.time() + max(0, int(expire_in)),
+    }
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    try:
+        os.chmod(cache_path, 0o600)
+    except OSError:
+        pass
+
+
+def resolve_api_key(
+    *,
+    provided_api_key: str | None,
+    reuse_api_key: bool,
+    cache_path: Path,
+    env_id: str,
+    region: str,
+    key_name: str,
+    expire_in: int,
+) -> tuple[str, CreatedApiKey | None, bool]:
+    """Return (api_key, created_api_key, created_new).
+
+    created_api_key is non-None only when this call created (or reused) a temporary
+    key; created_new is True only when a brand new key was created this run."""
+    if provided_api_key:
+        return provided_api_key, None, False
+
+    if reuse_api_key:
+        cached = load_cached_api_key(cache_path, env_id=env_id, region=region)
+        if cached is not None:
+            print(f"reused_cached_api_key={cached.key_id}")
+            return cached.api_key, cached, False
+
+    created = create_temporary_api_key(
+        env_id=env_id,
+        region=region,
+        key_name=key_name,
+        expire_in=expire_in,
+    )
+    print(f"created_api_key={created.key_id}")
+    if reuse_api_key:
+        save_cached_api_key(
+            cache_path,
+            env_id=env_id,
+            region=region,
+            created=created,
+            expire_in=expire_in,
+        )
+    return created.api_key, created, True
+
+
+def run_uploads_parallel(
+    upload_plan: list[LocalFile],
+    *,
+    env_id: str,
+    region: str,
+    api_key: str,
+    concurrency: int,
+    pool: _SessionPool,
+) -> tuple[list[dict[str, Any]], list[UploadedItem]]:
+    records: list[dict[str, Any] | None] = [None] * len(upload_plan)
+    uploaded: list[UploadedItem | None] = [None] * len(upload_plan)
+
+    def _work(index: int, item: LocalFile) -> int:
+        session = pool.get()
+        metadata = get_upload_metadata(
+            session,
+            env_id=env_id,
+            region=region,
+            api_key=api_key,
+            cloud_path=item.cloud_path,
+        )
+        upload_bytes(session, cloud_path=item.cloud_path, local_path=item.local_path, metadata=metadata)
+        records[index] = {
+            "relative_path": item.relative_path,
+            "cloud_path": item.cloud_path,
+            "file_id": metadata["fileId"],
+            "size": item.size,
+            "sha256": item.sha256,
+            "status": "uploaded",
+        }
+        uploaded[index] = UploadedItem(file=item, file_id=str(metadata["fileId"]))
+        print(f"uploaded {item.relative_path} -> {metadata['fileId']}", flush=True)
+        return index
+
+    workers = max(1, min(int(concurrency), len(upload_plan)))
+    if workers == 1:
+        for index, item in enumerate(upload_plan):
+            _work(index, item)
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(_work, index, item) for index, item in enumerate(upload_plan)]
+            for future in as_completed(futures):
+                future.result()
+
+    return (
+        [record for record in records if record is not None],
+        [item for item in uploaded if item is not None],
+    )
+
+
 def admin_headers(api_key: str, region: str) -> dict[str, str]:
     timestamp_ms = str(int(time.time() * 1000))
     return {
@@ -407,6 +618,7 @@ def get_download_url(
     api_key: str,
     cloud_path: str,
 ) -> str:
+    global _download_combo_index
     payload_candidates: list[dict[str, Any]] = [
         {"file_list": [cloud_path]},
         {"fileList": [cloud_path]},
@@ -425,25 +637,39 @@ def get_download_url(
         "storage.getTempFileURL",
     ]
 
+    # Flatten (action, payload) combos in the original action-major order, then
+    # try the previously successful combo first so repeated verification reads
+    # don't re-probe every losing candidate for each file.
+    combos = [(action, payload) for action in actions for payload in payload_candidates]
+    order = list(range(len(combos)))
+    with _download_combo_lock:
+        cached_index = _download_combo_index
+    if cached_index is not None and 0 <= cached_index < len(combos):
+        order = [cached_index] + [index for index in order if index != cached_index]
+
     response: dict[str, Any] | None = None
     last_error: Exception | None = None
-    for action in actions:
-        for payload in payload_candidates:
-            try:
-                response = admin_request(
-                    session,
-                    env_id=env_id,
-                    region=region,
-                    api_key=api_key,
-                    action=action,
-                    payload=payload,
-                )
-                break
-            except CloudBaseUploadError as exc:
-                last_error = exc
-                continue
-        if response is not None:
+    winning_index: int | None = None
+    for index in order:
+        action, payload = combos[index]
+        try:
+            response = admin_request(
+                session,
+                env_id=env_id,
+                region=region,
+                api_key=api_key,
+                action=action,
+                payload=payload,
+            )
+            winning_index = index
             break
+        except CloudBaseUploadError as exc:
+            last_error = exc
+            continue
+
+    if winning_index is not None and winning_index != cached_index:
+        with _download_combo_lock:
+            _download_combo_index = winning_index
 
     if response is None:
         if last_error is not None:
@@ -529,6 +755,91 @@ def _json_summary_for_compare(relative_path: str, payload: bytes) -> str:
     return ""
 
 
+def _verify_single_item(
+    session: requests.Session,
+    uploaded: UploadedItem,
+    *,
+    env_id: str,
+    region: str,
+    api_key: str,
+    verify_attempts: int,
+    retry_wait_seconds: float,
+) -> VerificationResult:
+    item = uploaded.file
+    local_payload = item.local_path.read_bytes()
+    local_summary = _json_summary_for_compare(item.relative_path, local_payload)
+    cloud_sha256 = ""
+    cloud_summary = ""
+    matched = False
+    attempts = 0
+
+    for attempt in range(1, verify_attempts + 1):
+        attempts = attempt
+        try:
+            cloud_payload = download_cloud_bytes(
+                session,
+                env_id=env_id,
+                region=region,
+                api_key=api_key,
+                cloud_path=uploaded.file_id or item.cloud_path,
+            )
+        except requests.RequestException as exc:
+            cloud_sha256 = ""
+            cloud_summary = f"download_error:{type(exc).__name__}"
+            if attempt < verify_attempts:
+                time.sleep(max(0.0, float(retry_wait_seconds)))
+                continue
+            break
+        cloud_sha256 = hashlib.sha256(cloud_payload).hexdigest()
+        cloud_summary = _json_summary_for_compare(item.relative_path, cloud_payload)
+
+        if cloud_sha256 == item.sha256:
+            matched = True
+            break
+
+        if attempt < verify_attempts:
+            time.sleep(max(0.0, float(retry_wait_seconds)))
+
+    return VerificationResult(
+        relative_path=item.relative_path,
+        cloud_path=item.cloud_path,
+        local_sha256=item.sha256,
+        cloud_sha256=cloud_sha256,
+        matched=matched,
+        attempts=attempts,
+        local_summary=local_summary,
+        cloud_summary=cloud_summary,
+    )
+
+
+def _select_items_to_verify(
+    uploaded_items: list[UploadedItem],
+    sample_ratio: float,
+) -> list[UploadedItem]:
+    if sample_ratio >= 1.0:
+        return list(uploaded_items)
+
+    critical: list[UploadedItem] = []
+    optional: list[UploadedItem] = []
+    for uploaded in uploaded_items:
+        relative_path = uploaded.file.relative_path.replace("\\", "/")
+        if (
+            relative_path == "index.json"
+            or relative_path.startswith("groups/")
+            or file_should_always_upload(relative_path)
+        ):
+            critical.append(uploaded)
+        else:
+            optional.append(uploaded)
+
+    if sample_ratio <= 0.0 or not optional:
+        return critical
+
+    sample_size = max(0, min(len(optional), round(len(optional) * sample_ratio)))
+    sampled = random.sample(optional, sample_size) if sample_size < len(optional) else optional
+    return critical + sampled
+
+
 def verify_uploaded_files(
     session: requests.Session,
     *,
@@ -538,60 +849,54 @@ def verify_uploaded_files(
     uploaded_items: list[UploadedItem],
     retries: int,
     retry_wait_seconds: float,
+    concurrency: int = 1,
+    sample_ratio: float = 1.0,
 ) -> list[VerificationResult]:
-    results: list[VerificationResult] = []
     verify_attempts = max(1, int(retries))
+    selected = _select_items_to_verify(uploaded_items, sample_ratio)
 
-    for uploaded in uploaded_items:
-        item = uploaded.file
-        local_payload = item.local_path.read_bytes()
-        local_summary = _json_summary_for_compare(item.relative_path, local_payload)
-        cloud_payload = b""
-        cloud_sha256 = ""
-        cloud_summary = ""
-        matched = False
-        attempts = 0
-
-        for attempt in range(1, verify_attempts + 1):
-            attempts = attempt
-            try:
-                cloud_payload = download_cloud_bytes(
+    results: list[VerificationResult] = []
+    workers = max(1, min(int(concurrency), len(selected))) if selected else 1
+    if workers == 1:
+        for uploaded in selected:
+            results.append(
+                _verify_single_item(
                     session,
+                    uploaded,
                     env_id=env_id,
                     region=region,
                     api_key=api_key,
-                    cloud_path=uploaded.file_id or item.cloud_path,
+                    verify_attempts=verify_attempts,
+                    retry_wait_seconds=retry_wait_seconds,
                 )
-            except requests.RequestException as exc:
-                cloud_payload = b""
-                cloud_sha256 = ""
-                cloud_summary = f"download_error:{type(exc).__name__}"
-                if attempt < verify_attempts:
-                    time.sleep(max(0.0, float(retry_wait_seconds)))
-                    continue
-                break
-            cloud_sha256 = hashlib.sha256(cloud_payload).hexdigest()
-            cloud_summary = _json_summary_for_compare(item.relative_path, cloud_payload)
-
-            if cloud_sha256 == item.sha256:
-                matched = True
-                break
-
-            if attempt < verify_attempts:
-                time.sleep(max(0.0, float(retry_wait_seconds)))
-
-        results.append(
-            VerificationResult(
-                relative_path=item.relative_path,
-                cloud_path=item.cloud_path,
-                local_sha256=item.sha256,
-                cloud_sha256=cloud_sha256,
-                matched=matched,
-                attempts=attempts,
-                local_summary=local_summary,
-                cloud_summary=cloud_summary,
             )
-        )
+    else:
+        pool = _SessionPool()
+        ordered: list[VerificationResult | None] = [None] * len(selected)
+
+        def _verify_worker(index: int, uploaded: UploadedItem) -> int:
+            ordered[index] = _verify_single_item(
+                pool.get(),
+                uploaded,
+                env_id=env_id,
+                region=region,
+                api_key=api_key,
+                verify_attempts=verify_attempts,
+                retry_wait_seconds=retry_wait_seconds,
+            )
+            return index
+
+        try:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = [
+                    executor.submit(_verify_worker, index, uploaded)
+                    for index, uploaded in enumerate(selected)
+                ]
+                for future in as_completed(futures):
+                    future.result()
+        finally:
+            pool.close_all()
+        results = [result for result in ordered if result is not None]
 
     mismatches = [result for result in results if not result.matched]
     if mismatches:
@@ -741,8 +1046,8 @@ def require_path(path: Path, label: str) -> Path:
     return path
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
     source_dir = require_path(Path(args.source_dir).resolve(), "source dir")
     manifest_path = Path(args.manifest_path).resolve()
     if not args.env_id and not args.dry_run:
@@ -812,54 +1117,50 @@ def main() -> int:
         print(f"dry_run_manifest={manifest_path}")
         return 0
 
-    api_key = args.api_key
-    created_api_key: CreatedApiKey | None = None
-    if not api_key:
-        created_api_key = create_temporary_api_key(
-            env_id=args.env_id,
-            region=args.region,
-            key_name=args.api_key_name,
-            expire_in=args.api_key_expire_in,
-        )
-        api_key = created_api_key.api_key
-        print(f"created_api_key={created_api_key.key_id}")
+    api_key, created_api_key, created_new = resolve_api_key(
+        provided_api_key=args.api_key,
+        reuse_api_key=bool(args.reuse_api_key),
+        cache_path=Path(args.api_key_cache_path).resolve(),
+        env_id=args.env_id,
+        region=args.region,
+        key_name=args.api_key_name,
+        expire_in=args.api_key_expire_in,
+    )
 
-    session = new_session()
+    pool = _SessionPool()
+    verify_session = new_session()
     uploads: list[dict[str, Any]] = list(skipped_uploads)
     uploaded_items: list[UploadedItem] = []
     try:
-        for item in upload_plan:
-            metadata = get_upload_metadata(
-                session,
-                env_id=args.env_id,
-                region=args.region,
-                api_key=api_key,
-                cloud_path=item.cloud_path,
-            )
-            upload_bytes(session, cloud_path=item.cloud_path, local_path=item.local_path, metadata=metadata)
-            uploads.append(
-                {
-                    "relative_path": item.relative_path,
-                    "cloud_path": item.cloud_path,
-                    "file_id": metadata["fileId"],
-                    "size": item.size,
-                    "sha256": item.sha256,
-                    "status": "uploaded",
-                }
-            )
-            uploaded_items.append(UploadedItem(file=item, file_id=str(metadata["fileId"])))
-            print(f"uploaded {item.relative_path} -> {metadata['fileId']}")
+        upload_started = time.perf_counter()
+        upload_records, uploaded_items = run_uploads_parallel(
+            upload_plan,
+            env_id=args.env_id,
+            region=args.region,
+            api_key=api_key,
+            concurrency=args.upload_concurrency,
+            pool=pool,
+        )
+        uploads.extend(upload_records)
+        print(
+            f"upload_stage_seconds={time.perf_counter() - upload_started:.2f} "
+            f"files={len(upload_records)} concurrency={max(1, min(int(args.upload_concurrency), len(upload_plan) or 1))}",
+            flush=True,
+        )
 
         verification_payload: list[dict[str, Any]] = []
         if args.verify_upload and uploaded_items:
+            verify_started = time.perf_counter()
             verification_results = verify_uploaded_files(
-                session,
+                verify_session,
                 env_id=args.env_id,
                 region=args.region,
                 api_key=api_key,
                 uploaded_items=uploaded_items,
                 retries=args.verify_retries,
                 retry_wait_seconds=args.verify_retry_wait_seconds,
+                concurrency=args.verify_concurrency,
+                sample_ratio=args.verify_sample_ratio,
             )
             verification_payload = [
                 {
@@ -874,12 +1175,19 @@ def main() -> int:
                 }
                 for result in verification_results
             ]
-            print(f"verified={len(verification_results)}")
+            print(
+                f"verified={len(verification_results)}/{len(uploaded_items)} "
+                f"sample_ratio={args.verify_sample_ratio} "
+                f"verify_stage_seconds={time.perf_counter() - verify_started:.2f}",
+                flush=True,
+            )
         else:
             verification_payload = []
     finally:
-        session.close()
-        if created_api_key and args.delete_created_api_key:
+        pool.close_all()
+        verify_session.close()
+        # Only delete a key we created this run, and never when caching it for reuse.
+        if created_api_key and created_new and args.delete_created_api_key and not args.reuse_api_key:
             delete_temporary_api_key(env_id=args.env_id, region=args.region, key_id=created_api_key.key_id)
             print(f"deleted_api_key={created_api_key.key_id}")
 

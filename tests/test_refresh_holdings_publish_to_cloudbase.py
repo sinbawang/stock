@@ -82,13 +82,13 @@ def test_upload_publish_bundle_prints_structured_summary_on_retry_failure(monkey
 
     calls = {"count": 0}
 
-    def fail_command(command):
+    def fail_command(argv):
         calls["count"] += 1
         raise RuntimeError(
             "source bundle is incomplete: missing required publish entry files index.json, groups/portfolio.json"
         )
 
-    monkeypatch.setattr(module, "_run_command", fail_command)
+    monkeypatch.setattr(module, "_run_upload_in_process", fail_command)
 
     try:
         module.upload_publish_bundle(args, source_dir)
@@ -127,8 +127,8 @@ def test_upload_publish_bundle_uses_frozen_snapshot_source(monkeypatch, tmp_path
 
     captured: dict[str, Path] = {}
 
-    def fake_run_command(command):
-        snapshot_dir = Path(command[command.index("--source-dir") + 1])
+    def fake_run_command(argv):
+        snapshot_dir = Path(argv[argv.index("--source-dir") + 1])
         captured["snapshot_dir"] = snapshot_dir
         assert snapshot_dir != source_dir
         assert snapshot_dir.parent.name == ".upload-staging"
@@ -137,9 +137,9 @@ def test_upload_publish_bundle_uses_frozen_snapshot_source(monkeypatch, tmp_path
 
         payload_path.write_text('{"version":"mutated-after-freeze"}\n', encoding="utf-8")
         assert snap_payload.read_text(encoding="utf-8") == '{"version":"original"}\n'
-        return ""
+        return None
 
-    monkeypatch.setattr(module, "_run_command", fake_run_command)
+    monkeypatch.setattr(module, "_run_upload_in_process", fake_run_command)
 
     module.upload_publish_bundle(args, source_dir)
 

@@ -23,6 +23,7 @@ if str(SCRIPTS) not in sys.path:
 
 from batch_generate_and_send_portfolio_mixed_reports import generate_bundle as generate_report_bundle
 from batch_generate_and_send_portfolio_mixed_reports import load_holdings
+import upload_miniapp_publish_bundle as upload_module
 from build_miniapp_publish_bundle import generate_bundle as build_publish_bundle
 from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
@@ -656,55 +657,73 @@ def upload_publish_bundle(
     publish_failures: list[dict[str, object]] | None = None,
 ) -> None:
     with _frozen_upload_source_dir(source_dir) as upload_source_dir:
-        command = [
-            sys.executable,
-            str(DEFAULT_UPLOAD_SCRIPT),
+        argv = [
             "--source-dir",
             str(upload_source_dir),
             "--cloud-prefix",
             args.cloud_prefix,
         ]
         if args.env_id:
-            command.extend(["--env-id", args.env_id])
+            argv.extend(["--env-id", args.env_id])
         if args.region:
-            command.extend(["--region", args.region])
+            argv.extend(["--region", args.region])
         if args.api_key:
-            command.extend(["--api-key", args.api_key])
+            argv.extend(["--api-key", args.api_key])
+        else:
+            # Reuse a cached temporary API key across runs instead of creating and
+            # deleting one every upload (two extra TCB control-plane round-trips).
+            argv.append("--reuse-api-key")
         if args.api_key_name:
-            command.extend(["--api-key-name", args.api_key_name])
+            argv.extend(["--api-key-name", args.api_key_name])
         if args.api_key_expire_in is not None:
-            command.extend(["--api-key-expire-in", str(args.api_key_expire_in)])
-        if args.delete_created_api_key:
-            command.append("--delete-created-api-key")
+            argv.extend(["--api-key-expire-in", str(args.api_key_expire_in)])
         if bool(getattr(args, "force_upload", False)):
-            command.append("--force-upload")
+            argv.append("--force-upload")
         upload_chart_timeframes = getattr(args, "upload_chart_timeframes", None)
         if upload_chart_timeframes:
-            command.extend(["--chart-timeframes", *[str(value) for value in upload_chart_timeframes]])
+            argv.extend(["--chart-timeframes", *[str(value) for value in upload_chart_timeframes]])
         upload_symbols = getattr(args, "upload_symbols", None)
         if upload_symbols:
-            command.extend(["--symbols", *[str(value) for value in upload_symbols]])
+            argv.extend(["--symbols", *[str(value) for value in upload_symbols]])
         if not bool(getattr(args, "upload_include_stock_meta", True)):
-            command.append("--no-include-stock-meta")
+            argv.append("--no-include-stock-meta")
         if not bool(getattr(args, "upload_include_index_groups", True)):
-            command.append("--no-include-index-groups")
+            argv.append("--no-include-index-groups")
+        upload_concurrency = getattr(args, "upload_concurrency", None)
+        if upload_concurrency:
+            argv.extend(["--upload-concurrency", str(upload_concurrency)])
+        verify_concurrency = getattr(args, "verify_concurrency", None)
+        if verify_concurrency:
+            argv.extend(["--verify-concurrency", str(verify_concurrency)])
+        verify_sample_ratio = getattr(args, "verify_sample_ratio", None)
+        if verify_sample_ratio is not None:
+            argv.extend(["--verify-sample-ratio", str(verify_sample_ratio)])
         if args.upload_dry_run:
-            command.append("--dry-run")
+            argv.append("--dry-run")
+        print("$ upload_miniapp_publish_bundle " + " ".join(shlex.quote(part) for part in argv), flush=True)
         try:
-            _run_command(command)
-        except RuntimeError as exc:
+            _run_upload_in_process(argv)
+        except Exception as exc:  # noqa: BLE001 - surfaced as a structured failure below
             event = _print_publish_stage_failure_summary(stage="upload_attempt_1", error=exc, source_dir=upload_source_dir)
             if publish_failures is not None:
                 publish_failures.append(event)
             print(f"upload attempt 1 failed: {exc}", flush=True)
             print("retrying upload once...", flush=True)
             try:
-                _run_command(command)
-            except RuntimeError as retry_exc:
+                _run_upload_in_process(argv)
+            except Exception as retry_exc:  # noqa: BLE001
                 retry_event = _print_publish_stage_failure_summary(stage="upload_attempt_2", error=retry_exc, source_dir=upload_source_dir)
                 if publish_failures is not None:
                     publish_failures.append(retry_event)
                 raise
+
+
+def _run_upload_in_process(argv: list[str]) -> None:
+    """Run the CloudBase uploader in-process to avoid per-run Python cold start
+    and Tencent SDK re-import. Raises on any upload failure."""
+    exit_code = upload_module.main(argv)
+    if exit_code != 0:
+        raise RuntimeError(f"upload_miniapp_publish_bundle exited with code {exit_code}")
 
 
 def _print_upload_verification_summary(manifest_path: Path, focus_symbols: list[str] | None) -> None:
