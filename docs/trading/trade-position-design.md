@@ -13,7 +13,7 @@
   ├─ services/tradeStoreService.js       封装 wx.cloud.callFunction('tradeStore')
   └─ utils/
        ├─ tradeTime.js                    成交时间默认补时 / 解析
-       ├─ tradePairing.js                 向前平仓 + 价差最优配对（纯函数）
+       ├─ tradePairing.js                 双向向前平仓 + 价差最优配对（纯函数）
        ├─ positionAggregation.js          移动加权均成本 + FIFO 持有天数 + 仓位% + 总览聚合
        └─ tradeValidation.js              录入校验 + 超限预检
           │
@@ -114,42 +114,45 @@ normalizeTradeTime(input, { direction, market }):
   返回 ISO 本地时间字符串
 ```
 
-### 5.2 配对展示 `tradePairing.js`（向前平仓按时间推进 + 只平盈利 + 价差最优）
+### 5.2 配对展示 `tradePairing.js`（双向向前平仓按时间推进 + 只平盈利 + 价差最优）
 按 symbol 已给定，入参为该股票 trades。流程：
 ```
 pairAll(trades):
   for level in LEVELS:
-    buys  = trades[level].filter(buy)  →  lots {price, qty, time}
-    sells = trades[level].filter(sell) →  lots {price, qty, time}
+    buys  = trades[level].filter(buy)  →  lots {price, qty, time, opened}
+    sells = trades[level].filter(sell) →  lots {price, qty, time, opened}
     rows += pairLevel(level, buys, sells)
 
 pairLevel(level, buys, sells):
-  // 向前平仓按时间推进 + 只平盈利：卖单按成交时间从早到晚依次平仓。
-  sells 按 time 升序
+  // 按成交时间推进 + 只平盈利：买卖都先平掉此前反向、已发生的未平 lot。
+  events = buys ∪ sells 按 time 升序（同一时刻先买后卖）
   rows = []
-  for sell in sells:                                   // 早卖先平，后买不会被早卖抢平
-    while sell.remain > 0:
-      best = buys 中满足 { b.time <= sell.time 且 (sell.price-b.price) > 0 且 b.remain>0 }
-             里价差最大的一笔（价差相同取更早买入）
-      if best is None: break                           // 当时没有可盈利平仓的更早买单
-      q = min(sell.remain, best.remain)
+  for t in events:                                     // 早发生的成交先平，后成交不会被抢平
+    opposite = t 为卖 ? buys : sells
+    while t.remain > 0:
+      best = opposite 中满足 { opened 且 remain>0 且 (卖价-买价) > 0 }
+             里价差最大的一笔（价差相同取开仓更早）
+      if best is None: break                           // 当时没有可盈利平仓的更早反向成交
+      q = min(t.remain, best.remain)
       rows.push({level, quantity:q,
-                 buyTime:best.time, buyPrice:best.price,
-                 sellTime:sell.time, sellPrice:sell.price,
-                 status:'done', pnl:(sell.price-best.price)*q})
-      best.remain-=q; sell.remain-=q
+                 buyTime/buyPrice、sellTime/sellPrice 取 t 与 best 各自的 time/price,
+                 status:'done', pnl:(卖价-买价)*q})
+      best.remain-=q; t.remain-=q
+    if t.remain > 0: t.opened = true                   // 剩余数量作为新开仓 lot 挂起
   // 剩余净持仓（含只能亏损成交、因此不配对的部分）
   剩余 buy → {status:'wait_sell'(待卖), buyTime/buyPrice, quantity}
   剩余 sell → {status:'wait_buy'(待买), sellTime/sellPrice, quantity}
 ```
-- **向前平仓约束**：卖单不会平掉在它之后才买入的仓位；只有更早（或同时）的买单可被其抵消。
-- **按时间推进**：卖单按成交时间从早到晚依次平仓，早发生的卖先在「当时已持有」的买单里平仓，
-  后来的买单不会被更早的卖「抢平」（例：早卖先平早买，晚卖再平晚买）。
-- **只平盈利**：只对价差为正（赚钱）的组合成交；若某卖单当时没有可盈利平仓的更早买单，则不配对，
-  双边各自以 `待卖` / `待买` 挂起（配对面板只反映已实现的盈利平仓，亏损不强行配对）。
-- 单张卖单内部，优先平「当时可平买单中盈利价差最大」的那一笔（价差相同取更早买入）。
+- **向前平仓约束（双向）**：卖单只平其之前（含同时）已发生的买单（多头了结）；买单只平其之前
+  已发生的卖单（空头回补，例：先卖 56.2、后买 54.8 则配对为 done，盈亏 (56.2-54.8)×数量）。
+- **按时间推进**：买卖统一按成交时间从早到晚依次处理，早发生的成交先在「当时已存在」的反向 lot
+  里平仓，后来才发生的反向成交不会被更早的成交「抢平」（例：早卖先平早买，晚买再回补早卖）。
+- **只平盈利（双向）**：多空统一按「卖价 − 买价」计；价差非正不配对，双边各自以 `待卖` /
+  `待买` 挂起（配对面板只反映已实现的盈利平仓，亏损不强行配对）。
+- 单笔成交内部，优先平「当时已开仓的反向 lot 中盈利价差最大」的那一笔（价差相同取开仓更早）。
 - 时间比较把「日期 空格 时间」统一成 ISO（空格→T）后按字典序比较，避免跨端 `Date` 解析差异。
-- `done` 行可因部分成交拆成多行，buyTime/sellTime 取各自被匹配 lot 的时间。
+- `done` 行可因部分成交拆成多行，buyTime/sellTime 取各自被匹配 lot 的时间；空头回补行
+  的 `buyTime` 晚于 `sellTime` 属正常。
 
 ### 5.3 仓位聚合 `positionAggregation.js`
 对每个级别，按 `tradeTime` 升序处理：
