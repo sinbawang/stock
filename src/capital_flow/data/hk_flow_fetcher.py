@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from io import StringIO
 from datetime import date, datetime, timedelta
-import multiprocessing as mp
 import os
 from pathlib import Path
 import re
@@ -27,6 +26,12 @@ SOUTHBOUND_HOLDING_CACHE_DATASET = "eastmoney_southbound_holding"
 SOUTHBOUND_NET_BUY_CACHE_DATASET = "eastmoney_southbound_net_buy"
 HKEX_SHORT_SELLING_CACHE_DATASET = "hkex_short_selling_turnover"
 REQUEST_TIMEOUT_SECONDS = 8
+# 南向持股统计是全市场大报表（RPT_MUTUAL_STOCK_HOLDRANKS，pageSize 5000，可能多页），
+# 8 秒的全局超时过紧，经常误判为“抓取超时”。给它单独放宽进程/请求超时并加重试；
+# 整批运行借助 _DATASET_MEMORY_CACHE 只抓一次，重试成本可控。
+SOUTHBOUND_HOLDING_REQUEST_TIMEOUT_SECONDS = 20
+SOUTHBOUND_HOLDING_FETCH_ATTEMPTS = 2
+SOUTHBOUND_HOLDING_MAX_PAGES = 20
 _DATASET_MEMORY_CACHE: dict[tuple[str, str, int | None], tuple[pd.DataFrame, str, list[str]]] = {}
 _DATASET_FAILURE_CACHE: dict[tuple[str, str, int | None], str] = {}
 _EASTMONEY_BLOCK_MARKERS = (
@@ -726,54 +731,62 @@ def _fetch_hk_southbound_net_buy_with_cache(
 
 
 def _fetch_hk_southbound_holding_df() -> pd.DataFrame:
-    ctx = mp.get_context("spawn")
-    queue: mp.Queue = ctx.Queue()
-    process = ctx.Process(target=_fetch_hk_southbound_holding_worker, args=(queue,))
-    process.start()
-    process.join(REQUEST_TIMEOUT_SECONDS)
-    if process.is_alive():
-        process.terminate()
-        process.join(2)
-        raise TimeoutError(f"南向持股统计抓取超过 {REQUEST_TIMEOUT_SECONDS} 秒")
-    if queue.empty():
-        raise RuntimeError("南向持股统计抓取无返回")
-    status, payload = queue.get()
-    if status == "ok":
-        return payload
-    raise RuntimeError(payload)
-
-
-def _fetch_hk_southbound_holding_worker(queue: mp.Queue) -> None:
-    try:
-        queue.put(("ok", _fetch_hk_southbound_holding_df_remote()))
-    except Exception as exc:
-        queue.put(("error", f"{type(exc).__name__}: {exc}"))
+    # 原先用 spawn 子进程做硬超时，是为了防止旧实现顺序翻 500+ 页卡死；
+    # 现已改为“按最新持股日期过滤 + 翻页上限”，抓取被压到数秒且有界，
+    # 直接复用 requests 的 per-request 超时即可，避免 spawn 重新 import 重模块树
+    # （含 akshare）带来的数十秒启动开销反而触发误超时。
+    return _fetch_hk_southbound_holding_df_remote()
 
 
 def _fetch_hk_southbound_holding_df_remote() -> pd.DataFrame:
     _clear_proxy_env()
     session = requests.Session()
     session.trust_env = False
-    params = {
-        "sortColumns": "TRADE_DATE",
-        "sortTypes": "-1",
-        "pageSize": "5000",
-        "pageNumber": "1",
+    base_url = "http://datacenter-web.eastmoney.com/api/data/v1/get"
+    common_params = {
         "columns": "ALL",
         "source": "WEB",
         "client": "WEB",
-        "filter": '(INTERVAL_TYPE="1")(RN=1)',
         "reportName": "RPT_MUTUAL_STOCK_HOLDRANKS",
     }
-    response = session.get("http://datacenter-web.eastmoney.com/api/data/v1/get", params=params, timeout=REQUEST_TIMEOUT_SECONDS)
+
+    # 该报表默认返回全历史（pages 可达数十万），每页固定 500 行，顺序翻页必然超时。
+    # 先取最新持股日期，再只拉该日期的全市场数据（约 3 页），把抓取压到数秒内完成。
+    latest_params = {
+        **common_params,
+        "sortColumns": "HOLD_DATE",
+        "sortTypes": "-1",
+        "pageSize": "1",
+        "pageNumber": "1",
+        "filter": '(INTERVAL_TYPE="1")',
+    }
+    latest_response = session.get(base_url, params=latest_params, timeout=SOUTHBOUND_HOLDING_REQUEST_TIMEOUT_SECONDS)
+    latest_response.raise_for_status()
+    latest_result = latest_response.json().get("result") or {}
+    latest_rows = latest_result.get("data") or []
+    if not latest_rows:
+        return pd.DataFrame()
+    latest_hold_date = str(latest_rows[0].get("HOLD_DATE") or "").split(" ")[0]
+    if not latest_hold_date:
+        return pd.DataFrame()
+
+    params = {
+        **common_params,
+        "sortColumns": "HOLD_DATE",
+        "sortTypes": "-1",
+        "pageSize": "500",
+        "pageNumber": "1",
+        "filter": f"(INTERVAL_TYPE=\"1\")(HOLD_DATE='{latest_hold_date}')",
+    }
+    response = session.get(base_url, params=params, timeout=SOUTHBOUND_HOLDING_REQUEST_TIMEOUT_SECONDS)
     response.raise_for_status()
     payload = response.json()
     result = payload.get("result") or {}
     rows = result.get("data") or []
-    pages = int(result.get("pages") or 1)
+    pages = min(int(result.get("pages") or 1), SOUTHBOUND_HOLDING_MAX_PAGES)
     for page in range(2, pages + 1):
         params["pageNumber"] = str(page)
-        page_response = session.get("http://datacenter-web.eastmoney.com/api/data/v1/get", params=params, timeout=REQUEST_TIMEOUT_SECONDS)
+        page_response = session.get(base_url, params=params, timeout=SOUTHBOUND_HOLDING_REQUEST_TIMEOUT_SECONDS)
         page_response.raise_for_status()
         page_payload = page_response.json()
         rows.extend(((page_payload.get("result") or {}).get("data")) or [])
@@ -807,24 +820,30 @@ def _fetch_hk_southbound_holding_with_cache(
         df, source, notes = _DATASET_MEMORY_CACHE[key]
         return df.copy(), source, list(notes)
     notes: list[str] = []
-    try:
-        df = _fetch_hk_southbound_holding_df()
-        if df.empty:
-            raise RuntimeError("南向持股统计为空")
-        _write_cache(df, cache_dir, SOUTHBOUND_HOLDING_CACHE_DATASET)
-        result = (df, "eastmoney.southbound_holding", notes)
-        _DATASET_MEMORY_CACHE[key] = result
-        return df.copy(), result[1], list(result[2])
-    except Exception as exc:
-        if not use_cache:
-            raise
-        cached = _read_cache(cache_dir, SOUTHBOUND_HOLDING_CACHE_DATASET, max_cache_age_days=max_cache_age_days)
-        if cached is None or cached.empty:
-            raise
-        notes.append(f"南向持股统计远端抓取失败，使用本地缓存: {exc}")
-        result = (cached, "eastmoney.southbound_holding.cache", notes)
-        _DATASET_MEMORY_CACHE[key] = result
-        return cached.copy(), result[1], list(result[2])
+    last_exc: Exception | None = None
+    for attempt in range(1, SOUTHBOUND_HOLDING_FETCH_ATTEMPTS + 1):
+        try:
+            df = _fetch_hk_southbound_holding_df()
+            if df.empty:
+                raise RuntimeError("南向持股统计为空")
+            _write_cache(df, cache_dir, SOUTHBOUND_HOLDING_CACHE_DATASET)
+            result = (df, "eastmoney.southbound_holding", notes)
+            _DATASET_MEMORY_CACHE[key] = result
+            return df.copy(), result[1], list(result[2])
+        except Exception as exc:
+            last_exc = exc
+    exc = last_exc or RuntimeError("南向持股统计抓取失败")
+    if not use_cache:
+        raise exc
+    cached = _read_cache(cache_dir, SOUTHBOUND_HOLDING_CACHE_DATASET, max_cache_age_days=max_cache_age_days)
+    if cached is None or cached.empty:
+        raise exc
+    notes.append(
+        f"南向持股统计远端抓取失败（重试 {SOUTHBOUND_HOLDING_FETCH_ATTEMPTS} 次），使用本地缓存: {exc}"
+    )
+    result = (cached, "eastmoney.southbound_holding.cache", notes)
+    _DATASET_MEMORY_CACHE[key] = result
+    return cached.copy(), result[1], list(result[2])
 
 
 def _parse_hkex_short_selling_text(text: str, trade_date: date | None = None) -> pd.DataFrame:

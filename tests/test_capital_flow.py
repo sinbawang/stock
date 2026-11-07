@@ -1351,3 +1351,48 @@ def test_batch_capital_flow_continues_after_failed_target(monkeypatch, tmp_path)
     assert "## 组合观察" in summary_text
     assert "## 排名表" in summary_text
     assert "## 口径与失败说明" in summary_text
+
+def test_southbound_holding_remote_filters_latest_date_and_bounds_pages(monkeypatch) -> None:
+    calls: list[dict] = []
+
+    class _FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    def _row_for(code, d1, d5, d10, hold_date):
+        row = {f"c{i}": None for i in range(29)}
+        row["c1"] = hold_date
+        row["c4"] = f"name-{code}"
+        row["c5"] = code
+        row["c25"] = d1
+        row["c26"] = d5
+        row["c27"] = d10
+        return row
+
+    class _FakeSession:
+        trust_env = True
+
+        def get(self, url, params=None, timeout=None):
+            params = dict(params or {})
+            calls.append(params)
+            if params.get("pageSize") == "1":
+                return _FakeResponse({"result": {"pages": 999, "data": [{"HOLD_DATE": "2026-11-06 00:00:00"}]}})
+            page = int(params.get("pageNumber", "1"))
+            data = [_row_for("00700", -11.0, 39.0, 38.0, "2026-11-06")] if page == 1 else []
+            return _FakeResponse({"result": {"pages": 999, "data": data}})
+
+    monkeypatch.setattr(hk_flow_fetcher.requests, "Session", _FakeSession)
+
+    df = hk_flow_fetcher._fetch_hk_southbound_holding_df_remote()
+
+    assert calls[0]["pageSize"] == "1"
+    assert all("HOLD_DATE='2026-11-06'" in c.get("filter", "") for c in calls[1:])
+    assert len(calls) <= hk_flow_fetcher.SOUTHBOUND_HOLDING_MAX_PAGES + 1
+    assert not df.empty
+    assert "持股市值变化-1日" in df.columns
