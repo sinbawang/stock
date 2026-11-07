@@ -1396,3 +1396,52 @@ def test_southbound_holding_remote_filters_latest_date_and_bounds_pages(monkeypa
     assert len(calls) <= hk_flow_fetcher.SOUTHBOUND_HOLDING_MAX_PAGES + 1
     assert not df.empty
     assert "持股市值变化-1日" in df.columns
+
+
+def test_latest_turnover_from_hist_picks_latest_row() -> None:
+    df = pd.DataFrame(
+        [
+            {"日期": "2026-11-05", "成交额": 1_000.0, "换手率": 0.5},
+            {"日期": "2026-11-06", "成交额": 2_000.0, "换手率": 0.8},
+        ]
+    )
+    turnover, turnover_rate, resolved = hk_flow_fetcher._latest_turnover_from_hist(df, date(2026, 11, 6))
+    assert turnover == 2_000.0
+    assert turnover_rate == 0.8
+    assert resolved == date(2026, 11, 6)
+
+
+def test_hkex_short_selling_detects_pre_close_placeholder() -> None:
+    placeholder = (
+        "Short Selling Turnover (Main Board) up to day close today "
+        "will be available after day close."
+    )
+    real_report = "| 00700 | TENCENT | 1,000 | 2,000,000 |"
+    assert hk_flow_fetcher._is_hkex_short_selling_pre_close(placeholder) is True
+    assert hk_flow_fetcher._is_hkex_short_selling_pre_close(real_report) is False
+
+
+def test_fetch_hk_snapshot_fills_turnover_from_daily_hist_when_components_fail(monkeypatch, tmp_path) -> None:
+    hist_df = pd.DataFrame(
+        [
+            {"日期": "2026-05-21", "成交额": 7_000_000_000, "换手率": 0.3},
+            {"日期": "2026-05-22", "成交额": 9_000_000_000, "换手率": 0.5},
+        ]
+    )
+    holding_df = pd.DataFrame(
+        [
+            {"持股日期": "2026-05-22", "股票代码": "00700", "股票简称": "腾讯", "持股市值变化-1日": 1_000_000},
+        ]
+    )
+
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_connect_components_df", lambda: (_ for _ in ()).throw(RuntimeError("quote down")))
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_daily_hist_df", lambda symbol, start_date, end_date: hist_df)
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_southbound_net_buy_df", lambda symbol: (_ for _ in ()).throw(RuntimeError("net buy down")))
+    monkeypatch.setattr(hk_flow_fetcher, "_fetch_hk_southbound_holding_df", lambda: holding_df)
+
+    snapshot = hk_flow_fetcher.fetch_hk_capital_flow_snapshot(symbol="00700", name="腾讯", cache_dir=tmp_path)
+
+    assert snapshot.turnover == 9_000_000_000
+    assert snapshot.turnover_rate == 0.5
+    assert snapshot.notes is not None
+    assert "成交额/换手率回退自东方财富港股日线历史" in snapshot.notes

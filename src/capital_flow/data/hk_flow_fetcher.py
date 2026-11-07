@@ -396,6 +396,26 @@ def _compute_amount_ratio_5d_from_hist(df: pd.DataFrame, trade_date: date | None
     return amount / (sum(present_amounts) / len(present_amounts)), target_trade_date
 
 
+def _latest_turnover_from_hist(
+    df: pd.DataFrame, trade_date: date | None
+) -> tuple[float | None, float | None, date | None]:
+    """从港股日线历史取最新交易日的成交额与换手率，用于成份行情缺失时兜底。"""
+
+    if df.empty or "日期" not in df.columns:
+        return None, None, None
+    working_df = df.copy()
+    working_df["日期"] = pd.to_datetime(working_df["日期"], errors="coerce")
+    working_df = working_df[pd.notna(working_df["日期"])]
+    if trade_date is not None:
+        working_df = working_df[working_df["日期"].dt.date <= trade_date]
+    if working_df.empty:
+        return None, None, None
+    working_df = working_df.sort_values("日期").reset_index(drop=True)
+    row = working_df.iloc[-1]
+    target_trade_date = pd.Timestamp(row["日期"]).date()
+    return _coerce_float(row.get("成交额")), _coerce_float(row.get("换手率")), target_trade_date
+
+
 def _rolling_sum_until(df: pd.DataFrame, target_date: date, column: str, periods: int) -> float | None:
     if df.empty or column not in df.columns or "日期" not in df.columns:
         return None
@@ -873,6 +893,12 @@ def _parse_hkex_short_selling_text(text: str, trade_date: date | None = None) ->
     return pd.DataFrame(rows)
 
 
+def _is_hkex_short_selling_pre_close(text: str) -> bool:
+    """HKEX 沽空报表在当日收盘前只返回占位页，识别后给出准确说明。"""
+
+    return "available after day close" in text or "available after morning close" in text
+
+
 def _fetch_hkex_short_selling_df(trade_date: date | None = None) -> pd.DataFrame:
     _clear_proxy_env()
     session = requests.Session()
@@ -883,7 +909,10 @@ def _fetch_hkex_short_selling_df(trade_date: date | None = None) -> pd.DataFrame
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
     response.raise_for_status()
-    df = _parse_hkex_short_selling_text(response.text, trade_date=trade_date)
+    text = response.text
+    if _is_hkex_short_selling_pre_close(text):
+        raise RuntimeError("HKEX 日终沽空统计当日收盘后才发布，当前尚未可用")
+    df = _parse_hkex_short_selling_text(text, trade_date=trade_date)
     if df.empty:
         raise RuntimeError("HKEX 日终沽空统计未返回个股明细")
     return df
@@ -1029,6 +1058,17 @@ def fetch_hk_capital_flow_snapshot(
         if hist_trade_date is not None:
             snapshot_trade_date = snapshot_trade_date or hist_trade_date
             raw_refs.append(f"{hist_source}:{_cache_path(actual_cache_dir, _hk_daily_hist_dataset(normalized_symbol))}")
+        if turnover is None or turnover_rate is None:
+            hist_turnover, hist_turnover_rate, _ = _latest_turnover_from_hist(hist_df, trade_date)
+            filled = False
+            if turnover is None and hist_turnover is not None:
+                turnover = hist_turnover
+                filled = True
+            if turnover_rate is None and hist_turnover_rate is not None:
+                turnover_rate = hist_turnover_rate
+                filled = True
+            if filled:
+                notes.append("成交额/换手率回退自东方财富港股日线历史")
     except Exception as exc:
         errors.append(f"港股日线历史不可用: {exc}")
 
