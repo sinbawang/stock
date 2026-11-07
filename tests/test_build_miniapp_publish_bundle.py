@@ -3712,3 +3712,83 @@ def test_normalize_chart_zhongshu_records_bi_removes_segment_keys() -> None:
     assert "start_segment_id" not in normalized[0]
     assert "end_segment_id" not in normalized[0]
     assert "core_segment_ids" not in normalized[0]
+
+def test_build_capital_flow_section_cn_structured() -> None:
+    section = module.build_capital_flow_section(
+        {
+            "summary": {"score": 58.0, "rating": "C", "source": "eastmoney", "comment": "资金温和流入"},
+            "scorecard": {
+                "market": "CN",
+                "trade_date": "2026-05-30",
+                "strengths": ["主力多日净流入"],
+                "risks": ["换手偏高"],
+                "warnings": ["口径说明"],
+            },
+            "snapshot": {
+                "market": "CN",
+                "main_net_inflow": 1200000.0,
+                "main_net_inflow_3d": 3600000.0,
+                "main_net_inflow_5d": 5800000.0,
+                "main_net_inflow_10d": -900000.0,
+                "super_large_net_inflow": 800000.0,
+                "large_order_net_inflow": 400000.0,
+                "medium_order_net_inflow": -200000.0,
+                "small_order_net_inflow": -100000.0,
+                "northbound_holding_change": 500000.0,
+                "margin_balance_change": None,
+                "volume_ratio": 1.8,
+                "amount_ratio_5d": 1.4,
+                "turnover_rate": 16.2,
+            },
+        }
+    )
+
+    assert section["layout"] == "capital-structured"
+    assert section["market"] == "CN"
+    assert section["low_confidence"] is False
+
+    main_flow = section["main_flow"]
+    assert main_flow["title"] == "多日主力净流入"
+    assert [item["label"] for item in main_flow["items"]] == ["当日", "3日", "5日", "10日"]
+    assert main_flow["items"][0]["value"] == 1200000.0
+    assert main_flow["items"][3]["value"] == -900000.0
+
+    order = section["order_breakdown"]
+    assert [item["label"] for item in order["items"]] == ["超大单", "大单", "中单", "小单"]
+
+    channel = section["channel_flows"]
+    assert channel["items"][0]["label"] == "北向持股变化"
+    assert channel["items"][0]["note"] == "持股市值变化，非净买额"
+    assert channel["items"][1]["value"] is None
+
+    tags = {item["label"]: item for item in section["volume_tags"]["items"]}
+    assert tags["量比"]["tag"] == "温和放量"
+    assert tags["换手率"]["tag"] == "换手偏高"
+    assert tags["换手率"]["display"] == "16.2%"
+
+
+def test_build_capital_flow_section_hk_uses_southbound() -> None:
+    section = module.build_capital_flow_section(
+        {
+            "summary": {"score": 60.0, "rating": "C", "source": "eastmoney.fallback"},
+            "scorecard": {"market": "HK", "trade_date": "2026-05-30"},
+            "snapshot": {
+                "market": "HK",
+                "southbound_net_buy": 2500000.0,
+                "southbound_net_buy_3d": 4800000.0,
+                "southbound_net_buy_5d": 6200000.0,
+                "southbound_net_buy_10d": 9100000.0,
+                "southbound_holding_change": 1500000.0,
+                "short_sell_ratio": 12.5,
+                "volume_ratio": 6.4,
+            },
+        }
+    )
+
+    assert section["low_confidence"] is True
+    assert section["order_breakdown"] is None
+    assert section["main_flow"]["title"] == "多日南向净买入"
+    assert section["main_flow"]["items"][0]["value"] == 2500000.0
+    assert section["channel_flows"]["items"][0]["label"] == "南向持股变化"
+    tags = {item["label"]: item for item in section["volume_tags"]["items"]}
+    assert tags["量比"]["tag"] == "极端放量"

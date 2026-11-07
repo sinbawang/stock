@@ -1184,15 +1184,160 @@ def build_fundamental_section(base_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _capital_coerce_number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        text = value.strip().replace(",", "")
+        if not text:
+            return None
+        try:
+            return float(text)
+        except ValueError:
+            return None
+    return None
+
+
+def _capital_money_items(
+    snapshot: dict[str, Any],
+    specs: list[tuple[str, str, str]],
+) -> list[dict[str, Any]]:
+    """Build money rows keeping missing values as ``None`` (rendered as 「—」)."""
+
+    items: list[dict[str, Any]] = []
+    has_value = False
+    for key, label, note in specs:
+        value = _capital_coerce_number(snapshot.get(key))
+        if value is not None:
+            has_value = True
+        item: dict[str, Any] = {"key": key, "label": label, "value": value}
+        if note:
+            item["note"] = note
+        items.append(item)
+    return items if has_value else []
+
+
+def _build_capital_main_flow(snapshot: dict[str, Any], market: str) -> dict[str, Any] | None:
+    if market == "HK":
+        title = "多日南向净买入"
+        specs = [
+            ("southbound_net_buy", "当日", ""),
+            ("southbound_net_buy_3d", "3日", ""),
+            ("southbound_net_buy_5d", "5日", ""),
+            ("southbound_net_buy_10d", "10日", ""),
+        ]
+    else:
+        title = "多日主力净流入"
+        specs = [
+            ("main_net_inflow", "当日", ""),
+            ("main_net_inflow_3d", "3日", ""),
+            ("main_net_inflow_5d", "5日", ""),
+            ("main_net_inflow_10d", "10日", ""),
+        ]
+    items = _capital_money_items(snapshot, specs)
+    if not items:
+        return None
+    return {"title": title, "unit_hint": "单位：元", "items": items}
+
+
+def _build_capital_order_breakdown(snapshot: dict[str, Any]) -> dict[str, Any] | None:
+    specs = [
+        ("super_large_net_inflow", "超大单", ""),
+        ("large_order_net_inflow", "大单", ""),
+        ("medium_order_net_inflow", "中单", ""),
+        ("small_order_net_inflow", "小单", ""),
+    ]
+    items = _capital_money_items(snapshot, specs)
+    if not items:
+        return None
+    return {"title": "大单结构（当日净额）", "unit_hint": "单位：元", "items": items}
+
+
+def _build_capital_channel_flows(snapshot: dict[str, Any], market: str) -> dict[str, Any] | None:
+    if market == "HK":
+        title = "南向通道资金"
+        specs = [
+            ("southbound_holding_change", "南向持股变化", "南向持股市值变化"),
+            ("southbound_holding_change_5d", "5日南向持股变化", ""),
+            ("southbound_holding_change_10d", "10日南向持股变化", ""),
+        ]
+    else:
+        title = "北向/融资通道"
+        specs = [
+            ("northbound_holding_change", "北向持股变化", "持股市值变化，非净买额"),
+            ("margin_balance_change", "融资余额变化", ""),
+        ]
+    items = _capital_money_items(snapshot, specs)
+    if not items:
+        return None
+    return {"title": title, "unit_hint": "单位：元", "items": items}
+
+
+def _capital_volume_tag(key: str, value: float, market: str) -> tuple[str, str]:
+    if key == "volume_ratio":
+        mild_upper = 3.2 if market == "HK" else 2.5
+        extreme = 6.0 if market == "HK" else 5.0
+        if value < 1.0:
+            return "缩量", "muted"
+        if value >= extreme:
+            return "极端放量", "warn"
+        if value <= mild_upper:
+            return "温和放量", "good"
+        return "放量偏高", "warn"
+    if key == "amount_ratio_5d":
+        mild_upper = 3.0 if market == "HK" else 2.5
+        if value < 1.0:
+            return "缩量", "muted"
+        if value <= mild_upper:
+            return "温和放大", "good"
+        return "放量偏高", "warn"
+    if key == "turnover_rate":
+        return ("换手偏高", "warn") if value >= 15 else ("换手正常", "muted")
+    return "", "muted"
+
+
+def _build_capital_volume_tags(snapshot: dict[str, Any], market: str) -> dict[str, Any] | None:
+    specs = [
+        ("volume_ratio", "量比", "ratio"),
+        ("amount_ratio_5d", "成交额/5日均值", "ratio"),
+        ("turnover_rate", "换手率", "percent"),
+    ]
+    items: list[dict[str, Any]] = []
+    for key, label, kind in specs:
+        value = _capital_coerce_number(snapshot.get(key))
+        if value is None:
+            continue
+        tag, tone = _capital_volume_tag(key, value, market)
+        display = f"{value:.1f}%" if kind == "percent" else f"{value:.2f}"
+        items.append({"label": label, "display": display, "tag": tag, "tone": tone})
+    if not items:
+        return None
+    return {"title": "量价确认", "items": items}
+
+
 def build_capital_flow_section(fund_payload: dict[str, Any]) -> dict[str, Any]:
     summary = fund_payload.get("summary") or {}
     scorecard = fund_payload.get("scorecard") or {}
     snapshot = fund_payload.get("snapshot") or {}
+    market = safe_text(scorecard.get("market") or snapshot.get("market")).upper()
+    source = first_non_empty(summary.get("source"), snapshot.get("source"))
+    low_confidence = source.endswith("fallback") if source else False
+
+    main_flow = _build_capital_main_flow(snapshot, market)
+    order_breakdown = _build_capital_order_breakdown(snapshot)
+    channel_flows = _build_capital_channel_flows(snapshot, market)
+    volume_tags = _build_capital_volume_tags(snapshot, market)
+
     metrics: list[dict[str, str]] = []
     label_map = [
         ("main_net_inflow", "主力净流入"),
+        ("main_net_inflow_3d", "3日主力净流入"),
         ("main_net_inflow_5d", "5日主力净流入"),
+        ("main_net_inflow_10d", "10日主力净流入"),
         ("southbound_net_buy", "南向净买入"),
+        ("northbound_holding_change", "北向持股变化"),
         ("southbound_holding_change", "南向持股变化"),
         ("short_sell_ratio", "沽空比例"),
     ]
@@ -1200,18 +1345,26 @@ def build_capital_flow_section(fund_payload: dict[str, Any]) -> dict[str, Any]:
         value = snapshot.get(key)
         if value is not None:
             metrics.append({"label": label, "value": str(value)})
+
     return {
         "key": "capital_flow",
         "title": "资金面",
+        "layout": "capital-structured",
+        "market": market,
         "rating": summary.get("rating"),
         "score": summary.get("score"),
-        "source": summary.get("source"),
+        "source": source,
+        "low_confidence": low_confidence,
         "trade_date": scorecard.get("trade_date"),
         "summary": first_non_empty(summary.get("comment"), scorecard.get("combined_comment")),
+        "main_flow": main_flow,
+        "order_breakdown": order_breakdown,
+        "channel_flows": channel_flows,
+        "volume_tags": volume_tags,
         "strengths": (scorecard.get("strengths") or [])[:3],
         "risks": (scorecard.get("risks") or [])[:3],
         "warnings": (scorecard.get("warnings") or [])[:3],
-        "metrics": metrics[:5],
+        "metrics": metrics[:6],
     }
 def build_technical_section(tech_payload: dict[str, Any]) -> dict[str, Any]:
     summary = tech_payload.get("summary") or {}
