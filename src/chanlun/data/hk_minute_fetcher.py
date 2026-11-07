@@ -25,6 +25,7 @@ import csv
 import multiprocessing as mp
 import os
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Sequence
@@ -41,6 +42,21 @@ _DEFAULT_PRIMARY_SOURCE = "xueqiu"
 _SOURCE_FETCH_TIMEOUT_SECONDS = 45
 _LAST_FETCH_METADATA: dict[str, object] = {}
 _HK_MARKET_TZ = ZoneInfo("Asia/Hong_Kong")
+# 东方财富 push2 限流后重复请求会延长封禁时间：命中限流信号后，进程内暂停使用该源。
+try:
+    _SOURCE_COOLDOWN_SECONDS = float(os.getenv("HK_MINUTE_SOURCE_COOLDOWN_SECONDS", "300"))
+except ValueError:
+    _SOURCE_COOLDOWN_SECONDS = 300.0
+_SOURCE_COOLDOWN_UNTIL: dict[str, float] = {}
+_RATE_LIMIT_MARKERS = (
+    "限流",
+    "断开了连接",
+    "RemoteDisconnected",
+    "Remote end closed",
+    "Too Many Requests",
+    "rate limit",
+    "rate-limit",
+)
 ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_COOKIE_FILE_CANDIDATES = (
     ROOT / "data" / "_meta" / "xueqiu_cookie.env",
@@ -179,6 +195,31 @@ def _update_last_fetch_metadata(**kwargs: object) -> None:
 
 def get_last_fetch_metadata() -> dict[str, object]:
     return dict(_LAST_FETCH_METADATA)
+
+
+def _looks_like_rate_limit_error(error: Exception | str) -> bool:
+    text = str(error).lower()
+    return any(marker.lower() in text for marker in _RATE_LIMIT_MARKERS)
+
+
+def _mark_source_cooldown(source: str, seconds: float | None = None) -> float:
+    duration = _SOURCE_COOLDOWN_SECONDS if seconds is None else max(0.0, float(seconds))
+    if duration <= 0:
+        _SOURCE_COOLDOWN_UNTIL.pop(source, None)
+        return 0.0
+    _SOURCE_COOLDOWN_UNTIL[source] = time.monotonic() + duration
+    return duration
+
+
+def _source_cooldown_remaining(source: str) -> float:
+    until = _SOURCE_COOLDOWN_UNTIL.get(source)
+    if until is None:
+        return 0.0
+    remaining = until - time.monotonic()
+    if remaining <= 0:
+        _SOURCE_COOLDOWN_UNTIL.pop(source, None)
+        return 0.0
+    return remaining
 
 
 def _extract_xueqiu_cookie_from_browser(browser: Optional[str] = None) -> dict[str, str]:
@@ -379,9 +420,6 @@ def _fetch_hk_minute_akshare(
     end: Optional[str],
     adjust: str,
 ) -> list[dict]:
-    import os
-    import time
-
     # 延迟导入，避免无 akshare 时模块整体不可用
     # 绕过本地拦截代理（与项目其它 fetcher 行为一致）
     for var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
@@ -408,7 +446,13 @@ def _fetch_hk_minute_akshare(
             break
         except Exception as e:  # noqa: BLE001
             last_err = e
-            time.sleep(2 + attempt * 2)
+            if _looks_like_rate_limit_error(e):
+                cooldown = _mark_source_cooldown("akshare")
+                raise RuntimeError(
+                    f"AKShare 抓取失败（东方财富限流，已暂停 akshare 源 {cooldown:.0f} 秒，不再重试）: {e}"
+                ) from e
+            if attempt < 4:
+                time.sleep(2 + attempt * 2)
     if df is None:
         raise RuntimeError(f"AKShare 抓取失败（已重试5次）: {last_err}")
 
@@ -582,6 +626,17 @@ def fetch_hk_minute_with_policy(
     )
 
     for source in source_order:
+        cooldown_remaining = _source_cooldown_remaining(source)
+        if cooldown_remaining > 0:
+            failures.append(f"{source}: cooldown {cooldown_remaining:.0f}s")
+            source_attempts.append(
+                {
+                    "source": source,
+                    "status": "cooldown",
+                    "cooldown_seconds": round(cooldown_remaining, 1),
+                }
+            )
+            continue
         try:
             rows = fetch_hk_minute(
                 symbol=symbol,
@@ -592,6 +647,20 @@ def fetch_hk_minute_with_policy(
                 source=source,
             )
         except Exception as exc:  # noqa: BLE001
+            if source == "akshare" and _looks_like_rate_limit_error(exc):
+                # akshare 跑在 spawn 子进程里，子进程设置的冷却不会回传父进程；
+                # 这里在父进程再标记一次，保证同批次后续标的直接跳过限流源。
+                cooldown = _mark_source_cooldown("akshare")
+                failures.append(f"{source}: cooldown {cooldown:.0f}s after rate limit: {exc}")
+                source_attempts.append(
+                    {
+                        "source": source,
+                        "status": "error",
+                        "error": str(exc),
+                        "cooldown_seconds": round(cooldown, 1),
+                    }
+                )
+                continue
             failures.append(f"{source}: {exc}")
             source_attempts.append({"source": source, "status": "error", "error": str(exc)})
             continue

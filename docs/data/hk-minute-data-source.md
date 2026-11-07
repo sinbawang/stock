@@ -109,6 +109,19 @@ $env:XUEQIU_COOKIE = 'xq_a_token=REPLACE_ME; xqat=REPLACE_ME; u=REPLACE_ME'
 - 会让日志和失败语义变得混乱
 - 当主问题其实是 cookie 失效时，会掩盖真正要修的点
 
+## 限流冷却与本地兜底
+
+- 东方财富 push2 限流后继续请求会延长封禁。`akshare` 抓取一旦命中限流信号（如 `限流`、
+  `断开了连接`、`RemoteDisconnected`），立即停止重试并在进程内冷却（默认 300 秒，可用
+  `HK_MINUTE_SOURCE_COOLDOWN_SECONDS` 调整）。
+- 冷却期内 `fetch_hk_minute_with_policy` 对 `akshare` 只记录 `status=cooldown`，不再发起请求；
+  雪球链路不受影响。
+- `batch_prepare_chanlun_reports.py` 在远端失败且本地 K 线仓库有数据时，会用本地最近 N 根兜底，
+  `data_fetch.source=local_store_fallback` 并记录 `remote_error`；单个持仓失败也不会中断整批
+  （需要严格失败时加 `--fail-on-holding-error`）。
+- 容器环境没有浏览器登录态，必须配置 `XUEQIU_COOKIE`，否则每次刷新都会落到 `akshare`
+  并容易触发限流。
+
 ## 当前脚本约定
 
 [scripts/run_hk_60m_chanlun_report.py](../scripts/run_hk_60m_chanlun_report.py) 已接入统一策略入口。

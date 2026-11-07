@@ -104,6 +104,7 @@ def _build_intraday_request_from_publish(request: "PublishRefreshRequest") -> "T
         skip_build=request.skip_build,
         skip_upload=request.skip_upload,
         parallelism=request.parallelism,
+        fail_on_holding_error=request.fail_on_holding_error,
         day_bars=request.day_bars,
         m60_bars=request.m60_bars,
         m30_bars=request.m30_bars,
@@ -191,6 +192,7 @@ class TechnicalRefreshRequest(BaseModel):
     skip_build: bool = False
     skip_upload: bool = False
     parallelism: int = Field(default=max(1, min(4, os.cpu_count() or 1)), ge=1)
+    fail_on_holding_error: bool = False
     day_start: str | None = None
     day_bars: int = Field(default=1200, ge=1)
     m60_start: str | None = None
@@ -372,7 +374,10 @@ def _publish_build_and_upload(args: Namespace) -> dict[str, Any]:
     latest_dir = Path(args.publish_root) / "latest"
     build_summary: dict[str, Any] | None = None
     if not args.skip_build:
-        build_summary = rebuild_publish_bundle(args)
+        build_summary = rebuild_publish_bundle(
+            args,
+            regeneration_summary=getattr(args, "regeneration_summary", None),
+        )
         latest_dir = Path(str(build_summary["latest"]))
     if not args.skip_upload:
         upload_publish_bundle(args, latest_dir)
@@ -493,7 +498,10 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             zhongshu_level=request.zhongshu_level,
             timeframes=tuple(tech_timeframes),
             export_structure_images=bool(request.export_structure_images),
+            fail_on_holding_error=bool(request.fail_on_holding_error),
         )
+        failed_holdings = list(getattr(prepare_result, "failed_holdings", []) or [])
+        failure_summary = {"failed_holdings": failed_holdings}
         stage_seconds["fetch_analyze_seconds"] = round(time.perf_counter() - prepare_started, 2)
         publish_args = _build_publish_namespace(
             holdings_file=str(filtered_holdings_path),
@@ -520,6 +528,7 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             upload_include_index_groups=True,
             verify_sample_ratio=request.verify_sample_ratio,
         )
+        publish_args.regeneration_summary = failure_summary
         publish_started = time.perf_counter()
         publish_result = _publish_build_and_upload(publish_args)
         stage_seconds["build_upload_seconds"] = round(time.perf_counter() - publish_started, 2)
@@ -537,6 +546,8 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
             "generated_timeframes": list(prepare_result.selected_timeframes),
             "manifest_path": str(prepare_result.manifest_path),
             "summary_path": str(prepare_result.summary_path) if prepare_result.summary_path else None,
+            "failed_count": len(failed_holdings),
+            "failed_holdings": failed_holdings,
             "timeframe_diagnostics": list(getattr(prepare_result, "timeframe_diagnostics", []) or []),
         }
     )

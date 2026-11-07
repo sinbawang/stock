@@ -138,6 +138,14 @@ docker run --rm -p 8000:8000 \
 - 技术分析图导出和批量抓取耗时较长
 - 全持仓批任务天然更适合容器，不适合把 SCF 当主执行层
 
+## 港股分钟线失败降级（容器）
+
+- 容器内没有浏览器登录态，雪球港股分钟线依赖 `XUEQIU_COOKIE`（建议在 CloudBase Run 控制台配置，或用部署命令的 `--set-env` 注入）。未配置时雪球通常失败并回退 `akshare`。
+- 东方财富 push2 会按 IP 限流。命中限流信号后，`akshare` 源会在进程内进入冷却（默认 300 秒，可用 `HK_MINUTE_SOURCE_COOLDOWN_SECONDS` 调整），同批次后续标的直接跳过该源，避免重复请求延长封禁。
+- 单个标的远端抓取失败时，批量生成会改用本地 K 线仓库（`STOCK_LOCAL_STORE_ROOT`）的最近数据兜底，并在 `tech.json` 的 `data_fetch` 中记录 `source=local_store_fallback` / `remote_error`，不会中断整批。
+- 单个持仓整体失败不再让整批失败：失败清单会打印在日志，`/jobs/technical-refresh` 返回的 `failed_holdings` 同步给出，发布包会为缺失产物写入 missing-artifact 告警。
+- 需要严格失败语义时，`/jobs/publish-refresh` 与 `/jobs/technical-refresh` 都可传 `"fail_on_holding_error": true`。
+
 ## 目前这版的边界
 
 当前这版服务化骨架已经能支撑：

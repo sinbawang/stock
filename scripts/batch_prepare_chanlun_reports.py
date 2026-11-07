@@ -9,7 +9,7 @@ import inspect
 import json
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 import time
@@ -151,6 +151,7 @@ class BatchPrepareResult:
     manifest_path: Path
     summary_path: Path | None
     timeframe_diagnostics: list[dict[str, object]]
+    failed_holdings: list[dict[str, object]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -159,6 +160,22 @@ class PreparedSecurityResult:
     day_case: dict[str, Path]
     m60_case: dict[str, Path]
     timeframe_diagnostics: list[dict[str, object]]
+
+
+def _holding_failure(security: Security, exc: Exception) -> dict[str, object]:
+    return {
+        "market": security.market,
+        "symbol": security.symbol,
+        "name": security.name,
+        "error": f"{type(exc).__name__}: {exc}",
+    }
+
+
+def _print_holding_failure(security: Security, exc: Exception) -> None:
+    print(
+        f"failed {security.market} {security.symbol} {security.name}: {type(exc).__name__}: {exc}",
+        flush=True,
+    )
 
 
 def timeframe_display_label(timeframe: str) -> str:
@@ -321,6 +338,12 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=min(4, max(1, os.cpu_count() or 1)),
         help="按持仓并行生成的 worker 数，默认最多 4。",
+    )
+    parser.add_argument(
+        "--fail-on-holding-error",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="单个持仓生成失败时是否直接失败；默认 false（继续生成其余持仓并汇总失败清单）。",
     )
     return parser.parse_args()
 
@@ -558,6 +581,7 @@ def _fetch_with_optional_local_store(
     remote_fetcher,
 ) -> tuple[list[dict], dict[str, object]]:
     effective_start = requested_start
+    local_rows: list[dict] = []
     local_before = 0
     local_covers_target = False
     if use_local_store:
@@ -612,10 +636,63 @@ def _fetch_with_optional_local_store(
         remote_probe_min_rows = 1
 
     remote_fetcher_params = inspect.signature(remote_fetcher).parameters
-    if len(remote_fetcher_params) <= 1:
-        rows, fetch_meta = remote_fetcher(effective_start)
-    else:
-        rows, fetch_meta = remote_fetcher(effective_start, remote_probe_min_rows)
+
+    def call_remote(start_value: str, min_rows: int) -> tuple[list[dict], dict[str, object]]:
+        if len(remote_fetcher_params) <= 1:
+            return remote_fetcher(start_value)
+        return remote_fetcher(start_value, min_rows)
+
+    def local_fallback(exc: Exception) -> tuple[list[dict], dict[str, object]]:
+        """远端抓取失败时用本地仓库兜底，避免单个标的拖垮整批刷新。"""
+        analysis_rows = tail_rows(local_rows, bar_count)
+        payload: dict[str, object] = {
+            "source": "local_store_fallback",
+            "actual_source": "local_store_fallback",
+            "source_attempts": [],
+            "actual_bar_count": len(analysis_rows),
+            "requested_min_rows": bar_count,
+            "fulfilled_min_rows": len(analysis_rows) >= bar_count,
+            "bar_count_policy": BAR_COUNT_POLICY,
+            "source_probe_min_rows": 1,
+            "remote_error": f"{type(exc).__name__}: {exc}",
+            "local_store": {
+                "enabled": True,
+                "read_only": local_store_read_only,
+                "requested_start": requested_start,
+                "effective_start": requested_start,
+                "overlap_bars": overlap_bars,
+                "local_rows_before": local_before,
+                "remote_rows": 0,
+                "merged_total_rows": local_before,
+                "added_rows": 0,
+                "updated_rows": 0,
+                "analysis_rows": len(analysis_rows),
+                "fallback_reason": "remote_fetch_error",
+                "remote_error": str(exc),
+            },
+        }
+        analysis_rows = _maybe_apply_hk_phantom_gate(
+            security,
+            timeframe,
+            analysis_rows,
+            payload,
+            local_store_root=local_store_root,
+        )
+        payload["actual_bar_count"] = len(analysis_rows)
+        payload["local_store"]["analysis_rows"] = len(analysis_rows)  # type: ignore[index]
+        print(
+            f"WARN {security.symbol} {timeframe} 远端抓取失败，改用本地仓库 "
+            f"{len(analysis_rows)} 根: {type(exc).__name__}: {exc}",
+            flush=True,
+        )
+        return analysis_rows, payload
+
+    try:
+        rows, fetch_meta = call_remote(effective_start, remote_probe_min_rows)
+    except Exception as exc:  # noqa: BLE001
+        if use_local_store and local_rows:
+            return local_fallback(exc)
+        raise
     if not use_local_store:
         rows = _maybe_apply_hk_phantom_gate(
             security,
@@ -632,10 +709,12 @@ def _fetch_with_optional_local_store(
     if local_covers_target and detect_incremental_discontinuity(local_rows, rows):
         incremental_fallback = True
         effective_start = requested_start
-        if len(remote_fetcher_params) <= 1:
-            rows, fetch_meta = remote_fetcher(requested_start)
-        else:
-            rows, fetch_meta = remote_fetcher(requested_start, bar_count)
+        try:
+            rows, fetch_meta = call_remote(requested_start, bar_count)
+        except Exception as exc:  # noqa: BLE001
+            if local_rows:
+                return local_fallback(exc)
+            raise
 
     merged_rows, merge_stats, store_path = upsert_local_rows(
         security.symbol,
@@ -1689,6 +1768,7 @@ def run_batch_prepare(
     export_structure_images: bool = True,
     force_regenerate: bool = False,
     parallelism: int = min(4, max(1, os.cpu_count() or 1)),
+    fail_on_holding_error: bool = False,
 ) -> BatchPrepareResult:
     local_store_read_only = False
     selected_timeframes = tuple(dict.fromkeys(timeframes))
@@ -1702,8 +1782,10 @@ def run_batch_prepare(
     worker_count = max(1, min(parallelism, len(securities)))
     bundle: list[tuple[Security, dict[str, Path], dict[str, Path]]] = []
     ordered_results: list[PreparedSecurityResult | None] = [None] * len(securities)
-    if worker_count == 1:
-        for index, security in enumerate(securities):
+    failures: list[dict[str, object]] = []
+
+    def run_one(index: int, security: Security) -> None:
+        try:
             ordered_results[index] = _prepare_security_result(
                 security,
                 selected_timeframes=selected_timeframes,
@@ -1728,6 +1810,15 @@ def run_batch_prepare(
                 export_structure_images=export_structure_images,
                 force_regenerate=force_regenerate,
             )
+        except Exception as exc:  # noqa: BLE001 - 单个标的失败不阻塞整批
+            failures.append(_holding_failure(security, exc))
+            _print_holding_failure(security, exc)
+            if fail_on_holding_error:
+                raise
+
+    if worker_count == 1:
+        for index, security in enumerate(securities):
+            run_one(index, security)
     else:
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
             futures = {
@@ -1759,7 +1850,31 @@ def run_batch_prepare(
                 for index, security in enumerate(securities)
             }
             for future in as_completed(futures):
-                ordered_results[futures[future]] = future.result()
+                index = futures[future]
+                try:
+                    ordered_results[index] = future.result()
+                except Exception as exc:  # noqa: BLE001 - 单个标的失败不阻塞整批
+                    security = securities[index]
+                    failures.append(_holding_failure(security, exc))
+                    _print_holding_failure(security, exc)
+                    if fail_on_holding_error:
+                        raise
+
+    if securities and failures and len(failures) >= len(securities):
+        failure_lines = [
+            f"{item['market']} {item['symbol']} {item['name']}: {item['error']}"
+            for item in failures
+        ]
+        raise RuntimeError("All holdings failed:\n" + "\n".join(failure_lines))
+    if failures:
+        print(
+            "partial failures:\n"
+            + "\n".join(
+                f"{item['market']} {item['symbol']} {item['name']}: {item['error']}"
+                for item in failures
+            ),
+            flush=True,
+        )
 
     for prepared in ordered_results:
         if prepared is None:
@@ -1796,6 +1911,7 @@ def run_batch_prepare(
         manifest_path=manifest,
         summary_path=summary_path,
         timeframe_diagnostics=timeframe_diagnostics,
+        failed_holdings=failures,
     )
 
 
@@ -1825,6 +1941,7 @@ def main() -> None:
         export_structure_images=bool(args.export_structure_images),
         force_regenerate=args.force_regenerate,
         parallelism=args.parallelism,
+        fail_on_holding_error=bool(getattr(args, "fail_on_holding_error", False)),
     )
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 import types
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -267,6 +268,83 @@ def test_fetch_hk_minute_with_policy_stops_after_primary_when_rows_are_sufficien
     assert calls == ["xueqiu"]
     assert used_source == "xueqiu"
     assert len(rows) == 5
+
+
+def test_fetch_hk_minute_with_policy_skips_source_in_cooldown(monkeypatch):
+    monkeypatch.setattr(module, "_SOURCE_COOLDOWN_UNTIL", {"akshare": time.monotonic() + 60})
+    calls: list[str] = []
+
+    def fake_fetch(symbol, period="60", start=None, end=None, adjust="qfq", source="xueqiu"):
+        calls.append(source)
+        raise RuntimeError("cookie expired")
+
+    monkeypatch.setattr(module, "fetch_hk_minute", fake_fetch)
+
+    with pytest.raises(RuntimeError, match="cooldown"):
+        module.fetch_hk_minute_with_policy(
+            "03690",
+            primary_source="xueqiu",
+            fallback_sources=("akshare",),
+        )
+
+    assert calls == ["xueqiu"]
+    meta = module.get_last_fetch_metadata()
+    assert meta["source_attempts"][1]["status"] == "cooldown"
+
+
+def test_fetch_hk_minute_with_policy_marks_parent_cooldown_after_akshare_rate_limit(monkeypatch):
+    monkeypatch.setattr(module, "_SOURCE_COOLDOWN_UNTIL", {})
+    monkeypatch.setattr(module, "_SOURCE_COOLDOWN_SECONDS", 300.0)
+    calls: list[str] = []
+
+    def fake_fetch(symbol, period="60", start=None, end=None, adjust="qfq", source="xueqiu"):
+        calls.append(source)
+        if source == "akshare":
+            raise RuntimeError("AKShare 抓取失败（东方财富限流）")
+        raise RuntimeError("cookie expired")
+
+    monkeypatch.setattr(module, "fetch_hk_minute", fake_fetch)
+
+    with pytest.raises(RuntimeError, match="cooldown"):
+        module.fetch_hk_minute_with_policy(
+            "03690",
+            primary_source="xueqiu",
+            fallback_sources=("akshare",),
+        )
+
+    assert calls == ["xueqiu", "akshare"]
+    assert module._source_cooldown_remaining("akshare") > 0
+
+    with pytest.raises(RuntimeError, match="cooldown"):
+        module.fetch_hk_minute_with_policy(
+            "00700",
+            primary_source="xueqiu",
+            fallback_sources=("akshare",),
+        )
+
+    # 第二次只剩雪球被真实尝试，akshare 直接走冷却跳过。
+    assert calls == ["xueqiu", "akshare", "xueqiu"]
+
+
+def test_akshare_rate_limit_error_enters_cooldown_without_retry(monkeypatch):
+    monkeypatch.setattr(module, "_SOURCE_COOLDOWN_UNTIL", {})
+    monkeypatch.setattr(module, "_SOURCE_COOLDOWN_SECONDS", 300.0)
+
+    class FakeAkshare:
+        calls = 0
+
+        @classmethod
+        def stock_hk_hist_min_em(cls, **kwargs):
+            cls.calls += 1
+            raise RuntimeError("东方财富push2行情服务器断开了连接，通常是短时间内请求过多")
+
+    monkeypatch.setitem(sys.modules, "akshare", FakeAkshare)
+
+    with pytest.raises(RuntimeError, match="限流"):
+        module._fetch_hk_minute_akshare("03690", "5", None, None, "")
+
+    assert FakeAkshare.calls == 1
+    assert module._source_cooldown_remaining("akshare") > 0
 
 
 def test_fetch_hk_minute_with_policy_records_error_and_best_source(monkeypatch):

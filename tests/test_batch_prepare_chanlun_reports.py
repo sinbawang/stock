@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -350,6 +352,75 @@ def test_run_batch_prepare_uses_requested_parallelism(monkeypatch, tmp_path: Pat
     assert result.security_count == 2
 
 
+def test_run_batch_prepare_continues_after_holding_failure(monkeypatch, tmp_path: Path) -> None:
+    securities = [
+        module.Security("000651", "格力电器", "A"),
+        module.Security("03690", "美团", "HK"),
+    ]
+
+    def fake_prepare_security_result(security, **kwargs):
+        if security.symbol == "03690":
+            raise RuntimeError("港股分钟线抓取失败")
+        return module.PreparedSecurityResult(
+            security=security,
+            day_case={},
+            m60_case={},
+            timeframe_diagnostics=[],
+        )
+
+    monkeypatch.setattr(module, "load_securities", lambda path: securities)
+    monkeypatch.setattr(module, "_prepare_security_result", fake_prepare_security_result)
+    monkeypatch.setattr(module, "REPORTS_META_DIR", tmp_path)
+
+    result = module.run_batch_prepare(
+        holdings_path=tmp_path / "holdings.json",
+        timeframes=("5m",),
+        parallelism=1,
+    )
+
+    assert result.security_count == 2
+    assert len(result.failed_holdings) == 1
+    assert result.failed_holdings[0]["symbol"] == "03690"
+    assert str(result.failed_holdings[0]["error"]).startswith("RuntimeError:")
+
+
+def test_run_batch_prepare_raises_when_all_holdings_fail(monkeypatch, tmp_path: Path) -> None:
+    securities = [module.Security("03690", "美团", "HK")]
+
+    def failing_prepare_security_result(security, **kwargs):
+        raise RuntimeError("港股分钟线抓取失败")
+
+    monkeypatch.setattr(module, "load_securities", lambda path: securities)
+    monkeypatch.setattr(module, "_prepare_security_result", failing_prepare_security_result)
+    monkeypatch.setattr(module, "REPORTS_META_DIR", tmp_path)
+
+    with pytest.raises(RuntimeError, match="All holdings failed"):
+        module.run_batch_prepare(
+            holdings_path=tmp_path / "holdings.json",
+            timeframes=("5m",),
+            parallelism=1,
+        )
+
+
+def test_run_batch_prepare_fail_on_holding_error_raises(monkeypatch, tmp_path: Path) -> None:
+    securities = [module.Security("03690", "美团", "HK")]
+
+    def failing_prepare_security_result(security, **kwargs):
+        raise RuntimeError("港股分钟线抓取失败")
+
+    monkeypatch.setattr(module, "load_securities", lambda path: securities)
+    monkeypatch.setattr(module, "_prepare_security_result", failing_prepare_security_result)
+    monkeypatch.setattr(module, "REPORTS_META_DIR", tmp_path)
+
+    with pytest.raises(RuntimeError, match="港股分钟线抓取失败"):
+        module.run_batch_prepare(
+            holdings_path=tmp_path / "holdings.json",
+            timeframes=("5m",),
+            parallelism=1,
+            fail_on_holding_error=True,
+        )
+
+
 def test_reuse_existing_exact_case_accepts_matching_1m_payload(monkeypatch, tmp_path: Path) -> None:
     security = module.Security("03690", "美团", "HK")
     rows = [
@@ -666,6 +737,62 @@ def test_fetch_with_optional_local_store_backfills_when_local_short(monkeypatch,
 
     # 本地仅 2 根 < 目标 3 根 → 不从 last_ts 增量，而是从 requested_start 全量抓取
     assert captured["start"] == "2026-06-20 09:30"
+
+
+def test_fetch_with_optional_local_store_falls_back_to_local_on_remote_error(monkeypatch, tmp_path: Path) -> None:
+    """远端源（雪球/东财）整体失败时，用本地历史仓库兜底，避免拖垮整批刷新。"""
+    security = module.Security("00700", "腾讯", "HK")
+    local_rows = [
+        {"ts": "2026-07-01", "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+        {"ts": "2026-07-02", "open": 1.1, "high": 1.1, "low": 1.1, "close": 1.1, "volume": 2},
+        {"ts": "2026-07-03", "open": 1.2, "high": 1.2, "low": 1.2, "close": 1.2, "volume": 3},
+    ]
+
+    def failing_remote(start: str):
+        raise RuntimeError("港股分钟线抓取失败：xueqiu cookie 缺失；akshare 东方财富限流")
+
+    monkeypatch.setattr(module, "load_local_rows", lambda *args, **kwargs: local_rows)
+
+    rows, payload = module._fetch_with_optional_local_store(
+        security,
+        timeframe="day",
+        requested_start="2026-07-01",
+        bar_count=2,
+        overlap_bars=0,
+        use_local_store=True,
+        local_store_read_only=False,
+        local_store_root=tmp_path,
+        remote_fetcher=failing_remote,
+    )
+
+    assert rows == local_rows[-2:]
+    assert payload["source"] == "local_store_fallback"
+    assert payload["actual_source"] == "local_store_fallback"
+    assert payload["remote_error"].startswith("RuntimeError:")
+    assert payload["local_store"]["fallback_reason"] == "remote_fetch_error"
+    assert payload["actual_bar_count"] == 2
+
+
+def test_fetch_with_optional_local_store_reraises_when_no_local_cache(monkeypatch, tmp_path: Path) -> None:
+    security = module.Security("00700", "腾讯", "HK")
+
+    def failing_remote(start: str):
+        raise RuntimeError("remote down")
+
+    monkeypatch.setattr(module, "load_local_rows", lambda *args, **kwargs: [])
+
+    with pytest.raises(RuntimeError, match="remote down"):
+        module._fetch_with_optional_local_store(
+            security,
+            timeframe="day",
+            requested_start="2026-07-01",
+            bar_count=2,
+            overlap_bars=0,
+            use_local_store=True,
+            local_store_read_only=False,
+            local_store_root=tmp_path,
+            remote_fetcher=failing_remote,
+        )
 
 
 def test_fetch_with_optional_local_store_falls_back_to_full_on_incremental_gap(monkeypatch, tmp_path: Path) -> None:
