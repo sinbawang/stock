@@ -34,6 +34,7 @@ DEFAULT_INTRADAY_COMMAND = (
     "day",
     "--publish-json-only",
     "--no-export-structure-images",
+    "--notify",
 )
 DEFAULT_EOD_COMMAND = (
     "python",
@@ -54,6 +55,7 @@ DEFAULT_M5_INTRADAY_COMMAND = (
     "1m",
     "--publish-json-only",
     "--no-export-structure-images",
+    "--notify",
 )
 DEFAULT_M1_INTRADAY_COMMAND = (
     "python",
@@ -66,6 +68,7 @@ DEFAULT_M1_INTRADAY_COMMAND = (
     "1m",
     "--publish-json-only",
     "--no-export-structure-images",
+    "--notify",
 )
 DEFAULT_INTRADAY_SLOTS = (
     time(9, 30),

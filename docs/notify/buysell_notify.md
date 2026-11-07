@@ -92,18 +92,26 @@ python scripts/notify_signals.py --no-forming
 
 ---
 
-## 5. 接入日度运行
+## 5. 接入自动刷新（盘中自动推送）
 
-`run_a_share_daily_overview.py` / `run_h_share_daily_overview.py` 都支持 `--notify`：
+### 盘中刷新（推荐，最快见效）
+
+`run_scheduled_technical_refresh.py` 支持 `--notify`：刷新完 tech.json 后，自动扫描**本次刷新的周期**并推送新买卖点（`--notify-timeframes` 未指定时默认用 `--tech-timeframes`）。
 
 ```powershell
-python scripts/run_a_share_daily_overview.py --notify --notify-timeframes 30m 5m 1m
+python scripts/run_scheduled_technical_refresh.py --refresh-mode m30_intraday \
+  --tech-timeframes 30m 5m 1m --publish-timeframes 30m 5m 1m day --notify
 ```
 
-对应子参数：`--notify-state-file`、`--notify-timeframes`、`--notify-no-forming`、`--notify-dry-run`、`--notify-seed-only`。
-缺少 `FEISHU_WEBHOOK_URL` 时只告警、不中断日度流程。
+`run_m30_intraday_scheduler.py` 的盘中内置档位（`intraday` / `m5_intraday` / `m1_intraday`）**已默认带 `--notify`**，所以用调度器跑盘中刷新时会自动推送；`eod` 档不带。缺 `FEISHU_WEBHOOK_URL` 时只打印 `..._notify_skip` 并继续，不中断刷新。
 
-> 注意：日度脚本本身**不重算 intraday tech.json**，只读现有文件。若要 intraday（30m/5m/1m）实时推送，应在你的 intraday 生成流程**之后**单独调 `notify_signals.py`（周期带 `30m 5m 1m` 或不带=全部）。
+> ⚠️ 首次启用自动化前，务必先手动跑一次 `python scripts/notify_signals.py --seed-only` 建基线，否则第一次刷新会把当前所有历史信号一次性推出来。
+
+### 日度概览
+
+`run_a_share_daily_overview.py` / `run_h_share_daily_overview.py` 也支持 `--notify`（及 `--notify-timeframes` 等子参数），但它们**只读现有 tech.json、不重算**，更适合盘后汇总场景。
+
+缺少 `FEISHU_WEBHOOK_URL` 时只告警、不中断流程。
 
 ---
 

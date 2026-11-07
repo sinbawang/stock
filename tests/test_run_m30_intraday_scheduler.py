@@ -129,3 +129,21 @@ def test_build_command_for_m5_profile_disables_structure_images(monkeypatch) -> 
     assert command[1].endswith("run_scheduled_technical_refresh.py")
     assert "--publish-json-only" in command
     assert "--no-export-structure-images" in command
+
+def test_intraday_profiles_enable_feishu_notify(monkeypatch) -> None:
+    for env_name in (
+        "INTRADAY_SCHEDULER_EXTRA_ARGS",
+        "M5_INTRADAY_SCHEDULER_EXTRA_ARGS",
+        "M1_INTRADAY_SCHEDULER_EXTRA_ARGS",
+        "EOD_SCHEDULER_EXTRA_ARGS",
+        "INTRADAY_SCHEDULER_PYTHON",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+
+    for profile in ("intraday", "m5_intraday", "m1_intraday"):
+        command = module.build_command(argparse.Namespace(command=None, profile=profile))
+        assert "--notify" in command, profile
+        assert command[1].endswith("run_scheduled_technical_refresh.py")
+
+    eod_command = module.build_command(argparse.Namespace(command=None, profile="eod"))
+    assert "--notify" not in eod_command
