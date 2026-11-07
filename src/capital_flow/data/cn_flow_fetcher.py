@@ -180,11 +180,18 @@ def _fetch_cn_northbound_holding_df(symbol: str, start_date: date, end_date: dat
     _clear_proxy_env()
     import akshare as ak  # type: ignore
 
-    return ak.stock_hsgt_individual_detail_em(
-        symbol=symbol,
-        start_date=start_date.strftime("%Y%m%d"),
-        end_date=end_date.strftime("%Y%m%d"),
-    )
+    # 旧接口 stock_hsgt_individual_detail_em 在东方财富 result 为 null 时会直接抛
+    # TypeError（'NoneType' object is not subscriptable），无法优雅降级；改用
+    # stock_hsgt_individual_em（返回个股北向持股完整历史，含“今日持股市值变化”），
+    # 再按目标窗口切片，缺失时返回空表而不是崩溃。
+    raw = ak.stock_hsgt_individual_em(symbol=symbol)
+    if raw is None or getattr(raw, "empty", True) or "持股日期" not in raw.columns:
+        return pd.DataFrame()
+    df = raw.rename(columns={"今日持股市值变化": "持股市值变化-1日"}).copy()
+    df["持股日期"] = pd.to_datetime(df["持股日期"], errors="coerce")
+    df = df[pd.notna(df["持股日期"])]
+    mask = (df["持股日期"] >= pd.Timestamp(start_date)) & (df["持股日期"] <= pd.Timestamp(end_date))
+    return df.loc[mask].reset_index(drop=True)
 
 
 def _fetch_cn_margin_detail_sse_df(trade_date: date) -> pd.DataFrame:
@@ -652,17 +659,20 @@ def _safe_northbound_holding_change(
             "北向持股明细",
         )
         if df.empty:
-            raise RuntimeError(f"未取到北向持股明细: {symbol}")
+            raise RuntimeError(
+                f"北向个股持股明细无 {start_date.isoformat()}~{target_date.isoformat()} 数据"
+                "（北向资金个股持股明细自2024-08起停止公开披露）"
+            )
         _write_cache(df, symbol=symbol, dataset=NORTHBOUND_HOLDING_CACHE_DATASET, cache_dir=cache_dir)
         cache_warning = None
-        source_name = "eastmoney.hsgt_individual_detail"
+        source_name = "eastmoney.hsgt_individual"
     except Exception as exc:
         if not use_cache:
             return None, f"北向持股明细补充失败: {exc}", None
         try:
             df = _read_cache(symbol=symbol, dataset=NORTHBOUND_HOLDING_CACHE_DATASET, cache_dir=cache_dir)
             cache_warning = f"北向持股明细远端抓取失败，使用本地缓存: {exc}"
-            source_name = "eastmoney.hsgt_individual_detail.cache"
+            source_name = "eastmoney.hsgt_individual.cache"
         except Exception as cache_exc:
             return None, f"北向持股明细补充失败: {exc}; 缓存回退不可用: {cache_exc}", None
 

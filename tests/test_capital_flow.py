@@ -529,7 +529,7 @@ def test_fetch_cn_capital_flow_snapshot_maps_institutional_and_event_fields(monk
     assert "出现龙虎榜事件" in snapshot.notes
     assert "出现大宗交易事件" in snapshot.notes
     assert snapshot.raw_payload_ref is not None
-    assert "eastmoney.hsgt_individual_detail" in snapshot.raw_payload_ref
+    assert "eastmoney.hsgt_individual" in snapshot.raw_payload_ref
     assert "margin_detail" in snapshot.raw_payload_ref
 
 
