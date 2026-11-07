@@ -3792,3 +3792,27 @@ def test_build_capital_flow_section_hk_uses_southbound() -> None:
     assert section["channel_flows"]["items"][0]["label"] == "南向持股变化"
     tags = {item["label"]: item for item in section["volume_tags"]["items"]}
     assert tags["量比"]["tag"] == "极端放量"
+
+
+def test_build_capital_flow_section_flags_stale_freshness() -> None:
+    stale = module.build_capital_flow_section(
+        {
+            "generated_at": "2026-11-07T12:20:00+08:00",
+            "summary": {"score": 55.0, "rating": "C", "source": "eastmoney.southbound_net_buy"},
+            "scorecard": {"market": "HK", "trade_date": "2026-09-09"},
+            "snapshot": {"market": "HK", "southbound_net_buy": 1000000.0},
+        }
+    )
+    assert stale["stale_days"] == 59
+    assert stale["low_freshness"] is True
+
+    fresh = module.build_capital_flow_section(
+        {
+            "generated_at": "2026-11-07T12:20:00+08:00",
+            "summary": {"score": 60.0, "rating": "C", "source": "eastmoney.southbound_net_buy"},
+            "scorecard": {"market": "HK", "trade_date": "2026-11-06"},
+            "snapshot": {"market": "HK", "southbound_net_buy": 1000000.0},
+        }
+    )
+    assert fresh["stale_days"] == 1
+    assert fresh["low_freshness"] is False

@@ -7,7 +7,7 @@ import re
 import shutil
 import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -1184,6 +1184,9 @@ def build_fundamental_section(base_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+CAPITAL_STALE_WARN_DAYS = 7
+
+
 def _capital_coerce_number(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
@@ -1198,6 +1201,27 @@ def _capital_coerce_number(value: Any) -> float | None:
         except ValueError:
             return None
     return None
+
+
+def _capital_parse_date(value: Any) -> date | None:
+    text = safe_text(value)
+    if not text:
+        return None
+    # 支持 ISO 日期或带时区的 ISO 时间戳，只取日期部分
+    candidate = text.replace("Z", "").split("T")[0].split(" ")[0]
+    try:
+        return datetime.strptime(candidate[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _capital_stale_days(generated_at: Any, trade_date: Any) -> int | None:
+    generated = _capital_parse_date(generated_at)
+    traded = _capital_parse_date(trade_date)
+    if generated is None or traded is None:
+        return None
+    delta = (generated - traded).days
+    return delta if delta > 0 else 0
 
 
 def _capital_money_items(
@@ -1324,6 +1348,9 @@ def build_capital_flow_section(fund_payload: dict[str, Any]) -> dict[str, Any]:
     market = safe_text(scorecard.get("market") or snapshot.get("market")).upper()
     source = first_non_empty(summary.get("source"), snapshot.get("source"))
     low_confidence = source.endswith("fallback") if source else False
+    trade_date = scorecard.get("trade_date")
+    stale_days = _capital_stale_days(fund_payload.get("generated_at"), trade_date)
+    low_freshness = stale_days is not None and stale_days > CAPITAL_STALE_WARN_DAYS
 
     main_flow = _build_capital_main_flow(snapshot, market)
     order_breakdown = _build_capital_order_breakdown(snapshot)
@@ -1355,7 +1382,9 @@ def build_capital_flow_section(fund_payload: dict[str, Any]) -> dict[str, Any]:
         "score": summary.get("score"),
         "source": source,
         "low_confidence": low_confidence,
-        "trade_date": scorecard.get("trade_date"),
+        "trade_date": trade_date,
+        "stale_days": stale_days,
+        "low_freshness": low_freshness,
         "summary": first_non_empty(summary.get("comment"), scorecard.get("combined_comment")),
         "main_flow": main_flow,
         "order_breakdown": order_breakdown,
