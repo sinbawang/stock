@@ -17,12 +17,40 @@ if str(SRC) not in sys.path:
 
 import batch_generate_capital_flow_reports as capital_batch
 import generate_a_share_combined_overview as combined_overview
-from storage_layout import CAPITAL_FLOW_CACHE_DIR, REPORTS_META_DIR, holdings_file
+from notify.feishu import FeishuConfigError
+from notify.signal_notifier import notify_from_reports
+from storage_layout import CAPITAL_FLOW_CACHE_DIR, REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
 DEFAULT_META_DIR = REPORTS_META_DIR
 DEFAULT_CACHE_DIR = CAPITAL_FLOW_CACHE_DIR
+DEFAULT_NOTIFY_STATE_FILE = REPORTS_META_DIR / "notify_state.json"
+
+
+def maybe_notify_signals(args: argparse.Namespace) -> None:
+    """按 --notify 开关扫描买卖点并推送飞书（缺凭据时告警但不中断日度流程）。"""
+
+    if not getattr(args, "notify", False):
+        return
+    try:
+        new_events = notify_from_reports(
+            REPORTS_DIR,
+            state_path=Path(args.notify_state_file),
+            timeframes=args.notify_timeframes,
+            include_forming=not args.notify_no_forming,
+            dry_run=args.notify_dry_run,
+            seed_only=args.notify_seed_only,
+        )
+    except FeishuConfigError as error:
+        print(f"[notify] 跳过推送：{error}")
+        return
+    if args.notify_dry_run:
+        print(f"[notify][dry-run] 将推送 {len(new_events)} 条新买卖点")
+    elif args.notify_seed_only:
+        print(f"[notify][seed-only] 已把 {len(new_events)} 条当前信号记为基线")
+    else:
+        print(f"[notify] 已推送 {len(new_events)} 条新买卖点")
 
 
 @dataclass(frozen=True)
@@ -53,6 +81,12 @@ def parse_args() -> argparse.Namespace:
         default=7,
         help="Maximum accepted cache age in days; use -1 to allow any cache age",
     )
+    parser.add_argument("--notify", action="store_true", help="日度完成后扫描买卖点并推送飞书")
+    parser.add_argument("--notify-state-file", default=str(DEFAULT_NOTIFY_STATE_FILE), help="买卖点通知去重状态文件")
+    parser.add_argument("--notify-timeframes", nargs="*", default=None, help="仅推送指定周期的买卖点，如 30m 60m")
+    parser.add_argument("--notify-no-forming", action="store_true", help="只推确认买卖点，不推预备/迹象")
+    parser.add_argument("--notify-dry-run", action="store_true", help="只预览将推送的买卖点，不发送、不改状态")
+    parser.add_argument("--notify-seed-only", action="store_true", help="只把当前买卖点记为基线，不实际推送")
     return parser.parse_args()
 
 
@@ -199,6 +233,7 @@ def main() -> None:
     print(f"capital_flow_summary={result.capital_flow_summary_path}")
     print(f"combined_overview={result.combined_overview_path}")
     print(f"manifest={result.manifest_path if result.manifest_path is not None else 'disabled'}")
+    maybe_notify_signals(args)
     print(f"capital_flow_succeeded={result.capital_flow_succeeded}")
     print(f"capital_flow_failed={result.capital_flow_failed}")
 
