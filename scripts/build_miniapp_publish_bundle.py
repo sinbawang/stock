@@ -1373,6 +1373,31 @@ def build_capital_flow_section(fund_payload: dict[str, Any]) -> dict[str, Any]:
         if value is not None:
             metrics.append({"label": label, "value": str(value)})
 
+    dimension_labels = {
+        "flow_direction": "资金方向",
+        "flow_persistence": "持续性",
+        "volume_confirmation": "量能确认",
+        "institutional_hint": "机构线索",
+        "overheat_risk": "过热风险",
+    }
+    dimensions: list[dict[str, Any]] = []
+    for item in scorecard.get("dimension_scores") or []:
+        key = item.get("dimension")
+        if key not in dimension_labels:
+            continue
+        score = _capital_coerce_number(item.get("score"))
+        max_score = _capital_coerce_number(item.get("max_score"))
+        if score is None or max_score is None or max_score <= 0:
+            continue
+        dimensions.append(
+            {
+                "key": key,
+                "label": dimension_labels[key],
+                "score": score,
+                "max_score": max_score,
+            }
+        )
+
     return {
         "key": "capital_flow",
         "title": "资金面",
@@ -1390,6 +1415,7 @@ def build_capital_flow_section(fund_payload: dict[str, Any]) -> dict[str, Any]:
         "order_breakdown": order_breakdown,
         "channel_flows": channel_flows,
         "volume_tags": volume_tags,
+        "dimensions": dimensions,
         "strengths": (scorecard.get("strengths") or [])[:3],
         "risks": (scorecard.get("risks") or [])[:3],
         "warnings": (scorecard.get("warnings") or [])[:3],

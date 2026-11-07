@@ -3816,3 +3816,36 @@ def test_build_capital_flow_section_flags_stale_freshness() -> None:
     )
     assert fresh["stale_days"] == 1
     assert fresh["low_freshness"] is False
+
+
+def test_build_capital_flow_section_includes_radar_dimensions() -> None:
+    section = module.build_capital_flow_section(
+        {
+            "generated_at": "2026-11-07T12:20:00+08:00",
+            "summary": {"score": 58.0, "rating": "C", "source": "eastmoney"},
+            "scorecard": {
+                "market": "CN",
+                "trade_date": "2026-11-06",
+                "dimension_scores": [
+                    {"dimension": "flow_direction", "score": 20.0, "max_score": 25.0},
+                    {"dimension": "flow_persistence", "score": 14.0, "max_score": 20.0},
+                    {"dimension": "volume_confirmation", "score": 16.0, "max_score": 20.0},
+                    {"dimension": "institutional_hint", "score": 12.0, "max_score": 20.0},
+                    {"dimension": "overheat_risk", "score": 13.0, "max_score": 15.0},
+                    {"dimension": "unknown_dim", "score": 1.0, "max_score": 0.0},
+                ],
+            },
+            "snapshot": {"market": "CN", "main_net_inflow": 1000.0},
+        }
+    )
+    dims = section["dimensions"]
+    assert [d["key"] for d in dims] == [
+        "flow_direction",
+        "flow_persistence",
+        "volume_confirmation",
+        "institutional_hint",
+        "overheat_risk",
+    ]
+    assert dims[0]["label"] == "资金方向"
+    assert dims[0]["score"] == 20.0
+    assert dims[0]["max_score"] == 25.0
