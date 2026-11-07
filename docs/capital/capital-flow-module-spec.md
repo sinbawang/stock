@@ -107,7 +107,7 @@ A 股资金流字段：
 - `medium_order_net_inflow`: 中单净流入
 - `small_order_net_inflow`: 小单净流入
 - `margin_balance_change`: 融资余额变化
-- `northbound_holding_change`: 北向持股变化
+- `northbound_holding_change`: 北向持股变化（注：北向个股日频持股明细自 2024-08-19 起停止公开披露，V1 评分已不再依赖该字段，缺失时按设计显示为缺失而非 0）
 
 港股资金流字段：
 
@@ -241,7 +241,7 @@ V1 建议先使用五个维度，总分 100。
 
 当前实现口径：
 
-- CN：优先使用 `northbound_holding_change`、`southbound_holding_change`、`margin_balance_change` 等机构/通道线索
+- CN：以大单结构（`super_large_net_inflow`、`large_order_net_inflow`）和融资杠杆（`margin_balance_change`）作为可持续获取的机构化线索；北向个股日频数据自 2024-08-19 停止公开披露，已不再参与 A 股该维度评分
 - HK：优先使用 `southbound_holding_change` 和 `southbound_holding_change_5d` 作为机构化通道线索，再结合 `short_sell_ratio` 判断多空压力
 - `southbound_holding_change_10d` 当前已入模和报告，但暂未直接参与评分规则
 

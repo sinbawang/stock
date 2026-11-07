@@ -198,18 +198,21 @@ def _score_institutional_hint(snapshot: CapitalFlowSnapshot) -> CapitalFlowDimen
             ("short_sell_ratio", snapshot.short_sell_ratio),
         )
         positive_inputs = (snapshot.southbound_holding_change, snapshot.southbound_holding_change_5d)
+        basis = "按南向持股/沽空等通道线索评分"
     else:
+        # 北向个股日频数据自 2024-08 停止公开披露，不再作为 A 股机构线索；
+        # 改以大单结构（超大单/大单）与融资杠杆作为可持续获取的机构化线索。
         metrics = (
-            ("northbound_holding_change", snapshot.northbound_holding_change),
-            ("southbound_holding_change", snapshot.southbound_holding_change),
+            ("super_large_net_inflow", snapshot.super_large_net_inflow),
+            ("large_order_net_inflow", snapshot.large_order_net_inflow),
             ("margin_balance_change", snapshot.margin_balance_change),
-            ("short_sell_ratio", snapshot.short_sell_ratio),
         )
         positive_inputs = (
-            snapshot.northbound_holding_change,
-            snapshot.southbound_holding_change,
+            snapshot.super_large_net_inflow,
+            snapshot.large_order_net_inflow,
             snapshot.margin_balance_change,
         )
+        basis = "按大单结构/融资杠杆等机构线索评分（北向日频自2024-08停更）"
     score = 8.0
     passed: list[TriggeredRule] = []
     failed: list[TriggeredRule] = []
@@ -223,7 +226,7 @@ def _score_institutional_hint(snapshot: CapitalFlowSnapshot) -> CapitalFlowDimen
         elif snapshot.short_sell_ratio <= 8:
             score += 4.0
             passed.append(_rule("short_sell_ratio_low", "pass", "港股沽空比例较低"))
-    return _build_dimension("institutional_hint", score, "按北向/南向/融资/沽空等通道线索评分", metrics, passed, failed)
+    return _build_dimension("institutional_hint", score, basis, metrics, passed, failed)
 
 
 def _score_overheat_risk(snapshot: CapitalFlowSnapshot) -> CapitalFlowDimensionScore:

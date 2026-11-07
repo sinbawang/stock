@@ -98,7 +98,7 @@ def test_capital_flow_snapshot_scoring_and_rendering() -> None:
         main_net_inflow_10d=310_000_000,
         volume_ratio=1.6,
         amount_ratio_5d=1.4,
-        northbound_holding_change=0.2,
+        margin_balance_change=50_000_000,
     )
 
     scorecard = analyze_capital_flow_snapshot(snapshot)
@@ -268,6 +268,28 @@ def test_hk_scoring_uses_southbound_holding_change_5d_for_institutional_hint() -
 
     assert institutional_dimension.score == 16.0
     assert any(rule.rule_id == "institutional_channel_positive" for rule in institutional_dimension.passed_rules)
+
+
+def test_cn_institutional_hint_uses_order_structure_and_margin_not_northbound() -> None:
+    snapshot = CapitalFlowSnapshot(
+        symbol="300124",
+        name="汇川技术",
+        market="CN",
+        trade_date=date(2026, 5, 24),
+        source="manual",
+        updated_at=datetime(2026, 5, 24, 12, 0, 0),
+        super_large_net_inflow=90_000_000,
+        margin_balance_change=40_000_000,
+    )
+
+    scorecard = analyze_capital_flow_snapshot(snapshot)
+    institutional_dimension = next(item for item in scorecard.dimension_scores if item.dimension == "institutional_hint")
+
+    assert institutional_dimension.score == 16.0
+    assert any(rule.rule_id == "institutional_channel_positive" for rule in institutional_dimension.passed_rules)
+    # 北向个股日频数据已停更，不再作为 A 股机构线索，不应出现在该维度缺失项里
+    assert "northbound_holding_change" not in institutional_dimension.missing_metrics
+    assert "northbound_holding_change" not in scorecard.missing_metrics
 
 
 def test_hk_scorecard_strong_sample_reaches_a_rating() -> None:
