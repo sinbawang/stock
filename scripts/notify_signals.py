@@ -24,6 +24,7 @@ if str(SRC) not in sys.path:
 
 from notify.signal_notifier import (  # noqa: E402
     collect_signal_events_from_reports,
+    load_market_index_advice,
     notify_new_signals,
 )
 from storage_layout import REPORTS_DIR, REPORTS_META_DIR  # noqa: E402
@@ -54,6 +55,7 @@ def run(args: argparse.Namespace) -> list:
         events,
         state_path=args.state_file,
         title=args.title,
+        market_advice=load_market_index_advice(args.reports_dir),
         dry_run=args.dry_run,
         seed_only=args.seed_only,
     )

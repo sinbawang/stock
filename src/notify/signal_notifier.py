@@ -54,6 +54,56 @@ def _format_point_label(point: str) -> str:
     return SIGNAL_POINT_LABELS.get(normalized, point)
 
 
+def _format_generated_at(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text.replace("T", " ")[:16]
+
+
+def load_market_index_advice(
+    reports_dir: Path | str,
+    *,
+    symbol: str = "HSTECH",
+    timeframe: str = "1m",
+) -> Optional[str]:
+    """读取恒生科技指数 1M 技术面最新建议（tech.json 的 advice_text）。
+
+    读取失败或缺少建议时返回 ``None``，不影响买卖点通知本身。
+    """
+
+    tech_path = Path(reports_dir) / symbol / timeframe / "tech.json"
+    try:
+        payload = json.loads(tech_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    advice = str(payload.get("advice_text") or "").strip()
+    if not advice:
+        summary = payload.get("summary") or {}
+        conclusion = str(summary.get("conclusion") or "").strip()
+        suggestion = str(summary.get("suggestion") or "").strip()
+        name = str(payload.get("name") or "恒生科技指数").strip()
+        level = str(payload.get("timeframe") or timeframe).upper()
+        lines = [f"【{name} {level} 操作建议】"]
+        if conclusion:
+            lines.append(f"结论：{conclusion}")
+        if suggestion:
+            lines.append(f"建议：{suggestion}")
+        if len(lines) > 1:
+            advice = "\n".join(lines)
+
+    if not advice:
+        return None
+
+    generated_at = _format_generated_at(payload.get("generated_at"))
+    if generated_at:
+        advice = f"{advice}\n数据时间：{generated_at}"
+    return advice
+
+
 def _event_from_point(
     symbol: str,
     name: str,
@@ -200,10 +250,21 @@ def _format_event_line(event: SignalEvent) -> str:
     )
 
 
-def build_signal_card(events: list[SignalEvent], *, title: str = "缠论买卖点提醒") -> dict[str, Any]:
+def build_signal_card(
+    events: list[SignalEvent],
+    *,
+    title: str = "缠论买卖点提醒",
+    market_advice: Optional[str] = None,
+) -> dict[str, Any]:
     """把买卖点事件渲染成飞书交互卡片。"""
 
     content = "\n".join(_format_event_line(event) for event in events)
+    elements: list[dict[str, Any]] = [
+        {"tag": "div", "text": {"tag": "lark_md", "content": content or "暂无新信号"}}
+    ]
+    if market_advice:
+        elements.append({"tag": "hr"})
+        elements.append({"tag": "div", "text": {"tag": "lark_md", "content": market_advice}})
     return {
         "msg_type": "interactive",
         "card": {
@@ -212,7 +273,7 @@ def build_signal_card(events: list[SignalEvent], *, title: str = "缠论买卖�
                 "title": {"tag": "plain_text", "content": f"{title}（{len(events)}）"},
                 "template": _header_template(events),
             },
-            "elements": [{"tag": "div", "text": {"tag": "lark_md", "content": content or "暂无新信号"}}],
+            "elements": elements,
         },
     }
 
@@ -225,22 +286,30 @@ def notify_from_reports(
     include_forming: bool = True,
     sender: Callable[..., Any] = send_feishu_message,
     title: str = "缠论买卖点提醒",
+    market_advice: Optional[str] = None,
     dry_run: bool = False,
     seed_only: bool = False,
     **send_kwargs: Any,
 ) -> list[SignalEvent]:
-    """扫描报告目录收集买卖点并推送新信号的一站式封装。"""
+    """扫描报告目录收集买卖点并推送新信号的一站式封装。
+
+    默认附带 ``reports_dir/HSTECH/1m/tech.json`` 的恒生科技指数 1M 技术面建议；
+    显式传入 ``market_advice`` 时以传入值为准。
+    """
 
     events = collect_signal_events_from_reports(
         reports_dir,
         timeframes=timeframes,
         include_forming=include_forming,
     )
+    if market_advice is None:
+        market_advice = load_market_index_advice(reports_dir)
     return notify_new_signals(
         events,
         state_path=state_path,
         sender=sender,
         title=title,
+        market_advice=market_advice,
         dry_run=dry_run,
         seed_only=seed_only,
         **send_kwargs,
@@ -253,6 +322,7 @@ def notify_new_signals(
     state_path: Path | str,
     sender: Callable[..., Any] = send_feishu_message,
     title: str = "缠论买卖点提醒",
+    market_advice: Optional[str] = None,
     dry_run: bool = False,
     seed_only: bool = False,
     max_state_keys: int = DEFAULT_MAX_STATE_KEYS,
@@ -281,7 +351,10 @@ def notify_new_signals(
         return new_events
 
     if new_events and not seed_only:
-        sender(build_signal_card(new_events, title=title), **send_kwargs)
+        sender(
+            build_signal_card(new_events, title=title, market_advice=market_advice),
+            **send_kwargs,
+        )
 
     if new_events:
         merged = sent_keys + [event_key(event) for event in new_events]

@@ -12,6 +12,8 @@ from notify.signal_notifier import (
     collect_signal_events_from_reports,
     event_key,
     extract_signal_events,
+    load_market_index_advice,
+    notify_from_reports,
     notify_new_signals,
 )
 
@@ -111,6 +113,97 @@ def test_build_signal_card_structure() -> None:
     assert card["card"]["header"]["template"] == "blue"  # 买卖混合
     content = card["card"]["elements"][0]["text"]["content"]
     assert "三卖" in content and "一买" in content
+
+
+def test_build_signal_card_includes_hstech_1m_advice() -> None:
+    events = extract_signal_events(_tech_payload())
+    advice = "【恒生科技指数 1M 操作建议】\n结论：观察，等待确认。\n建议：先按观察态处理。"
+    card = build_signal_card(events, title="买卖点", market_advice=advice)
+
+    contents = [
+        element.get("text", {}).get("content", "")
+        for element in card["card"]["elements"]
+        if isinstance(element, dict)
+    ]
+    assert any("恒生科技指数 1M 操作建议" in content for content in contents)
+    assert any("观察，等待确认" in content for content in contents)
+
+
+def test_load_market_index_advice_from_hstech_1m(tmp_path: Path) -> None:
+    tech_dir = tmp_path / "HSTECH" / "1m"
+    tech_dir.mkdir(parents=True)
+    payload = {
+        "symbol": "HSTECH",
+        "name": "恒生科技指数",
+        "timeframe": "1m",
+        "generated_at": "2026-10-31T11:45:02+08:00",
+        "advice_text": "【恒生科技指数 1M 操作建议】\n结论：观察，等待确认。",
+    }
+    (tech_dir / "tech.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    advice = load_market_index_advice(tmp_path)
+
+    assert advice is not None
+    assert "恒生科技指数 1M 操作建议" in advice
+    assert "数据时间：2026-10-31 11:45" in advice
+
+
+def test_load_market_index_advice_falls_back_to_summary(tmp_path: Path) -> None:
+    tech_dir = tmp_path / "HSTECH" / "1m"
+    tech_dir.mkdir(parents=True)
+    payload = {
+        "symbol": "HSTECH",
+        "name": "恒生科技指数",
+        "timeframe": "1m",
+        "summary": {"conclusion": "观察，等待确认。", "suggestion": "先按观察态处理。"},
+    }
+    (tech_dir / "tech.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    advice = load_market_index_advice(tmp_path)
+
+    assert advice is not None
+    assert "结论：观察，等待确认。" in advice
+    assert "建议：先按观察态处理。" in advice
+
+
+def test_load_market_index_advice_missing_file_returns_none(tmp_path: Path) -> None:
+    assert load_market_index_advice(tmp_path) is None
+
+
+def test_notify_from_reports_attaches_hstech_1m_advice(tmp_path: Path) -> None:
+    reports = tmp_path / "reports"
+    signal_dir = reports / "000591" / "30m"
+    signal_dir.mkdir(parents=True)
+    (signal_dir / "tech.json").write_text(json.dumps(_tech_payload(), ensure_ascii=False), encoding="utf-8")
+    hstech_dir = reports / "HSTECH" / "1m"
+    hstech_dir.mkdir(parents=True)
+    (hstech_dir / "tech.json").write_text(
+        json.dumps(
+            {
+                "symbol": "HSTECH",
+                "name": "恒生科技指数",
+                "timeframe": "1m",
+                "advice_text": "【恒生科技指数 1M 操作建议】\n结论：观察，等待确认。",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    sent: list = []
+
+    notify_from_reports(
+        reports,
+        state_path=tmp_path / "state.json",
+        sender=lambda payload, **kwargs: sent.append(payload),
+    )
+
+    assert len(sent) == 1
+    contents = [
+        element.get("text", {}).get("content", "")
+        for element in sent[0]["card"]["elements"]
+        if isinstance(element, dict)
+    ]
+    assert any("恒生科技指数 1M 操作建议" in content for content in contents)
 
 
 def test_collect_signal_events_from_reports(tmp_path: Path) -> None:
