@@ -23,7 +23,10 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from notify.signal_notifier import (  # noqa: E402
+    DEFAULT_INDEX_SYMBOL,
+    DEFAULT_INDEX_TIMEFRAME,
     collect_signal_events_from_reports,
+    load_index_brief,
     notify_new_signals,
 )
 from storage_layout import REPORTS_DIR, REPORTS_META_DIR  # noqa: E402
@@ -39,6 +42,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeframes", nargs="*", default=None, help="仅扫描指定周期，如 30m 60m；缺省扫描全部")
     parser.add_argument("--title", default="缠论买卖点提醒", help="飞书卡片标题")
     parser.add_argument("--no-forming", action="store_true", help="只推确认买卖点，不推预备/迹象")
+    parser.add_argument("--index-symbol", default=DEFAULT_INDEX_SYMBOL, help="大盘参考指数标的，默认恒生科技指数 HSTECH")
+    parser.add_argument("--index-timeframe", default=DEFAULT_INDEX_TIMEFRAME, help="大盘参考指数周期，默认 1m（恒科 1M 技术面建议）")
+    parser.add_argument("--no-index-brief", action="store_true", help="不在卡片顶部附带大盘指数技术面建议")
     parser.add_argument("--dry-run", action="store_true", help="只打印将要推送的新信号，不发送、不改状态")
     parser.add_argument("--seed-only", action="store_true", help="只把当前信号标记为已通知以建立基线，不实际推送")
     return parser.parse_args()
@@ -50,12 +56,20 @@ def run(args: argparse.Namespace) -> list:
         timeframes=args.timeframes,
         include_forming=not args.no_forming,
     )
+    index_brief = None
+    if not args.no_index_brief:
+        index_brief = load_index_brief(
+            args.reports_dir,
+            symbol=args.index_symbol,
+            timeframe=args.index_timeframe,
+        )
     new_events = notify_new_signals(
         events,
         state_path=args.state_file,
         title=args.title,
         dry_run=args.dry_run,
         seed_only=args.seed_only,
+        index_brief=index_brief,
     )
     return new_events
 

@@ -7,11 +7,14 @@ import pytest
 
 from notify.feishu import FeishuConfigError, send_feishu_message, sign_feishu_request
 from notify.signal_notifier import (
+    IndexBrief,
     SignalEvent,
     build_signal_card,
     collect_signal_events_from_reports,
     event_key,
+    extract_index_brief,
     extract_signal_events,
+    load_index_brief,
     notify_new_signals,
 )
 
@@ -33,6 +36,88 @@ def _tech_payload() -> dict:
             "invalidated_points": [],
         },
     }
+
+
+def _index_tech_payload() -> dict:
+    return {
+        "symbol": "HSTECH",
+        "name": "恒生科技指数",
+        "timeframe": "1m",
+        "summary": {
+            "operation_level": "1M",
+            "conclusion": "跌破中枢后反抽下沿失败，当前按三卖确认处理。",
+            "suggestion": "反抽不过 430.00 以减仓为主，不逆势加仓。",
+            "bias": "跌破中枢后反抽下沿失败",
+            "score": 67,
+            "rating": "B",
+            "oscillation_rhythm_state": "down_bias",
+            "divergence": {
+                "top": {"active": False},
+                "bottom": {"active": True, "time": "2026-09-11T14:57:00"},
+            },
+        },
+    }
+
+
+def test_extract_index_brief_reads_core_fields() -> None:
+    brief = extract_index_brief(_index_tech_payload())
+    assert brief is not None
+    assert brief.symbol == "HSTECH"
+    assert brief.name == "恒生科技指数"
+    assert brief.level_label == "1M"
+    assert brief.rating == "B"
+    assert brief.score == 67
+    assert brief.oscillation_label == "偏空节奏"
+    assert brief.bottom_divergence is True
+    assert brief.top_divergence is False
+
+
+def test_load_index_brief_from_reports(tmp_path: Path) -> None:
+    reports = tmp_path / "reports"
+    index_dir = reports / "HSTECH" / "1m"
+    index_dir.mkdir(parents=True)
+    (index_dir / "tech.json").write_text(
+        json.dumps(_index_tech_payload(), ensure_ascii=False), encoding="utf-8"
+    )
+    brief = load_index_brief(reports, symbol="HSTECH", timeframe="1m")
+    assert brief is not None and brief.name == "恒生科技指数"
+    # 缺失报告时返回 None，不影响推送
+    assert load_index_brief(reports, symbol="HSTECH", timeframe="5m") is None
+
+
+def test_build_signal_card_includes_index_brief() -> None:
+    events = extract_signal_events(_tech_payload())
+    brief = extract_index_brief(_index_tech_payload())
+    card = build_signal_card(events, title="买卖点", index_brief=brief)
+    elements = card["card"]["elements"]
+    # 顶部应为大盘简报 + 分隔线，其后才是买卖点
+    head = elements[0]["text"]["content"]
+    assert "恒生科技指数 1M 大盘技术面建议" in head
+    assert "底背驰" in head
+    assert elements[1]["tag"] == "hr"
+    assert "三卖" in elements[-1]["text"]["content"]
+
+
+def test_build_signal_card_without_brief_keeps_single_div() -> None:
+    events = extract_signal_events(_tech_payload())
+    card = build_signal_card(events)
+    assert len(card["card"]["elements"]) == 1
+
+
+def test_notify_new_signals_passes_index_brief(tmp_path: Path) -> None:
+    state = tmp_path / "state.json"
+    sent: list = []
+
+    def fake_sender(payload, **kwargs):
+        sent.append(payload)
+        return {"code": 0}
+
+    events = extract_signal_events(_tech_payload())
+    brief = extract_index_brief(_index_tech_payload())
+    notify_new_signals(events, state_path=state, sender=fake_sender, index_brief=brief)
+    assert len(sent) == 1
+    head = sent[0]["card"]["elements"][0]["text"]["content"]
+    assert "恒生科技指数" in head
 
 
 def test_extract_signal_events_skips_invalidated_and_labels_points() -> None:
