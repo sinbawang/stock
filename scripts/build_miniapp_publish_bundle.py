@@ -28,6 +28,7 @@ from chanlun.analysis import (
     format_transition_state_label,
 )
 from chanlun.analysis_contract import SIGNAL_INVALIDATED_REASON_LABELS
+from chanlun.data.quote_repair import repair_nonpositive_quotes
 from chanlun.models import Bi, BiDirection
 from chanlun.segment import (
     build_segment_tail_interpretations,
@@ -2055,6 +2056,9 @@ def build_chart_data_payload(chart_spec: dict[str, str]) -> dict[str, Any] | Non
     )
 
     bars_records = read_csv_records(bars_csv)
+    # 发布前兜底：修复历史 CSV 中的非正 OHLC（如港股占位 bar 的 open=0.0），
+    # 避免小程序蜡烛实体从 0 画起形成超长柱子。
+    bars_records, _ = repair_nonpositive_quotes(bars_records)
     structure_state = (tech_payload.get("structure_state") or {}) if isinstance(tech_payload, dict) else {}
     trend_type_boundaries = _trend_type_boundary_bar_indices(
         (structure_state or {}).get("type_chain") or [],

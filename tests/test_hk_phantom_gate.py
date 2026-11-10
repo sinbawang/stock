@@ -198,6 +198,56 @@ def test_missing_day_anchor_keeps_rows_unchanged() -> None:
     assert gated == rows
 
 
+def test_zero_open_placeholder_bar_repaired_from_close() -> None:
+    """港股零成交占位 bar：open=0.0、H=L=C=2.94 → open 回填 close，避免超长蜡烛实体。"""
+    day_rows = [_day("2026-11-02", 2.91, 2.95, 2.89, 2.94)]
+    rows = [
+        _bar("2026-11-02 13:59", 2.94, 2.94, 2.94, 2.94),
+        _bar("2026-11-02 14:00", 0.0, 2.94, 2.94, 2.94, v=0),
+        _bar("2026-11-02 14:01", 0.0, 2.94, 2.94, 2.94, v=0),
+    ]
+
+    gated, events = apply_hk_minute_phantom_gate(
+        rows, symbol="01024", timeframe="1m", day_rows=day_rows
+    )
+
+    assert gated[1]["open"] == 2.94
+    assert gated[2]["open"] == 2.94
+    assert gated[1]["volume"] == 0
+    open_events = [event for event in events if event.field == "open"]
+    assert len(open_events) == 2
+    assert all(event.changed for event in open_events)
+    assert all(event.reason == "nonpositive_open_filled_close" for event in open_events)
+    assert all(event.source == "nonpositive_fill" for event in open_events)
+
+
+def test_zero_open_repaired_even_without_day_anchor() -> None:
+    """open=0 是客观非法值，即使没有日线锚也必须修复。"""
+    rows = [_bar("2026-11-02 14:00", 0.0, 2.94, 2.94, 2.94, v=0)]
+
+    gated, events = apply_hk_minute_phantom_gate(
+        rows, symbol="01024", timeframe="1m", day_rows=[]
+    )
+
+    assert gated[0]["open"] == 2.94
+    assert len(events) == 1
+    assert events[0].reason == "nonpositive_open_filled_close"
+
+
+def test_zero_open_repair_is_idempotent() -> None:
+    rows = [_bar("2026-11-02 14:00", 0.0, 2.94, 2.94, 2.94, v=0)]
+
+    once, _ = apply_hk_minute_phantom_gate(
+        rows, symbol="01024", timeframe="1m", day_rows=[]
+    )
+    twice, events = apply_hk_minute_phantom_gate(
+        once, symbol="01024", timeframe="1m", day_rows=[]
+    )
+
+    assert events == []
+    assert twice == once
+
+
 def test_day_without_bar_is_skipped() -> None:
     """窗口里早于锚定日线的日期不参与（无日线锚）。"""
     day_rows = [_day("2026-09-11", 74.0, 75.6, 73.4, 75.1)]

@@ -26,6 +26,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from .quote_repair import repair_nonpositive_quotes
+
 DEFAULT_MIN_REPAIR_PCT = 0.5
 DEFAULT_SOFT_LOG_PCT = 0.1
 DEFAULT_TOL_ABS = 0.01
@@ -81,6 +83,47 @@ def _tol(limit: float, tol_abs: float, tol_ratio: float) -> float:
 
 def _beyond(value: float, low: float, high: float, tol: float) -> bool:
     return value > high + tol or value < low - tol
+
+
+def _quote_repair_events(
+    repairs: list[tuple[str, object]],
+    rows: list[dict],
+    *,
+    symbol: str,
+    timeframe: str,
+) -> list[PhantomEvent]:
+    """把非正价格修复记录转成统一的 PhantomEvent（severity=0）。"""
+    if not repairs:
+        return []
+
+    first_label = _FIRST_LABELS.get(timeframe)
+    last_ts_by_day: dict[str, str] = {}
+    for row in rows:
+        ts = str(row.get("ts") or "")
+        last_ts_by_day[ts[:10]] = ts
+
+    events: list[PhantomEvent] = []
+    for ts, repair in repairs:
+        hhmm = ts[11:16] if len(ts) >= 16 else ""
+        is_first = first_label is not None and hhmm == first_label
+        is_tail = ts == last_ts_by_day.get(ts[:10]) and hhmm in {"16:00", "12:00"}
+        position = "first" if is_first else ("tail" if is_tail else "mid")
+        events.append(
+            PhantomEvent(
+                symbol=symbol,
+                timeframe=timeframe,
+                ts=ts,
+                position=position,
+                field=getattr(repair, "field"),
+                before=float(getattr(repair, "before")),
+                after=float(getattr(repair, "after")),
+                changed=True,
+                reason=str(getattr(repair, "reason")),
+                source="nonpositive_fill",
+                severity_pct=0.0,
+            )
+        )
+    return events
 
 
 def _day_groups(rows: list[dict]) -> dict[str, list[dict]]:
@@ -146,8 +189,18 @@ def apply_hk_minute_phantom_gate(
     Returns:
         (新 rows, 事件列表)。未变动的 bar 原样返回；被修复的 bar 是新的 dict。
     """
-    if not rows or not day_rows:
-        return list(rows), []
+    if not rows:
+        return [], []
+
+    # 0) 先修复非正 OHLC（典型：港股分钟占位 bar 的 open=0.0）。
+    #    这类脏值独立于日线锚，即使没有日线锚也必须修复。
+    rows, quote_repairs = repair_nonpositive_quotes(rows)
+    events: list[PhantomEvent] = _quote_repair_events(
+        quote_repairs, rows, symbol=symbol, timeframe=timeframe
+    )
+
+    if not day_rows:
+        return rows, events
 
     day_map = {
         str(item["ts"])[:10]: item
@@ -155,7 +208,7 @@ def apply_hk_minute_phantom_gate(
         if str(item.get("ts") or "").strip()
     }
     if not day_map:
-        return list(rows), []
+        return rows, events
 
     one_min_by_day = (
         _day_groups(one_min_rows)
@@ -163,7 +216,6 @@ def apply_hk_minute_phantom_gate(
         else {}
     )
 
-    events: list[PhantomEvent] = []
     out: list[dict] = []
 
     for day, bars in _day_groups(rows).items():
@@ -344,12 +396,22 @@ def run_hk_phantom_gate(
 
     day_rows = load_local_rows(symbol, "HK", "day", root=store_root)
     if not day_rows:
-        return list(rows), {
+        # 无日线锚仍要修复客观非法的价格（如 open=0），否则图表会画出超长柱。
+        gated, events = apply_hk_minute_phantom_gate(
+            rows,
+            symbol=symbol,
+            timeframe=timeframe,
+            day_rows=[],
+            one_min_rows=None,
+            min_repair_pct=min_repair_pct,
+        )
+        repaired = sum(1 for event in events if event.changed)
+        return gated, {
             "applied": False,
             "skipped": "no_day_anchor",
-            "repaired": 0,
-            "soft": 0,
-            "events": [],
+            "repaired": repaired,
+            "soft": len(events) - repaired,
+            "events": [event.to_dict() for event in events if event.changed],
         }
     one_min_rows = (
         load_local_rows(symbol, "HK", "1m", root=store_root)

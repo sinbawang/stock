@@ -255,10 +255,15 @@ class Plotter:
 
     def _draw_bars(self, ax, bars: List[Bar]) -> None:
         for i, bar in enumerate(bars):
-            color = self.up_color if bar.close >= bar.open else self.down_color
-            ax.plot([i, i], [bar.low, bar.high], color=color, linewidth=0.6)
-            height = abs(bar.close - bar.open)
-            ax.bar(i, height, width=0.6, bottom=min(bar.open, bar.close), color=color)
+            # 防御脏数据：open<=0 时按 close 绘制，避免实体从 0 拉出超长柱子。
+            open_price = bar.open if bar.open > 0 else bar.close
+            close_price = bar.close if bar.close > 0 else open_price
+            high_price = bar.high if bar.high > 0 else max(open_price, close_price)
+            low_price = bar.low if bar.low > 0 else min(open_price, close_price)
+            color = self.up_color if close_price >= open_price else self.down_color
+            ax.plot([i, i], [low_price, high_price], color=color, linewidth=0.6)
+            height = abs(close_price - open_price)
+            ax.bar(i, height, width=0.6, bottom=min(open_price, close_price), color=color)
 
     def _draw_moving_averages(self, ax, bars: List[Bar]) -> None:
         closes = [bar.close for bar in bars]
