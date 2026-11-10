@@ -9,6 +9,9 @@ on:
       - "tests/**"
       - "scripts/run_segment_safety_gates.py"
       - "docs/chanlun/**"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - ".github/workflows/spec-gates.yml"
 
 permissions:
   contents: read
