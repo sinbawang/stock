@@ -33,6 +33,9 @@ EOD_SCHEDULER_ENABLED="${EOD_SCHEDULER_ENABLED:-false}"
 EOD_SCHEDULER_TIMEZONE="${EOD_SCHEDULER_TIMEZONE:-Asia/Shanghai}"
 EOD_SCHEDULER_GRACE_SECONDS="${EOD_SCHEDULER_GRACE_SECONDS:-300}"
 EOD_SCHEDULER_POLL_SECONDS="${EOD_SCHEDULER_POLL_SECONDS:-30}"
+EOD_SCHEDULER_CATCHUP_ENABLED="${EOD_SCHEDULER_CATCHUP_ENABLED:-true}"
+EOD_SCHEDULER_RETRY_SECONDS="${EOD_SCHEDULER_RETRY_SECONDS:-600}"
+EOD_SCHEDULER_STATE_PATH="${EOD_SCHEDULER_STATE_PATH:-${KLINE_SYNC_LOCAL_ROOT}/.scheduler/eod-last-run.txt}"
 
 mkdir -p "${KLINE_SYNC_LOCAL_ROOT}"
 mkdir -p "$(dirname "${KLINE_SYNC_MANIFEST_PATH}")"
@@ -117,12 +120,29 @@ start_m1_intraday_scheduler() {
 }
 
 start_eod_scheduler() {
+  eod_catchup_flag="--catchup"
+  if ! is_true "${EOD_SCHEDULER_CATCHUP_ENABLED}"; then
+    eod_catchup_flag="--no-catchup"
+  fi
+
   INTRADAY_SCHEDULER_TIMEZONE="${EOD_SCHEDULER_TIMEZONE}" \
   INTRADAY_SCHEDULER_GRACE_SECONDS="${EOD_SCHEDULER_GRACE_SECONDS}" \
   INTRADAY_SCHEDULER_POLL_SECONDS="${EOD_SCHEDULER_POLL_SECONDS}" \
-  python /app/scripts/run_m30_intraday_scheduler.py --profile eod &
+  SCHEDULER_STATE_PATH="${EOD_SCHEDULER_STATE_PATH}" \
+  SCHEDULER_RETRY_SECONDS="${EOD_SCHEDULER_RETRY_SECONDS}" \
+  python /app/scripts/run_m30_intraday_scheduler.py \
+    --profile eod \
+    "${eod_catchup_flag}" \
+    --state-path "${EOD_SCHEDULER_STATE_PATH}" &
   eod_scheduler_pid=$!
-  log "started eod scheduler (timezone=${EOD_SCHEDULER_TIMEZONE})"
+  log "started eod scheduler (pid=${eod_scheduler_pid}, timezone=${EOD_SCHEDULER_TIMEZONE}, catchup=${EOD_SCHEDULER_CATCHUP_ENABLED}, state=${EOD_SCHEDULER_STATE_PATH})"
+
+  # 调度器若因导入/时区等问题立即退出，这里直接把问题暴露在容器日志里。
+  sleep 1
+  if ! kill -0 "${eod_scheduler_pid}" 2>/dev/null; then
+    wait "${eod_scheduler_pid}" 2>/dev/null || true
+    log "eod scheduler exited during startup; check python traceback above"
+  fi
 }
 
 handle_shutdown() {

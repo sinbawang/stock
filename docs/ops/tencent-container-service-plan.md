@@ -116,6 +116,7 @@ docker run --rm -p 8000:8000 \
 - `m5_intraday` 适合盘中细粒度刷新；当前容器入口默认槽位是交易日盘中每 5 分钟一次，但排除 `:00` 和 `:30`，因此默认从 `09:35` 跑到 `16:05`。
 - `m1_intraday` 适合盘中逐分钟最细刷新；默认在 `09:30~12:00` 与 `13:00~16:00` 内逐分钟触发，并自动去掉 m5 / m30 已覆盖的整 5 分钟档位，只刷新 `1m`。
 - 收盘后另有 `16:10` 的 `EOD` 容器内调度，用于覆盖港股 `16:00~16:10` 集合竞价后的收盘刷新。
+- 当服务最小副本数为 `0` 时，容器空闲会被缩容，调度器也会停止；EOD 因此内置**唤醒补跑**：实例恢复后若最近一个交易日 `16:10` 档位未执行，会补跑一次（状态文件默认 `${STOCK_LOCAL_STORE_ROOT}/.scheduler/eod-last-run.txt`）。需要严格准点 `16:10` 时请把最小副本数设为 `1`。
 
 当前仓库的容器入口 [scripts/container_bootstrap_and_run.sh](c:/sandbox/sinba/stock/scripts/container_bootstrap_and_run.sh) 已直接内置这四条可选调度器，按环境变量 `INTRADAY_SCHEDULER_ENABLED`、`M5_INTRADAY_SCHEDULER_ENABLED`、`M1_INTRADAY_SCHEDULER_ENABLED`、`EOD_SCHEDULER_ENABLED` 启用。也就是说，这部分已经不只是规划，而是当前默认可部署能力。
 

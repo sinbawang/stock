@@ -25,7 +25,7 @@ from batch_generate_and_send_portfolio_mixed_reports import generate_bundle as g
 from batch_generate_and_send_portfolio_mixed_reports import load_holdings
 import upload_miniapp_publish_bundle as upload_module
 from build_miniapp_publish_bundle import generate_bundle as build_publish_bundle
-from storage_layout import REPORTS_DIR, REPORTS_META_DIR, holdings_file
+from storage_layout import KLINE_CACHE_DIR, REPORTS_DIR, REPORTS_META_DIR, holdings_file
 
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
@@ -33,7 +33,9 @@ DEFAULT_PUBLISH_ROOT = ROOT / "build" / "miniapp-publish"
 DEFAULT_UPLOAD_SCRIPT = SCRIPTS / "upload_miniapp_publish_bundle.py"
 DEFAULT_UPLOAD_MANIFEST_PATH = ROOT / "build" / "miniapp-publish" / "cloudbase-upload-manifest.json"
 DEFAULT_SYNC_KLINE_SCRIPT = SCRIPTS / "sync_kline_cache_cloudbase.py"
-DEFAULT_KLINE_CACHE_SOURCE_DIR = ROOT / "data" / "cache" / "kline"
+# 必须与 batch_prepare_chanlun_reports.py 使用的是同一个 store；容器内该值由
+# STOCK_LOCAL_STORE_ROOT / STOCK_KLINE_CACHE_DIR 指向 /data/stock-kline-cache。
+DEFAULT_KLINE_CACHE_SOURCE_DIR = KLINE_CACHE_DIR
 DEFAULT_KLINE_CACHE_MANIFEST_PATH = ROOT / "build" / "stock-kline-cache" / "cloudbase-upload-manifest.json"
 DEFAULT_KLINE_CACHE_POINTER_PATH = ROOT / "build" / "stock-kline-cache" / "manifest-pointer.json"
 DEFAULT_KLINE_CACHE_CLOUD_PREFIX = "stock-kline-cache/latest"

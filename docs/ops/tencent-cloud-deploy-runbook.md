@@ -117,7 +117,7 @@ bin\deploy_service.bat --env-id cloudbase-d9gplq92zc1d88ee6 --service-name chanl
 | 容器端口 | `8000` |
 | CPU | `0.5` |
 | 内存 | `1 GB` |
-| 最小副本数 | `0` |
+| 最小副本数 | `0`（若要求精确 16:10 触发，改为 `1`） |
 | 最大副本数 | `2` |
 | 必填环境变量 | `CLOUDBASE_ENV_ID`、`CLOUDBASE_REGION`、`CLOUDBASE_APIKEY` |
 | 可选定时开关 | `INTRADAY_SCHEDULER_ENABLED`、`M5_INTRADAY_SCHEDULER_ENABLED`、`M1_INTRADAY_SCHEDULER_ENABLED`、`EOD_SCHEDULER_ENABLED` |
@@ -158,6 +158,10 @@ EOD_SCHEDULER_ENABLED=true
 	`m1 intraday`：仅交易日运行，在 `09:30~12:00` 与 `13:00~16:00` 两个窗口内逐分钟触发，但自动去掉 m5 / m30 已经覆盖的整 5 分钟档位（即只跑分钟数非 5 的倍数的点），只刷新 `1m` 分析。默认 `grace=45s`、`poll=15s`（可用 `M1_INTRADAY_SCHEDULER_GRACE_SECONDS` / `M1_INTRADAY_SCHEDULER_POLL_SECONDS` 覆盖）。注意：该任务刷新频次最高，务必确认容器算力（建议 ≥ 1 vCPU 或最小副本数 ≥ 1）能在 1 分钟内跑完一轮。
 4. `EOD_SCHEDULER_ENABLED=true`
 	`EOD`：仅交易日运行，在 `16:10` 触发一次，覆盖港股 `16:00~16:10` 集合竞价之后的收盘刷新。
+
+> **最小副本数为 0 时的重要说明**：容器无请求会被缩容到 0，调度器进程也随之停止，因此不可能保证在 `16:10` 准点触发。EOD 默认启用**补跑**：实例被请求唤醒后，如果最近一个已到点的交易日 `16:10` 档位尚未成功执行，会立即补跑一次，并把成功档位写入 `EOD_SCHEDULER_STATE_PATH`（默认 `${STOCK_LOCAL_STORE_ROOT}/.scheduler/eod-last-run.txt`），避免重启后重复执行。要严格保证 `16:10` 准点触发，请把服务最小副本数设为 `1`。
+>
+> 相关开关：`EOD_SCHEDULER_CATCHUP_ENABLED`（默认 `true`）、`EOD_SCHEDULER_RETRY_SECONDS`（失败重试间隔，默认 `600`）。
 
 ### 推荐启用顺序
 

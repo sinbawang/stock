@@ -8,6 +8,7 @@ import shlex
 import subprocess
 import sys
 import time as time_module
+import traceback
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -166,6 +167,23 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional log label override.",
     )
+    parser.add_argument(
+        "--catchup",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="When a slot was missed (for example the container was scaled to zero), run the most recent due slot once on wake-up.",
+    )
+    parser.add_argument(
+        "--state-path",
+        default=os.environ.get("SCHEDULER_STATE_PATH", ""),
+        help="Optional file used to remember the last successfully triggered slot across restarts.",
+    )
+    parser.add_argument(
+        "--retry-seconds",
+        type=int,
+        default=int(os.environ.get("SCHEDULER_RETRY_SECONDS", "600")),
+        help="Minimum delay before retrying a failed slot command.",
+    )
     return parser.parse_args()
 
 
@@ -236,6 +254,81 @@ def next_slot_after(moment: datetime, slots: tuple[time, ...] | None = None) -> 
         cursor = datetime.combine(next_day, active_slots[0], tzinfo=moment.tzinfo)
 
 
+def most_recent_due_slot(moment: datetime, slots: tuple[time, ...] | None = None) -> datetime | None:
+    """返回最近一个已经到点的交易日 slot（用于缩容/重启后的补跑）。"""
+    active_slots = tuple(slots or DEFAULT_INTRADAY_SLOTS)
+    if not active_slots:
+        return None
+
+    if is_trading_day(moment):
+        for slot in sorted(active_slots, reverse=True):
+            candidate = datetime.combine(moment.date(), slot, tzinfo=moment.tzinfo)
+            if candidate <= moment:
+                return candidate
+
+    latest_slot = max(active_slots)
+    cursor = datetime.combine(moment.date() - timedelta(days=1), latest_slot, tzinfo=moment.tzinfo)
+    while not is_trading_day(cursor):
+        cursor = datetime.combine(cursor.date() - timedelta(days=1), latest_slot, tzinfo=moment.tzinfo)
+    return cursor
+
+
+def resolve_trigger_slot(
+    moment: datetime,
+    *,
+    grace_seconds: int,
+    catchup: bool,
+    slots: tuple[time, ...] | None = None,
+    last_triggered_slot: datetime | None = None,
+) -> tuple[datetime | None, str]:
+    """返回本次应触发的 slot 及原因（scheduled / catch-up）。"""
+    due_slot = resolve_due_slot(moment, grace_seconds, slots)
+    if due_slot is not None:
+        return due_slot, "scheduled"
+    if catchup:
+        missed_slot = most_recent_due_slot(moment, slots)
+        if missed_slot is not None and missed_slot != last_triggered_slot:
+            return missed_slot, "catch-up"
+    return None, "none"
+
+
+def load_last_triggered_slot(state_path: str | Path | None, tz: ZoneInfo) -> datetime | None:
+    if not state_path:
+        return None
+    path = Path(state_path)
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=tz)
+
+
+def save_last_triggered_slot(state_path: str | Path | None, slot: datetime) -> None:
+    if not state_path:
+        return
+    path = Path(state_path)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = path.with_name(f"{path.name}.tmp")
+        temp_path.write_text(slot.isoformat(timespec="minutes") + "\n", encoding="utf-8")
+        temp_path.replace(path)
+    except OSError as exc:
+        print(f"[scheduler] WARNING unable to persist state {path}: {exc}", file=sys.stderr, flush=True)
+
+
+def resolve_timezone(name: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(name)
+    except Exception as exc:  # noqa: BLE001 - 时区库异常不阻断调度器
+        raise SystemExit(f"Unable to load timezone {name!r}: {exc}") from exc
+
+
 def build_command(args: argparse.Namespace) -> list[str]:
     if args.command:
         return list(args.command)
@@ -265,29 +358,66 @@ def build_command(args: argparse.Namespace) -> list[str]:
 
 
 def run_scheduler(args: argparse.Namespace) -> int:
-    tz = ZoneInfo(args.timezone)
-    slots = resolve_slots(args)
     label = resolve_label(args)
+    log(f"starting profile={args.profile} pid={os.getpid()}", label=label)
+    tz = resolve_timezone(args.timezone)
+    slots = resolve_slots(args)
     command = build_command(args)
     poll_seconds = max(1, int(args.poll_seconds))
     grace_seconds = max(0, int(args.grace_seconds))
-    last_triggered_slot: datetime | None = None
+    catchup = bool(getattr(args, "catchup", False))
+    retry_seconds = max(60, int(getattr(args, "retry_seconds", 600)))
+    state_path = getattr(args, "state_path", "") or None
+    last_triggered_slot = load_last_triggered_slot(state_path, tz)
+    last_attempted_slot: datetime | None = None
+    last_attempt_at: datetime | None = None
 
-    log(f"profile={args.profile}", label=label)
     log(f"timezone={args.timezone}", label=label)
     log(f"grace_seconds={grace_seconds}", label=label)
     log(f"poll_seconds={poll_seconds}", label=label)
+    log(f"catchup={catchup} retry_seconds={retry_seconds}", label=label)
+    log(f"state_path={state_path or '-'}", label=label)
     log(f"slots={','.join(slot.strftime('%H:%M') for slot in slots)}", label=label)
     log(f"command={shlex.join(command)}", label=label)
+    if last_triggered_slot is not None:
+        log(f"last_triggered_slot={last_triggered_slot.isoformat(timespec='minutes')}", label=label)
 
     while True:
         now = datetime.now(tz)
-        due_slot = resolve_due_slot(now, grace_seconds, slots)
+        due_slot, trigger_reason = resolve_trigger_slot(
+            now,
+            grace_seconds=grace_seconds,
+            catchup=catchup,
+            slots=slots,
+            last_triggered_slot=last_triggered_slot,
+        )
+
+        if (
+            due_slot is not None
+            and due_slot == last_attempted_slot
+            and last_attempt_at is not None
+            and (now - last_attempt_at).total_seconds() < retry_seconds
+        ):
+            due_slot = None
+
         if due_slot is not None and due_slot != last_triggered_slot:
-            log(f"triggering slot {due_slot.isoformat(timespec='minutes')}", label=label)
-            completed = subprocess.run(command, cwd=ROOT)
-            log(f"slot finished with exit code {completed.returncode}", label=label)
-            last_triggered_slot = due_slot
+            log(
+                f"{trigger_reason} slot {due_slot.isoformat(timespec='minutes')}",
+                label=label,
+            )
+            last_attempted_slot = due_slot
+            last_attempt_at = now
+            try:
+                returncode = subprocess.run(command, cwd=ROOT).returncode
+            except Exception as exc:  # noqa: BLE001 - 单次命令启动失败不应杀死调度器
+                returncode = -1
+                log(f"slot command failed to start: {type(exc).__name__}: {exc}", label=label)
+            log(f"slot finished with exit code {returncode}", label=label)
+            if returncode == 0:
+                last_triggered_slot = due_slot
+                save_last_triggered_slot(state_path, due_slot)
+            else:
+                log(f"slot failed; will retry in about {retry_seconds}s", label=label)
             continue
 
         next_slot = next_slot_after(now, slots)
@@ -298,7 +428,14 @@ def run_scheduler(args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = parse_args()
-    return run_scheduler(args)
+    try:
+        return run_scheduler(args)
+    except KeyboardInterrupt:
+        return 0
+    except Exception as exc:  # noqa: BLE001 - 把调度器崩溃写进容器日志
+        traceback.print_exc()
+        print(f"[scheduler] fatal: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        return 2
 
 
 if __name__ == "__main__":

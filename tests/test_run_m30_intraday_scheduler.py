@@ -69,6 +69,73 @@ def test_next_slot_after_supports_eod_profile_weekday_and_weekend() -> None:
     assert module.next_slot_after(_dt("2026-08-14T16:20:00"), module.DEFAULT_EOD_SLOTS) == _dt("2026-08-17T16:10:00")
 
 
+def test_most_recent_due_slot_rolls_back_to_previous_trading_day() -> None:
+    slots = module.DEFAULT_EOD_SLOTS
+
+    assert module.most_recent_due_slot(_dt("2026-08-17T15:40:00"), slots) == _dt("2026-08-14T16:10:00")
+    assert module.most_recent_due_slot(_dt("2026-08-17T16:20:00"), slots) == _dt("2026-08-17T16:10:00")
+    assert module.most_recent_due_slot(_dt("2026-08-16T20:00:00"), slots) == _dt("2026-08-14T16:10:00")
+
+
+def test_most_recent_due_slot_handles_multiple_slots() -> None:
+    assert module.most_recent_due_slot(_dt("2026-08-17T11:05:00"), module.DEFAULT_INTRADAY_SLOTS) == _dt("2026-08-17T11:00:00")
+    assert module.most_recent_due_slot(_dt("2026-08-17T09:20:00"), module.DEFAULT_INTRADAY_SLOTS) == _dt("2026-08-14T15:30:00")
+
+
+def test_resolve_trigger_slot_supports_eod_catchup() -> None:
+    now = _dt("2026-08-17T20:00:00")
+
+    slot, reason = module.resolve_trigger_slot(
+        now,
+        grace_seconds=300,
+        catchup=True,
+        slots=module.DEFAULT_EOD_SLOTS,
+    )
+
+    assert slot == _dt("2026-08-17T16:10:00")
+    assert reason == "catch-up"
+
+    already_done, _ = module.resolve_trigger_slot(
+        now,
+        grace_seconds=300,
+        catchup=True,
+        slots=module.DEFAULT_EOD_SLOTS,
+        last_triggered_slot=slot,
+    )
+    assert already_done is None
+
+    disabled, _ = module.resolve_trigger_slot(
+        now,
+        grace_seconds=300,
+        catchup=False,
+        slots=module.DEFAULT_EOD_SLOTS,
+    )
+    assert disabled is None
+
+
+def test_resolve_trigger_slot_prefers_scheduled_slot_over_catchup() -> None:
+    slot, reason = module.resolve_trigger_slot(
+        _dt("2026-08-17T16:12:00"),
+        grace_seconds=300,
+        catchup=True,
+        slots=module.DEFAULT_EOD_SLOTS,
+    )
+
+    assert slot == _dt("2026-08-17T16:10:00")
+    assert reason == "scheduled"
+
+
+def test_last_triggered_slot_state_roundtrip(tmp_path) -> None:
+    state_path = tmp_path / "state" / "eod-last-run.txt"
+    slot = _dt("2026-08-17T16:10:00")
+
+    module.save_last_triggered_slot(state_path, slot)
+
+    assert module.load_last_triggered_slot(state_path, TZ) == slot
+    assert module.load_last_triggered_slot(None, TZ) is None
+    assert module.load_last_triggered_slot(tmp_path / "missing.txt", TZ) is None
+
+
 def test_next_slot_after_supports_m5_intraday_profile_around_session_boundaries() -> None:
     assert module.next_slot_after(_dt("2026-08-17T09:31:00"), module.DEFAULT_M5_INTRADAY_SLOTS) == _dt("2026-08-17T09:35:00")
     assert module.next_slot_after(_dt("2026-08-17T12:01:00"), module.DEFAULT_M5_INTRADAY_SLOTS) == _dt("2026-08-17T13:05:00")
