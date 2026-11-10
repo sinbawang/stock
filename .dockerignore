@@ -18,3 +18,4 @@ logs/
 .vscode
 .env
 *.md
+!README.md
