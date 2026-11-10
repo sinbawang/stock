@@ -170,6 +170,70 @@ def test_load_market_index_advice_missing_file_returns_none(tmp_path: Path) -> N
     assert load_market_index_advice(tmp_path) is None
 
 
+def test_load_market_index_advice_keeps_only_conclusion_reason_suggestion(tmp_path: Path) -> None:
+    tech_dir = tmp_path / "HSTECH" / "1m"
+    tech_dir.mkdir(parents=True)
+    payload = {
+        "symbol": "HSTECH",
+        "name": "恒生科技指数",
+        "timeframe": "1m",
+        "generated_at": "2026-10-31T11:45:02+08:00",
+        "advice_text": (
+            "【恒生科技指数 1M 操作建议】\n"
+            "结论：偏强，持有为主。\n"
+            "理由：价格运行在中枢上沿 31.68 附近或上方。\n"
+            "建议：已有仓位可继续持有，回踩不破 31.68 再考虑加仓。\n"
+            "结构说明：当前中枢由线段构成。\n"
+            "监视器：中枢中线 31.49，当前偏强，预警状态 无预警。\n"
+            "信号说明：三买已确认。\n"
+            "消费说明：当前同级别结构处于 已确认，所有高层结论按确认处理。\n"
+            "转场说明：结构已完成转场。\n"
+            "节奏监视：节奏偏强，当前只作辅助观察，不单独升级主结论。\n"
+            "补充：已有顶背驰迹象，若后续反弹无力，应优先考虑保护利润。\n"
+            "说明：以上仅基于缠论结构与 MACD 强弱，不构成投资建议。"
+        ),
+    }
+    (tech_dir / "tech.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    advice = load_market_index_advice(tmp_path)
+
+    assert advice is not None
+    lines = advice.splitlines()
+    assert lines[0] == "【恒生科技指数 1M 操作建议】"
+    assert lines[1].startswith("结论：")
+    assert lines[2].startswith("理由：")
+    assert lines[3].startswith("建议：")
+    assert lines[-1].startswith("数据时间：")
+    assert len(lines) == 5
+    for dropped in ("结构说明", "监视器", "信号说明", "消费说明", "转场说明", "节奏监视", "补充", "说明："):
+        assert dropped not in advice
+
+
+def test_build_signal_card_trims_long_market_advice() -> None:
+    events = extract_signal_events(_tech_payload())
+    advice = (
+        "【恒生科技指数 1M 操作建议】\n"
+        "结论：震荡，等待方向选择。\n"
+        "理由：当前主要围绕中枢 31.30-31.68 波动。\n"
+        "建议：中枢内少折腾，等离开或跌破后再做决策。\n"
+        "结构说明：中枢由线段构成。\n"
+        "监视器：中枢中线 31.49，当前中性，预警状态 无预警。"
+    )
+    card = build_signal_card(events, title="买卖点", market_advice=advice)
+
+    contents = [
+        element.get("text", {}).get("content", "")
+        for element in card["card"]["elements"]
+        if isinstance(element, dict)
+    ]
+    advice_content = contents[-1]
+    assert "结论：震荡，等待方向选择。" in advice_content
+    assert "理由：" in advice_content
+    assert "建议：" in advice_content
+    assert "结构说明" not in advice_content
+    assert "监视器" not in advice_content
+
+
 def test_notify_from_reports_attaches_hstech_1m_advice(tmp_path: Path) -> None:
     reports = tmp_path / "reports"
     signal_dir = reports / "000591" / "30m"

@@ -15,6 +15,8 @@ from .feishu import send_feishu_message
 
 DIRECTION_EMOJI = {"buy": "🟢", "sell": "🔴"}
 DEFAULT_MAX_STATE_KEYS = 3000
+# 飞书卡片只保留标题与结论/理由/建议，结构说明等长尾内容留在 tech.json/advice.txt 里。
+MARKET_ADVICE_KEEP_PREFIXES = ("结论：", "理由：", "建议：", "数据时间：")
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,19 @@ def _format_generated_at(value: Any) -> str:
     return text.replace("T", " ")[:16]
 
 
+def compact_market_advice(advice: str) -> str:
+    """裁剪指数建议：只留标题行与结论/理由/建议，去掉结构说明等长尾内容。"""
+
+    kept: list[str] = []
+    for raw_line in str(advice or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("【") or line.startswith(MARKET_ADVICE_KEEP_PREFIXES):
+            kept.append(line)
+    return "\n".join(kept)
+
+
 def load_market_index_advice(
     reports_dir: Path | str,
     *,
@@ -70,6 +85,7 @@ def load_market_index_advice(
     """读取恒生科技指数 1M 技术面最新建议（tech.json 的 advice_text）。
 
     读取失败或缺少建议时返回 ``None``，不影响买卖点通知本身。
+    返回内容已裁剪为标题 + 结论/理由/建议，避免飞书卡片过长。
     """
 
     tech_path = Path(reports_dir) / symbol / timeframe / "tech.json"
@@ -97,6 +113,10 @@ def load_market_index_advice(
 
     if not advice:
         return None
+
+    compacted = compact_market_advice(advice)
+    if compacted:
+        advice = compacted
 
     generated_at = _format_generated_at(payload.get("generated_at"))
     if generated_at:
@@ -263,8 +283,10 @@ def build_signal_card(
         {"tag": "div", "text": {"tag": "lark_md", "content": content or "暂无新信号"}}
     ]
     if market_advice:
-        elements.append({"tag": "hr"})
-        elements.append({"tag": "div", "text": {"tag": "lark_md", "content": market_advice}})
+        compact_advice = compact_market_advice(market_advice)
+        if compact_advice:
+            elements.append({"tag": "hr"})
+            elements.append({"tag": "div", "text": {"tag": "lark_md", "content": compact_advice}})
     return {
         "msg_type": "interactive",
         "card": {
