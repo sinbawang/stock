@@ -3849,3 +3849,126 @@ def test_build_capital_flow_section_includes_radar_dimensions() -> None:
     assert dims[0]["label"] == "资金方向"
     assert dims[0]["score"] == 20.0
     assert dims[0]["max_score"] == 25.0
+
+
+def test_attach_signal_detected_at_keeps_earliest_detection_across_refresh_frames() -> None:
+    """后续帧结构检出轻微前移时，发布包保留首次（最早）检出时刻。"""
+    previous = {
+        "signal_points": [
+            {
+                "point": "buy2like",
+                "time": "2026-10-20T14:06:00",
+                "lifecycle_state": "forming",
+                "detected_at": "2026-10-20T14:14:00",
+            }
+        ]
+    }
+    current = {
+        "signal_points": [
+            {
+                "point": "buy2like",
+                "time": "2026-10-20T14:06:00",
+                "lifecycle_state": "confirmed",
+                "active": True,
+                "detected_at": "2026-10-20T14:15:00",
+                "confirmed_at": "2026-10-20T15:10:00",
+            }
+        ]
+    }
+
+    merged = module.attach_signal_detected_at(current, previous, "2026-10-20T15:40:00")
+
+    assert merged["signal_points"][0]["detected_at"] == "2026-10-20T14:14:00"
+    assert merged["signal_points"][0]["confirmed_at"] == "2026-10-20T15:10:00"
+
+
+def test_attach_signal_detected_at_discards_legacy_anchor_time_placeholder() -> None:
+    """旧包 detected_at 等于锚点时间（旧口径占位）时改用本帧结构检出，避免仍显示买点时间。"""
+    previous = {
+        "signal_points": [
+            {
+                "point": "buy2like",
+                "time": "2026-10-20T14:06:00",
+                "lifecycle_state": "forming",
+                "detected_at": "2026-10-20T14:06:00",
+            }
+        ]
+    }
+    current = {
+        "signal_points": [
+            {
+                "point": "buy2like",
+                "time": "2026-10-20T14:06:00",
+                "lifecycle_state": "forming",
+                "active": False,
+                "detected_at": "2026-10-20T14:14:00",
+            }
+        ]
+    }
+
+    merged = module.attach_signal_detected_at(current, previous, "2026-10-20T14:20:00")
+
+    assert merged["signal_points"][0]["detected_at"] == "2026-10-20T14:14:00"
+
+
+def test_attach_signal_detected_at_keeps_earliest_confirmed_at_across_frames() -> None:
+    """后续帧把 confirmed_at 往后推时，发布包保留首次确认时刻。"""
+    previous = {
+        "signal_points": [
+            {
+                "point": "buy2like",
+                "time": "2026-10-20T14:06:00",
+                "lifecycle_state": "confirmed",
+                "detected_at": "2026-10-20T14:14:00",
+                "confirmed_at": "2026-10-20T15:10:00",
+            }
+        ]
+    }
+    current = {
+        "signal_points": [
+            {
+                "point": "buy2like",
+                "time": "2026-10-20T14:06:00",
+                "lifecycle_state": "confirmed",
+                "active": True,
+                "detected_at": "2026-10-20T14:15:00",
+                "confirmed_at": "2026-10-20T15:15:00",
+            }
+        ]
+    }
+
+    merged = module.attach_signal_detected_at(current, previous, "2026-10-20T15:40:00")
+
+    assert merged["signal_points"][0]["detected_at"] == "2026-10-20T14:14:00"
+    assert merged["signal_points"][0]["confirmed_at"] == "2026-10-20T15:10:00"
+
+
+def test_attach_signal_detected_at_discards_legacy_confirmed_equal_to_detected() -> None:
+    """旧口径 confirmed_at（≈检出时刻）占位值被丢弃，改用本帧真正的确认时刻。"""
+    previous = {
+        "signal_points": [
+            {
+                "point": "buy2like",
+                "time": "2026-10-20T14:06:00",
+                "lifecycle_state": "forming",
+                "detected_at": "2026-10-20T14:14:00",
+                "confirmed_at": "2026-10-20T14:14:00",
+            }
+        ]
+    }
+    current = {
+        "signal_points": [
+            {
+                "point": "buy2like",
+                "time": "2026-10-20T14:06:00",
+                "lifecycle_state": "confirmed",
+                "active": True,
+                "detected_at": "2026-10-20T14:14:00",
+                "confirmed_at": "2026-10-20T15:10:00",
+            }
+        ]
+    }
+
+    merged = module.attach_signal_detected_at(current, previous, "2026-10-20T15:40:00")
+
+    assert merged["signal_points"][0]["confirmed_at"] == "2026-10-20T15:10:00"

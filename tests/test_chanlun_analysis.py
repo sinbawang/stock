@@ -17,7 +17,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from chanlun.analysis import _build_zs_monitor_state, _has_reverse_turn_after, _is_first_reverse_hold, _signal_premise_broken, _structural_premise_broken, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
+from chanlun.analysis import _build_zs_monitor_state, _has_reverse_turn_after, _is_first_reverse_hold, _signal_detect_ts, _signal_premise_broken, _structural_premise_broken, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
 
@@ -2334,8 +2334,12 @@ def test_analyze_chanlun_signals_buy_2like_fires_with_unconfirmed_reverse_turn()
     assert payload["signal_bi_id"] == 32
 
 
-def test_analyze_chanlun_signals_buy_2like_forming_before_reverse_turn() -> None:
-    """BS7：类二 forming——隔段背驰 + 锚点成立、锚点之后尚无任何反向笔 → forming 预备（非确认）。"""
+def test_analyze_chanlun_signals_buy_2like_confirmed_segment_without_following_bi_emits_nothing() -> None:
+    """已确认 A_{i+2} 但笔链无后续笔属非法输入：不再产出 forming（旧死分支已移除）。
+
+    真实笔链严格交替：已确认线段必然已有后续反向笔，故不存在「确认线段 + 无反向转折」的
+    forming 窗口。本用例只锁定旧分支不会因移除而意外产出确认点。
+    """
     segments = _lb2_gap_segments()
     zhongshus = _down_trend_zhongshus()
     bis = [
@@ -2351,9 +2355,7 @@ def test_analyze_chanlun_signals_buy_2like_forming_before_reverse_turn() -> None
     signals = analyze_chanlun_signals([], bis, zhongshus, macd_points, segments=segments)
 
     assert "buy_2like" not in signals["buy_points"]
-    payload = next(p for p in signals["signal_points"] if p["point"] == "buy2like")
-    assert payload["lifecycle_state"] == "forming"
-    assert payload["active"] is False
+    assert not any(p["point"] == "buy2like" for p in signals["signal_points"])
 
 
 def _lb2_tail_gap_segments() -> list[Segment]:
@@ -4523,3 +4525,119 @@ def test_build_lower_timeframe_precision_entry_prefers_exit_bi_time_as_window_en
     assert entry["window_basis_description"] == "窗口依据：上级别已确认离开笔，当前按中枢结束至离开笔完成时间收缩区间套窗口。"
     assert [item["point"] for item in entry["signal_points"]] == ["buy1"]
     assert "窗口依据：上级别已确认离开笔" in entry["note"]
+
+
+def _anchor_bi_with_confirmation(*, confirmed_ts: datetime | None) -> tuple[Bi, Bi]:
+    anchor = Bi(
+        bi_id=10,
+        direction=BiDirection.DOWN,
+        start_fx_id=10,
+        end_fx_id=11,
+        start_ts=datetime(2026, 10, 20, 14, 0),
+        end_ts=datetime(2026, 10, 20, 14, 6),
+        high=50.9,
+        low=50.65,
+        norm_bar_range=(10, 14),
+        is_confirmed=confirmed_ts is not None,
+        confirmed_ts=confirmed_ts,
+    )
+    follow = Bi(
+        bi_id=11,
+        direction=BiDirection.UP,
+        start_fx_id=11,
+        end_fx_id=12,
+        start_ts=datetime(2026, 10, 20, 14, 6),
+        end_ts=datetime(2026, 10, 20, 14, 20),
+        high=51.2,
+        low=50.7,
+        norm_bar_range=(14, 18),
+        is_confirmed=True,
+        confirmed_ts=datetime(2026, 10, 20, 14, 25),
+    )
+    return anchor, follow
+
+
+def test_signal_detected_at_is_anchor_bi_confirmation_not_anchor_tail() -> None:
+    """检出时刻 = 锚点笔**被确认**的时刻，严格晚于买点时间（锚点笔尾）。"""
+
+    anchor, follow = _anchor_bi_with_confirmation(confirmed_ts=datetime(2026, 10, 20, 14, 14))
+
+    confirmed_points, _ = build_signal_point_payloads(
+        buy_points=["buy_2like"],
+        sell_points=[],
+        latest_confirmed_up=follow,
+        latest_up=follow,
+        latest_down=anchor,
+        current_zs=None,
+        buy2like_signal_bi=anchor,
+        bis=[anchor, follow],
+    )
+    confirmed_payload = next(item for item in confirmed_points if item["point"] == "buy2like")
+    assert confirmed_payload["time"] == "2026-10-20T14:06:00"
+    assert confirmed_payload["detected_at"] == "2026-10-20T14:14:00"
+    assert confirmed_payload["detected_at"] > confirmed_payload["time"]
+    assert confirmed_payload["confirmed_at"] >= confirmed_payload["detected_at"]
+
+    forming_points, _ = build_signal_point_payloads(
+        buy_points=[],
+        sell_points=[],
+        latest_confirmed_up=follow,
+        latest_up=follow,
+        latest_down=anchor,
+        current_zs=None,
+        forming_candidates=[("buy_2like", anchor)],
+        bis=[anchor, follow],
+    )
+    forming_payload = next(item for item in forming_points if item["point"] == "buy2like")
+    assert forming_payload["lifecycle_state"] == "forming"
+    assert forming_payload["detected_at"] == "2026-10-20T14:14:00"
+    assert "confirmed_at" not in forming_payload
+
+
+def test_signal_detect_ts_falls_back_to_anchor_tail_for_unconfirmed_or_legacy_bi() -> None:
+    """锚点未确认 / 旧对象缺 `confirmed_ts` 时回退锚点笔尾，保持向后兼容。"""
+
+    legacy_anchor, _ = _anchor_bi_with_confirmation(confirmed_ts=None)
+    assert legacy_anchor.confirmed_ts is None
+    assert _signal_detect_ts(legacy_anchor) == legacy_anchor.end_ts
+    assert _signal_detect_ts(None) is None
+
+
+def test_signal_buy2like_confirmed_at_uses_first_confirmed_frame_as_of() -> None:
+    """类二 confirmed 时刻 = 首次发射该状态那一帧的最后一根 K 线时间，且晚于检出时刻。"""
+
+    anchor, follow = _anchor_bi_with_confirmation(confirmed_ts=datetime(2026, 10, 20, 14, 14))
+
+    points, _ = build_signal_point_payloads(
+        buy_points=["buy_2like"],
+        sell_points=[],
+        latest_confirmed_up=follow,
+        latest_up=follow,
+        latest_down=anchor,
+        current_zs=None,
+        buy2like_signal_bi=anchor,
+        bis=[anchor, follow],
+        as_of_ts=datetime(2026, 10, 20, 15, 10),
+    )
+
+    payload = next(item for item in points if item["point"] == "buy2like")
+    assert payload["detected_at"] == "2026-10-20T14:14:00"
+    assert payload["confirmed_at"] == "2026-10-20T15:10:00"
+    assert payload["confirmed_at"] > payload["detected_at"]
+
+    sell_points, _ = build_signal_point_payloads(
+        buy_points=[],
+        sell_points=["sell_2like"],
+        latest_confirmed_up=follow,
+        latest_up=follow,
+        latest_down=anchor,
+        current_zs=None,
+        sell2like_signal_bi=anchor,
+        bis=[anchor, follow],
+        as_of_ts=datetime(2026, 10, 20, 15, 10),
+    )
+
+    sell_payload = next(item for item in sell_points if item["point"] == "sell2like")
+    assert sell_payload["detected_at"] == "2026-10-20T14:14:00"
+    assert sell_payload["confirmed_at"] == "2026-10-20T15:10:00"
+    assert sell_payload["confirmed_at"] > sell_payload["detected_at"]

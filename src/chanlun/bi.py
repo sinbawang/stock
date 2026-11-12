@@ -6,6 +6,7 @@
 - tail_mixed: 只对最后未确认尾笔链路启用 effective_only
 """
 
+from datetime import datetime
 from typing import List, Literal, Optional
 from .models import Fractal, Bi, FractalType, BiDirection, NormalizedBar
 
@@ -197,23 +198,44 @@ def _find_first_opposite(
     return -1
 
 
+def _fractal_confirmed_ts(
+    fx: Fractal, normalized_bars: Optional[List[NormalizedBar]]
+) -> datetime:
+    """分型**可被观测**的 K 线时刻（右侧确认 bar 的收盘时间）。
+
+    分型以中心 bar 参与成笔，但必须等右邻 bar 出现才能确认该分型。
+    故「结构检出时刻」= `center_bar_idx + 1` 这个标准化 bar 的 `ts_end`，
+    不是分型中心的 `ts`（否则会比实际可检出早一根 bar）。
+    缺 `normalized_bars`（单测假数据）时回退分型自身时间。
+    """
+    if normalized_bars is not None:
+        right_idx = fx.center_bar_idx + 1
+        if 0 <= right_idx < len(normalized_bars):
+            return normalized_bars[right_idx].ts_end
+    return fx.ts
+
+
 def _extend_until_reversal(
     fractals: List[Fractal],
     end_idx: int,
     normalized_bars: Optional[List[NormalizedBar]],
     pending_reverse_mode: PendingReverseMode,
-) -> tuple[int, bool]:
+) -> tuple[int, bool, int | None]:
     """
     从候选终点 end_idx 开始，向后寻找：
     - 同类更极值分型则替换终点（笔延伸）
     - 遇到反向分型后，进入“确认候选”状态
     - 确认候选若不满足间隔，可被后续更强的同类反向分型替代
     - 只有确认候选本身满足间隔时，当前笔才确认
-    返回: (最终终点索引, 是否已确认)
+    返回: (最终终点索引, 是否已确认, 确认该笔的反向分型索引)
+
+    第三个返回值是**确认事件**发生的分型下标：调用方据此落 `Bi.confirmed_ts`，
+    得到「本笔第一次可被下游结构使用」的 K 线时间（晚于笔尾 `end_ts`）。
     """
     best_idx = end_idx
     best_fx = fractals[best_idx]
     pending_reverse: Optional[Fractal] = None
+    pending_reverse_idx: Optional[int] = None
 
     k = end_idx + 1
     while k < len(fractals):
@@ -224,6 +246,7 @@ def _extend_until_reversal(
                 best_idx = k
                 best_fx = fx
                 pending_reverse = None
+                pending_reverse_idx = None
             k += 1
             continue
 
@@ -237,16 +260,17 @@ def _extend_until_reversal(
 
         if pending_reverse is None or _is_more_extreme(pending_reverse, fx):
             pending_reverse = fx
+            pending_reverse_idx = k
 
         if (
             _has_enough_pen_gap(best_fx, pending_reverse, normalized_bars)
             and _is_valid_pen_endpoint(best_fx, pending_reverse, normalized_bars)
         ):
-            return best_idx, True
+            return best_idx, True, pending_reverse_idx
 
         k += 1
 
-    return best_idx, False
+    return best_idx, False, None
 
 
 def _score_bi_sequence(bis: List[Bi]) -> tuple[int, int]:
@@ -310,13 +334,18 @@ def _identify_bis_from_start(
             i += 1
             continue
 
-        end_idx, is_confirmed = _extend_until_reversal(
+        end_idx, is_confirmed, confirm_idx = _extend_until_reversal(
             fractals,
             end_idx,
             normalized_bars,
             pending_reverse_mode,
         )
         end_fx = fractals[end_idx]
+        confirmed_ts = (
+            _fractal_confirmed_ts(fractals[confirm_idx], normalized_bars)
+            if is_confirmed and confirm_idx is not None
+            else None
+        )
 
         if bi_id == 0 and not is_confirmed and end_idx < len(fractals) - 1:
             i += 1
@@ -335,6 +364,7 @@ def _identify_bis_from_start(
             low=min(start_fx.low, end_fx.low),
             norm_bar_range=(start_fx.center_bar_idx, end_fx.center_bar_idx),
             is_confirmed=is_confirmed,
+            confirmed_ts=confirmed_ts,
         )
 
         bis.append(bi)

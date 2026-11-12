@@ -678,6 +678,50 @@ def is_confirmed_signal(signal: dict[str, Any] | None) -> bool:
     return safe_bool(signal.get("active"))
 
 
+def _earliest_detected_at(current: str, previous: str, anchor: str) -> str:
+    """跨轮取**最早**检出时刻（首次可见），并跳过旧口径的「锚点时间占位」。
+
+    `detected_at` 现在是「锚点笔被确认的时刻」（结构检出），尾部分型过滤会让它在后续帧
+    轻微前移/后移；只有保留上一版更早的值，「检出」才是稳定的首次可见时刻。
+    旧版发布包曾把 `detected_at` 落成锚点笔尾（== 行的 `time`）——那不是检出时刻，
+    不能参与取最早，否则修复后仍会显示成买点时间。
+    """
+    current_text = safe_text(current)
+    previous_text = safe_text(previous)
+    anchor_text = safe_text(anchor)
+    candidates = [text for text in (current_text, previous_text) if text]
+    if previous_text and anchor_text and previous_text <= anchor_text:
+        candidates = [text for text in candidates if text != previous_text]
+    if not candidates:
+        return ""
+    return min(candidates)
+
+
+def _earliest_confirmed_at(
+    current: str, previous: str, detected_at: str, *, drop_legacy_equal: bool
+) -> str:
+    """跨轮取**最早**确认时刻（首次确认），并丢弃类二的旧口径占位值。
+
+    类二旧版 `confirmed_at` 取锚点后第一根反向笔的结束时间（≈检出时刻），不是真正的
+    确认事件；不晚于检出时间的旧值不参与取最早，避免修复后仍显示成「检出=确认」。
+    其它点类型未改语义，仍允许上一版值（可能合法地等于检出时刻）。
+    """
+    current_text = safe_text(current)
+    previous_text = safe_text(previous)
+    detected_text = safe_text(detected_at)
+    candidates = [text for text in (current_text, previous_text) if text]
+    if (
+        drop_legacy_equal
+        and previous_text
+        and detected_text
+        and previous_text <= detected_text
+    ):
+        candidates = [text for text in candidates if text != previous_text]
+    if not candidates:
+        return ""
+    return min(candidates)
+
+
 def attach_signal_detected_at(
     section: dict[str, Any],
     fallback_section: dict[str, Any] | None,
@@ -701,26 +745,36 @@ def attach_signal_detected_at(
 
             normalized_item = dict(item)
             key = build_signal_detected_key(normalized_item)
-            # 结构时间优先：引擎已按笔尾 / 反向转折笔落种 detected_at / confirmed_at，
-            # 它是对 K 线的确定性重算，优先于上一版发布包里的旧值（旧值可能是历史跑批时刻），
-            # 最后才回退到本次 updated_at，彻底摆脱「检出 / 确认 = 跑批时刻」。
-            detected_at = first_non_empty(
+            # 结构时间优先：引擎已按「锚点笔被确认的时刻 / 反向转折笔完成时刻」落种
+            # detected_at / confirmed_at，它优于上一版发布包里的旧值（可能是历史跑批时刻），
+            # 最后才回退到本次 updated_at。检出时刻跨轮取最早，避免后续帧把首次检出顶走。
+            current_detected = first_non_empty(
                 normalized_item.get("detected_at"),
                 normalized_item.get("detectedAt"),
-                previous_detected_at_by_key.get(key),
-                default_value,
             )
+            detected_at = _earliest_detected_at(
+                current_detected,
+                previous_detected_at_by_key.get(key, ""),
+                safe_text(normalized_item.get("time")),
+            ) or default_value
             if detected_at:
                 normalized_item["detected_at"] = detected_at
 
             # confirmed_at 只在点真正进入 confirmed 时落定；forming 阶段必须为空，
             # invalidated 时结构已不可重算，退回上一版发布包保留的确认时刻（用于“确认 → 失效”追溯）。
-            confirmed_at = first_non_empty(
+            # 类二取「首次确认帧的最后一根 K 线时间」，跨轮保留最早值保证稳定；
+            # 旧版「反向转折笔结束」占位值（≤ detected_at）会被丢弃。
+            current_confirmed = first_non_empty(
                 normalized_item.get("confirmed_at"),
                 normalized_item.get("confirmedAt"),
-                previous_confirmed_at_by_key.get(key),
-                default_value if is_confirmed_signal(normalized_item) else "",
             )
+            confirmed_at = _earliest_confirmed_at(
+                current_confirmed,
+                previous_confirmed_at_by_key.get(key, ""),
+                detected_at,
+                drop_legacy_equal=safe_text(normalized_item.get("point")).lower()
+                in {"buy2like", "sell2like"},
+            ) or (default_value if is_confirmed_signal(normalized_item) else "")
             if confirmed_at:
                 normalized_item["confirmed_at"] = confirmed_at
             else:

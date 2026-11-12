@@ -699,6 +699,10 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
   （已并入 `signal-lifecycle` 安全闸门）。
 - **检出时间语义**：`build_signal_detected_key` 由 `point|time|lifecycle` 改为 `point|time`。
   否则 forming → confirmed 会重置 `detected_at`，页面的「检出」仍显示确认时刻，早期预警不可见。
+- **检出时间修正（2026-11-12）**：`detected_at` 不再取锚点笔尾（那会恒等于买点时间），
+  改取**锚点笔被确认的时刻**（`Bi.confirmed_ts` = 反向分型右侧确认 bar 的收盘时间）；
+  发布包对同一 `point|time` 跨轮取最早（尾部分型过滤导致后续帧轻微前移时不顶走首次检出），
+  旧包中 `detected_at == time` 的锚点占位值会被丢弃。
 - **确认时间单列（2026-10-21）**：发布包新增 `confirmed_at`（首次进入 `confirmed` 的运行时刻）。
   `detected_at` = 首次检出（含 forming），`confirmed_at` = 首次确认；forming 行为空，
   invalidated 行保留历史确认时刻。小程序买卖点表拆为「检出 / 确认」两行，避免把确认时刻

@@ -107,6 +107,9 @@ class Bi:
     low: float                   # 笔的最低价
     norm_bar_range: tuple        # (start_idx, end_idx) 标准化 K 线覆盖范围
     is_confirmed: bool = False   # 是否已确认（反向分型出现后）
+    # 确认本笔的**反向分型右侧确认 bar** 时间（= 本笔第一次可被下游结构使用的 K 线时刻）。
+    # 与 `end_ts`（笔尾分型中心时间）不同：确认必晚于笔尾；未确认时为 None。
+    confirmed_ts: Optional[datetime] = None
 
     def is_up(self) -> bool:
         return self.direction == BiDirection.UP

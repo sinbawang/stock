@@ -286,6 +286,25 @@ def _has_reverse_turn_after(signal_bi: Bi | None, *, direction: str, bis: list[B
     return False
 
 
+def _signal_detect_ts(anchor_bi: Bi | None) -> datetime | None:
+    """点的**结构检出时刻** = 锚点笔被确认的时刻（反向分型的右侧确认 K 线时间）。
+
+    `Bi.is_confirmed` 的语义是「反向分型出现后」（见 `bi.py::_extend_until_reversal`），
+    因此 `Bi.confirmed_ts` 才是锚点第一次可以承载信号的最早 K 线时刻：
+    它**严格晚于**锚点笔尾（= 买点时间 `time`），又早于反向转折笔完成的确认时刻。
+
+    旧对象 / 测试假对象缺 `confirmed_ts`，或锚点本身尚未确认（仅 forming 可锚未确认笔）时，
+    回退锚点 `end_ts`，保证始终返回结构 K 线时间而非跑批时刻。
+    """
+    if anchor_bi is None:
+        return None
+    anchor_end = anchor_bi.end_ts
+    confirmed_ts = getattr(anchor_bi, "confirmed_ts", None)
+    if confirmed_ts is None:
+        return anchor_end
+    return confirmed_ts if confirmed_ts > anchor_end else anchor_end
+
+
 def _signal_confirm_ts(anchor_bi: Bi | None, *, is_buy: bool, bis: list[Bi] | None) -> datetime | None:
     """confirmed 点的**结构确认时刻**（不依赖跨轮发布状态）。
 
@@ -1534,13 +1553,9 @@ def analyze_chanlun_signals(
                             forming_candidates, "buy_2like", bi_id=anchor.bi_id
                         ):
                             # 尾段未确认 → 只能给 forming（§3.3：未确认结构不承载 confirmed）。
+                            # 已确认线段必然已有后续笔（笔链严格交替）→ 反向转折必然已现，
+                            # 因此不存在「A_{i+2} 已确认但无反向转折」的 forming 分支。
                             forming_candidates.append(("buy_2like", anchor))
-                    elif lb2_seg.is_confirmed and not _has_forming_candidate(
-                        forming_candidates, "buy_2"
-                    ):
-                        # 结构（隔段背驰 + 锚点）成立、反向转折未确认 → forming；
-                        # 标准二类已 confirmed / forming 时不重复标记。
-                        forming_candidates.append(("buy_2like", anchor))
         if "sell_2" not in sell_points:
             ls2_seg = _find_ls2_gap_divergence(segments, like_segment_strengths)
             if ls2_seg is None:
@@ -1560,11 +1575,9 @@ def analyze_chanlun_signals(
                         ) and not _has_forming_candidate(
                             forming_candidates, "sell_2like", bi_id=anchor.bi_id
                         ):
+                            # 尾段未确认 → 只能给 forming（与买侧对称）。
+                            # 已确认线段必然已有后续笔 → 不存在「确认线段 + 无反向转折」分支。
                             forming_candidates.append(("sell_2like", anchor))
-                    elif ls2_seg.is_confirmed and not _has_forming_candidate(
-                        forming_candidates, "sell_2"
-                    ):
-                        forming_candidates.append(("sell_2like", anchor))
 
     # 类一类买卖点（LB1/LS1）：盘整背驰（离开段 vs 进入段，range 门控）+ 反向转折即生成，
     # 补标准一类点因趋势门控（ongoing_type==down/up）缺席的场景（spec §2.5，第27/65课）。
@@ -1657,6 +1670,7 @@ def analyze_chanlun_signals(
         sell1like_signal_bi=sell1like_signal_bi,
         forming_candidates=forming_candidates,
         bis=bis,
+        as_of_ts=raw_bars[-1].ts if raw_bars else None,
     )
     zs_monitor_state = _build_zs_monitor_state(
         raw_bars,
@@ -1718,6 +1732,7 @@ def build_signal_point_payloads(
     sell1like_signal_bi: Bi | None = None,
     forming_candidates: list[tuple[str, Bi]] | None = None,
     bis: list[Bi] | None = None,
+    as_of_ts: datetime | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     signal_points: list[dict[str, object]] = []
     signal_catalog: list[dict[str, object]] = []
@@ -1909,9 +1924,19 @@ def build_signal_point_payloads(
             payload["related_zs_low"] = current_zs.zs_low
             payload["related_zs_high"] = current_zs.zs_high
 
+    # 类二 confirmed 的观测时刻 = 首次发射该 confirmed 状态那一帧的最后一根 K 线时间。
+    # 它晚于锚点笔确认（detected_at），也不同于反向转折笔结束；
+    # 跨轮由发布包保留最早值，后续帧不会把首次确认时间顶走。
+    confirm_ts_by_point: dict[str, datetime] = {}
+    if as_of_ts is not None:
+        if "buy_2like" in buy_points:
+            confirm_ts_by_point["buy2like"] = as_of_ts
+        if "sell_2like" in sell_points:
+            confirm_ts_by_point["sell2like"] = as_of_ts
+
     # 结构时间落种（spec 不依赖跨轮发布包）：
-    # detected_at = 锚点笔尾时间（forming/confirmed 的首见结构时刻，等于 `time`）；
-    # confirmed_at = 确认态点的反向转折笔结束时间（取不到时回退锚点时间）。
+    # detected_at = 锚点笔**被确认**的时刻（= 结构检出时刻，严格晚于锚点笔尾 `time`）；
+    # confirmed_at = 确认态点的确认时刻（类二取首次确认帧的 as-of；其余取反向转折笔结束）。
     # 发布侧据此透传，使「检出/确认」反映结构 K 线时间而非跑批时刻。
     def _seed_structural_times(items: list[dict[str, object]]) -> None:
         for item in items:
@@ -1919,6 +1944,8 @@ def build_signal_point_payloads(
                 continue
             state = item.get("lifecycle_state")
             anchor_ts = item.get("time")
+            anchor_id = item.get("signal_bi_id")
+            anchor = _bi_by_id(anchor_id, bis or []) if isinstance(anchor_id, int) else None
             if (
                 state
                 in (
@@ -1927,12 +1954,13 @@ def build_signal_point_payloads(
                 )
                 and anchor_ts
             ):
-                item.setdefault("detected_at", anchor_ts)
+                detect_ts = _isoformat_ts(_signal_detect_ts(anchor)) or anchor_ts
+                item.setdefault("detected_at", detect_ts)
             if state == SignalLifecycleState.CONFIRMED.value:
-                anchor = _bi_by_id(item.get("signal_bi_id"), bis or [])
-                confirm_ts = _signal_confirm_ts(
+                point_name = str(item.get("point") or "")
+                confirm_ts = confirm_ts_by_point.get(point_name) or _signal_confirm_ts(
                     anchor,
-                    is_buy=str(item.get("point") or "").startswith("buy"),
+                    is_buy=point_name.startswith("buy"),
                     bis=bis,
                 )
                 item["confirmed_at"] = _isoformat_ts(confirm_ts) or anchor_ts
