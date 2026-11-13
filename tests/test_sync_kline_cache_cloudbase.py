@@ -17,6 +17,50 @@ sync_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(sync_module)
 
 
+def test_resolve_cloud_file_id_keeps_cloud_uri(monkeypatch):
+    calls: list[str] = []
+
+    def fake_metadata(session, **kwargs):
+        calls.append(kwargs["cloud_path"])
+        return {"fileId": "cloud://env.bucket/unused"}
+
+    monkeypatch.setattr(sync_module, "get_upload_metadata", fake_metadata)
+
+    resolved = sync_module.resolve_cloud_file_id(
+        object(),
+        env_id="env",
+        region="ap-shanghai",
+        api_key="key",
+        cloud_path="cloud://env.bucket/stock-kline-cache/latest/_manifest.json",
+    )
+
+    assert resolved == "cloud://env.bucket/stock-kline-cache/latest/_manifest.json"
+    assert calls == []
+
+
+def test_resolve_cloud_file_id_maps_relative_path(monkeypatch):
+    seen: list[str] = []
+
+    def fake_metadata(session, **kwargs):
+        seen.append(kwargs["cloud_path"])
+        return {"fileId": f"cloud://env.bucket/{kwargs['cloud_path']}"}
+
+    monkeypatch.setattr(sync_module, "get_upload_metadata", fake_metadata)
+
+    resolved = sync_module.resolve_cloud_file_id(
+        object(),
+        env_id="env",
+        region="ap-shanghai",
+        api_key="key",
+        cloud_path="stock-kline-cache/latest/_manifest.json",
+    )
+
+    # admin API 只认 fileId，相对路径必须先换成 cloud://<env>.<bucket>/<path>。
+    assert seen == ["stock-kline-cache/latest/_manifest.json"]
+    assert resolved == "cloud://env.bucket/stock-kline-cache/latest/_manifest.json"
+
+
+
 def test_snapshot_archive_round_trip(tmp_path):
     source_dir = tmp_path / "source"
     source_dir.mkdir()

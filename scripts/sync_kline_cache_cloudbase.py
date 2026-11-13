@@ -276,6 +276,42 @@ def admin_request(
     return parsed
 
 
+def resolve_cloud_file_id(
+    session: requests.Session,
+    *,
+    env_id: str,
+    region: str,
+    api_key: str,
+    cloud_path: str,
+) -> str:
+    """把相对存储路径解析成 CloudBase file ID。
+
+    admin API 的下载接口只接受 `cloud://<env>.<bucket>/<path>` 形式的 fileId，
+    直接传 `stock-kline-cache/latest/_manifest.json` 会返回 STORAGE_FILE_NONEXIST。
+    """
+    normalized = str(cloud_path or "").strip()
+    if not normalized:
+        raise CloudBaseSyncError("Missing cloud path for download URL lookup.")
+    if normalized.startswith("cloud://"):
+        return normalized
+
+    try:
+        metadata = get_upload_metadata(
+            session,
+            env_id=env_id,
+            region=region,
+            api_key=api_key,
+            cloud_path=normalized,
+        )
+    except CloudBaseUploadError as exc:
+        raise CloudBaseSyncError(f"Cannot resolve cloud file id for {normalized}: {exc}") from exc
+
+    file_id = str(metadata.get("fileId") or "").strip()
+    if not file_id:
+        raise CloudBaseSyncError(f"No cloud file id returned for {normalized}.")
+    return file_id
+
+
 def get_download_url(
     session: requests.Session,
     *,
@@ -284,6 +320,13 @@ def get_download_url(
     api_key: str,
     cloud_path: str,
 ) -> str:
+    cloud_path = resolve_cloud_file_id(
+        session,
+        env_id=env_id,
+        region=region,
+        api_key=api_key,
+        cloud_path=cloud_path,
+    )
     payload_candidates: list[dict[str, Any]] = [
         {"file_list": [cloud_path]},
         {"fileList": [cloud_path]},
