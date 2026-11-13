@@ -342,7 +342,7 @@ def _segment_confirmed_ts(segment: Segment | None, bis: list[Bi] | None) -> date
         break_bi = _bi_by_id(break_bi_id, bis or [])
         if break_bi is not None:
             confirmed_ts = getattr(break_bi, "confirmed_ts", None)
-            return confirmed_ts if confirmed_ts is not None else break_bi.end_ts
+            return confirmed_ts if (confirmed_ts is not None and confirmed_ts > break_bi.end_ts) else break_bi.end_ts
     return getattr(segment, "end_ts", None)
 
 
@@ -364,7 +364,7 @@ def _back_to_center_at(
 
     取笔级口径（反向笔 `high`/`low`，而非逐根 K 线）作为 §2.8.2「后续向上/向下笔的最高/最低价」
     的实现近似；价格尚未回中枢（取不到满足条件的反向笔）→ 返回 `None`，类一保持 `forming`。
-    中枢边沿用点上固化的 `related_zs_low`/`related_zs_high`（见调用处），跨帧稳定。
+    中枢边沿由调用方传入（当前调用处为 `current_zs.zs_low/zs_high`）；若需跨帧固化，请在点上固化后再传入。
     """
     if anchor_bi is None:
         return None
