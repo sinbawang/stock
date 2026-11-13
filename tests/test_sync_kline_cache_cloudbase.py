@@ -92,6 +92,34 @@ def test_resolve_snapshot_locator_prefers_pointer_file_id():
     assert cloud_path == "stock-kline-cache/latest/snapshot.tar.gz"
 
 
+def test_restore_falls_back_to_admin_api_when_cli_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(sync_module, "find_tcb_command_optional", lambda: None)
+    args = SimpleNamespace(
+        env_id=None,
+        region="ap-guangzhou",
+        api_key=None,
+        api_key_name="stock-kline-cache-sync",
+        api_key_expire_in=7200,
+        delete_created_api_key=False,
+        cloud_prefix="stock-kline-cache/latest",
+        target_dir=str(tmp_path / "kline"),
+        manifest_path=str(tmp_path / "build" / "manifest.json"),
+        pointer_path=str(tmp_path / "build" / "pointer.json"),
+        manifest_file_id=None,
+        fetch_manifest=False,
+        clean_target=False,
+        use_cli_download=True,
+        dry_run=True,
+    )
+
+    # 容器镜像里没有 @cloudbase/cli，restore 不能因此直接失败。
+    assert sync_module.command_restore(args) == 0
+
+    captured = capsys.readouterr()
+    assert "CloudBase CLI not found" in captured.err
+    assert "falling back" in captured.err
+
+
 def test_resolve_snapshot_locator_uses_manifest_when_pointer_missing():
     file_id, cloud_path = sync_module.resolve_snapshot_locator(
         pointer=None,

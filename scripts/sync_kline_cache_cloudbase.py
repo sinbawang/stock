@@ -380,6 +380,13 @@ def find_tcb_command() -> str:
     raise CloudBaseSyncError("CloudBase CLI not found. Install @cloudbase/cli first.")
 
 
+def find_tcb_command_optional() -> str | None:
+    try:
+        return find_tcb_command()
+    except CloudBaseSyncError:
+        return None
+
+
 def ensure_tcb_logged_in(tcb_command: str, *, region: str, env_id: str) -> None:
     probe_command = [
         tcb_command,
@@ -415,11 +422,11 @@ def ensure_tcb_logged_in(tcb_command: str, *, region: str, env_id: str) -> None:
     raise CloudBaseSyncError(f"CloudBase CLI preflight failed: {detail}")
 
 
-def restore_with_cli(args: argparse.Namespace, target_dir: Path) -> int:
+def restore_with_cli(args: argparse.Namespace, target_dir: Path, *, tcb_command: str | None = None) -> int:
     if not args.env_id:
         raise CloudBaseSyncError("Missing --env-id or CLOUDBASE_ENV_ID/TCB_ENV_ID.")
 
-    tcb_command = find_tcb_command()
+    tcb_command = tcb_command or find_tcb_command()
     ensure_tcb_logged_in(tcb_command, region=str(args.region), env_id=str(args.env_id))
 
     if args.clean_target and target_dir.exists():
@@ -907,7 +914,16 @@ def command_restore(args: argparse.Namespace) -> int:
     pointer = read_pointer(pointer_path)
 
     if args.use_cli_download:
-        return restore_with_cli(args, target_dir)
+        tcb_command = find_tcb_command_optional()
+        if tcb_command is not None:
+            return restore_with_cli(args, target_dir, tcb_command=tcb_command)
+        # 容器镜像里没有 Node / @cloudbase/cli，这里降级到 admin API 下载，
+        # 否则启动期和 EOD 调度会直接失败。
+        print(
+            "WARNING: CloudBase CLI not found; falling back to CloudBase admin API download "
+            "(requires CLOUDBASE_APIKEY or TENCENT_SECRET_ID/TENCENT_SECRET_KEY).",
+            file=sys.stderr,
+        )
 
     if args.clean_target and target_dir.exists():
         shutil.rmtree(target_dir)

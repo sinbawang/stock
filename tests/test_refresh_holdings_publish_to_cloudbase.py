@@ -38,6 +38,52 @@ def test_parse_args_defaults_include_5m_2000_and_1m_3500(monkeypatch):
     assert args.m1_bars == 3500
     assert args.sync_kline_cache is True
     assert args.kline_cache_cloud_prefix == "stock-kline-cache/latest"
+    assert args.kline_cache_restore_use_cli_download is False
+
+
+def _restore_args(**overrides):
+    values = dict(
+        sync_kline_cache_script=str(SCRIPTS / "sync_kline_cache_cloudbase.py"),
+        kline_cache_target_dir="/data/stock-kline-cache",
+        kline_cache_cloud_prefix="stock-kline-cache/latest",
+        kline_cache_manifest_path="/app/build/stock-kline-cache/cloudbase-upload-manifest.json",
+        kline_cache_pointer_path="/app/build/stock-kline-cache/manifest-pointer.json",
+        env_id=None,
+        region=None,
+        api_key=None,
+        api_key_name="stock-kline-cache-sync",
+        api_key_expire_in=7200,
+        delete_created_api_key=False,
+        kline_cache_clean_target_before_restore=False,
+        kline_cache_restore_use_cli_download=False,
+        upload_dry_run=False,
+    )
+    values.update(overrides)
+    return argparse.Namespace(**values)
+
+
+def test_sync_kline_cache_restore_skips_cloudbase_cli_by_default(monkeypatch):
+    captured: list[list[str]] = []
+    monkeypatch.setattr(module, "_run_command", lambda argv: captured.append(list(argv)))
+
+    module.sync_kline_cache_restore(_restore_args())
+
+    assert captured, "restore command was not built"
+    command = captured[0]
+    assert command[1].endswith("sync_kline_cache_cloudbase.py")
+    assert command[2] == "restore"
+    # 容器镜像没有 @cloudbase/cli，默认必须走 admin API 下载路径。
+    assert "--no-use-cli-download" in command
+
+
+def test_sync_kline_cache_restore_can_opt_into_cli_download(monkeypatch):
+    captured: list[list[str]] = []
+    monkeypatch.setattr(module, "_run_command", lambda argv: captured.append(list(argv)))
+
+    module.sync_kline_cache_restore(_restore_args(kline_cache_restore_use_cli_download=True))
+
+    assert captured, "restore command was not built"
+    assert "--no-use-cli-download" not in captured[0]
 
 
 def test_resolve_kline_cache_source_dir_falls_back_to_container_path(tmp_path, monkeypatch):

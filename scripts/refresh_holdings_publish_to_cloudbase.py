@@ -300,6 +300,15 @@ def parse_args() -> argparse.Namespace:
         help="Clean local kline cache target directory before restore.",
     )
     parser.add_argument(
+        "--kline-cache-restore-use-cli-download",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Use CloudBase CLI `tcb storage download` for the kline cache restore. "
+            "Defaults to false so container runs use the admin API and do not require @cloudbase/cli."
+        ),
+    )
+    parser.add_argument(
         "--sync-kline-cache",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -880,6 +889,8 @@ def sync_kline_cache_restore(args: argparse.Namespace) -> None:
         command.append("--delete-created-api-key")
     if bool(getattr(args, "kline_cache_clean_target_before_restore", False)):
         command.append("--clean-target")
+    if not bool(getattr(args, "kline_cache_restore_use_cli_download", False)):
+        command.append("--no-use-cli-download")
     if args.upload_dry_run:
         command.append("--dry-run")
     _run_command(command)
