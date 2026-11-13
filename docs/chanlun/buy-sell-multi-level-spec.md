@@ -228,6 +228,28 @@ tests: tests/test_chanlun_analysis.py
 > 与三类点「不回中枢」互斥：类一要求离开后**回中枢**（弱势盘整背驰反转）；三买 / 三卖要求离开后
 > 首次回试 / 反抽**不回中枢**（强势离开不回归）。同一离开段二者不会同时成立。
 
+#### 2.8.3 上游重绘时 `forming` 事件的处理（待完善，先记录）
+
+`confirmed` 已有跨帧 repaint 护栏（只锚定已确认笔 / 线段、单调不翻转、消失须给证据，见 §3.3 红线与
+[signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §3.4 `replay_confirmed_signal_lifecycle`）。
+但 `forming` 锚在**进行中 / 未确认笔**上，上游（笔 / 线段 / 中枢）在后续帧**重绘（repaint）**时，
+`forming` 的锚点、`anchor_segment` 乃至 `related_zs` 都可能移动或消失，目前**无对应的跨帧处理口径**。
+
+现阶段先记录应然方向（**实现后置**）：
+
+- `forming` 定位是 watch 档观察态、本就允许随上游重绘漂移，**不纳入** `confirmed` 的「禁止消失 /
+  翻转」红线；但需要可审计地区分 `forming` 的三类跨帧归宿——**顺延**（锚点随重绘平移、同点仍成立）、
+  **消失**（前提被重绘抹掉，应落 `invalidated` 或自然终止）、**兑现**（升 `confirmed`）。
+- `forming_at` / `detected_at` 对同一 `point|time` 跨轮取**最早**值（沿用既有「尾部分型过滤导致
+  后续帧轻微前移时不顶走首次检出」口径，见 design §4 检出时间修正），避免重绘把早期预警时刻顶走。
+- 「记录所有 `forming` 事件算真实可执行胜率」（§2.8.1 后续任务）依赖此口径：重绘导致的 `forming`
+  漂移 / 消失必须能与「真实兑现 / 失效」区分，否则胜率统计会被重绘噪声污染。
+
+> **`forming` 缺位置条件（待完善）**：当前 `forming` 仅以「`anchor_segment.tail_bi` 已确认 + 基本
+> 条件（背驰 / 离开 / 隔段力度衰减）」触发，**尚未加入价格位置约束**（例如离开段是否已真正破中枢沿 /
+> 创前低前高到位、回踩 / 反抽是否落在合理价位带）。先记录此缺口，后续再完善 `forming` 的位置门控，
+> 以减少重绘期的假预备。
+
 Repaint 红线：
 
 - `confirmed` 只能锚定已确认笔 / 线段；未确认笔只能承载 `forming`。
