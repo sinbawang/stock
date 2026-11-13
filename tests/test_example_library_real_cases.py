@@ -71,6 +71,10 @@ CASE_CARDS = (
         "price": 436.4,
         "related_zs": 0,
         "basis": "consolidation_divergence_reverse_low",
+        # spec §2.8.1 例外 / §2.8.2：类一 confirmed 需「回中枢」（价格重回 [ZD, ZG]）。
+        # 本窗口离开段破 ZD=440.6 后，后续反向向上笔最高仅 439.8（< ZD），价格始终未回中枢，
+        # 故该类一买在全窗口（f9–f13）稳定为 **forming**（watch 档），不升 confirmed。
+        "lifecycle": "forming",
     },
     {
         "card": "2BL · 00700 5m",
@@ -374,7 +378,7 @@ def _bootstrap_for(timeframe: str) -> str:
     return SEGMENT_BOOTSTRAP_FIRST_VALID_SEED if timeframe == "1m" else SEGMENT_BOOTSTRAP_PREFER_EARLIER_START
 
 
-def _confirmed_points(symbol: str, timeframe: str, cutoff: int) -> list[dict[str, object]]:
+def _points_by_lifecycle(symbol: str, timeframe: str, cutoff: int, lifecycle: str) -> list[dict[str, object]]:
     bars_all = clean_bars(read_bars_from_csv(str(frozen_csv(symbol, timeframe))))
     bars = bars_all[:cutoff]
     norm = normalize_bars(bars)
@@ -391,8 +395,12 @@ def _confirmed_points(symbol: str, timeframe: str, cutoff: int) -> list[dict[str
     return [
         point
         for point in signals.get("signal_points", [])
-        if point.get("lifecycle_state") == "confirmed"
+        if point.get("lifecycle_state") == lifecycle
     ]
+
+
+def _confirmed_points(symbol: str, timeframe: str, cutoff: int) -> list[dict[str, object]]:
+    return _points_by_lifecycle(symbol, timeframe, cutoff, "confirmed")
 
 
 @pytest.mark.parametrize("card", CASE_CARDS, ids=[c["card"] for c in CASE_CARDS])
@@ -405,7 +413,8 @@ def test_case_card_reproduces_on_frozen_window(card: dict[str, object]) -> None:
         "若窗口被重新冻结，请同步更新卡片与文档。"
     )
 
-    points = _confirmed_points(card["symbol"], card["timeframe"], int(card["cutoff"]))
+    expected_lifecycle = str(card.get("lifecycle", "confirmed"))
+    points = _points_by_lifecycle(card["symbol"], card["timeframe"], int(card["cutoff"]), expected_lifecycle)
     matches = [p for p in points if p.get("point") == card["point"]]
     matched = [
         p
@@ -415,9 +424,9 @@ def test_case_card_reproduces_on_frozen_window(card: dict[str, object]) -> None:
 
     assert matched, (
         f"{card['card']}: 冻结窗口上已找不到卡片样本 "
-        f"（cutoff={card['cutoff']} 期望 {card['point']} 锚点 bi{card['signal_bi']} 中枢 zs{card['related_zs']}）；"
+        f"（cutoff={card['cutoff']} 期望 {expected_lifecycle} {card['point']} 锚点 bi{card['signal_bi']} 中枢 zs{card['related_zs']}）；"
         f"该 cutoff 实际 {card['point']} 发点为 {[ (p.get('signal_bi_id'), p.get('related_zs_id')) for p in matches ]}，"
-        f"全部 confirmed 为 {[(p.get('point'), p.get('signal_bi_id')) for p in points]}。"
+        f"全部 {expected_lifecycle} 为 {[(p.get('point'), p.get('signal_bi_id')) for p in points]}。"
         "规则变更请同步更新卡片与文档，不要放宽本断言。"
     )
 

@@ -38,13 +38,15 @@
 | `sell2` 二卖 | ✅ | ✅ | ❌ **0** | ❌ 无样本 |
 | `buy3` 三买 | ✅ | ✅ | ✅ 28 次 / 11 窗口 | ✅ `superseded(zs_superseded)` |
 | `sell3` 三卖 | ✅ | ✅ | ✅ 73 次 / 18 窗口 | ✅ `invalidated(third_class_reentered_zs)` / `superseded(reanchored)` |
-| `buy1like` 类一买 | ✅ | ✅ | ✅ 6 次 / 2 窗口 | ⚠️ 样本位于末帧，未观察到退场 |
+| `buy1like` 类一买 | ✅ | ✅ | ❌ **0**（watch 档 `forming`，见 §3.2） | ⚠️ 2 窗口均 `forming`（破沿未回中枢，§2.8.2） |
 | `sell1like` 类一卖 | ✅ | ✅ | ❌ **0** | ❌ 无样本 |
 | `buy2like` 类二买 | ✅ | ✅ | ✅ 7 次 / 4 窗口 | ✅ `invalidated(gap_divergence_lost)` |
 | `sell2like` 类二卖 | ✅ | ✅ | ✅ 12 次 / 6 窗口 | ✅ `invalidated(gap_divergence_lost)` |
 
-**读法**：构造正/反例覆盖 10/10 类型；**真实窗口正例只覆盖 6/10 类型**。`sell1`、`sell2`、`buy2`、`sell1like`
-在 287 个真实窗口帧上一次都没有 `confirmed` 发点，其判定逻辑目前**只在构造输入上被验证**（见 §5）。
+**读法**：构造正/反例覆盖 10/10 类型；**真实窗口正例只覆盖 5/10 类型**。`sell1`、`sell2`、`buy2`、`sell1like`
+在 287 个真实窗口帧上一次都没有 `confirmed` 发点；`buy1like` 两个历史窗口在引入 §2.8.2「回中枢
+（`back_to_center`）」门控后均降为 watch 档 `forming`（破沿但价格未回中枢，见 §3.2），`confirmed` 真实样本归零。
+这些类型的判定逻辑目前**只在构造输入上被验证**（见 §5）。
 
 ## 3. 真实案例卡（正例）
 
@@ -67,20 +69,27 @@
 **严格性要点**：该点在 `ongoing_type == down` 下成立，依附 `zs1` 且回溯到「最近中枢 + 离开段 + 背驰」
 三元组（spec §2.2）；f11 后其依附中枢被推进取代，故按**更替**而非**失效**退场——这是 §3.5 的证据表分支。
 
-### 3.2 类一买 · `00700` 1m
+### 3.2 类一买 · `00700` 1m（`forming` watch 档：破沿但未回中枢）
 
 | 字段 | 值 |
 | --- | --- |
 | cutoff 帧 | f13（`cutoff=3500`，窗口起点 2026-08-28 11:41） |
 | 点 / 锚点 / 价格 | `buy1like` / `bi96` / `436.4` |
-| 关联中枢 | `zs0` |
-| 依据码 | `consolidation_divergence_reverse_low`（盘整背驰，离开段结束向上转折即生成） |
+| 关联中枢 | `zs0`（`ZD=440.6` / `ZG=444.4`） |
+| 生命周期 | `forming`（watch 档，f9–f13 稳定；**未升 confirmed**） |
+| 依据码 | `consolidation_divergence_reverse_low`（盘整背驰，离开段结束向上转折即生成预备态） |
 | 退场轨迹 | 位于末帧，未观察到退场 |
 
 **严格性要点**：`buy1like` 全库只有 2 个窗口出现过，其中 `00700 1m` 是**唯一稳定**的（f9–f13 连续五帧
 同锚点 `bi96`；另有 `03690 5m` 单帧样本 `bi48`）。它体现类一买的门控差异：`ongoing_type == range` +
 `current_structure_status == ongoing_same_type`（spec §2.5）；同一窗口的 `sell1like` 在所有 287 帧上
 从未出现（见 §5）。
+
+**生命周期（spec §2.8.1 例外 / §2.8.2，`back_to_center` 回中枢）**：类一 confirmed 在「尾笔已确认 +
+反向转折」之外**还要求回中枢**——价格重新进入中枢区间 `[ZD, ZG]`。本窗口离开段向下破
+`ZD=440.6`（锚点 `bi96` 低 `436.4`），但其后反向向上笔最高仅 `439.8`（`< ZD`），价格**始终未回中枢**，
+因此该类一买在全窗口稳定为 `forming`（watch 档），**不升 confirmed**（与 §2.8.2「不回中枢 → 偏向三类点」
+的互斥口径一致）。`confirmed_at` 公式 `max(back_to_center_at, 锚点段尾笔确认)` 在回中枢成立后才落值。
 
 ### 3.3 类二买 · `00700` 5m
 

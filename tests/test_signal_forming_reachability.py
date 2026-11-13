@@ -248,13 +248,16 @@ def test_legacy_forming_points_slot_stays_empty() -> None:
 
 
 @pytest.mark.parametrize(
-    ("symbol", "name", "before_cutoff", "forming_cutoff", "confirmed_cutoff", "anchor_time", "price"),
+    ("symbol", "name", "before_cutoff", "forming_cutoff", "confirmed_cutoff", "anchor_time", "price", "confirmed_at"),
     [
         # 00981 中芯国际 2026-10-20：低点 14:05/50.65（冻结窗口锚点 14:06）、笔 14:14 确认，
-        # 线段直到 15:10 才确认。forming 必须在 14:14 出现，confirmed 仍钉在 15:10。
-        ("00981", "中芯国际", "2026-10-20 14:13", "2026-10-20 14:14", "2026-10-20 15:10", "2026-10-20T14:06:00", 50.65),
-        # 06088 鸿腾精密 2026-10-20：低点 14:00/3.99、笔 14:09 确认，线段直到 15:24 才确认。
-        ("06088", "鸿腾精密", "2026-10-20 14:08", "2026-10-20 14:09", "2026-10-20 15:24", "2026-10-20T14:00:00", 3.99),
+        # 线段直到回放 15:10 才**可检出为已确认**（笔链补齐滞后）。forming 必须在 14:14 出现；
+        # confirmed 发点仍钉在回放 15:10（归属不变），但 confirmed_at 改用结构口径
+        # `anchor_segment.confirmed_at`（破坏笔 75 确认时刻 14:32，spec §2.8.1），早于回放落地时刻。
+        ("00981", "中芯国际", "2026-10-20 14:13", "2026-10-20 14:14", "2026-10-20 15:10", "2026-10-20T14:06:00", 50.65, "2026-10-20T14:32:00"),
+        # 06088 鸿腾精密 2026-10-20：低点 14:00/3.99、笔 14:09 确认，线段直到回放 15:24 才可检出为已确认。
+        # confirmed_at = 锚点段结构确认时刻 14:43（破坏笔确认），早于回放 15:24。
+        ("06088", "鸿腾精密", "2026-10-20 14:08", "2026-10-20 14:09", "2026-10-20 15:24", "2026-10-20T14:00:00", 3.99, "2026-10-20T14:43:00"),
     ],
 )
 def test_real_1m_buy2like_tail_forming_precedes_segment_confirmation(
@@ -265,6 +268,7 @@ def test_real_1m_buy2like_tail_forming_precedes_segment_confirmation(
     confirmed_cutoff: str,
     anchor_time: str,
     price: float,
+    confirmed_at: str,
 ) -> None:
     """真实窗口：线段确认前先给 forming；confirmed 发点时刻保持不变（零变化）。
 
@@ -301,9 +305,10 @@ def test_real_1m_buy2like_tail_forming_precedes_segment_confirmation(
     assert confirmed_payload["time"] == anchor_time
     assert confirmed_payload["price"] == price
     # confirmed：检出不早于首次可检出帧（尾部分型过滤会轻微前移）；
-    # 确认 = 首次发射该帧的最后一根 K 线（本次回放 cutoff）。
+    # 确认 = **锚点段整体确认**的结构时刻 `anchor_segment.confirmed_at`（破坏笔确认），
+    # 它反映真实结构确认点，早于「回放首次落地帧」（spec §2.8.1）。
     assert confirmed_payload["detected_at"] >= f"{forming_cutoff.replace(' ', 'T')}:00"
-    assert confirmed_payload["confirmed_at"] == f"{confirmed_cutoff.replace(' ', 'T')}:00"
+    assert confirmed_payload["confirmed_at"] == confirmed_at
     assert confirmed_payload["confirmed_at"] > confirmed_payload["detected_at"]
 
 
