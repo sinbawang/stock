@@ -1229,6 +1229,7 @@ tcb --env-id ENV_ID cloudrun deploy -s SERVICE_NAME --port 8000 --source REPO_RO
 | CLI 未登录或登录态失效 | 服务查询 / 部署命令返回鉴权失败 | 重新执行 `tcb login`，或使用 `tcb login --key` |
 | 服务名不一致 | 控制台明明有服务，但本地脚本仍提示查不到 | 核对控制台服务名和本地 `--service-name` 是否完全一致 |
 | Docker 构建失败 | 发布前卡在本地 `docker build` | 先单独执行 `docker build -f Dockerfile -t chanlun-stock-service:local .` 看具体报错 |
+| 云端构建 429 Too Many Requests | `failed to resolve source metadata for docker.io/library/python:3.11-slim` | Docker Hub 匿名拉取被限流。`Dockerfile` 已默认改用 `docker.m.daocloud.io/library/python:3.11-slim`；想直连 Docker Hub 用 `--build-arg PYTHON_IMAGE=python:3.11-slim` 覆盖，腾讯云 VPC 内也可用 `mirror.ccs.tencentyun.com/library/python:3.11-slim` |
 | `/healthz` 返回 404 | 服务能发布，但健康检查不是 200 | 先确认服务实际启动的是当前 FastAPI 镜像，且容器端口仍是 `8000` |
 | `/healthz` 超时或 5xx | 服务域名可访问，但响应超时或网关报错 | 优先看容器启动日志、依赖安装是否成功、运行时环境变量是否缺失 |
 | 容器内后续发布失败 | API 服务起来了，但后续 CloudBase 上传链路报权限或 key 错误 | 核对 `CLOUDBASE_APIKEY` 是否已正确注入容器运行时 |

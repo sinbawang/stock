@@ -1,5 +1,10 @@
+# 基础镜像默认走 DaoCloud 的 Docker Hub 镜像加速，避免云端构建匿名拉取 docker.io 触发 429 限流。
+# 本地/云端如需换源，可覆盖：docker build --build-arg PYTHON_IMAGE=python:3.11-slim .
+# 腾讯云 VPC 内构建也可用：--build-arg PYTHON_IMAGE=mirror.ccs.tencentyun.com/library/python:3.11-slim
+ARG PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.11-slim
+
 # ============ 阶段 1：构建依赖 ============
-FROM python:3.11-slim AS builder
+FROM ${PYTHON_IMAGE} AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -16,12 +21,12 @@ COPY pyproject.toml README.md requirements.txt /app/
 COPY src /app/src
 
 # 装到 /install，方便整体拷贝
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir --prefix=/install .
+RUN pip install --no-cache-dir --retries 5 --timeout 60 --upgrade pip \
+    && pip install --no-cache-dir --retries 5 --timeout 60 --prefix=/install .
 
 
 # ============ 阶段 2：运行时 ============
-FROM python:3.11-slim
+FROM ${PYTHON_IMAGE}
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

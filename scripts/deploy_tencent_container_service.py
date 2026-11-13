@@ -61,6 +61,14 @@ def parse_args() -> argparse.Namespace:
         help="Local image tag used for the validation build",
     )
     parser.add_argument(
+        "--python-image",
+        default=os.environ.get("DOCKER_PYTHON_IMAGE"),
+        help=(
+            "Override the PYTHON_IMAGE build arg used by the Dockerfile. "
+            "Defaults to the Dockerfile value (DaoCloud Docker Hub mirror) to avoid docker.io 429 rate limits."
+        ),
+    )
+    parser.add_argument(
         "--persistent-data-dir",
         default=os.environ.get("STOCK_LOCAL_STORE_ROOT") or os.environ.get("STOCK_KLINE_CACHE_DIR") or "/data/stock-kline-cache",
         help="Persistent directory for the local K-line cache inside the container; defaults to /data/stock-kline-cache.",
@@ -300,8 +308,10 @@ def build_local_image(args: argparse.Namespace, *, cwd: Path) -> None:
         str(dockerfile_path),
         "-t",
         args.image_tag,
-        str(cwd),
     ]
+    if getattr(args, "python_image", None):
+        command.extend(["--build-arg", f"PYTHON_IMAGE={args.python_image}"])
+    command.append(str(cwd))
     run_command(command, cwd=cwd, dry_run=args.dry_run)
 
 
