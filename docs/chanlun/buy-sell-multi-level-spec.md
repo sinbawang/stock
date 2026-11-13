@@ -158,15 +158,97 @@ tests: tests/test_chanlun_analysis.py
 > [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md)，任务见
 > [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md) RS0-RS5。
 
-每个买卖点具备生命周期状态 `forming（预备 / 观察）→ confirmed（确认）→ invalidated（失效）`：
+每个买卖点具备生命周期状态 `forming（预备 / 观察）→ confirmed（确认）→ invalidated（失效）`。
 
-- `forming`：核心背驰 / 离开 / 隔段力度衰减条件已成立，但**反向转折笔尚未出现**（出现即可——
-  含 effective 未确认尾笔；`2026-09-13` 决策后「出现」不再要求「已确认」，与二 / 三类「新笔
-  不要求确认」对齐）。只作 watch 档观察态，不得升为 confirmed，也不得被下游二次摘要成确认买卖点。
-- `confirmed`：反向转折已出现（证据笔可为未确认尾笔），且**信号锚点**必须已确认
-  （锚点即`signal_bi_id`，§3.3 红线），是可操作确认态（仍受多级别降级约束）。
-- `invalidated`：确认后其成立前提被后续走势破坏。保留原信号锚点与 `invalidated_reason`，供撤单 /
-  失效提示消费，不再作可操作确认态。
+#### 2.8.1 以锚点段（`anchor_segment`）统一 forming / confirmed（应然）
+
+所有买卖点——同级别分解机械操作常用的类二 / 类三（LB2 / LS2、三买 / 三卖），一般的一 / 二类
+（一买 / 一卖、二买 / 二卖），以及盘整背驰的类一（LB1 / LS1）——的 `forming` 与 `confirmed`
+除各自的**基本条件**（共同条件：背驰 / 离开 / 隔段力度衰减 + 中枢绑定，见下表）外，均以**锚点段
+`anchor_segment`**（定义该点的离开 / 回踩 / 反抽线段）统一刻画，口径对称、跨帧单调（不 repaint）：
+
+- `forming`（预备 / 观察）：`anchor_segment` 的**尾笔**（`anchor_segment.tail_bi`）已确认。
+  仍只作 watch 档观察态，不得升为 confirmed，也不得被下游二次摘要成确认买卖点。
+  - `forming_at` / `detected_at` = `anchor_segment.tail_bi.confirmed_at`（锚点段尾笔的确认时刻）。
+- `confirmed`（确认）：`anchor_segment` 整体已确认（反向线段确认），是可操作确认态
+  （仍受多级别降级约束，且须满足 §3.3 repaint 红线：只锚定已确认笔 / 线段）。
+  - `confirmed_at` = `anchor_segment.confirmed_at`（锚点段的确认时刻）。
+- **类一（盘整背驰）例外**：`confirmed` 条件放松为 `anchor_segment.tail_bi 已确认` **且** `回中枢
+  （back_to_center，价格重回中枢区间 [ZD, ZG]，定义见 §2.8.2）`。
+  - `confirmed_at` = `max(back_to_center_at, anchor_segment.tail_bi.confirmed_at)`。
+- `invalidated`（失效）：确认后其成立前提被后续走势破坏。保留原信号锚点与 `invalidated_reason`，
+  供撤单 / 失效提示消费，不再作可操作确认态（失效条件与 `invalidated_at` 公式见本节「各点类型失效
+  条件」与 [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §3.2；`invalidated`
+  状态已有，其精确实现可后置）。
+
+统一生命周期表（`anchor_segment` 为各行「基本条件」列标注的锚点段；`forming` / `confirmed` 公式
+除类一外同构）：
+
+| 买卖点类型 | 预期收益简介 | 基本条件（forming / confirmed 共同，含锚点段 `anchor_segment`） | forming 条件 | `forming_at` / `detected_at` 公式 | confirmed 条件 | `confirmed_at` 公式 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 一买 / 一卖 | 趋势背驰转折起点，博反转第一波；空间最大、风险最高 | 同级别趋势（down→一买 / up→一卖）+ 绑定最近标准中枢 + **离开段**（=`anchor_segment`）对同向进入段趋势背驰（创进入段前低 / 前高 + 段级力度衰减）+ 离开段破中枢下 / 上沿 | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment` 已确认 | `anchor_segment.confirmed_at` |
+| 二买 / 二卖 | 一类点后首次确认性回抽 / 反抽；风险低于一类、空间仍大 | 绑定一买 / 一卖前置 + 首次回抽 / 反抽不破前低 / 前高 + 再度走强 / 走弱；**回抽 / 反抽段**（=`anchor_segment`） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment` 已确认 | `anchor_segment.confirmed_at` |
+| 三买 / 三卖（同级别分解机械第一类机会） | 离开中枢后首次不回归、趋势延续；确定性高、空间中等 | 向上 / 向下离开中枢 + 首次回试 / 反抽不重新跌回 / 站回中枢沿 + 回试后重新走强 / 走弱；**回试 / 反抽段**（=`anchor_segment`） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment` 已确认 | `anchor_segment.confirmed_at` |
+| 类一买 / 类一卖（LB1 / LS1，盘整背驰） | 盘整背驰转折；震荡区间转折机会，空间≈中枢震荡幅度 | 最近中枢 `ongoing_type == range` 且 `ongoing_same_type`（单中枢盘整）+ **离开段**（=`anchor_segment`）对同向进入段盘整背驰（破中枢沿 + 创进入段前低 / 前高 + 段级力度衰减） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment.tail_bi` 已确认 **且** 回中枢（`back_to_center`，价格重回 `[ZD, ZG]` 中枢区间，定义见 §2.8.2）〔放松〕 | `max(back_to_center_at, anchor_segment.tail_bi.confirmed_at)` |
+| 类二买 / 类二卖（LB2 / LS2，同级别分解机械第二类机会） | 同级别隔段背驰的回踩 / 反抽确认；类似二类的机械补点，空间中等 | `same_level_decomposition_mode == single_confirmed` + 同级别隔段背驰（A_i vs A_{i+2} 段级力度衰减，不要求破前低 / 前高）+ **A_{i+2}（当下回踩 / 反抽段）**（=`anchor_segment`） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment` 已确认 | `anchor_segment.confirmed_at` |
+
+> `invalidated` 条件与 `invalidated_at` 公式对所有点类型已在本节「各点类型失效条件」与
+> [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §3.2 定义，`invalidated`
+> 状态亦已落地；上表统一 `anchor_segment` 口径的**精确实现可后置**。
+>
+> **后续任务（可执行胜率）**：建议持久化记录**所有 `forming` 事件**（锚点、`forming_at`、后续
+> 转 `confirmed` / `invalidated` 的结局与时刻），据此统计从 `forming` 起算的**真实可执行胜率**
+> （而非仅以 `confirmed` 回看），作为盘中更早入场档位的收益评估依据。
+
+#### 2.8.2 类一「回中枢（`back_to_center`）」定义（应然）
+
+类一（盘整背驰 LB1 / LS1）的 `confirmed` 比一 / 二 / 三类、类二多出一个「回中枢」放松条件。
+其理论依据是第24课盘整背驰两种情形：**离开段破中枢但力度弱**时，价格**先出后回跌、重新回到
+中枢区间**（而非「不回中枢」转第三类点）；盘整背驰构成的「类第一类点」正是这条「破沿即回」的
+弱势离开反转。故类一不像标准一类点那样等反向线段整体走完才确认，而是以「尾笔确认 + 价格重新
+回到中枢区间」作为盘整背驰成立的确认信号。
+
+**中枢边沿口径**：沿用全文 ZG / ZD 约定——`ZG = related_zs_high`（中枢上沿）、
+`ZD = related_zs_low`（中枢下沿）。两边沿在中枢前三笔重叠区固定后即固化到该点上
+（`payload.related_zs_low` / `related_zs_high`，见 §RS0 增量7 / design §4.2.10），
+跨帧稳定比较，不随尾部重切换人。
+
+**定义（买卖对称）**：设 `anchor_segment` 为破沿的弱势离开段，反向转折后的回抽 / 反抽价格
+重新进入中枢区间 `[ZD, ZG]` 即为「回中枢」：
+
+- 类一买（LB1）：离开段向下跌破 `ZD`（创进入段前低但力度弱）；反向向上转折后，后续向上
+  笔 / 段的**最高价 `high ≥ ZD`**（价格重新站回中枢下沿之上、回到中枢区间）→ `back_to_center` 成立。
+- 类一卖（LS1）：离开段向上升破 `ZG`（创进入段前高但力度弱）；反向向下转折后，后续向下
+  笔 / 段的**最低价 `low ≤ ZG`**（价格重新跌回中枢上沿之下、回到中枢区间）→ `back_to_center` 成立。
+
+**`back_to_center_at`**：首次满足上述「价格重新进入中枢区间」条件的那根 K 线时间
+（类一买取 `high` 首次 `≥ ZD` 的 bar；类一卖取 `low` 首次 `≤ ZG` 的 bar）。据此
+`confirmed_at = max(back_to_center_at, anchor_segment.tail_bi.confirmed_at)`——两条件谁后满足以谁为准。
+
+> 与三类点「不回中枢」互斥：类一要求离开后**回中枢**（弱势盘整背驰反转）；三买 / 三卖要求离开后
+> 首次回试 / 反抽**不回中枢**（强势离开不回归）。同一离开段二者不会同时成立。
+
+#### 2.8.3 上游重绘时 `forming` 事件的处理（待完善，先记录）
+
+`confirmed` 已有跨帧 repaint 护栏（只锚定已确认笔 / 线段、单调不翻转、消失须给证据，见 §3.3 红线与
+[signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §3.4 `replay_confirmed_signal_lifecycle`）。
+但 `forming` 锚在**进行中 / 未确认笔**上，上游（笔 / 线段 / 中枢）在后续帧**重绘（repaint）**时，
+`forming` 的锚点、`anchor_segment` 乃至 `related_zs` 都可能移动或消失，目前**无对应的跨帧处理口径**。
+
+现阶段先记录应然方向（**实现后置**）：
+
+- `forming` 定位是 watch 档观察态、本就允许随上游重绘漂移，**不纳入** `confirmed` 的「禁止消失 /
+  翻转」红线；但需要可审计地区分 `forming` 的三类跨帧归宿——**顺延**（锚点随重绘平移、同点仍成立）、
+  **消失**（前提被重绘抹掉，应落 `invalidated` 或自然终止）、**兑现**（升 `confirmed`）。
+- `forming_at` / `detected_at` 对同一 `point|time` 跨轮取**最早**值（沿用既有「尾部分型过滤导致
+  后续帧轻微前移时不顶走首次检出」口径，见 design §4 检出时间修正），避免重绘把早期预警时刻顶走。
+- 「记录所有 `forming` 事件算真实可执行胜率」（§2.8.1 后续任务）依赖此口径：重绘导致的 `forming`
+  漂移 / 消失必须能与「真实兑现 / 失效」区分，否则胜率统计会被重绘噪声污染。
+
+> **`forming` 缺位置条件（待完善）**：当前 `forming` 仅以「`anchor_segment.tail_bi` 已确认 + 基本
+> 条件（背驰 / 离开 / 隔段力度衰减）」触发，**尚未加入价格位置约束**（例如离开段是否已真正破中枢沿 /
+> 创前低前高到位、回踩 / 反抽是否落在合理价位带）。先记录此缺口，后续再完善 `forming` 的位置门控，
+> 以减少重绘期的假预备。
 
 Repaint 红线：
 
