@@ -17,7 +17,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from chanlun.analysis import _build_zs_monitor_state, _has_reverse_turn_after, _is_first_reverse_hold, _signal_detect_ts, _signal_premise_broken, _structural_premise_broken, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
+from chanlun.analysis import _back_to_center_at, _build_zs_monitor_state, _has_reverse_turn_after, _is_first_reverse_hold, _segment_confirmed_ts, _signal_detect_ts, _signal_premise_broken, _structural_premise_broken, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
 from chanlun.models import Bi, BiDirection, Segment, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
 
@@ -4641,3 +4641,161 @@ def test_signal_buy2like_confirmed_at_uses_first_confirmed_frame_as_of() -> None
     assert sell_payload["detected_at"] == "2026-10-20T14:14:00"
     assert sell_payload["confirmed_at"] == "2026-10-20T15:10:00"
     assert sell_payload["confirmed_at"] > sell_payload["detected_at"]
+
+def _bi_with_confirm(
+    bi_id: int,
+    direction: BiDirection,
+    *,
+    high: float,
+    low: float,
+    end_ts: datetime,
+    confirmed_ts: datetime | None = None,
+    is_confirmed: bool = True,
+) -> Bi:
+    return Bi(
+        bi_id=bi_id,
+        direction=direction,
+        start_fx_id=bi_id,
+        end_fx_id=bi_id + 1,
+        start_ts=end_ts,
+        end_ts=end_ts,
+        high=high,
+        low=low,
+        norm_bar_range=(bi_id, bi_id + 1),
+        is_confirmed=is_confirmed,
+        confirmed_ts=confirmed_ts,
+    )
+
+
+def test_segment_confirmed_ts_derives_from_break_bi_confirmation() -> None:
+    """anchor_segment.confirmed_at = 破坏笔(break_bi_id) 的确认时刻（spec §2.8.1）。"""
+    anchor = _bi_with_confirm(
+        20, BiDirection.DOWN, high=51.0, low=50.0,
+        end_ts=datetime(2026, 10, 20, 14, 6), confirmed_ts=datetime(2026, 10, 20, 14, 15),
+    )
+    break_bi = _bi_with_confirm(
+        21, BiDirection.UP, high=52.0, low=50.5,
+        end_ts=datetime(2026, 10, 20, 14, 18), confirmed_ts=datetime(2026, 10, 20, 14, 32),
+    )
+    seg = _segment(2, BiDirection.DOWN, high=51.0, low=50.0, start_day=1, is_confirmed=True)
+    seg.break_bi_id = 21
+    seg.end_bi_id = 20
+
+    assert _segment_confirmed_ts(seg, [anchor, break_bi]) == datetime(2026, 10, 20, 14, 32)
+
+
+def test_segment_confirmed_ts_fallbacks_and_fail_closed() -> None:
+    """破坏笔缺 confirmed_ts → 回退破坏笔 end_ts；无破坏笔 → 段 end_ts；未确认段 → None。"""
+    break_bi = _bi_with_confirm(
+        31, BiDirection.UP, high=52.0, low=50.5,
+        end_ts=datetime(2026, 10, 20, 14, 18), confirmed_ts=None,
+    )
+    seg = _segment(3, BiDirection.DOWN, high=51.0, low=50.0, start_day=1, is_confirmed=True)
+    seg.break_bi_id = 31
+    assert _segment_confirmed_ts(seg, [break_bi]) == datetime(2026, 10, 20, 14, 18)
+
+    seg_no_break = _segment(4, BiDirection.DOWN, high=51.0, low=50.0, start_day=1, is_confirmed=True)
+    seg_no_break.break_bi_id = None
+    assert _segment_confirmed_ts(seg_no_break, []) == seg_no_break.end_ts
+
+    # fail-closed：未确认段不得承载 confirmed_at（§3.3 红线）。
+    seg_unconfirmed = _segment(5, BiDirection.DOWN, high=51.0, low=50.0, start_day=1, is_confirmed=False)
+    seg_unconfirmed.break_bi_id = 31
+    assert _segment_confirmed_ts(seg_unconfirmed, [break_bi]) is None
+    assert _segment_confirmed_ts(None, []) is None
+
+
+def test_signal_confirmed_at_uses_anchor_segment_time_over_reverse_turn() -> None:
+    """confirmed_at 优先用 anchor_segment.confirmed_at（替代反向转折笔近似，spec §2.8.1）。"""
+    anchor, follow = _anchor_bi_with_confirmation(confirmed_ts=datetime(2026, 10, 20, 14, 14))
+    # 锚点段确认时刻（结构）晚于反向转折笔 end_ts（follow.end_ts=14:20），验证优先级。
+    anchor_confirm = {"buy2like": datetime(2026, 10, 20, 14, 32)}
+
+    points, _ = build_signal_point_payloads(
+        buy_points=["buy_2like"],
+        sell_points=[],
+        latest_confirmed_up=follow,
+        latest_up=follow,
+        latest_down=anchor,
+        current_zs=None,
+        buy2like_signal_bi=anchor,
+        bis=[anchor, follow],
+        as_of_ts=datetime(2026, 10, 20, 15, 10),
+        anchor_confirm_ts_by_point=anchor_confirm,
+    )
+    payload = next(item for item in points if item["point"] == "buy2like")
+    assert payload["detected_at"] == "2026-10-20T14:14:00"
+    # anchor_segment.confirmed_at 优先于 as_of(15:10) 与反向转折笔近似。
+    assert payload["confirmed_at"] == "2026-10-20T14:32:00"
+    assert payload["confirmed_at"] > payload["detected_at"]
+
+
+def test_back_to_center_at_reenters_zhongshu_band() -> None:
+    """类一回中枢（spec §2.8.2）：首个重回 [ZD, ZG] 的反向笔 end_ts。"""
+    # 类一买：离开段向下破 ZD=50.0 的锚点笔（low=49.5）；反向向上笔 high>=ZD 即回中枢。
+    anchor = _bi(40, BiDirection.DOWN, high=50.3, low=49.5, day=1)
+    below = _bi(41, BiDirection.UP, high=49.8, low=49.5, day=2)   # high<ZD，未回中枢
+    reenter = _bi(42, BiDirection.UP, high=50.4, low=49.7, day=3)  # high>=ZD，回中枢
+    bis = [anchor, below, reenter]
+    at = _back_to_center_at(anchor, is_buy=True, zs_low=50.0, zs_high=51.0, bis=bis)
+    assert at == reenter.end_ts
+
+    # 尚未回中枢（无笔 high>=ZD）→ None，类一保持 forming。
+    assert _back_to_center_at(anchor, is_buy=True, zs_low=50.0, zs_high=51.0, bis=[anchor, below]) is None
+
+    # 类一卖对称：向下反向笔 low<=ZG=51.0 即回中枢。
+    sanchor = _bi(50, BiDirection.UP, high=51.5, low=51.0, day=1)
+    sabove = _bi(51, BiDirection.DOWN, high=51.4, low=51.2, day=2)  # low>ZG，未回
+    sreenter = _bi(52, BiDirection.DOWN, high=51.3, low=50.9, day=3)  # low<=ZG，回
+    sbis = [sanchor, sabove, sreenter]
+    sat = _back_to_center_at(sanchor, is_buy=False, zs_low=50.0, zs_high=51.0, bis=sbis)
+    assert sat == sreenter.end_ts
+    assert _back_to_center_at(sanchor, is_buy=False, zs_low=50.0, zs_high=51.0, bis=[sanchor, sabove]) is None
+
+
+def test_analyze_chanlun_signals_buy_1like_forming_when_reverse_turn_not_back_to_center() -> None:
+    """类一 confirmed 新增回中枢门控（spec §2.8.1 例外 / §2.8.2）：
+
+    盘整背驰 + 边界 + 反向转折均成立，但反向向上笔 high < ZD（价格尚未重回中枢区间）
+    → 类一保持 forming，不升 confirmed。
+    """
+    current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)  # ZD=10.0
+    bis = [
+        _bi(1, BiDirection.DOWN, high=11.2, low=10.6, day=1),
+        _bi(2, BiDirection.UP, high=10.9, low=10.4, day=2),
+        _bi(3, BiDirection.DOWN, high=11.0, low=10.0, day=3),
+        _bi(4, BiDirection.UP, high=11.3, low=10.2, day=4),
+        _bi(5, BiDirection.DOWN, high=11.0, low=9.8, day=5),   # 离开末笔，破 ZD
+        _bi(6, BiDirection.UP, high=9.95, low=9.85, day=6),    # 反向转折，但 high<ZD → 未回中枢
+    ]
+    macd_points = _lb1_divergence_macd(bis)
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert signals["bottom_divergence"] is True
+    assert "buy_1like" not in signals["buy_points"]  # 回中枢未成立 → 不 confirmed
+    payload = next(p for p in signals["signal_points"] if p["point"] == "buy1like")
+    assert payload["lifecycle_state"] == "forming"
+    assert payload["active"] is False
+    assert payload["signal_bi_id"] == 5
+    assert "confirmed_at" not in payload
+
+
+def test_analyze_chanlun_signals_buy_1like_confirmed_at_is_max_back_to_center_and_tail() -> None:
+    """类一 confirmed_at = max(back_to_center_at, 锚点段尾笔确认)（spec §2.8.1 例外 / §2.8.2）。
+
+    回中枢在反向向上笔 bi6（high=11.5≥ZD=10.0）成立，back_to_center_at = bi6.end_ts；
+    尾笔(bi5)确认时刻回退 end_ts（synthetic 无 confirmed_ts），故 confirmed_at = bi6.end_ts。
+    """
+    current_zs = _zhongshu(1, zs_low=10.0, zs_high=10.8, day=1)
+    bis = _lb1_range_bis()
+    macd_points = _lb1_divergence_macd(bis)
+
+    signals = analyze_chanlun_signals([], bis, [current_zs], macd_points)
+
+    assert "buy_1like" in signals["buy_points"]
+    payload = next(p for p in signals["signal_points"] if p["point"] == "buy1like")
+    assert payload["lifecycle_state"] == "confirmed"
+    reenter_bi = bis[5]  # bi6: 首个 high>=ZD 的反向向上笔
+    assert payload["confirmed_at"] == reenter_bi.end_ts.isoformat()
+    assert payload["confirmed_at"] >= payload["detected_at"]

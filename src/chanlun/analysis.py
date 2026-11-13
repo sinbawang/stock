@@ -324,6 +324,60 @@ def _signal_confirm_ts(anchor_bi: Bi | None, *, is_buy: bool, bis: list[Bi] | No
     return anchor_bi.end_ts
 
 
+def _segment_confirmed_ts(segment: Segment | None, bis: list[Bi] | None) -> datetime | None:
+    """`anchor_segment.confirmed_at`：锚点段**整体确认**时刻（spec §2.8.1）。
+
+    线段由其**破坏笔**（`break_bi_id`）确认——该笔即终结反向线段、把当前段锁死为已确认的那根
+    突破笔，故段的结构确认时刻 = 破坏笔的确认时刻（`Bi.confirmed_ts`，回退破坏笔 `end_ts`）。
+    破坏笔缺失（极少数边界 / 测试假对象）时回退段 `end_ts`，始终返回结构 K 线时间。
+
+    **fail-closed（§3.3 红线）**：段 `is_confirmed=False` 时返回 `None`——未确认段只允许承载
+    `forming`，`confirmed_at` 绝不落在未确认段上。调用方据 `None` 回退到既有近似口径，
+    并**不**改变该点的 confirmed / forming 归属（归属仍由发点门控决定）。
+    """
+    if segment is None or not bool(getattr(segment, "is_confirmed", False)):
+        return None
+    break_bi_id = getattr(segment, "break_bi_id", None)
+    if break_bi_id is not None:
+        break_bi = _bi_by_id(break_bi_id, bis or [])
+        if break_bi is not None:
+            confirmed_ts = getattr(break_bi, "confirmed_ts", None)
+            return confirmed_ts if confirmed_ts is not None else break_bi.end_ts
+    return getattr(segment, "end_ts", None)
+
+
+def _back_to_center_at(
+    anchor_bi: Bi | None,
+    *,
+    is_buy: bool,
+    zs_low: float | None,
+    zs_high: float | None,
+    bis: list[Bi] | None,
+) -> datetime | None:
+    """类一（盘整背驰 LB1 / LS1）「回中枢（`back_to_center`）」时刻（spec §2.8.2）。
+
+    离开段弱势破沿后，反向转折价格**重新进入中枢区间 [ZD, ZG]** 即成立：
+    - 类一买（LB1）：离开段向下破 `ZD`（=`zs_low`）；反向转折后首个**向上笔** `high >= ZD`
+      → 回中枢成立，`back_to_center_at` = 该笔 `end_ts`。
+    - 类一卖（LS1）：离开段向上破 `ZG`（=`zs_high`）；反向转折后首个**向下笔** `low <= ZG`
+      → 回中枢成立，`back_to_center_at` = 该笔 `end_ts`。
+
+    取笔级口径（反向笔 `high`/`low`，而非逐根 K 线）作为 §2.8.2「后续向上/向下笔的最高/最低价」
+    的实现近似；价格尚未回中枢（取不到满足条件的反向笔）→ 返回 `None`，类一保持 `forming`。
+    中枢边沿用点上固化的 `related_zs_low`/`related_zs_high`（见调用处），跨帧稳定。
+    """
+    if anchor_bi is None:
+        return None
+    for candidate in bis or []:
+        if candidate.bi_id <= anchor_bi.bi_id:
+            continue
+        if is_buy and zs_low is not None and candidate.is_up() and candidate.high >= zs_low:
+            return candidate.end_ts
+        if (not is_buy) and zs_high is not None and candidate.is_down() and candidate.low <= zs_high:
+            return candidate.end_ts
+    return None
+
+
 def _is_first_reverse_hold(anchor: Bi, candidate: Bi, bis: list[Bi]) -> bool:
     """candidate 是否落在 anchor 之后「第一次确认性回抽 / 反抽」窗口内（spec §2.3）。
 
@@ -1398,6 +1452,8 @@ def analyze_chanlun_signals(
             forming_candidates.append(("buy_2", buy2_anchor))
     buy3_signal_bi: Bi | None = None
     buy3_hold_bi: Bi | None = None
+    # 三买锚点段（anchor_segment）= 回试段（hold 段）；confirmed_at 取其段级确认时刻。
+    buy3_hold_seg: Segment | None = None
     if current_zs and latest_up:
         if use_segment_divergence and segments:
             _leave_seg, hold_seg = _find_buy3_segment_leave_hold(segments, current_zs, current_zs.zs_high)
@@ -1407,6 +1463,7 @@ def analyze_chanlun_signals(
                     buy3_hold_bi = hold_bi
                     if latest_up.bi_id > hold_bi.bi_id:
                         buy3_signal_bi = hold_bi
+                        buy3_hold_seg = hold_seg
                         buy_points.append("buy_3")
         else:
             _leave_bi, hold_bi = _find_buy3_bi_leave_hold(bis, current_zs.zs_high)
@@ -1443,6 +1500,8 @@ def analyze_chanlun_signals(
             forming_candidates.append(("sell_2", sell2_anchor))
     sell3_signal_bi: Bi | None = None
     sell3_hold_bi: Bi | None = None
+    # 三卖锚点段（anchor_segment）= 反抽段（hold 段）；confirmed_at 取其段级确认时刻。
+    sell3_hold_seg: Segment | None = None
     if current_zs and latest_down:
         if use_segment_divergence and segments:
             _leave_seg, hold_seg = _find_sell3_segment_leave_hold(segments, current_zs, current_zs.zs_low)
@@ -1452,6 +1511,7 @@ def analyze_chanlun_signals(
                     sell3_hold_bi = hold_bi
                     if latest_down.bi_id > hold_bi.bi_id:
                         sell3_signal_bi = hold_bi
+                        sell3_hold_seg = hold_seg
                         sell_points.append("sell_3")
         else:
             _leave_bi, hold_bi = _find_sell3_bi_leave_hold(bis, current_zs.zs_low)
@@ -1526,6 +1586,9 @@ def analyze_chanlun_signals(
     sell2like_signal_bi: Bi | None = None
     buy2like_anchor_bi: Bi | None = None
     sell2like_anchor_bi: Bi | None = None
+    # 类二锚点段（anchor_segment）= A_{i+2}（回踩 / 反抽段）；confirmed_at 取其段级确认时刻。
+    buy2like_anchor_seg: Segment | None = None
+    sell2like_anchor_seg: Segment | None = None
     if (
         current_zs is not None
         and segments
@@ -1546,6 +1609,7 @@ def analyze_chanlun_signals(
                     if _has_reverse_turn_after(anchor, direction="down", bis=bis):
                         if lb2_seg.is_confirmed:
                             buy2like_signal_bi = anchor
+                            buy2like_anchor_seg = lb2_seg
                             buy_points.append("buy_2like")
                         elif not _has_forming_candidate(
                             forming_candidates, "buy_2"
@@ -1569,6 +1633,7 @@ def analyze_chanlun_signals(
                     if _has_reverse_turn_after(anchor, direction="up", bis=bis):
                         if ls2_seg.is_confirmed:
                             sell2like_signal_bi = anchor
+                            sell2like_anchor_seg = ls2_seg
                             sell_points.append("sell_2like")
                         elif not _has_forming_candidate(
                             forming_candidates, "sell_2"
@@ -1586,6 +1651,9 @@ def analyze_chanlun_signals(
     # 即最近中枢语义清晰的盘整），排除 candidate_completed_waiting_stability 过渡态（只观察）。
     buy1like_signal_bi: Bi | None = None
     sell1like_signal_bi: Bi | None = None
+    # 类一 confirmed_at = max(back_to_center_at, 锚点段尾笔确认时刻)（spec §2.8.1 例外 / §2.8.2）。
+    buy1like_confirmed_ts: datetime | None = None
+    sell1like_confirmed_ts: datetime | None = None
     if (
         current_zs is not None
         and ongoing_type == "range"
@@ -1598,14 +1666,34 @@ def analyze_chanlun_signals(
             and buy_signal_bi.low <= current_zs.zs_low
             and (buy2like_signal_bi is None or buy2like_signal_bi.bi_id != buy_signal_bi.bi_id)
         ):
-            if buy_signal_bi.is_confirmed and _has_reverse_turn_after(buy_signal_bi, direction="down", bis=bis):
+            # 类一 confirmed 放松条件（spec §2.8.1 例外）：尾笔已确认 + 反向转折已现 + **回中枢**。
+            # 回中枢未成立（价格尚未重回 [ZD, ZG]）→ 维持 forming，不升 confirmed（§2.8.2）。
+            back_to_center_at = (
+                _back_to_center_at(
+                    buy_signal_bi,
+                    is_buy=True,
+                    zs_low=current_zs.zs_low,
+                    zs_high=current_zs.zs_high,
+                    bis=bis,
+                )
+                if buy_signal_bi.is_confirmed
+                and _has_reverse_turn_after(buy_signal_bi, direction="down", bis=bis)
+                else None
+            )
+            if back_to_center_at is not None:
                 buy1like_signal_bi = buy_signal_bi
+                tail_confirmed = _signal_detect_ts(buy_signal_bi)
+                buy1like_confirmed_ts = (
+                    max(back_to_center_at, tail_confirmed)
+                    if tail_confirmed is not None
+                    else back_to_center_at
+                )
                 buy_points.append("buy_1like")
             elif (
                 not _has_forming_candidate(forming_candidates, "buy_1")
                 and not _has_forming_candidate(forming_candidates, "buy_2like", bi_id=buy_signal_bi.bi_id)
             ):
-                # 结构（盘整背驰 + 边界）成立、反向转折未确认 → forming；
+                # 结构（盘整背驰 + 边界）成立、（反向转折 / 回中枢）未至 → forming；
                 # 标准一类 / 类二类同锚时不重复标记。
                 forming_candidates.append(("buy_1like", buy_signal_bi))
         if (
@@ -1615,8 +1703,26 @@ def analyze_chanlun_signals(
             and sell_signal_bi.high >= current_zs.zs_high
             and (sell2like_signal_bi is None or sell2like_signal_bi.bi_id != sell_signal_bi.bi_id)
         ):
-            if sell_signal_bi.is_confirmed and _has_reverse_turn_after(sell_signal_bi, direction="up", bis=bis):
+            back_to_center_at = (
+                _back_to_center_at(
+                    sell_signal_bi,
+                    is_buy=False,
+                    zs_low=current_zs.zs_low,
+                    zs_high=current_zs.zs_high,
+                    bis=bis,
+                )
+                if sell_signal_bi.is_confirmed
+                and _has_reverse_turn_after(sell_signal_bi, direction="up", bis=bis)
+                else None
+            )
+            if back_to_center_at is not None:
                 sell1like_signal_bi = sell_signal_bi
+                tail_confirmed = _signal_detect_ts(sell_signal_bi)
+                sell1like_confirmed_ts = (
+                    max(back_to_center_at, tail_confirmed)
+                    if tail_confirmed is not None
+                    else back_to_center_at
+                )
                 sell_points.append("sell_1like")
             elif (
                 not _has_forming_candidate(forming_candidates, "sell_1")
@@ -1651,6 +1757,32 @@ def analyze_chanlun_signals(
         bottom_divergence=bottom_divergence,
     )
     oscillation_rhythm_state = _build_oscillation_rhythm_state(current_zs, confirmed_bis, strengths)
+    # anchor_segment.confirmed_at（spec §2.8.1）：confirmed 态点的结构确认时刻以**锚点段整体确认**
+    # 为准（替代旧「反向转折笔 end_ts」近似）。只对**已确认锚点段**落值（fail-closed，§3.3 红线）；
+    # 取不到（段未确认 / 无段，如笔级回退、二类标准）时在载荷层回退既有近似，确认 / forming 归属不变。
+    # 类一例外：confirmed_at = max(back_to_center_at, 尾笔确认)，已在上文算好直接透传。
+    # 键用载荷点名（下划线去除，见 `_format_signal_point_name`）。
+    anchor_confirm_ts_by_point: dict[str, datetime] = {}
+
+    def _register_anchor_confirm(point_name: str, confirmed_ts: datetime | None) -> None:
+        if confirmed_ts is not None:
+            anchor_confirm_ts_by_point[point_name] = confirmed_ts
+
+    if "buy_1" in buy_points:
+        _register_anchor_confirm("buy1", _segment_confirmed_ts(exit_segment, bis))
+    if "sell_1" in sell_points:
+        _register_anchor_confirm("sell1", _segment_confirmed_ts(exit_segment, bis))
+    if "buy_3" in buy_points:
+        _register_anchor_confirm("buy3", _segment_confirmed_ts(buy3_hold_seg, bis))
+    if "sell_3" in sell_points:
+        _register_anchor_confirm("sell3", _segment_confirmed_ts(sell3_hold_seg, bis))
+    if "buy_2like" in buy_points:
+        _register_anchor_confirm("buy2like", _segment_confirmed_ts(buy2like_anchor_seg, bis))
+    if "sell_2like" in sell_points:
+        _register_anchor_confirm("sell2like", _segment_confirmed_ts(sell2like_anchor_seg, bis))
+    _register_anchor_confirm("buy1like", buy1like_confirmed_ts)
+    _register_anchor_confirm("sell1like", sell1like_confirmed_ts)
+
     signal_points, signal_catalog = build_signal_point_payloads(
         buy_points=buy_points,
         sell_points=sell_points,
@@ -1671,6 +1803,7 @@ def analyze_chanlun_signals(
         forming_candidates=forming_candidates,
         bis=bis,
         as_of_ts=raw_bars[-1].ts if raw_bars else None,
+        anchor_confirm_ts_by_point=anchor_confirm_ts_by_point,
     )
     zs_monitor_state = _build_zs_monitor_state(
         raw_bars,
@@ -1733,6 +1866,7 @@ def build_signal_point_payloads(
     forming_candidates: list[tuple[str, Bi]] | None = None,
     bis: list[Bi] | None = None,
     as_of_ts: datetime | None = None,
+    anchor_confirm_ts_by_point: dict[str, datetime] | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
     signal_points: list[dict[str, object]] = []
     signal_catalog: list[dict[str, object]] = []
@@ -1934,10 +2068,15 @@ def build_signal_point_payloads(
         if "sell_2like" in sell_points:
             confirm_ts_by_point["sell2like"] = as_of_ts
 
-    # 结构时间落种（spec 不依赖跨轮发布包）：
+    # 结构时间落种（spec §2.8.1，不依赖跨轮发布包）：
     # detected_at = 锚点笔**被确认**的时刻（= 结构检出时刻，严格晚于锚点笔尾 `time`）；
-    # confirmed_at = 确认态点的确认时刻（类二取首次确认帧的 as-of；其余取反向转折笔结束）。
+    # confirmed_at 优先级：
+    #   1) `anchor_segment.confirmed_at`（锚点段整体确认，由调用方 fail-closed 预算，仅已确认段有值）；
+    #   2) `as_of`（仅类二类在**无锚点段可用**的场景——如 current_zs=None 的裸笔单测——回退）；
+    #   3) 反向转折笔 end_ts 近似（二类标准 / 笔级回退等仍无段口径的点）。
     # 发布侧据此透传，使「检出/确认」反映结构 K 线时间而非跑批时刻。
+    anchor_confirm = anchor_confirm_ts_by_point or {}
+
     def _seed_structural_times(items: list[dict[str, object]]) -> None:
         for item in items:
             if not isinstance(item, dict):
@@ -1958,10 +2097,14 @@ def build_signal_point_payloads(
                 item.setdefault("detected_at", detect_ts)
             if state == SignalLifecycleState.CONFIRMED.value:
                 point_name = str(item.get("point") or "")
-                confirm_ts = confirm_ts_by_point.get(point_name) or _signal_confirm_ts(
-                    anchor,
-                    is_buy=point_name.startswith("buy"),
-                    bis=bis,
+                confirm_ts = (
+                    anchor_confirm.get(point_name)
+                    or confirm_ts_by_point.get(point_name)
+                    or _signal_confirm_ts(
+                        anchor,
+                        is_buy=point_name.startswith("buy"),
+                        bis=bis,
+                    )
                 )
                 item["confirmed_at"] = _isoformat_ts(confirm_ts) or anchor_ts
 
