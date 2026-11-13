@@ -174,7 +174,7 @@ tests: tests/test_chanlun_analysis.py
   （仍受多级别降级约束，且须满足 §3.3 repaint 红线：只锚定已确认笔 / 线段）。
   - `confirmed_at` = `anchor_segment.confirmed_at`（锚点段的确认时刻）。
 - **类一（盘整背驰）例外**：`confirmed` 条件放松为 `anchor_segment.tail_bi 已确认` **且** `回中枢
-  （back_to_center）`。
+  （back_to_center，价格重回中枢区间 [ZD, ZG]，定义见 §2.8.2）`。
   - `confirmed_at` = `max(back_to_center_at, anchor_segment.tail_bi.confirmed_at)`。
 - `invalidated`（失效）：确认后其成立前提被后续走势破坏。保留原信号锚点与 `invalidated_reason`，
   供撤单 / 失效提示消费，不再作可操作确认态（失效条件与 `invalidated_at` 公式见本节「各点类型失效
@@ -189,7 +189,7 @@ tests: tests/test_chanlun_analysis.py
 | 一买 / 一卖 | 趋势背驰转折起点，博反转第一波；空间最大、风险最高 | 同级别趋势（down→一买 / up→一卖）+ 绑定最近标准中枢 + **离开段**（=`anchor_segment`）对同向进入段趋势背驰（创进入段前低 / 前高 + 段级力度衰减）+ 离开段破中枢下 / 上沿 | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment` 已确认 | `anchor_segment.confirmed_at` |
 | 二买 / 二卖 | 一类点后首次确认性回抽 / 反抽；风险低于一类、空间仍大 | 绑定一买 / 一卖前置 + 首次回抽 / 反抽不破前低 / 前高 + 再度走强 / 走弱；**回抽 / 反抽段**（=`anchor_segment`） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment` 已确认 | `anchor_segment.confirmed_at` |
 | 三买 / 三卖（同级别分解机械第一类机会） | 离开中枢后首次不回归、趋势延续；确定性高、空间中等 | 向上 / 向下离开中枢 + 首次回试 / 反抽不重新跌回 / 站回中枢沿 + 回试后重新走强 / 走弱；**回试 / 反抽段**（=`anchor_segment`） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment` 已确认 | `anchor_segment.confirmed_at` |
-| 类一买 / 类一卖（LB1 / LS1，盘整背驰） | 盘整背驰转折；震荡区间转折机会，空间≈中枢震荡幅度 | 最近中枢 `ongoing_type == range` 且 `ongoing_same_type`（单中枢盘整）+ **离开段**（=`anchor_segment`）对同向进入段盘整背驰（破中枢沿 + 创进入段前低 / 前高 + 段级力度衰减） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment.tail_bi` 已确认 **且** 回中枢（`back_to_center`）〔放松〕 | `max(back_to_center_at, anchor_segment.tail_bi.confirmed_at)` |
+| 类一买 / 类一卖（LB1 / LS1，盘整背驰） | 盘整背驰转折；震荡区间转折机会，空间≈中枢震荡幅度 | 最近中枢 `ongoing_type == range` 且 `ongoing_same_type`（单中枢盘整）+ **离开段**（=`anchor_segment`）对同向进入段盘整背驰（破中枢沿 + 创进入段前低 / 前高 + 段级力度衰减） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment.tail_bi` 已确认 **且** 回中枢（`back_to_center`，价格重回 `[ZD, ZG]` 中枢区间，定义见 §2.8.2）〔放松〕 | `max(back_to_center_at, anchor_segment.tail_bi.confirmed_at)` |
 | 类二买 / 类二卖（LB2 / LS2，同级别分解机械第二类机会） | 同级别隔段背驰的回踩 / 反抽确认；类似二类的机械补点，空间中等 | `same_level_decomposition_mode == single_confirmed` + 同级别隔段背驰（A_i vs A_{i+2} 段级力度衰减，不要求破前低 / 前高）+ **A_{i+2}（当下回踩 / 反抽段）**（=`anchor_segment`） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment` 已确认 | `anchor_segment.confirmed_at` |
 
 > `invalidated` 条件与 `invalidated_at` 公式对所有点类型已在本节「各点类型失效条件」与
@@ -199,6 +199,34 @@ tests: tests/test_chanlun_analysis.py
 > **后续任务（可执行胜率）**：建议持久化记录**所有 `forming` 事件**（锚点、`forming_at`、后续
 > 转 `confirmed` / `invalidated` 的结局与时刻），据此统计从 `forming` 起算的**真实可执行胜率**
 > （而非仅以 `confirmed` 回看），作为盘中更早入场档位的收益评估依据。
+
+#### 2.8.2 类一「回中枢（`back_to_center`）」定义（应然）
+
+类一（盘整背驰 LB1 / LS1）的 `confirmed` 比一 / 二 / 三类、类二多出一个「回中枢」放松条件。
+其理论依据是第24课盘整背驰两种情形：**离开段破中枢但力度弱**时，价格**先出后回跌、重新回到
+中枢区间**（而非「不回中枢」转第三类点）；盘整背驰构成的「类第一类点」正是这条「破沿即回」的
+弱势离开反转。故类一不像标准一类点那样等反向线段整体走完才确认，而是以「尾笔确认 + 价格重新
+回到中枢区间」作为盘整背驰成立的确认信号。
+
+**中枢边沿口径**：沿用全文 ZG / ZD 约定——`ZG = related_zs_high`（中枢上沿）、
+`ZD = related_zs_low`（中枢下沿）。两边沿在中枢前三笔重叠区固定后即固化到该点上
+（`payload.related_zs_low` / `related_zs_high`，见 §RS0 增量7 / design §4.2.10），
+跨帧稳定比较，不随尾部重切换人。
+
+**定义（买卖对称）**：设 `anchor_segment` 为破沿的弱势离开段，反向转折后的回抽 / 反抽价格
+重新进入中枢区间 `[ZD, ZG]` 即为「回中枢」：
+
+- 类一买（LB1）：离开段向下跌破 `ZD`（创进入段前低但力度弱）；反向向上转折后，后续向上
+  笔 / 段的**最高价 `high ≥ ZD`**（价格重新站回中枢下沿之上、回到中枢区间）→ `back_to_center` 成立。
+- 类一卖（LS1）：离开段向上升破 `ZG`（创进入段前高但力度弱）；反向向下转折后，后续向下
+  笔 / 段的**最低价 `low ≤ ZG`**（价格重新跌回中枢上沿之下、回到中枢区间）→ `back_to_center` 成立。
+
+**`back_to_center_at`**：首次满足上述「价格重新进入中枢区间」条件的那根 K 线时间
+（类一买取 `high` 首次 `≥ ZD` 的 bar；类一卖取 `low` 首次 `≤ ZG` 的 bar）。据此
+`confirmed_at = max(back_to_center_at, anchor_segment.tail_bi.confirmed_at)`——两条件谁后满足以谁为准。
+
+> 与三类点「不回中枢」互斥：类一要求离开后**回中枢**（弱势盘整背驰反转）；三买 / 三卖要求离开后
+> 首次回试 / 反抽**不回中枢**（强势离开不回归）。同一离开段二者不会同时成立。
 
 Repaint 红线：
 
