@@ -158,15 +158,47 @@ tests: tests/test_chanlun_analysis.py
 > [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md)，任务见
 > [buy-sell-multi-level-tasks.md](buy-sell-multi-level-tasks.md) RS0-RS5。
 
-每个买卖点具备生命周期状态 `forming（预备 / 观察）→ confirmed（确认）→ invalidated（失效）`：
+每个买卖点具备生命周期状态 `forming（预备 / 观察）→ confirmed（确认）→ invalidated（失效）`。
 
-- `forming`：核心背驰 / 离开 / 隔段力度衰减条件已成立，但**反向转折笔尚未出现**（出现即可——
-  含 effective 未确认尾笔；`2026-09-13` 决策后「出现」不再要求「已确认」，与二 / 三类「新笔
-  不要求确认」对齐）。只作 watch 档观察态，不得升为 confirmed，也不得被下游二次摘要成确认买卖点。
-- `confirmed`：反向转折已出现（证据笔可为未确认尾笔），且**信号锚点**必须已确认
-  （锚点即`signal_bi_id`，§3.3 红线），是可操作确认态（仍受多级别降级约束）。
-- `invalidated`：确认后其成立前提被后续走势破坏。保留原信号锚点与 `invalidated_reason`，供撤单 /
-  失效提示消费，不再作可操作确认态。
+#### 2.8.1 以锚点段（`anchor_segment`）统一 forming / confirmed（应然）
+
+所有买卖点——同级别分解机械操作常用的类二 / 类三（LB2 / LS2、三买 / 三卖），一般的一 / 二类
+（一买 / 一卖、二买 / 二卖），以及盘整背驰的类一（LB1 / LS1）——的 `forming` 与 `confirmed`
+除各自的**基本条件**（共同条件：背驰 / 离开 / 隔段力度衰减 + 中枢绑定，见下表）外，均以**锚点段
+`anchor_segment`**（定义该点的离开 / 回踩 / 反抽线段）统一刻画，口径对称、跨帧单调（不 repaint）：
+
+- `forming`（预备 / 观察）：`anchor_segment` 的**尾笔**（`anchor_segment.tail_bi`）已确认。
+  仍只作 watch 档观察态，不得升为 confirmed，也不得被下游二次摘要成确认买卖点。
+  - `forming_at` / `detected_at` = `anchor_segment.tail_bi.confirmed_at`（锚点段尾笔的确认时刻）。
+- `confirmed`（确认）：`anchor_segment` 整体已确认（反向线段确认），是可操作确认态
+  （仍受多级别降级约束，且须满足 §3.3 repaint 红线：只锚定已确认笔 / 线段）。
+  - `confirmed_at` = `anchor_segment.confirmed_at`（锚点段的确认时刻）。
+- **类一（盘整背驰）例外**：`confirmed` 条件放松为 `anchor_segment.tail_bi 已确认` **且** `回中枢
+  （back_to_center）`。
+  - `confirmed_at` = `max(back_to_center_at, anchor_segment.tail_bi.confirmed_at)`。
+- `invalidated`（失效）：确认后其成立前提被后续走势破坏。保留原信号锚点与 `invalidated_reason`，
+  供撤单 / 失效提示消费，不再作可操作确认态（失效条件与 `invalidated_at` 公式见本节「各点类型失效
+  条件」与 [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §3.2；`invalidated`
+  状态已有，其精确实现可后置）。
+
+统一生命周期表（`anchor_segment` 为各行「基本条件」列标注的锚点段；`forming` / `confirmed` 公式
+除类一外同构）：
+
+| 买卖点类型 | 预期收益简介 | 基本条件（forming / confirmed 共同，含锚点段 `anchor_segment`） | forming 条件 | `forming_at` / `detected_at` 公式 | confirmed 条件 | `confirmed_at` 公式 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 一买 / 一卖 | 趋势背驰转折起点，博反转第一波；空间最大、风险最高 | 同级别趋势（down→一买 / up→一卖）+ 绑定最近标准中枢 + **离开段**（=`anchor_segment`）对同向进入段趋势背驰（创进入段前低 / 前高 + 段级力度衰减）+ 离开段破中枢下 / 上沿 | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment` 已确认 | `anchor_segment.confirmed_at` |
+| 二买 / 二卖 | 一类点后首次确认性回抽 / 反抽；风险低于一类、空间仍大 | 绑定一买 / 一卖前置 + 首次回抽 / 反抽不破前低 / 前高 + 再度走强 / 走弱；**回抽 / 反抽段**（=`anchor_segment`） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment` 已确认 | `anchor_segment.confirmed_at` |
+| 三买 / 三卖（同级别分解机械第一类机会） | 离开中枢后首次不回归、趋势延续；确定性高、空间中等 | 向上 / 向下离开中枢 + 首次回试 / 反抽不重新跌回 / 站回中枢沿 + 回试后重新走强 / 走弱；**回试 / 反抽段**（=`anchor_segment`） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment` 已确认 | `anchor_segment.confirmed_at` |
+| 类一买 / 类一卖（LB1 / LS1，盘整背驰） | 盘整背驰转折；震荡区间转折机会，空间≈中枢震荡幅度 | 最近中枢 `ongoing_type == range` 且 `ongoing_same_type`（单中枢盘整）+ **离开段**（=`anchor_segment`）对同向进入段盘整背驰（破中枢沿 + 创进入段前低 / 前高 + 段级力度衰减） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment.tail_bi` 已确认 **且** 回中枢（`back_to_center`）〔放松〕 | `max(back_to_center_at, anchor_segment.tail_bi.confirmed_at)` |
+| 类二买 / 类二卖（LB2 / LS2，同级别分解机械第二类机会） | 同级别隔段背驰的回踩 / 反抽确认；类似二类的机械补点，空间中等 | `same_level_decomposition_mode == single_confirmed` + 同级别隔段背驰（A_i vs A_{i+2} 段级力度衰减，不要求破前低 / 前高）+ **A_{i+2}（当下回踩 / 反抽段）**（=`anchor_segment`） | `anchor_segment.tail_bi` 已确认 | `anchor_segment.tail_bi.confirmed_at` | `anchor_segment` 已确认 | `anchor_segment.confirmed_at` |
+
+> `invalidated` 条件与 `invalidated_at` 公式对所有点类型已在本节「各点类型失效条件」与
+> [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md) §3.2 定义，`invalidated`
+> 状态亦已落地；上表统一 `anchor_segment` 口径的**精确实现可后置**。
+>
+> **后续任务（可执行胜率）**：建议持久化记录**所有 `forming` 事件**（锚点、`forming_at`、后续
+> 转 `confirmed` / `invalidated` 的结局与时刻），据此统计从 `forming` 起算的**真实可执行胜率**
+> （而非仅以 `confirmed` 回看），作为盘中更早入场档位的收益评估依据。
 
 Repaint 红线：
 
