@@ -280,6 +280,73 @@ def test_collect_signal_events_from_reports(tmp_path: Path) -> None:
     assert collect_signal_events_from_reports(reports, timeframes=["5m"]) == []
 
 
+def _tech_payload_with_event_fields() -> dict:
+    return {
+        "symbol": "000591",
+        "name": "太阳能",
+        "timeframe": "30m",
+        "summary": {
+            "signal_points": [
+                {
+                    "point": "buy1",
+                    "lifecycle_state": "confirmed",
+                    "time": "2026-08-05T14:00:00",
+                    "price": 4.2,
+                    "forming_at": "2026-08-05T13:45:00",
+                    "forming_price": 4.18,
+                    "confirmed_at": "2026-08-05T14:05:00",
+                    "confirmed_price": 4.26,
+                },
+                {
+                    "point": "sell3",
+                    "lifecycle_state": "forming",
+                    "time": "2026-08-06T10:30:00",
+                    "price": 4.63,
+                    "forming_at": "2026-08-06T10:15:00",
+                    "forming_price": 4.59,
+                    "confirmed_at": None,
+                    "confirmed_price": None,
+                },
+            ],
+            "forming_points": [],
+            "invalidated_points": [],
+        },
+    }
+
+
+def test_extract_signal_events_carries_forming_and_confirmed_event_fields() -> None:
+    events = {event.point: event for event in extract_signal_events(_tech_payload_with_event_fields())}
+
+    confirmed = events["buy1"]
+    assert (confirmed.forming_at, confirmed.forming_price) == ("2026-08-05T13:45:00", 4.18)
+    assert (confirmed.confirmed_at, confirmed.confirmed_price) == ("2026-08-05T14:05:00", 4.26)
+
+    forming = events["sell3"]
+    assert (forming.forming_at, forming.forming_price) == ("2026-08-06T10:15:00", 4.59)
+    assert (forming.confirmed_at, forming.confirmed_price) == ("", None)
+
+
+def test_build_signal_card_renders_forming_and_confirmed_times_with_prices() -> None:
+    card = build_signal_card(extract_signal_events(_tech_payload_with_event_fields()), title="买卖点")
+    content = card["card"]["elements"][0]["text"]["content"]
+
+    # 锚点信息仍在（买卖点自身时间 + 极值）
+    assert "价4.2 @ 2026-08-05 14:00" in content
+    # 六字段：forming / confirmed 各自「事件时间 + 该 K 线收盘价」，成对出现
+    assert "检出 4.18 @ 2026-08-05 13:45" in content
+    assert "确认 4.26 @ 2026-08-05 14:05" in content
+    # 预备态信号只有 forming 一组，不渲染确认段
+    assert "检出 4.59 @ 2026-08-06 10:15" in content
+
+
+def test_build_signal_card_omits_snapshot_line_for_legacy_payload() -> None:
+    card = build_signal_card(extract_signal_events(_tech_payload()), title="买卖点")
+    content = card["card"]["elements"][0]["text"]["content"]
+
+    assert " @ 2026-08-05 13:45" not in content
+    assert "检出 " not in content
+
+
 def test_sign_feishu_request_is_deterministic() -> None:
     first = sign_feishu_request("1700000000", "secret")
     second = sign_feishu_request("1700000000", "secret")

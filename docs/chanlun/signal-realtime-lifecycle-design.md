@@ -805,6 +805,11 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
    `forming` 点不能被 `active` 过滤丢弃（`build_latest_signal_summary`）。
 2. **前端渲染层**（`c:/sandbox/sinba/westock/`，独立仓库）：「买卖点」页面按 `lifecycle_state`
    渲染 `forming`（预备 / 观察角标）、`confirmed`（正常）、`invalidated`（已失效 + 原因）。
+3. **飞书通知层**（`src/notify/signal_notifier.py`，见 [../notify/buysell_notify.md](../notify/buysell_notify.md)）：
+   卡片每条信号两行——第一行锚点（买卖点自身 `time` + `price`），第二行缩进展示六字段中的
+   「检出 `forming_price`@`forming_at` → 确认 `confirmed_price`@`confirmed_at`」。
+   `forming` 事件只渲染检出段；旧 `tech.json` 缺字段时整行省略（向后兼容）。
+   **语义红线**：第二行的事件价格是该事件 K 线的 **close**，不得用锚点极值代替。
 
 渐进策略：初期可复用现有 `zs_monitor_alert` 文本行（页面已展示「中枢预警：…」），先以文本行
 透出买卖点预备态，再逐步升级为结构化 `lifecycle_state` 角标。红线：`forming` 不得在页面上

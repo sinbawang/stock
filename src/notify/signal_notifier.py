@@ -21,7 +21,12 @@ MARKET_ADVICE_KEEP_PREFIXES = ("结论：", "理由：", "建议：", "数据时
 
 @dataclass(frozen=True)
 class SignalEvent:
-    """一条可推送的买卖点事件。"""
+    """一条可推送的买卖点事件。
+
+    ``time`` / ``price`` 是**锚点**（买卖点自身）的时间与极值；
+    ``forming_at`` / ``confirmed_at`` 等是 spec §2.8.4 的**事件六字段**快照，
+    口径与发布包一致（事件 K 线时间 + 那根 K 线的收盘价）。
+    """
 
     symbol: str
     name: str
@@ -33,6 +38,10 @@ class SignalEvent:
     lifecycle_label: str
     time: str
     price: Optional[float]
+    forming_at: str = ""
+    forming_price: Optional[float] = None
+    confirmed_at: str = ""
+    confirmed_price: Optional[float] = None
 
 
 def _coerce_float(value: Any) -> Optional[float]:
@@ -159,6 +168,11 @@ def _event_from_point(
         lifecycle_label=lifecycle_label,
         time=str(raw.get("time") or ""),
         price=_coerce_float(raw.get("price")),
+        # 六字段（spec §2.8.4）：旧 tech.json 没有时留空，卡片自动省略该段。
+        forming_at=str(raw.get("forming_at") or raw.get("detected_at") or ""),
+        forming_price=_coerce_float(raw.get("forming_price")),
+        confirmed_at=str(raw.get("confirmed_at") or ""),
+        confirmed_price=_coerce_float(raw.get("confirmed_price")),
     )
 
 
@@ -258,16 +272,51 @@ def _header_template(events: list[SignalEvent]) -> str:
     return "blue"
 
 
+def _format_moment(value: str) -> str:
+    return str(value or "").strip().replace("T", " ")
+
+
+def _format_stamped(label: str, moment: str, price: Optional[float]) -> str:
+    """「预备 4.18 @ 2026-08-05 13:45」——事件时间与事件 K 线收盘价成对出现。"""
+
+    parts = [label]
+    if price is not None:
+        parts.append(f"{price:g}")
+    text = _format_moment(moment)
+    if text:
+        parts.append(f"@ {text}")
+    return " ".join(parts)
+
+
+def _format_lifecycle_snapshot(event: SignalEvent) -> str:
+    """spec §2.8.4 六字段中 forming / confirmed 两组的卡片展示。
+
+    与锚点「时间 + 极值」不同，这里是**事件时刻 + 那一刻的收盘价**：
+    `forming_at/forming_price`（结构检出）与 `confirmed_at/confirmed_price`（首次确认）。
+    """
+
+    parts: list[str] = []
+    if event.forming_at or event.forming_price is not None:
+        # 标签与小程序买卖点表的「检出」行对齐：forming_at = 结构检出时刻（= detected_at）。
+        parts.append(_format_stamped("检出", event.forming_at, event.forming_price))
+    if event.confirmed_at or event.confirmed_price is not None:
+        parts.append(_format_stamped("确认", event.confirmed_at, event.confirmed_price))
+    return " → ".join(parts)
+
+
 def _format_event_line(event: SignalEvent) -> str:
     emoji = DIRECTION_EMOJI.get(event.direction, "🔵")
     name = event.name or event.symbol
     price = f" 价{event.price:g}" if event.price is not None else ""
     moment = event.time.replace("T", " ")
     tail = f" @ {moment}" if moment else ""
-    return (
+    main = (
         f"{emoji} **{name} {event.symbol}** {event.timeframe.upper()}"
         f"｜{event.lifecycle_label}·{event.point_label}{price}{tail}"
     )
+    snapshot = _format_lifecycle_snapshot(event)
+    # 六字段另起一行缩进展示，避免把主行拉得过长（飞书 lark_md 支持换行）。
+    return f"{main}\n　　{snapshot}" if snapshot else main
 
 
 def build_signal_card(
