@@ -397,3 +397,75 @@ def test_verify_uploaded_files_parallel_matches_all(monkeypatch, tmp_path: Path)
     assert len(results) == len(items)
     assert all(result.matched for result in results)
     assert {result.relative_path for result in results} == {item.file.relative_path for item in items}
+
+
+def test_is_transient_network_error_matches_dns_resolution_failure() -> None:
+    error = module.requests.exceptions.ConnectionError(
+        "HTTPSConnectionPool(host='env.ap-shanghai.tcb-api.tencentcloudapi.com', port=443): "
+        "Failed to resolve 'env.ap-shanghai.tcb-api.tencentcloudapi.com' "
+        "([Errno -3] Temporary failure in name resolution)"
+    )
+    assert module.is_transient_network_error(error) is True
+    assert module.is_transient_network_error(ValueError("bad input")) is False
+
+
+def test_admin_request_retries_transient_dns_error(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"data": {"ok": True}}
+
+    class FakeSession:
+        def post(self, *_args, **_kwargs):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise module.requests.exceptions.ConnectionError(
+                    "Failed to resolve 'env.ap-shanghai.tcb-api.tencentcloudapi.com' "
+                    "([Errno -3] Temporary failure in name resolution)"
+                )
+            return FakeResponse()
+
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+
+    result = module.admin_request(
+        FakeSession(),
+        env_id="env",
+        region="ap-shanghai",
+        api_key="key",
+        action="storage.getUploadMetadata",
+        payload={"path": "index.json"},
+    )
+
+    assert calls["count"] == 2
+    assert result == {"data": {"ok": True}}
+
+
+def test_admin_request_does_not_retry_permanent_errors(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    class FakeSession:
+        def post(self, *_args, **_kwargs):
+            calls["count"] += 1
+            raise module.requests.exceptions.ConnectionError("certificate verify failed")
+
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+
+    try:
+        module.admin_request(
+            FakeSession(),
+            env_id="env",
+            region="ap-shanghai",
+            api_key="key",
+            action="storage.getUploadMetadata",
+            payload={"path": "index.json"},
+        )
+    except module.requests.exceptions.ConnectionError:
+        pass
+    else:  # pragma: no cover - 非瞬态错误必须直接抛出
+        raise AssertionError("permanent error should not be retried")
+
+    assert calls["count"] == 1

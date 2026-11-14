@@ -379,6 +379,56 @@ def build_admin_url(env_id: str, region: str) -> str:
     return f"https://{env_id}.{region}.tcb-api.tencentcloudapi.com/admin?env={env_id}&seqId={seq_id}"
 
 
+DEFAULT_NETWORK_RETRIES = 4
+DEFAULT_NETWORK_RETRY_BASE_SECONDS = 1.0
+
+
+def is_transient_network_error(error: BaseException) -> bool:
+    """DNS 抖动 / 连接被重置等**可重试**错误。
+
+    只匹配「请求尚未被服务端处理」类错误，避免重复创建 API Key 等副作用：
+    DNS 解析失败、连接被拒 / 重置、连接阶段超时。
+    """
+    text = repr(error).lower()
+    markers = (
+        "failed to resolve",
+        "name or service not known",
+        "temporary failure in name resolution",
+        "nodename nor servname",
+        "connection aborted",
+        "connection reset",
+        "remote end closed connection",
+        "connect timeout",
+    )
+    return any(marker in text for marker in markers)
+
+
+def request_with_retry(
+    request_fn,
+    *,
+    label: str,
+    retries: int = DEFAULT_NETWORK_RETRIES,
+):
+    """执行一次性网络请求；遇到瞬态网络错误按指数退避重试。"""
+    attempts = max(1, int(retries))
+    last_error: BaseException | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return request_fn()
+        except requests.RequestException as error:
+            last_error = error
+            if attempt >= attempts or not is_transient_network_error(error):
+                raise
+            wait = DEFAULT_NETWORK_RETRY_BASE_SECONDS * (2 ** (attempt - 1))
+            print(
+                f"{label} transient network error (attempt {attempt}/{attempts}), "
+                f"retry in {wait:.1f}s: {error}",
+                flush=True,
+            )
+            time.sleep(wait)
+    raise last_error  # pragma: no cover - 循环内已保证要么 return 要么 raise
+
+
 def new_session() -> requests.Session:
     session = requests.Session()
     session.trust_env = False
@@ -573,12 +623,16 @@ def admin_request(
     payload: dict[str, Any],
 ) -> dict[str, Any]:
     body = {"action": action, "envName": env_id, **payload}
-    response = session.post(
-        build_admin_url(env_id, region),
-        headers=admin_headers(api_key, region),
-        json=body,
-        timeout=30,
-    )
+
+    def _send():
+        return session.post(
+            build_admin_url(env_id, region),
+            headers=admin_headers(api_key, region),
+            json=body,
+            timeout=30,
+        )
+
+    response = request_with_retry(_send, label=f"admin {action}")
     response.raise_for_status()
     parsed = response.json()
     if parsed.get("code"):
@@ -927,7 +981,13 @@ def upload_bytes(session: requests.Session, *, cloud_path: str, local_path: Path
         "Content-Type": content_type,
     }
     with local_path.open("rb") as handle:
-        response = session.put(str(metadata["url"]), headers=headers, data=handle, timeout=120)
+
+        def _put():
+            # 重试前必须回到文件头，否则断点连接会从半截开始上传。
+            handle.seek(0)
+            return session.put(str(metadata["url"]), headers=headers, data=handle, timeout=120)
+
+        response = request_with_retry(_put, label=f"cos upload {cloud_path}")
     if response.status_code != 200:
         raise CloudBaseUploadError(f"COS upload failed for {cloud_path}: HTTP {response.status_code} {response.text[:200]}")
     body = response.text.strip()
