@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import io
 import json
@@ -133,6 +134,16 @@ def parse_args() -> argparse.Namespace:
         "--pointer-path",
         default=str(DEFAULT_POINTER_PATH),
         help="Local path to write manifest pointer metadata",
+    )
+    backup_parser.add_argument(
+        "--merge-cloud",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "上传前先把云端快照与本地缓存按 ts 取并集合并（默认开）。"
+            "关掉后容器会用自己可能不完整的本地仓库整包覆盖云端，"
+            "导致刚补的历史（如新加入持仓的标的）被抹掉。"
+        ),
     )
     backup_parser.add_argument(
         "--upload-expanded-files",
@@ -698,6 +709,102 @@ def write_pointer(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+KLINE_COLUMNS = ("ts", "open", "high", "low", "close", "volume")
+
+
+def read_kline_rows(path: Path) -> list[dict[str, str]]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return [
+            {key: str(row.get(key) or "").strip() for key in KLINE_COLUMNS}
+            for row in csv.DictReader(handle)
+            if str(row.get("ts") or "").strip()
+        ]
+
+
+def _file_last_ts(rows: list[dict[str, str]]) -> str:
+    return rows[-1]["ts"] if rows else ""
+
+
+def merge_kline_tree(cloud_dir: Path, local_dir: Path, merged_dir: Path) -> dict[str, int]:
+    """把云端快照与本地缓存按 `ts` 取**并集**合并。
+
+    规则：
+    - 只有一侧有的文件 → 直接取该侧（新标的的历史来自云端或本地皆可补齐）；
+    - 两侧都有且是 CSV → 并集；同一 `ts` 冲突时以「`last_ts` 更新 / 行数更多」的一侧为准
+      （那一侧通常是刚抓过数的权威副本）；
+    - 非 CSV（`manifest.json` / `.scheduler` 等）→ 优先本地。
+
+    背景（2026-11-14）：容器备份用它**不完整**的本地仓库整包覆盖云端，把刚补进云端的
+    600584 历史抹掉（1m 从 4200 根变成几百根）。合并后再上传才能保证「谁都不会丢数据」。
+    """
+
+    merged_dir.mkdir(parents=True, exist_ok=True)
+    cloud_files = {path.relative_to(cloud_dir).as_posix(): path for path in cloud_dir.rglob("*") if path.is_file()}
+    local_files = {path.relative_to(local_dir).as_posix(): path for path in local_dir.rglob("*") if path.is_file()}
+
+    stats = {"files": 0, "from_local_only": 0, "from_cloud_only": 0, "merged_csv": 0, "copied_other": 0}
+    for relative in sorted(set(cloud_files) | set(local_files)):
+        target = merged_dir / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        cloud_path = cloud_files.get(relative)
+        local_path = local_files.get(relative)
+        if cloud_path is None:
+            shutil.copy2(local_path, target)
+            stats["from_local_only"] += 1
+            stats["files"] += 1
+            continue
+        if local_path is None:
+            shutil.copy2(cloud_path, target)
+            stats["from_cloud_only"] += 1
+            stats["files"] += 1
+            continue
+        if target.suffix.lower() != ".csv":
+            shutil.copy2(local_path, target)
+            stats["copied_other"] += 1
+            stats["files"] += 1
+            continue
+
+        cloud_rows = read_kline_rows(cloud_path)
+        local_rows = read_kline_rows(local_path)
+        cloud_rank = (_file_last_ts(cloud_rows), len(cloud_rows))
+        local_rank = (_file_last_ts(local_rows), len(local_rows))
+        winner, loser = (cloud_rows, local_rows) if cloud_rank >= local_rank else (local_rows, cloud_rows)
+        merged: dict[str, dict[str, str]] = {row["ts"]: row for row in loser}
+        merged.update({row["ts"]: row for row in winner})
+        with target.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(KLINE_COLUMNS))
+            writer.writeheader()
+            for ts in sorted(merged):
+                writer.writerow({key: merged[ts].get(key, "") for key in KLINE_COLUMNS})
+        stats["merged_csv"] += 1
+        stats["files"] += 1
+    return stats
+
+
+def merge_with_cloud_snapshot(
+    args: argparse.Namespace,
+    source_dir: Path,
+    *,
+    work_dir: Path,
+) -> tuple[Path, dict[str, int]]:
+    """下载云端快照到临时目录，并与 `source_dir` 合并；返回合并后的目录与统计。"""
+
+    if work_dir.exists():
+        shutil.rmtree(work_dir)
+    cloud_dir = work_dir / "cloud"
+    merged_dir = work_dir / "merged"
+    restore_args = argparse.Namespace(**vars(args))
+    restore_args.target_dir = str(cloud_dir)
+    restore_args.clean_target = True
+    restore_args.use_cli_download = False
+    restore_args.fetch_manifest = False
+    restore_args.manifest_file_id = None
+    restore_args.dry_run = False
+    command_restore(restore_args)
+    stats = merge_kline_tree(cloud_dir, source_dir, merged_dir)
+    return merged_dir, stats
+
+
 def command_backup(args: argparse.Namespace) -> int:
     ensure_env_id(args.env_id, dry_run=args.dry_run)
     source_dir = Path(args.source_dir).resolve()
@@ -708,6 +815,28 @@ def command_backup(args: argparse.Namespace) -> int:
 
     manifest_path = Path(args.manifest_path).resolve()
     pointer_path = Path(args.pointer_path).resolve()
+
+    original_source_dir = source_dir
+    merge_work_dir = manifest_path.parent / "_merge"
+    if bool(getattr(args, "merge_cloud", True)) and not args.dry_run:
+        try:
+            source_dir, merge_stats = merge_with_cloud_snapshot(
+                args,
+                original_source_dir,
+                work_dir=merge_work_dir,
+            )
+            print(
+                "merge_cloud="
+                + " ".join(f"{key}={value}" for key, value in merge_stats.items())
+            )
+            print(f"merged_source={source_dir}")
+        except Exception as exc:  # noqa: BLE001 - 合并失败退化为普通备份，但明确告警
+            print(
+                f"merge_cloud_warning={type(exc).__name__}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+            source_dir = original_source_dir
 
     snapshot_files = [path for path in source_dir.rglob("*") if path.is_file()]
     if not snapshot_files:
