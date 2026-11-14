@@ -30,8 +30,14 @@ if str(SCRIPTS) not in sys.path:
 from batch_generate_and_send_portfolio_mixed_reports import load_holdings
 from batch_prepare_chanlun_reports import run_batch_prepare
 from refresh_holdings_publish_to_cloudbase import (
+    DEFAULT_KLINE_CACHE_CLOUD_PREFIX,
+    DEFAULT_KLINE_CACHE_MANIFEST_PATH,
+    DEFAULT_KLINE_CACHE_POINTER_PATH,
+    DEFAULT_KLINE_CACHE_SOURCE_DIR,
+    DEFAULT_SYNC_KLINE_SCRIPT,
     rebuild_publish_bundle,
     regenerate_holdings,
+    sync_kline_cache_restore,
     sync_signal_history,
     upload_publish_bundle,
     write_signal_history_jsonl,
@@ -178,6 +184,10 @@ class PublishRefreshRequest(BaseModel):
     force_upload: bool = False
     upload_dry_run: bool = False
     verify_sample_ratio: float = Field(default=1.0, ge=0.0, le=1.0)
+    # 重新生成前先从 CloudBase 拉最新 K 线快照（含新增持仓标的的历史），
+    # 否则容器只在启动时 restore 一次，新加入的标的会因为本地仓库没有历史而只能靠
+    # 限频的远端接口现抓 → 发布包 K 线不足（2026-11-14 600584 事故）。
+    restore_kline_cache: bool = True
     client_request_id: str | None = None
 
     @field_validator("local_store_read_only", mode="before")
@@ -460,11 +470,31 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
         force_upload=request.force_upload,
         upload_dry_run=request.upload_dry_run,
         verify_sample_ratio=request.verify_sample_ratio,
+        # K 线缓存同步参数（供 `sync_kline_cache_restore` 子命令构造）。
+        sync_kline_cache_script=str(DEFAULT_SYNC_KLINE_SCRIPT),
+        kline_cache_source_dir=str(DEFAULT_KLINE_CACHE_SOURCE_DIR),
+        kline_cache_target_dir=str(DEFAULT_KLINE_CACHE_SOURCE_DIR),
+        kline_cache_cloud_prefix=DEFAULT_KLINE_CACHE_CLOUD_PREFIX,
+        kline_cache_manifest_path=str(DEFAULT_KLINE_CACHE_MANIFEST_PATH),
+        kline_cache_pointer_path=str(DEFAULT_KLINE_CACHE_POINTER_PATH),
+        kline_cache_clean_target_before_restore=False,
+        kline_cache_restore_use_cli_download=False,
     )
     regeneration_result: dict[str, Any] | None = None
     stage_seconds: dict[str, float] = {}
     total_started = time.perf_counter()
     if not args.skip_regenerate:
+        # 重新生成前先从云端拉最新 K 线快照：容器只在启动时 restore 一次，
+        # 不在这里补一次，新增持仓标的（如 600584）会因本地无历史而只能靠限频远端接口现抓，
+        # 发布包里 K 线就不足。失败只告警，不阻断发布。
+        if request.restore_kline_cache:
+            restore_started = time.perf_counter()
+            try:
+                sync_kline_cache_restore(args)
+                print("kline_cache_restore=ok", flush=True)
+            except Exception as exc:  # noqa: BLE001 - K 线 restore 不阻断发布
+                print(f"kline_cache_restore_warning={exc}", flush=True)
+            stage_seconds["restore_kline_cache_seconds"] = round(time.perf_counter() - restore_started, 2)
         regenerate_started = time.perf_counter()
         regeneration_result = regenerate_holdings(args)
         stage_seconds["regenerate_seconds"] = round(time.perf_counter() - regenerate_started, 2)

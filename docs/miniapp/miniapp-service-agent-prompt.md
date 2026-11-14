@@ -132,7 +132,8 @@
   "skip_gen_base": false,
   "skip_gen_fund": false,
   "tech_timeframes": ["day", "30m", "5m"],
-  "publish_timeframes": ["day", "30m", "5m"]
+  "publish_timeframes": ["day", "30m", "5m"],
+  "restore_kline_cache": true
 }
 ```
 
@@ -142,6 +143,9 @@
 2. 不传 `limit`，表示不截断
 3. `skip_upload` 必须是 `false`，因为小程序要消费上传后的最新发布包
 4. `skip_gen_base` 和 `skip_gen_fund` 这里固定用 `false`，避免发布包构建依赖缺失
+5. `restore_kline_cache`（默认 `true`）：重新生成前先从 CloudBase 拉最新 K 线快照。
+   服务容器只在启动时 restore 一次；不开这个，新加入持仓的标的会拿不到云端历史，
+   发布包里 K 线会不足（前端表现为图表只有寥寥几根）。
 
 六、job 接口的真实返回模型
 

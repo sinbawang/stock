@@ -199,7 +199,12 @@ def test_run_publish_refresh_keeps_full_path_when_primary_timeframe_requested(mo
     monkeypatch.setattr(module, "regenerate_holdings", fake_regenerate_holdings)
     monkeypatch.setattr(module, "_publish_build_and_upload", fake_publish_build_and_upload)
 
-    request = module.PublishRefreshRequest(skip_build=True, skip_upload=True, tech_timeframes=["30m", "5m", "1m"])
+    request = module.PublishRefreshRequest(
+        skip_build=True,
+        skip_upload=True,
+        tech_timeframes=["30m", "5m", "1m"],
+        restore_kline_cache=False,
+    )
 
     result = module._run_publish_refresh(request)
 
@@ -227,12 +232,80 @@ def test_run_publish_refresh_expands_day_request_to_lower_timeframes(monkeypatch
     monkeypatch.setattr(module, "regenerate_holdings", fake_regenerate_holdings)
     monkeypatch.setattr(module, "_publish_build_and_upload", fake_publish_build_and_upload)
 
-    request = module.PublishRefreshRequest(skip_build=True, skip_upload=True, tech_timeframes=["day"])
+    request = module.PublishRefreshRequest(
+        skip_build=True,
+        skip_upload=True,
+        tech_timeframes=["day"],
+        restore_kline_cache=False,
+    )
 
     result = module._run_publish_refresh(request)
 
     assert captured["tech_timeframes"] == ("day", "30m", "5m", "1m")
     assert result["generated_timeframes"] == ["day", "30m", "5m", "1m"]
+
+
+def test_run_publish_refresh_restores_kline_cache_before_regenerate(monkeypatch) -> None:
+    """小程序 EOD 必须先拉云端 K 线快照再重新生成（新标的才拿得到完整历史）。"""
+    calls: list[str] = []
+
+    monkeypatch.setattr(module, "sync_kline_cache_restore", lambda args: calls.append("restore"))
+
+    def fake_regenerate(args):
+        calls.append("regenerate")
+        return {"generated_count": 1}
+
+    monkeypatch.setattr(module, "regenerate_holdings", fake_regenerate)
+    monkeypatch.setattr(
+        module,
+        "_publish_build_and_upload",
+        lambda args: {
+            "publish_root": args.publish_root,
+            "latest_dir": "latest",
+            "cloud_prefix": args.cloud_prefix,
+            "published_timeframes": None,
+        },
+    )
+
+    request = module.PublishRefreshRequest(skip_build=True, skip_upload=True, tech_timeframes=["30m"])
+
+    result = module._run_publish_refresh(request)
+
+    assert calls == ["restore", "regenerate"]
+    assert "restore_kline_cache_seconds" in result["stage_seconds"]
+
+
+def test_run_publish_refresh_survives_kline_cache_restore_failure(monkeypatch) -> None:
+    """K 线 restore 失败只告警，不阻断重新生成与发布。"""
+    calls: list[str] = []
+
+    def boom(args):
+        raise RuntimeError("restore failed")
+
+    monkeypatch.setattr(module, "sync_kline_cache_restore", boom)
+
+    def fake_regenerate(args):
+        calls.append("regenerate")
+        return {"generated_count": 1}
+
+    monkeypatch.setattr(module, "regenerate_holdings", fake_regenerate)
+    monkeypatch.setattr(
+        module,
+        "_publish_build_and_upload",
+        lambda args: {
+            "publish_root": args.publish_root,
+            "latest_dir": "latest",
+            "cloud_prefix": args.cloud_prefix,
+            "published_timeframes": None,
+        },
+    )
+
+    request = module.PublishRefreshRequest(skip_build=True, skip_upload=True, tech_timeframes=["30m"])
+
+    result = module._run_publish_refresh(request)
+
+    assert calls == ["regenerate"]
+    assert result["regenerated"] is True
 
 
 def test_publish_build_and_upload_writes_signal_history_before_upload(monkeypatch, tmp_path) -> None:

@@ -148,7 +148,6 @@ docker run --rm -p 8000:8000 \
 - 需要严格失败语义时，`/jobs/publish-refresh` 与 `/jobs/technical-refresh` 都可传 `"fail_on_holding_error": true`。
 
 ## A 股报告整页消失事故（2026-11-14，已修）
-
 **现象**：小程序上 A 股全部「暂无分析报告」，港股正常。
 
 **根因**：容器内 `akshare` 缺少 `stock_financial_abstract_ths`（THS 财务接口会随 akshare 版本被移除/改名），
@@ -168,6 +167,21 @@ docker run --rm -p 8000:8000 \
 
 回归：`tests/test_generate_a_share_single_mixed_report_failure_tolerance.py`、
 `tests/test_fundamental_akshare_guard.py`。
+
+## K 线缓存恢复时机（2026-11-14 修正）
+
+容器启动时由 `container_bootstrap_and_run.sh` 依据 `KLINE_SYNC_RESTORE_ON_START=true` 做一次
+`restore`；**但容器里上一次 EOD 之后新推到云端的 K 线（比如新加入持仓的标的）在重启前不会被拉到**。
+2026-11-14 的 600584 就是这样：云端补了历史，小程序跑完 EOD 仍然「K 线不足」，因为拿不到新快照。
+
+修正：`/jobs/publish-refresh`（小程序「盘后 / EOD」走的就是它）新增请求字段
+`restore_kline_cache`（默认 `true`）：重新生成前先执行一次
+`sync_kline_cache_cloudbase.py restore`，失败只打 `kline_cache_restore_warning=` 不阻断发布；
+耗时记入 `stage_seconds.restore_kline_cache_seconds`。盘中 profile（`intraday_*`）不走这条路
+（它们会被 reroute 到 `/jobs/technical-refresh`，不重复拉快照）。
+
+> 新增持仓标的仍需**先把本地历史推到云端**（见 `docs/ops` 与仓库记忆
+> `new-holding-cloud-kline-cache.md`），否则云端快照里本来就没有该标的。
 
 ## 目前这版的边界
 
