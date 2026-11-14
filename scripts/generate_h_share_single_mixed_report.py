@@ -726,37 +726,47 @@ def main() -> None:
         fundamental_path = _build_technical_only_placeholder_path(base_path, report_symbol, args.name, "fundamental")
         fundamental_ref = FundamentalBriefRef(path=fundamental_path)
     elif fundamental_ref is None:
-        fundamental_result = fetch_and_analyze_hk_blended_fundamentals(
-            args.symbol,
-            name=args.name,
-            quote_overlay_source=args.quote_overlay_source,
-            manual_supplement_path=manual_supplement_path,
-        )
-        base_text_path = write_base_text(fundamental_result.blended, output_dir)
-        fundamental_path = write_json(
-            base_path,
-            {
-                "report_type": "fundamental",
-                "symbol": report_symbol,
-                "name": args.name,
-                "generated_at": now_iso(),
-                "summary": {
-                    "score": fundamental_result.blended.blended_total_score,
-                    "rating": fundamental_result.blended.blended_rating,
-                    "submodel": fundamental_result.blended.submodel_id,
-                    "freshness_label": getattr(fundamental_result.blended, "freshness_label", None),
-                    "comment": getattr(fundamental_result.blended, "combined_comment", None),
+        # 基本面属外部数据源步骤：失败只降级，不得拖垮技术面报告（与 A 股同口径）。
+        try:
+            fundamental_result = fetch_and_analyze_hk_blended_fundamentals(
+                args.symbol,
+                name=args.name,
+                quote_overlay_source=args.quote_overlay_source,
+                manual_supplement_path=manual_supplement_path,
+            )
+            base_text_path = write_base_text(fundamental_result.blended, output_dir)
+            fundamental_path = write_json(
+                base_path,
+                {
+                    "report_type": "fundamental",
+                    "symbol": report_symbol,
+                    "name": args.name,
+                    "generated_at": now_iso(),
+                    "summary": {
+                        "score": fundamental_result.blended.blended_total_score,
+                        "rating": fundamental_result.blended.blended_rating,
+                        "submodel": fundamental_result.blended.submodel_id,
+                        "freshness_label": getattr(fundamental_result.blended, "freshness_label", None),
+                        "comment": getattr(fundamental_result.blended, "combined_comment", None),
+                    },
+                    "blended": fundamental_result.blended,
+                    "presentation": build_fundamental_presentation(fundamental_result.blended, base_text_path),
                 },
-                "blended": fundamental_result.blended,
-                "presentation": build_fundamental_presentation(fundamental_result.blended, base_text_path),
-            },
-        )
-        fundamental_ref = FundamentalBriefRef(
-            score=fundamental_result.blended.blended_total_score,
-            rating=fundamental_result.blended.blended_rating,
-            submodel=fundamental_result.blended.submodel_id,
-            path=fundamental_path,
-        )
+            )
+            fundamental_ref = FundamentalBriefRef(
+                score=fundamental_result.blended.blended_total_score,
+                rating=fundamental_result.blended.blended_rating,
+                submodel=fundamental_result.blended.submodel_id,
+                path=fundamental_path,
+            )
+        except Exception as exc:  # noqa: BLE001 - 基本面失败只降级，不中断整份报告
+            print(f"fundamental_generation_failed= {type(exc).__name__}: {exc}", flush=True)
+            fundamental_ref = _load_existing_fundamental_ref(base_path)
+            if fundamental_ref is not None:
+                print(f"fundamental_reused_stale= {base_path}")
+            else:
+                fundamental_ref = FundamentalBriefRef(path=base_path)
+                print(f"fundamental_missing= {base_path}")
     else:
         print(f"fundamental_reused= {fundamental_path}")
     fundamental_seconds = time.perf_counter() - started_fundamental
@@ -810,47 +820,57 @@ def main() -> None:
         capital_flow_path = _build_technical_only_placeholder_path(capital_flow_path, report_symbol, args.name, "capital_flow")
         capital_flow_ref = CapitalFlowRef(source="technical_only", bucket="missing", path=capital_flow_path)
     elif capital_flow_ref is None:
-        capital_flow_result = fetch_and_analyze_hk_flow(
-            args.symbol,
-            args.name,
-            use_cache=True,
-            cache_dir=Path(args.cache_dir),
-            max_cache_age_days=args.max_cache_age_days,
-        )
-        capital_bucket = (
-            "strong"
-            if capital_flow_result.scorecard.total_score >= 80
-            else "watch"
-            if capital_flow_result.scorecard.total_score >= 65
-            else "neutral"
-            if capital_flow_result.scorecard.total_score >= 50
-            else "weak"
-        )
-        capital_flow_path = write_json(
-            capital_flow_path,
-            {
-                "report_type": "capital_flow",
-                "symbol": report_symbol,
-                "name": args.name,
-                "generated_at": now_iso(),
-                "summary": {
-                    "score": capital_flow_result.scorecard.total_score,
-                    "rating": capital_flow_result.scorecard.rating,
-                    "bucket": capital_bucket,
-                    "source": capital_flow_result.snapshot.source,
-                    "comment": getattr(capital_flow_result.scorecard, "combined_comment", None),
+        # 资金面同为外部数据源步骤：失败只降级，不拖垮已生成的技术面报告。
+        try:
+            capital_flow_result = fetch_and_analyze_hk_flow(
+                args.symbol,
+                args.name,
+                use_cache=True,
+                cache_dir=Path(args.cache_dir),
+                max_cache_age_days=args.max_cache_age_days,
+            )
+            capital_bucket = (
+                "strong"
+                if capital_flow_result.scorecard.total_score >= 80
+                else "watch"
+                if capital_flow_result.scorecard.total_score >= 65
+                else "neutral"
+                if capital_flow_result.scorecard.total_score >= 50
+                else "weak"
+            )
+            capital_flow_path = write_json(
+                capital_flow_path,
+                {
+                    "report_type": "capital_flow",
+                    "symbol": report_symbol,
+                    "name": args.name,
+                    "generated_at": now_iso(),
+                    "summary": {
+                        "score": capital_flow_result.scorecard.total_score,
+                        "rating": capital_flow_result.scorecard.rating,
+                        "bucket": capital_bucket,
+                        "source": capital_flow_result.snapshot.source,
+                        "comment": getattr(capital_flow_result.scorecard, "combined_comment", None),
+                    },
+                    "scorecard": capital_flow_result.scorecard,
+                    "snapshot": capital_flow_result.snapshot,
                 },
-                "scorecard": capital_flow_result.scorecard,
-                "snapshot": capital_flow_result.snapshot,
-            },
-        )
-        capital_flow_ref = CapitalFlowRef(
-            score=capital_flow_result.scorecard.total_score,
-            rating=capital_flow_result.scorecard.rating,
-            source=capital_flow_result.snapshot.source,
-            bucket=capital_bucket,
-            path=capital_flow_path,
-        )
+            )
+            capital_flow_ref = CapitalFlowRef(
+                score=capital_flow_result.scorecard.total_score,
+                rating=capital_flow_result.scorecard.rating,
+                source=capital_flow_result.snapshot.source,
+                bucket=capital_bucket,
+                path=capital_flow_path,
+            )
+        except Exception as exc:  # noqa: BLE001 - 资金面失败只降级，不中断整份报告
+            print(f"capital_flow_generation_failed= {type(exc).__name__}: {exc}", flush=True)
+            capital_flow_ref = _load_existing_capital_flow_ref(capital_flow_path)
+            if capital_flow_ref is not None:
+                print(f"capital_flow_reused_stale= {capital_flow_path}")
+            else:
+                capital_flow_ref = CapitalFlowRef(bucket="failed", path=capital_flow_path)
+                print(f"capital_flow_missing= {capital_flow_path}")
     else:
         print(f"capital_flow_reused= {capital_flow_path}")
     capital_flow_seconds = time.perf_counter() - started_capital_flow

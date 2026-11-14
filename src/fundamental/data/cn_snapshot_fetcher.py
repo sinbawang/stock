@@ -80,25 +80,41 @@ def _coerce_float(value: object) -> Optional[float]:
         return None
 
 
-def _fetch_cn_financial_abstract_df(symbol: str) -> pd.DataFrame:
-    _clear_proxy_env()
+def _akshare_attr(name: str) -> object:
+    """取 akshare 接口，缺失时给出**可诊断**的错误（含已安装版本）。
+
+    事故背景（2026-11-14）：服务容器内 `akshare` 缺少 `stock_financial_abstract_ths`，
+    原代码直接属性访问 → AttributeError 让整个 A 股报告子进程 exit 1，小程序上 A 股
+    分析报告整页消失（港股不受影响）。这里改成特征探测 + 明确报错，并提醒钉版本。
+    """
     import akshare as ak  # type: ignore
 
-    return ak.stock_financial_abstract_ths(symbol=symbol, indicator="按报告期")
+    func = getattr(ak, name, None)
+    if func is None:
+        version = getattr(ak, "__version__", "unknown")
+        raise RuntimeError(
+            f"akshare 缺少接口 {name}（已安装版本 {version}）：该接口在部分版本被移除或改名，"
+            "请把 requirements/pyproject 中的 akshare 固定到已验证版本（1.18.64）。"
+        )
+    return func
+
+
+def _fetch_cn_financial_abstract_df(symbol: str) -> pd.DataFrame:
+    _clear_proxy_env()
+    func = _akshare_attr("stock_financial_abstract_ths")
+    return func(symbol=symbol, indicator="按报告期")  # type: ignore[operator]
 
 
 def _fetch_cn_financial_debt_df(symbol: str) -> pd.DataFrame:
     _clear_proxy_env()
-    import akshare as ak  # type: ignore
-
-    return ak.stock_financial_debt_new_ths(symbol=symbol)
+    func = _akshare_attr("stock_financial_debt_new_ths")
+    return func(symbol=symbol)  # type: ignore[operator]
 
 
 def _fetch_cn_financial_cash_df(symbol: str) -> pd.DataFrame:
     _clear_proxy_env()
-    import akshare as ak  # type: ignore
-
-    return ak.stock_financial_cash_new_ths(symbol=symbol)
+    func = _akshare_attr("stock_financial_cash_new_ths")
+    return func(symbol=symbol)  # type: ignore[operator]
 
 
 def _fetch_cn_valuation_series(symbol: str, indicator: str, period: str = "近五年") -> pd.DataFrame:

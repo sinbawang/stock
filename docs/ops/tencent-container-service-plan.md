@@ -147,6 +147,28 @@ docker run --rm -p 8000:8000 \
 - 单个持仓整体失败不再让整批失败：失败清单会打印在日志，`/jobs/technical-refresh` 返回的 `failed_holdings` 同步给出，发布包会为缺失产物写入 missing-artifact 告警。
 - 需要严格失败语义时，`/jobs/publish-refresh` 与 `/jobs/technical-refresh` 都可传 `"fail_on_holding_error": true`。
 
+## A 股报告整页消失事故（2026-11-14，已修）
+
+**现象**：小程序上 A 股全部「暂无分析报告」，港股正常。
+
+**根因**：容器内 `akshare` 缺少 `stock_financial_abstract_ths`（THS 财务接口会随 akshare 版本被移除/改名），
+`generate_a_share_single_mixed_report.py` 的基本面步骤直接抛 `AttributeError` → 整个 A 股子进程 exit 1 →
+`base.json` / `fund.json` / 各周期 `tech.json` 全部 `requested_but_not_generated`；而港股走的是东财/雪球路径，不受影响。
+日志特征：`AttributeError: module 'akshare' has no attribute 'stock_financial_abstract_ths'`
++ `WARN <symbol>/<tf> tech_json reason=requested_but_not_generated`。
+
+**修复（三层）**：
+
+1. `requirements.txt` / `pyproject.toml` 钉住 `akshare==1.18.64`（本地已验证三个 THS 接口可用），杜绝构建期漂移。
+2. `fundamental/data/cn_snapshot_fetcher.py`：THS 接口改为特征探测 `_akshare_attr()`，缺失时抛
+   **带已安装版本号**的 `RuntimeError`，不再裸 `AttributeError`。
+3. A/H 单股报告的**基本面 / 资金面**步骤改为 `try/except` 降级：失败时打印
+   `fundamental_generation_failed=` / `capital_flow_generation_failed=`，复用旧 json（若有）或标记 missing，
+   **技术面报告照常生成**——外部数据源永远不得拖垮缠论分析主链路。
+
+回归：`tests/test_generate_a_share_single_mixed_report_failure_tolerance.py`、
+`tests/test_fundamental_akshare_guard.py`。
+
 ## 目前这版的边界
 
 当前这版服务化骨架已经能支撑：
