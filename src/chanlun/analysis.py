@@ -2237,8 +2237,20 @@ def build_signal_point_payloads(
                         bis=bis,
                     )
                 )
-                item["confirmed_at"] = _isoformat_ts(confirm_ts) or anchor_ts
-                if item.get("confirmed_price") is None:
+                confirmed_at = _isoformat_ts(confirm_ts) or anchor_ts
+                # spec §2.8.4 不变量 `confirmed_at ≥ forming_at`：
+                # 三类点会**真实倒挂**——`forming_at` 取锚点笔 `confirmed_ts`（笔级确认可能被
+                # 后续更极值的反向分型推迟），`confirmed_at` 取锚点段的破坏笔确认（段级确认
+                # 可能比其末端笔更早）。点只有在「锚点笔已确认 + 锚段已确认」同时成立时才可能
+                # 发射，故点级「确认」时刻不得早于点级「检出」时刻：倒挂时夹紧到 forming_at，
+                # 并按同一根事件 K 线重算 confirmed_price（不得沿用更早时刻的价格）。
+                forming_dt = _parse_event_ts(item.get("forming_at"))
+                confirmed_dt = _parse_event_ts(confirmed_at)
+                clamped_to_forming = (
+                    forming_dt is not None and confirmed_dt is not None and confirmed_dt < forming_dt
+                )
+                item["confirmed_at"] = item.get("forming_at") if clamped_to_forming else confirmed_at
+                if clamped_to_forming or item.get("confirmed_price") is None:
                     item["confirmed_price"] = _event_bar_close(raw_bars, item.get("confirmed_at"))
 
     _seed_structural_times(signal_points)

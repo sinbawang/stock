@@ -157,6 +157,15 @@ def _event_from_point(
     lifecycle_label = SIGNAL_LIFECYCLE_STATE_LABELS.get(
         lifecycle, "确认" if lifecycle == "confirmed" else lifecycle
     )
+    # 六字段（spec §2.8.4）：旧 tech.json 没有时留空，卡片自动省略该段。
+    forming_at = str(raw.get("forming_at") or raw.get("detected_at") or "")
+    forming_price = _coerce_float(raw.get("forming_price"))
+    confirmed_at = str(raw.get("confirmed_at") or "")
+    confirmed_price = _coerce_float(raw.get("confirmed_price"))
+    # 不变量 `confirmed_at ≥ forming_at`：旧载荷倒挂时夹紧，价格改取同一根事件 K 线。
+    if forming_at and confirmed_at and confirmed_at < forming_at:
+        confirmed_at = forming_at
+        confirmed_price = forming_price
     return SignalEvent(
         symbol=symbol,
         name=name,
@@ -168,11 +177,10 @@ def _event_from_point(
         lifecycle_label=lifecycle_label,
         time=str(raw.get("time") or ""),
         price=_coerce_float(raw.get("price")),
-        # 六字段（spec §2.8.4）：旧 tech.json 没有时留空，卡片自动省略该段。
-        forming_at=str(raw.get("forming_at") or raw.get("detected_at") or ""),
-        forming_price=_coerce_float(raw.get("forming_price")),
-        confirmed_at=str(raw.get("confirmed_at") or ""),
-        confirmed_price=_coerce_float(raw.get("confirmed_price")),
+        forming_at=forming_at,
+        forming_price=forming_price,
+        confirmed_at=confirmed_at,
+        confirmed_price=confirmed_price,
     )
 
 

@@ -4830,6 +4830,84 @@ def test_signal_confirmed_at_uses_anchor_segment_time_over_reverse_turn() -> Non
     assert payload["confirmed_at"] > payload["detected_at"]
 
 
+def test_signal_confirmed_at_clamped_up_to_forming_at_when_segment_confirm_precedes() -> None:
+    """spec §2.8.4 不变量：`confirmed_at ≥ forming_at`。
+
+    三类点会真实倒挂——`forming_at` 取锚点笔 `confirmed_ts`（笔级确认可能被后续更极值的
+    反向分型推迟），`confirmed_at` 取锚点段破坏笔（段级确认可能更早）。点只有两者同时成立
+    才可能发射，故确认时刻必须夹紧到检出时刻，且价格改取同一根事件 K 线的收盘价。
+    """
+
+    anchor = Bi(
+        bi_id=20,
+        direction=BiDirection.UP,
+        start_fx_id=20,
+        end_fx_id=21,
+        start_ts=datetime(2026, 9, 1, 10, 30),
+        end_ts=datetime(2026, 9, 1, 11, 0),
+        high=36.02,
+        low=35.1,
+        norm_bar_range=(20, 21),
+        is_confirmed=True,
+        # 笔级确认被后续更深的底分型推迟到 09-02 13:30。
+        confirmed_ts=datetime(2026, 9, 2, 13, 30),
+    )
+    follow = Bi(
+        bi_id=21,
+        direction=BiDirection.DOWN,
+        start_fx_id=21,
+        end_fx_id=22,
+        start_ts=datetime(2026, 9, 1, 11, 0),
+        end_ts=datetime(2026, 9, 2, 10, 30),
+        high=36.02,
+        low=33.5,
+        norm_bar_range=(21, 22),
+        is_confirmed=True,
+        confirmed_ts=datetime(2026, 9, 2, 13, 30),
+    )
+    raw_bars = [
+        Bar(
+            ts=datetime(2026, 9, 2, 10, 30),
+            open=34.0,
+            high=34.2,
+            low=33.4,
+            close=33.58,
+            volume=1.0,
+        ),
+        Bar(
+            ts=datetime(2026, 9, 2, 13, 30),
+            open=33.6,
+            high=33.9,
+            low=33.5,
+            close=33.7,
+            volume=1.0,
+        ),
+    ]
+
+    points, _ = build_signal_point_payloads(
+        buy_points=[],
+        sell_points=["sell_2like"],
+        latest_confirmed_up=anchor,
+        latest_up=anchor,
+        latest_down=follow,
+        current_zs=None,
+        sell2like_signal_bi=anchor,
+        bis=[anchor, follow],
+        raw_bars=raw_bars,
+        as_of_ts=datetime(2026, 9, 2, 14, 0),
+        # 段级确认（破坏笔）早于锚点笔的笔级确认。
+        anchor_confirm_ts_by_point={"sell2like": datetime(2026, 9, 2, 10, 30)},
+    )
+
+    payload = next(item for item in points if item["point"] == "sell2like")
+    assert payload["forming_at"] == "2026-09-02T13:30:00"
+    assert payload["confirmed_at"] == "2026-09-02T13:30:00"
+    assert payload["confirmed_at"] >= payload["forming_at"]
+    # 价格必须与夹紧后的事件时刻配对（同一根 K 线收盘价），不得沿用更早时刻的价格。
+    assert payload["confirmed_price"] == 33.7
+    assert payload["forming_price"] == 33.7
+
+
 def test_back_to_center_at_reenters_zhongshu_band() -> None:
     """类一回中枢（spec §2.8.2）：首个重回 [ZD, ZG] 的反向笔 end_ts。"""
     # 类一买：离开段向下破 ZD=50.0 的锚点笔（low=49.5）；反向向上笔 high>=ZD 即回中枢。

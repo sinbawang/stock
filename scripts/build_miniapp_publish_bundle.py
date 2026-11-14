@@ -843,8 +843,14 @@ def attach_signal_detected_at(
                 drop_legacy_equal=safe_text(normalized_item.get("point")).lower()
                 in {"buy2like", "sell2like"},
             ) or (default_value if is_confirmed_signal(normalized_item) else "")
-            if confirmed_at:
-                normalized_item["confirmed_at"] = confirmed_at
+            # spec §2.8.4 不变量：确认不得早于检出。
+            # 引擎已按同口径夹紧；这里再兜住旧版 payload 与「两字段各自跨轮取最早」
+            # 可能凑出的倒挂（各轮内部都成立时 min 运算不会倒挂，但旧值过滤会破坏配对）。
+            # 夹紧后两者是同一根事件 K 线 → 确认价与检出价同源。
+            if confirmed_at and forming_at and confirmed_at < forming_at:
+                confirmed_at = forming_at
+                confirmed_price = forming_price
+            else:
                 confirmed_price = _price_paired_with_event(
                     confirmed_at,
                     previous_confirmed_at_by_key.get(key, ""),
@@ -854,6 +860,8 @@ def attach_signal_detected_at(
                         normalized_item.get("confirmedPrice"),
                     ),
                 )
+            if confirmed_at:
+                normalized_item["confirmed_at"] = confirmed_at
                 if confirmed_price not in (None, ""):
                     normalized_item["confirmed_price"] = maybe_float(confirmed_price)
             else:

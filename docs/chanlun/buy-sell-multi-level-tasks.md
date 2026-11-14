@@ -707,3 +707,8 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
   - `forming → invalidated` 在冻结 fixture 上可复现，且**不**产生 `repaint_violations`；
   - 发布包与小程序页面行为零变化（**只加字段**）；
   - 历史库 upsert 幂等：重复上传不增行（`_id` 在 `signal_bi_id = 0` 时不得误判为空）。
+- 已修（2026-11-14，用户上报）：**`forming_at > confirmed_at` 倒挂**（中航科工 1m / 快手 30m 三卖）。
+  根因是两类时间取自不同结构层——`forming_at` = 锚点笔 `confirmed_ts`（笔级确认会被后续更极值的
+  反向分型推迟），`confirmed_at` = 锚点段破坏笔确认（段级确认可能更早）。修法：`analysis` 侧在倒挂时
+  把 `confirmed_at` 夹紧到 `forming_at` 并按同一根事件 K 线重算价格；发布包 / 历史库 / 飞书通知
+  各自再兜一层。实测 13 个冻结真实 fixture / 19 个 confirmed 点：5 → 0。

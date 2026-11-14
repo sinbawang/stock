@@ -793,6 +793,14 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 不变量：`confirmed_at ≥ forming_at`；`invalidated_at ≥ confirmed_at`（forming 直转时 `confirmed_at` 为空）；
 价格取对应事件 K 线的 **close**，不得用锚点极值 / 当前价冒充。
 
+> **倒挂夹紧（2026-11-14 修复）**：`forming_at`（锚点笔 `confirmed_ts`）与 `confirmed_at`（锚点段破坏笔
+> 确认）取自不同结构层，**笔级确认可能晚于段级确认**（更极值的反向分型会把笔的确认推迟）。点只有
+> 两者同时成立才可能发射，故 `analysis._seed_structural_times` 在 `confirmed_at < forming_at` 时
+> 夹紧到 `forming_at` 并重算 `confirmed_price`；发布包（`attach_signal_detected_at`）、历史库
+> （`sync_signal_history_cloudbase._base_record`）、飞书通知（`signal_notifier._event_from_point`）
+> 各自再兜一层，保证旧 `tech.json` / 跨轮合并不会把倒挂漏到消费者。实测 13 个冻结真实 fixture /
+> 19 个 confirmed 点：5 → 0（全为 `sell3`，最大倒挂约 1 天）。
+
 消费降级：新消费者优先读 `lifecycle_state`；`forming` → watch，`invalidated` → 不操作，
 `confirmed` 才允许按现有 `same_level_consumption_level` 档位输出。
 

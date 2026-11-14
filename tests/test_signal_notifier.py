@@ -347,6 +347,38 @@ def test_build_signal_card_omits_snapshot_line_for_legacy_payload() -> None:
     assert "检出 " not in content
 
 
+def test_extract_signal_events_clamps_inverted_confirmed_at() -> None:
+    """spec §2.8.4 不变量：确认不得早于检出（旧 tech.json 倒挂时夹紧 + 价格同源）。"""
+    payload = {
+        "symbol": "01024",
+        "name": "快手",
+        "timeframe": "30m",
+        "summary": {
+            "signal_points": [
+                {
+                    "point": "sell3",
+                    "lifecycle_state": "confirmed",
+                    "time": "2026-09-01T11:00:00",
+                    "price": 36.02,
+                    "forming_at": "2026-09-02T13:30:00",
+                    "forming_price": 33.7,
+                    "confirmed_at": "2026-09-02T10:30:00",
+                    "confirmed_price": 33.58,
+                }
+            ],
+            "forming_points": [],
+        },
+    }
+
+    event = extract_signal_events(payload)[0]
+
+    assert event.forming_at == "2026-09-02T13:30:00"
+    assert event.confirmed_at == "2026-09-02T13:30:00"
+    assert event.confirmed_price == 33.7
+    content = build_signal_card([event])["card"]["elements"][0]["text"]["content"]
+    assert "检出 33.7 @ 2026-09-02 13:30:00 → 确认 33.7 @ 2026-09-02 13:30:00" in content
+
+
 def test_sign_feishu_request_is_deterministic() -> None:
     first = sign_feishu_request("1700000000", "secret")
     second = sign_feishu_request("1700000000", "secret")

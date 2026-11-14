@@ -299,6 +299,12 @@ K 线收盘价」**字段，统一口径为「**事件发生那根 K 线的收�
   窗口内无更早 bar 时取第一根；仍无法解析则为 `null`（fail closed，**不得**用锚点极值或当前价冒充）。
 - **不变量**：`confirmed_at ≥ forming_at`；`invalidated_at ≥ confirmed_at`（`forming → invalidated` 直转时
   `invalidated_at ≥ forming_at`，`confirmed_at` 为空）。
+- **倒挂夹紧（2026-11-14）**：`confirmed_at` 与 `forming_at` 取自**不同结构层**，二者无天然单调关系——
+  三类点的 `forming_at` 取锚点笔 `confirmed_ts`（笔级确认可能被后续更极值的反向分型推迟），
+  `confirmed_at` 取锚点段的破坏笔确认（段级确认可能**早于**其末端笔的笔级确认）。点只有在
+  「锚点笔已确认 + 锚段已确认」同时成立时才可能发射，故**点级**确认不得早于点级检出：
+  倒挂时把 `confirmed_at` 夹紧到 `forming_at`，并按同一根事件 K 线重算 `confirmed_price`。
+  实测（13 个冻结真实 fixture / 19 个 confirmed 点）修前 5 个倒挂（全为 `sell3`，最大倒挂约 1 天），修后 0。`
 - **forming 行**：`confirmed_at` / `confirmed_price` / `invalidated_*` 均为空（尚未发生）。
 - **confirmed 行**：`invalidated_*` 为空。
 - **invalidated 行**：`forming_at` / `forming_price` / `confirmed_at` / `confirmed_price` 保留历史值。

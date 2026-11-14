@@ -113,3 +113,28 @@ def test_invalidated_event_falls_back_to_confirmed_from_state() -> None:
     invalidated = records[-1]
 
     assert invalidated["from_state"] == "confirmed"
+
+
+def test_records_clamp_confirmed_at_before_forming_at() -> None:
+    """spec §2.8.4 不变量：确认不得早于检出（旧 tech.json 倒挂时夹紧 + 价格同源）。"""
+    payload = _payload()
+    payload["summary"]["signal_points"] = [
+        {
+            "point": "sell_3",
+            "signal_bi_id": 21,
+            "lifecycle_state": "confirmed",
+            "time": "2026-09-01T11:00:00",
+            "price": 36.02,
+            "forming_at": "2026-09-02T13:30:00",
+            "forming_price": 33.7,
+            "confirmed_at": "2026-09-02T10:30:00",
+            "confirmed_price": 33.58,
+        }
+    ]
+
+    records = module.build_event_records(payload, run_id="run-1")
+    confirmed = next(record for record in records if record["event"] == "confirmed")
+
+    assert confirmed["forming_at"] == "2026-09-02T13:30:00"
+    assert confirmed["confirmed_at"] == "2026-09-02T13:30:00"
+    assert confirmed["confirmed_price"] == 33.7

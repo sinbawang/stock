@@ -669,7 +669,7 @@ def test_stock_payload_preserves_existing_signal_detected_at_and_fills_new_ones(
                     {"point": "buy3", "time": "2026-08-17T10:03:00", "lifecycle_state": "forming", "detected_at": "2026-08-17T10:04:00"}
                 ],
                 "invalidated_points": [
-                    {"point": "sell1", "time": "2026-08-17T09:15:00", "lifecycle_state": "invalidated", "detected_at": "2026-08-17T09:20:00", "confirmed_at": "2026-08-17T09:16:00"}
+                    {"point": "sell1", "time": "2026-08-17T09:15:00", "lifecycle_state": "invalidated", "detected_at": "2026-08-17T09:20:00", "confirmed_at": "2026-08-17T09:22:00"}
                 ],
             }
         }
@@ -685,7 +685,7 @@ def test_stock_payload_preserves_existing_signal_detected_at_and_fills_new_ones(
                     {"point": "buy3", "time": "2026-08-17T10:03:00", "lifecycle_state": "forming", "detected_at": "2026-08-17T10:04:00"}
                 ],
                 "invalidated_points": [
-                    {"point": "sell1", "time": "2026-08-17T09:15:00", "lifecycle_state": "invalidated", "detected_at": "2026-08-17T09:20:00", "confirmed_at": "2026-08-17T09:16:00"}
+                    {"point": "sell1", "time": "2026-08-17T09:15:00", "lifecycle_state": "invalidated", "detected_at": "2026-08-17T09:20:00", "confirmed_at": "2026-08-17T09:22:00"}
                 ],
             }
         ]
@@ -718,7 +718,7 @@ def test_stock_payload_preserves_existing_signal_detected_at_and_fills_new_ones(
     assert technical_card["forming_points"][0]["detected_at"] == "2026-08-17T10:04:00"
     assert "confirmed_at" not in technical_card["forming_points"][0]
     assert technical_card["invalidated_points"][0]["detected_at"] == "2026-08-17T09:20:00"
-    assert technical_card["invalidated_points"][0]["confirmed_at"] == "2026-08-17T09:16:00"
+    assert technical_card["invalidated_points"][0]["confirmed_at"] == "2026-08-17T09:22:00"
     assert technical_section["signal_points"][0]["detected_at"] == "2026-08-17T09:50:00"
     assert technical_section["signal_points"][0]["confirmed_at"] == "2026-08-17T09:50:00"
     assert technical_section["signal_points"][1]["detected_at"] == "2026-08-17T10:05:00"
@@ -726,7 +726,7 @@ def test_stock_payload_preserves_existing_signal_detected_at_and_fills_new_ones(
     assert technical_section["forming_points"][0]["detected_at"] == "2026-08-17T10:04:00"
     assert "confirmed_at" not in technical_section["forming_points"][0]
     assert technical_section["invalidated_points"][0]["detected_at"] == "2026-08-17T09:20:00"
-    assert technical_section["invalidated_points"][0]["confirmed_at"] == "2026-08-17T09:16:00"
+    assert technical_section["invalidated_points"][0]["confirmed_at"] == "2026-08-17T09:22:00"
 
 
 def test_signal_detected_key_is_stable_across_lifecycle_transitions() -> None:
@@ -4009,3 +4009,32 @@ def test_attach_signal_detected_at_pairs_earliest_event_with_its_own_price() -> 
     assert item["forming_price"] == 9.8
     assert item["confirmed_at"] == "2026-08-05T09:40:00"
     assert item["confirmed_price"] == 9.9
+
+
+def test_attach_signal_detected_at_clamps_confirmed_at_before_forming_at() -> None:
+    """spec §2.8.4 不变量：`confirmed_at ≥ forming_at`（旧 tech.json 倒挂时夹紧）。
+
+    三类点曾有真实倒挂（段级确认早于锚点笔的笔级确认）；发布包必须兜住，
+    并把确认价改取同一根事件 K 线（= forming_price），不得保留更早时刻的价格。
+    """
+    current = {
+        "signal_points": [
+            {
+                "point": "sell3",
+                "time": "2026-09-01T11:00:00",
+                "lifecycle_state": "confirmed",
+                "forming_at": "2026-09-02T13:30:00",
+                "forming_price": 33.7,
+                "confirmed_at": "2026-09-02T10:30:00",
+                "confirmed_price": 33.58,
+            }
+        ]
+    }
+
+    merged = module.attach_signal_detected_at(current, None, "2026-09-02T16:00:00")
+
+    item = merged["signal_points"][0]
+    assert item["forming_at"] == "2026-09-02T13:30:00"
+    assert item["confirmed_at"] == "2026-09-02T13:30:00"
+    assert item["confirmed_at"] >= item["forming_at"]
+    assert item["confirmed_price"] == 33.7

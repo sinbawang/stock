@@ -106,6 +106,12 @@ def _base_record(
     confirmed_at = safe_text(point.get("confirmed_at")) or (
         safe_text(event_at) if event == "confirmed" else ""
     ) or None
+    confirmed_price = point.get("confirmed_price")
+    # spec §2.8.4 不变量：确认不得早于检出（引擎已夹紧；这里兜住旧 tech.json）。
+    # 夹紧后两者同属一根事件 K 线，价格改取 forming_price 保持配对。
+    if forming_at and confirmed_at and confirmed_at < forming_at:
+        confirmed_at = forming_at
+        confirmed_price = point.get("forming_price")
     return {
         "_id": build_event_id(symbol, timeframe, point_name, anchor_key, event),
         "symbol": symbol,
@@ -126,7 +132,7 @@ def _base_record(
         "forming_at": forming_at,
         "forming_price": maybe_float(point.get("forming_price")),
         "confirmed_at": confirmed_at,
-        "confirmed_price": maybe_float(point.get("confirmed_price")),
+        "confirmed_price": maybe_float(confirmed_price),
         "invalidated_at": safe_text(point.get("invalidated_at")) or None,
         "invalidated_price": maybe_float(point.get("invalidated_price")),
         "invalidated_reason": safe_text(point.get("invalidated_reason")) or None,
