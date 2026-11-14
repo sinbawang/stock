@@ -441,6 +441,7 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 | RS3 | 收口既有「工程近似」（笔级中枢级别收敛 / 二类首次回抽窗口 / 三类回中枢失效） | 准确性 | P3 | 1/2/3 | 关闭 BS1 差异表遗留近似，降低边界假信号 | 完成（item1 级别收敛 + item2 首次回抽窗口均已落地 / item3 由 RS0 覆盖） |
 | RS4 | 增量重算稳健性（跳空 / 停牌 / overlap 失配） | 实时 / 性能 | P3 | 全部（数据层） | 保证极端行情下缓存不污染信号，避免全量回退降级 | 完成（跨帧不连续检测 + 回退全量重抓 + 回归） |
 | RS5 | 消费交付：发布包透传 + 小程序「买卖点」页面渲染 | 交付 | P1（随 RS0/RS1） | 1/2/3 + 类一 / 类二 | RS0/RS1 若不透传到发布包与前端，页面上看不到任何变化；此项确保改动真正落到用户可见面 | 完成（发布包 + 前端 + invalidated 帧序管道全链已落地并回归；invalidated 仅在真实跨帧失效事件时非空） |
+| RS6 | 生命周期事件六字段 + `forming → invalidated` + CloudBase 迁移历史库 | 准确性 + 交付 | P1 | 1/2/3 + 类一 / 类二 | 现有记录只有时间点、没有**事件价格**，失效/兑现无法复盘与度量胜率；forming 只顺延/兑现、误报无归宿；历史只活一轮 | 文档已定稿（2026-11-14），待实现 |
 
 ### RS0 信号生命周期与 repaint 安全契约（P0）
 
@@ -686,3 +687,23 @@ catalog 兼容：`buy_1like` / `sell_1like` 追加在类二类槽位（槽 6=buy
 
 > 评审出口：请 reviewer 就 (1) P0/P1 是否值得优先于继续收口 BS5/BS6，(2) 状态机的失效条件口径，
 > (3) 预备态是否单列契约字段，三点确认后再进入实现阶段。
+
+### RS6 生命周期事件六字段 + `forming → invalidated` + 历史库（P1，2026-11-14）
+
+- 目标：
+  1. 每个信号记录带 `forming_at/forming_price`、`confirmed_at/confirmed_price`、
+     `invalidated_at/invalidated_price`（口径见 spec §2.8.4）。
+  2. 代码可发现 **`forming → invalidated`** 转移（口径见 spec §2.8.5 / design §3.2.1）。
+  3. CloudBase 文档数据库 `signal_events` 保存**完整迁移历史**（design §6.2）；
+     小程序「买卖点」页面**不改**，仍读发布包最新信号。
+- 交付物：
+  - `analysis_contract.py`：六字段常量 + `get_analysis_contract` 投影；
+  - `analysis.py`：事件 K 线收盘价解析 + 六字段落载荷 + 回放 forming 集合 + `invalidated_at/price`；
+  - `to_lifecycle_frame`：持久化 forming 锚点与 `last_bar_ts/close`（供回扫与定价）；
+  - `build_miniapp_publish_bundle.py`：六字段透传 + 跨轮取最早；
+  - `scripts/sync_signal_history_cloudbase.py` + `westock/cloudfunctions/signalHistory`。
+- 验收：
+  - 六字段不变量成立：`confirmed_at ≥ forming_at`、`invalidated_at ≥ confirmed_at`（or forming 直转）；
+  - `forming → invalidated` 在冻结 fixture 上可复现，且**不**产生 `repaint_violations`；
+  - 发布包与小程序页面行为零变化（**只加字段**）；
+  - 历史库 upsert 幂等：重复上传不增行（`_id` 在 `signal_bi_id = 0` 时不得误判为空）。

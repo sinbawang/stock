@@ -80,6 +80,131 @@ def _isoformat_ts(value: datetime | str | None) -> str | None:
     return value.isoformat(timespec="seconds")
 
 
+def _parse_event_ts(value: object) -> datetime | None:
+    """把 bar / 事件时间统一归一化为 `datetime`（本仓 `Bar.ts` 在回放路径可能是字符串）。"""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _event_bar_close(raw_bars: list[Bar] | None, event_ts: object) -> float | None:
+    """事件时刻 → **该事件 K 线的收盘价**（spec §2.8.4 六字段口径）。
+
+    解析顺序（fail closed，不得用锚点极值 / 当前价冒充）：
+    1. 精确匹配 `bar.ts == event_ts`；
+    2. 否则取 `bar.ts <= event_ts` 的最后一根；
+    3. 事件早于窗口首根（旧事件已滚出窗口）时取首根收盘价；
+    4. 仍无法解析（缺 bars / 非法时间）→ `None`。
+    """
+    if not raw_bars:
+        return None
+    target = _parse_event_ts(event_ts)
+    if target is None:
+        return None
+    first_ts = _parse_event_ts(raw_bars[0].ts)
+    if first_ts is None:
+        return None
+    # naive / aware 混用会让比较抛 TypeError，按窗口首根的时区口径归一。
+    if target.tzinfo is None and first_ts.tzinfo is not None:
+        target = target.replace(tzinfo=first_ts.tzinfo)
+    elif target.tzinfo is not None and first_ts.tzinfo is None:
+        target = target.replace(tzinfo=None)
+    if target < first_ts:
+        return float(raw_bars[0].close)
+    candidate = None
+    for bar in raw_bars:
+        bar_ts = _parse_event_ts(bar.ts)
+        if bar_ts is None:
+            continue
+        if bar_ts.tzinfo is None and target.tzinfo is not None:
+            bar_ts = bar_ts.replace(tzinfo=target.tzinfo)
+        elif bar_ts.tzinfo is not None and target.tzinfo is None:
+            bar_ts = bar_ts.replace(tzinfo=None)
+        if bar_ts <= target:
+            candidate = bar
+        else:
+            break
+    if candidate is None:
+        return float(raw_bars[0].close)
+    return float(candidate.close)
+
+
+def _bar_breaks_signal_premise(
+    point: str,
+    bar: Bar,
+    price: float | None,
+    *,
+    related_zs_low: object = None,
+    related_zs_high: object = None,
+) -> bool:
+    """bar 级的**价格前提**破坏判据（spec §2.8.4「逐根回扫」的实现口径）。
+
+    与 `_signal_premise_broken` 同族同语义，只是粒度从「笔极值」细化到「单根 bar」：
+    买点看 `bar.low`、卖点看 `bar.high`；三类点比该点自己固化的中枢边沿。
+    """
+    side = _signal_point_side(point)
+    if side is None:
+        return False
+    if point in ("buy3", "sell3"):
+        reference = _safe_float(related_zs_high if side == "buy" else related_zs_low)
+        if reference is None:
+            return False
+        return float(bar.low) < reference if side == "buy" else float(bar.high) > reference
+    reference_price = _safe_float(price)
+    if reference_price is None:
+        return False
+    if side == "buy":
+        return float(bar.low) < reference_price
+    return float(bar.high) > reference_price
+
+
+def _first_premise_break_bar(
+    raw_bars: list[Bar] | None,
+    point: str,
+    price: float | None,
+    *,
+    since_ts: object = None,
+    related_zs_low: object = None,
+    related_zs_high: object = None,
+) -> tuple[str | None, float | None]:
+    """自 `since_ts`（不含）之后逐根回扫，返回**首次**破坏价格前提的 bar 时间与收盘价。"""
+    if not raw_bars:
+        return None, None
+    since = _parse_event_ts(since_ts)
+    first_ts = _parse_event_ts(raw_bars[0].ts)
+    if isinstance(since, datetime) and first_ts is not None:
+        if since.tzinfo is None and first_ts.tzinfo is not None:
+            since = since.replace(tzinfo=first_ts.tzinfo)
+        elif since.tzinfo is not None and first_ts.tzinfo is None:
+            since = since.replace(tzinfo=None)
+    for bar in raw_bars:
+        bar_ts = _parse_event_ts(bar.ts)
+        if isinstance(since, datetime) and bar_ts is not None:
+            comparable = bar_ts
+            if comparable.tzinfo is None and since.tzinfo is not None:
+                comparable = comparable.replace(tzinfo=since.tzinfo)
+            elif comparable.tzinfo is not None and since.tzinfo is None:
+                comparable = comparable.replace(tzinfo=None)
+            if comparable <= since:
+                continue
+        if _bar_breaks_signal_premise(
+            point,
+            bar,
+            price,
+            related_zs_low=related_zs_low,
+            related_zs_high=related_zs_high,
+        ):
+            return _isoformat_ts(bar.ts), float(bar.close)
+    return None, None
+
+
 def _format_signal_point_name(point: str) -> str:
     return point.replace("_", "")
 
@@ -1802,6 +1927,7 @@ def analyze_chanlun_signals(
         sell1like_signal_bi=sell1like_signal_bi,
         forming_candidates=forming_candidates,
         bis=bis,
+        raw_bars=raw_bars,
         as_of_ts=raw_bars[-1].ts if raw_bars else None,
         anchor_confirm_ts_by_point=anchor_confirm_ts_by_point,
     )
@@ -1865,6 +1991,7 @@ def build_signal_point_payloads(
     sell1like_signal_bi: Bi | None = None,
     forming_candidates: list[tuple[str, Bi]] | None = None,
     bis: list[Bi] | None = None,
+    raw_bars: list[Bar] | None = None,
     as_of_ts: datetime | None = None,
     anchor_confirm_ts_by_point: dict[str, datetime] | None = None,
 ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
@@ -2095,6 +2222,10 @@ def build_signal_point_payloads(
             ):
                 detect_ts = _isoformat_ts(_signal_detect_ts(anchor)) or anchor_ts
                 item.setdefault("detected_at", detect_ts)
+                # spec §2.8.4：forming_at = 结构检出时刻（= detected_at）；forming_price = 那根 K 线收盘价。
+                item.setdefault("forming_at", item.get("detected_at"))
+                if item.get("forming_price") is None:
+                    item["forming_price"] = _event_bar_close(raw_bars, item.get("forming_at"))
             if state == SignalLifecycleState.CONFIRMED.value:
                 point_name = str(item.get("point") or "")
                 confirm_ts = (
@@ -2107,6 +2238,8 @@ def build_signal_point_payloads(
                     )
                 )
                 item["confirmed_at"] = _isoformat_ts(confirm_ts) or anchor_ts
+                if item.get("confirmed_price") is None:
+                    item["confirmed_price"] = _event_bar_close(raw_bars, item.get("confirmed_at"))
 
     _seed_structural_times(signal_points)
     _seed_structural_times(signal_catalog)
@@ -2118,10 +2251,16 @@ def build_signal_summary_fields(
     *,
     previous_frame: dict[str, object] | None = None,
     data_window: str | None = None,
+    raw_bars: list[Bar] | None = None,
 ) -> dict[str, object]:
     # spec_id: SPEC.BUY_SELL.CORE（见 docs/chanlun/buy-sell-multi-level-spec.md）
     same_level_consumption_level = signals.get("same_level_consumption_level")
-    transitions = derive_signal_lifecycle_transitions(previous_frame, signals, data_window=data_window)
+    transitions = derive_signal_lifecycle_transitions(
+        previous_frame,
+        signals,
+        data_window=data_window,
+        raw_bars=raw_bars,
+    )
     return {
         "buy_points": [_format_signal_point_name(str(point)) for point in signals.get("buy_points", [])],
         "sell_points": [_format_signal_point_name(str(point)) for point in signals.get("sell_points", [])],
@@ -2129,11 +2268,14 @@ def build_signal_summary_fields(
         "signal_catalog": list(signals.get("signal_catalog", [])),
         "forming_points": list(signals.get("forming_points", [])),
         "invalidated_points": list(transitions.get("invalidated_points", [])),
+        "forming_invalidated_points": list(transitions.get("forming_invalidated_points", [])),
+        "forming_dropped_points": list(transitions.get("forming_dropped_points", [])),
+        "forming_reanchored_points": list(transitions.get("forming_reanchored_points", [])),
         "signal_repaint_violations": list(transitions.get("repaint_violations", [])),
         "lifecycle_rebased_points": list(transitions.get("rebased_points", [])),
         "lifecycle_superseded_points": list(transitions.get("superseded_points", [])),
         "lifecycle_window_rebased": bool(transitions.get("window_rebased", False)),
-        "lifecycle_frame": to_lifecycle_frame(signals, data_window=data_window),
+        "lifecycle_frame": to_lifecycle_frame(signals, data_window=data_window, raw_bars=raw_bars),
         "structure_state": signals.get("structure_state"),
         "same_level_decomposition_mode": signals.get("same_level_decomposition_mode"),
         "same_level_consumption_level": same_level_consumption_level,
@@ -2373,10 +2515,15 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
     """
     timeline: list[dict[str, object]] = []
     invalidated: list[dict[str, object]] = []
+    forming_invalidated: list[dict[str, object]] = []
+    forming_dropped: list[dict[str, object]] = []
+    forming_reanchored: list[dict[str, object]] = []
     repaint_violations: list[dict[str, object]] = []
     rebased: list[dict[str, object]] = []
     superseded: list[dict[str, object]] = []
     history: dict[tuple[str, object], dict[str, object]] = {}
+    forming_history: dict[tuple[str, object], dict[str, object]] = {}
+    forming_terminal: set[tuple[str, object]] = set()
     window_rebased = False
 
     for idx, frame in enumerate(frames):
@@ -2393,15 +2540,125 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
         if window_changed:
             window_rebased = True
         current: dict[tuple[str, object], dict[str, object]] = {}
+        current_forming: dict[tuple[str, object], dict[str, object]] = {}
         for point_payload in frame.get("signal_points", []) or []:
-            if point_payload.get("lifecycle_state") != SignalLifecycleState.CONFIRMED.value:
-                continue
+            state = point_payload.get("lifecycle_state")
             key = (str(point_payload.get("point")), point_payload.get("signal_bi_id"))
-            current[key] = point_payload
+            if state == SignalLifecycleState.CONFIRMED.value:
+                current[key] = point_payload
+            elif state == SignalLifecycleState.FORMING.value:
+                current_forming[key] = point_payload
 
         current_anchors: dict[str, set] = {}
         for point_name, anchor in current:
             current_anchors.setdefault(point_name, set()).add(anchor)
+        current_forming_points = {point_name for point_name, _anchor in current_forming}
+
+        # --- forming 集合的跨帧归宿（spec §2.8.3 / design §3.2.1）---
+        # 只在**本帧仍可比较**（窗口未重基）时判 forming 失效，否则一律按自然终止处理。
+        for key, record in list(forming_history.items()):
+            if key in current_forming:
+                continue
+            point_name = str(key[0])
+            forming_history.pop(key, None)
+            if point_name in current_anchors:
+                # 兑现（含同 point 换锚更替）
+                timeline.append(
+                    {"frame": idx, "point": key[0], "signal_bi_id": key[1], "transition": "forming_confirmed"}
+                )
+                continue
+            if point_name in current_forming_points:
+                # 顺延：同 point 仍有 forming，只是锚点随重绘平移
+                forming_reanchored.append(
+                    {"frame": idx, "point": key[0], "signal_bi_id": key[1], "kind": "forming_reanchored"}
+                )
+                timeline.append(
+                    {"frame": idx, "point": key[0], "signal_bi_id": key[1], "transition": "forming_reanchored"}
+                )
+                continue
+            premise: str | None = None
+            if not window_changed:
+                price = _safe_float(record.get("price"))
+                price_broken = price is not None and _signal_premise_broken(
+                    point_name,
+                    float(price),
+                    frame,
+                    anchor_zs_low=record.get("anchor_zs_low"),
+                    anchor_zs_high=record.get("anchor_zs_high"),
+                )
+                if price_broken:
+                    premise = "price"
+                elif _structural_premise_broken(point_name, frame):
+                    premise = "structure"
+            if premise is None:
+                forming_dropped.append(
+                    {
+                        "frame": idx,
+                        "point": key[0],
+                        "signal_bi_id": key[1],
+                        "kind": "forming_dropped",
+                    }
+                )
+                timeline.append(
+                    {"frame": idx, "point": key[0], "signal_bi_id": key[1], "transition": "forming_dropped"}
+                )
+                continue
+            forming_terminal.add(key)
+            reason = _SIGNAL_INVALIDATION_REASON_BY_POINT.get(point_name)
+            entry = {
+                "point": point_name,
+                "signal_bi_id": key[1],
+                "price": record.get("price"),
+                "lifecycle_state": SignalLifecycleState.INVALIDATED.value,
+                "invalidated_reason": reason,
+                "invalidated_premise": premise,
+                "from_state": SignalLifecycleState.FORMING.value,
+                "invalidated_frame": idx,
+                "invalidated_at": frame.get("last_bar_ts"),
+                "invalidated_price": frame.get("last_bar_close"),
+                "related_zs_low": record.get("anchor_zs_low"),
+                "related_zs_high": record.get("anchor_zs_high"),
+                "forming_at": record.get("forming_at"),
+                "forming_price": record.get("forming_price"),
+                "confirmed_at": None,
+                "confirmed_price": None,
+            }
+            invalidated.append(entry)
+            forming_invalidated.append(entry)
+            timeline.append(
+                {
+                    "frame": idx,
+                    "point": point_name,
+                    "signal_bi_id": key[1],
+                    "transition": "forming_invalidated",
+                    "invalidated_reason": reason,
+                    "invalidated_premise": premise,
+                }
+            )
+
+        # 失效终态的回归护栏：同锚点不得再次 forming（spec §2.8.5）。
+        for key in forming_terminal:
+            if key in current_forming or key in current:
+                future = [event for event in forming_invalidated if (event["point"], event["signal_bi_id"]) == key]
+                if future and not future[0].get("reconfirm_reported"):
+                    future[0]["reconfirm_reported"] = True
+                    repaint_violations.append(
+                        {"frame": idx, "point": key[0], "signal_bi_id": key[1], "kind": "reconfirm_after_invalidated"}
+                    )
+
+        for key, payload in current_forming.items():
+            if key in forming_history or key in forming_terminal:
+                continue
+            forming_history[key] = {
+                "point": key[0],
+                "signal_bi_id": key[1],
+                "price": payload.get("price"),
+                "anchor_zs_low": payload.get("related_zs_low"),
+                "anchor_zs_high": payload.get("related_zs_high"),
+                "forming_at": payload.get("forming_at"),
+                "forming_price": payload.get("forming_price"),
+            }
+            timeline.append({"frame": idx, "point": key[0], "signal_bi_id": key[1], "transition": "forming"})
 
         for key, payload in current.items():
             record = history.get(key)
@@ -2413,6 +2670,10 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
                     # RS0 增量7：三类点价格前提的固定参考（确认时固化），跨帧不随 zhongshus[-1] 漂移。
                     "anchor_zs_low": payload.get("related_zs_low"),
                     "anchor_zs_high": payload.get("related_zs_high"),
+                    "forming_at": payload.get("forming_at"),
+                    "forming_price": payload.get("forming_price"),
+                    "confirmed_at": payload.get("confirmed_at"),
+                    "confirmed_price": payload.get("confirmed_price"),
                     "status": "confirmed",
                 }
                 timeline.append({"frame": idx, "point": key[0], "signal_bi_id": key[1], "transition": "confirmed"})
@@ -2473,7 +2734,16 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
                         "lifecycle_state": SignalLifecycleState.INVALIDATED.value,
                         "invalidated_reason": reason,
                         "invalidated_premise": premise,
+                        "from_state": SignalLifecycleState.CONFIRMED.value,
                         "invalidated_frame": idx,
+                        "invalidated_at": frame.get("last_bar_ts"),
+                        "invalidated_price": frame.get("last_bar_close"),
+                        "related_zs_low": record.get("anchor_zs_low"),
+                        "related_zs_high": record.get("anchor_zs_high"),
+                        "forming_at": record.get("forming_at"),
+                        "forming_price": record.get("forming_price"),
+                        "confirmed_at": record.get("confirmed_at"),
+                        "confirmed_price": record.get("confirmed_price"),
                     }
                 )
                 timeline.append(
@@ -2484,6 +2754,7 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
                         "transition": "invalidated",
                         "invalidated_reason": reason,
                         "invalidated_premise": premise,
+                        "from_state": SignalLifecycleState.CONFIRMED.value,
                     }
                 )
             elif window_changed:
@@ -2521,6 +2792,9 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
     return {
         "timeline": timeline,
         "invalidated": invalidated,
+        "forming_invalidated": forming_invalidated,
+        "forming_dropped": forming_dropped,
+        "forming_reanchored": forming_reanchored,
         "repaint_violations": repaint_violations,
         "rebased": rebased,
         "superseded": superseded,
@@ -2528,42 +2802,69 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
     }
 
 
-def to_lifecycle_frame(signals: dict[str, object], *, data_window: str | None = None) -> dict[str, object]:
+def to_lifecycle_frame(
+    signals: dict[str, object],
+    *,
+    data_window: str | None = None,
+    raw_bars: list[Bar] | None = None,
+) -> dict[str, object]:
     """从 `analyze_chanlun_signals` 输出提取可持久化的压缩生命周期帧（spec §2.8）。
 
-    只保留跨帧回放所需字段（confirmed 锚点 + 前提比较标量），便于逐次运行 / 逐次刷新之间落盘对比。
+    只保留跨帧回放所需字段（confirmed / forming 锚点 + 前提比较标量 + 六字段快照）。
 
     `data_window` 标识本次分析所用 K 线窗口（实现取窗口起始 bar 时间戳）：增量追加时保持稳定，
     全量重抓 / 重算会变化。跨帧比较据此区分「真 repaint」与「窗口重基导致锚点重编号」。
 
     另持久化参考中枢编号 `zs_id`：它是唯一能**独立于本次消失**说明「结构已推进」的标量，
     供 `classify_confirmed_disappearance` 判定自然更替（旧帧缺该键时按 fail closed 不豁免）。
+
+    `last_bar_ts` / `last_bar_close` 用于下一轮：
+    - 作为失效逐根回扫的起点（`since_ts`）；
+    - 作为 `invalidated_at` / `invalidated_price` 的兜底事件时刻（结构型失效无 bar 级证据）。
     """
     latest_down = signals.get("latest_down")
     latest_confirmed_up = signals.get("latest_confirmed_up")
     current_zs = signals.get("current_zs")
-    confirmed = [
-        {
-            "point": payload.get("point"),
-            "signal_bi_id": payload.get("signal_bi_id"),
-            "price": payload.get("price"),
-            "time": payload.get("time"),
-            "lifecycle_state": payload.get("lifecycle_state"),
-            # RS0 增量7：三类点价格前提的**固定参考**（确认时所属中枢的上下沿）。
-            "related_zs_low": payload.get("related_zs_low"),
-            "related_zs_high": payload.get("related_zs_high"),
-        }
-        for payload in signals.get("signal_points", []) or []
-        if payload.get("lifecycle_state") == SignalLifecycleState.CONFIRMED.value
-    ]
+    tracked: list[dict[str, object]] = []
+    for payload in signals.get("signal_points", []) or []:
+        state = payload.get("lifecycle_state")
+        if state not in (
+            SignalLifecycleState.CONFIRMED.value,
+            SignalLifecycleState.FORMING.value,
+        ):
+            continue
+        tracked.append(
+            {
+                "point": payload.get("point"),
+                "signal_bi_id": payload.get("signal_bi_id"),
+                "price": payload.get("price"),
+                "time": payload.get("time"),
+                "lifecycle_state": state,
+                # RS0 增量7：三类点价格前提的**固定参考**（确认时所属中枢的上下沿）。
+                "related_zs_low": payload.get("related_zs_low"),
+                "related_zs_high": payload.get("related_zs_high"),
+                # spec §2.8.4 六字段：跨帧只读快照，不重算。
+                "detected_at": payload.get("detected_at"),
+                "forming_at": payload.get("forming_at") or payload.get("detected_at"),
+                "forming_price": payload.get("forming_price"),
+                "confirmed_at": payload.get("confirmed_at"),
+                "confirmed_price": payload.get("confirmed_price"),
+            }
+        )
+    last_bar = raw_bars[-1] if raw_bars else None
+    # 测试 / 旧调用方可能传入只有 `close` 的 SimpleNamespace，缺字段一律按 None 处理。
+    last_bar_ts = getattr(last_bar, "ts", None) if last_bar is not None else None
+    last_bar_close = getattr(last_bar, "close", None) if last_bar is not None else None
     return {
-        "signal_points": confirmed,
+        "signal_points": tracked,
         "latest_down_low": getattr(latest_down, "low", None),
         "latest_up_high": getattr(latest_confirmed_up, "high", None),
         "zs_high": getattr(current_zs, "zs_high", None),
         "zs_low": getattr(current_zs, "zs_low", None),
         "zs_id": getattr(current_zs, "zs_id", None),
         "signal_gate_anchors": dict(signals.get("signal_gate_anchors") or {}),
+        "last_bar_ts": _isoformat_ts(last_bar_ts) if isinstance(last_bar_ts, (datetime, str)) else None,
+        "last_bar_close": float(last_bar_close) if isinstance(last_bar_close, (int, float)) else None,
         "data_window": data_window,
     }
 
@@ -2573,6 +2874,7 @@ def derive_signal_lifecycle_transitions(
     signals: dict[str, object],
     *,
     data_window: str | None = None,
+    raw_bars: list[Bar] | None = None,
 ) -> dict[str, object]:
     """跨相邻两帧（上一次运行 / 刷新 vs 当前）推导 invalidated 点与 repaint 违规（spec §2.8 RS0）。
 
@@ -2585,31 +2887,64 @@ def derive_signal_lifecycle_transitions(
 
     锚点消失但存在「参考结构已推进」的独立证据时，记入 `superseded_points`（附
     `superseded_evidence`），即设计 §3 允许的自然更替终态；无证据仍计入 `repaint_violations`。
+
+    **六字段（spec §2.8.4）**：传入 `raw_bars` 时，失效事件按「上一帧末 bar 之后逐根回扫、
+    首次命中价格前提」定位 `invalidated_at` 与其 K 线收盘价 `invalidated_price`；结构型失效
+    （无 bar 级证据）回退判定帧末 bar。`from_state` 区分 `forming → invalidated` 与
+    `confirmed → invalidated`；`forming_invalidated_points` 为前者子集，供审计与胜率统计。
     """
     if not previous_frame:
         return {
             "invalidated_points": [],
+            "forming_invalidated_points": [],
+            "forming_dropped_points": [],
+            "forming_reanchored_points": [],
             "repaint_violations": [],
             "rebased_points": [],
             "superseded_points": [],
             "window_rebased": False,
         }
-    current_frame = to_lifecycle_frame(signals, data_window=data_window)
+    current_frame = to_lifecycle_frame(signals, data_window=data_window, raw_bars=raw_bars)
     lifecycle = replay_confirmed_signal_lifecycle([previous_frame, current_frame])
-    invalidated_points = [
-        {
-            "point": entry.get("point"),
-            "active": False,
-            "lifecycle_state": SignalLifecycleState.INVALIDATED.value,
-            "invalidated_reason": entry.get("invalidated_reason"),
-            "invalidated_premise": entry.get("invalidated_premise"),
-            "signal_bi_id": entry.get("signal_bi_id"),
-            "price": entry.get("price"),
-            "time": None,
-            "basis": None,
-        }
-        for entry in lifecycle.get("invalidated", [])
-    ]
+    previous_last_ts = previous_frame.get("last_bar_ts")
+    invalidated_points: list[dict[str, object]] = []
+    for entry in lifecycle.get("invalidated", []):
+        point = str(entry.get("point"))
+        event_at = entry.get("invalidated_at")
+        event_price = entry.get("invalidated_price")
+        # 价格型失效：自上一帧末 bar 起逐根回扫，定位「首次成立」的那根 K 线。
+        # 结构型失效没有 bar 级证据，保留回放层给的判定帧末 bar。
+        if entry.get("invalidated_premise") != "structure":
+            scanned_at, scanned_price = _first_premise_break_bar(
+                raw_bars,
+                point,
+                entry.get("price"),
+                since_ts=previous_last_ts,
+                related_zs_low=entry.get("related_zs_low"),
+                related_zs_high=entry.get("related_zs_high"),
+            )
+            if scanned_at is not None:
+                event_at, event_price = scanned_at, scanned_price
+        invalidated_points.append(
+            {
+                "point": entry.get("point"),
+                "active": False,
+                "lifecycle_state": SignalLifecycleState.INVALIDATED.value,
+                "invalidated_reason": entry.get("invalidated_reason"),
+                "invalidated_premise": entry.get("invalidated_premise"),
+                "from_state": entry.get("from_state") or SignalLifecycleState.CONFIRMED.value,
+                "signal_bi_id": entry.get("signal_bi_id"),
+                "price": entry.get("price"),
+                "time": None,
+                "basis": None,
+                "invalidated_at": event_at,
+                "invalidated_price": event_price,
+                "forming_at": entry.get("forming_at"),
+                "forming_price": entry.get("forming_price"),
+                "confirmed_at": entry.get("confirmed_at"),
+                "confirmed_price": entry.get("confirmed_price"),
+            }
+        )
     rebased_points = [
         {
             "point": entry.get("point"),
@@ -2626,8 +2961,16 @@ def derive_signal_lifecycle_transitions(
         }
         for entry in lifecycle.get("superseded", [])
     ]
+    forming_invalidated_points = [
+        entry
+        for entry in invalidated_points
+        if entry.get("from_state") == SignalLifecycleState.FORMING.value
+    ]
     return {
         "invalidated_points": invalidated_points,
+        "forming_invalidated_points": forming_invalidated_points,
+        "forming_dropped_points": list(lifecycle.get("forming_dropped", [])),
+        "forming_reanchored_points": list(lifecycle.get("forming_reanchored", [])),
         "repaint_violations": lifecycle.get("repaint_violations", []),
         "rebased_points": rebased_points,
         "superseded_points": superseded_points,

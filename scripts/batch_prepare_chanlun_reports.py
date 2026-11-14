@@ -926,7 +926,12 @@ def build_technical_summary(
         "conclusion": conclusion,
         "suggestion": _extract_prefixed_value_from_text(advice_text, "建议：") or None,
         **build_technical_score_summary(raw_bars, signals, conclusion=conclusion, precision_entry=precision_entry),
-        **build_signal_summary_fields(signals, previous_frame=previous_frame, data_window=data_window),
+        **build_signal_summary_fields(
+            signals,
+            previous_frame=previous_frame,
+            data_window=data_window,
+            raw_bars=raw_bars,
+        ),
         **route_fields,
         **transition_fields,
     }

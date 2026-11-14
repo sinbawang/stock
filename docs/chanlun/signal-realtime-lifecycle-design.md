@@ -44,17 +44,55 @@ stateDiagram-v2
 | --- | --- | --- | --- |
 | `forming` | 预备态：核心背驰 / 离开条件成立，待反向转折确认 | watch（不得升 confirmed） | 可锚定进行中笔 |
 | `confirmed` | 确认态：反向转折已确认 | actionable（受多级别降级约束） | 必须锚定已确认笔 / 线段 |
-| `invalidated` | 失效态：确认后前提被破坏 | 不操作 / 撤单提示 | 保留原 `signal_bi_id` + `invalidated_reason` |
+| `invalidated` | 失效态：`forming` **或** `confirmed` 后前提被破坏 | 不操作 / 撤单提示 | 保留原 `signal_bi_id` + `invalidated_reason` + `invalidated_at` / `invalidated_price` |
 
-### 3.2 各点类型失效条件（应然候选，待评审）
+迁移边与判据落点（`analysis.py`）：
 
-| 点类型 | `confirmed → invalidated` 触发 |
-| --- | --- |
-| 一买 / 一卖 | 离开段极值被后续有效跌破 / 升破（背驰构成的转折被否定） |
-| 二买 / 二卖 | 回抽 / 反抽破前低 / 前高（首次确认性回抽失败） |
-| 三买 / 三卖 | 首次回试 / 反抽重新跌回 / 站回中枢（离开中枢的「不回归」前提被破坏） |
-| 类一买 / 类一卖（LB1 / LS1） | 盘整背驰前提消失（离开段 vs 进入段力度关系反转）或 range 门控退出 |
-| 类二买 / 类二卖（LB2 / LS2） | 隔段背驰前提消失（A_{i+2} 力度不再弱于 A_i）或同级别分解退出 single_confirmed |
+| 边 | 触发 | 判据 / 记录 |
+| --- | --- | --- |
+| `forming → confirmed` | 反向转折已确认且锚点满足 §3.3 | 发点门控；记 `forming_confirmed` 审计 |
+| `forming → invalidated` | 成立前提被破坏（§3.2.1） | `_signal_premise_broken` / `_structural_premise_broken`；`from_state=forming` |
+| `forming → forming` | 同 `point` 锚点随重绘平移（顺延） | 只记 `forming_reanchored` 审计，不失效 |
+| `forming → dropped` | 锚点被纯重绘抹掉、前提未破 | 只记 `forming_dropped` 审计，不失效 |
+| `confirmed → invalidated` | 失效条件命中（§3.2） | 回放判据，优先级最高 |
+| `confirmed → superseded` | 结构自然更替 | §3.5 证据链（`reanchored` / `zs_superseded` / `sibling_new_anchor`） |
+
+### 3.2 各点类型失效条件（2026-11-14 定稿）
+
+触发前提与 `invalidated_at` 公式、`invalidated_reason` 枚举值三者一一对应，买卖两侧对称：
+
+| 点类型 | 触发前提（价格 / 结构） | `invalidated_at` 公式 | `invalidated_reason` |
+| --- | --- | --- | --- |
+| 一买 / 一卖 | 离开段极值被后续有效跌破 / 升破（背驰构成的转折被否定）：`latest_down.low < price` / `latest_up.high > price` | 失效判据**首次成立**的 K 线 `ts` | `first_class_extreme_broken` |
+| 二买 / 二卖 | 回抽 / 反抽破前低 / 前高（首次确认性回抽失败）：`latest_down.low < price` / `latest_up.high > price` | 同上 | `second_class_pullback_failed` |
+| 三买 / 三卖 | 首次回试 / 反抽重新回到**该点自己**的中枢：买三 `latest_down.low < related_zs_high` / 卖三 `latest_up.high > related_zs_low` | 同上 | `third_class_reentered_zs` |
+| 类一买 / 类一卖（LB1 / LS1） | 盘整背驰前提消失（离开段 vs 进入段力度关系反转）或 range 门控退出 | 同上 | `consolidation_divergence_lost` |
+| 类二买 / 类二卖（LB2 / LS2） | 隔段背驰前提消失（A_{i+2} 力度不再弱于 A_i）或同级别分解退出 `single_confirmed`（`lb2_anchor` / `ls2_anchor` 为 `None`） | 同上 | `gap_divergence_lost` |
+
+> **实现口径**：逐点 reason 由 `_SIGNAL_INVALIDATION_REASON_BY_POINT` 静态映射；`invalidated_at` 取
+> 判定帧内自上一帧末 bar 之后**逐根回扫首次命中**的 bar；`invalidated_price` 取该 bar 收盘价。
+> 窗口不足（无上一帧末 bar）时回退判定帧末 bar。
+>
+> **已知缺口**：类一尚无结构判据（`_STRUCTURAL_GATE_BY_POINT` 未覆盖 `buy1like` / `sell1like`），
+> `consolidation_divergence_lost` 只能由价格近似触发。
+
+#### 3.2.1 `forming → invalidated` 判据（2026-11-14 新增）
+
+`forming` 也必须能失效，否则早期预警的误报无法度量：
+
+- **同源判据**：复用 `_signal_premise_broken(point, forming.price, frame)` 与
+  `_structural_premise_broken(point, frame)`——只把锚点价格换成 forming 载荷自己的 `price`。
+- **触发时机**：上一帧 `forming` 集合里的 `(point, signal_bi_id)`，在当前帧既不在 forming、也不在
+  confirmed 中，且当前帧前提已破坏 → `invalidated`，`from_state=forming`，
+  `invalidated_premise ∈ {price, structure}`。
+- **不得误伤**：
+  - 同 `point` + 同锚点已升 `confirmed` → 只记 `forming_confirmed`，不失效。
+  - 同 `point` 换新锚点仍 forming → 只记 `forming_reanchored`（顺延），不失效。
+  - 锚点消失且前提未破 → `forming_dropped`（自然终止，仅审计）。
+- **终态约束**：同一 `point` + 同一锚点 `forming → invalidated` 后不得回 forming / confirmed，
+  否则记 `reconfirm_after_invalidated`（与 confirmed 失效同一条护栏）。
+- **无 TTL**：当前不设有效期。若后续引入，必须新增独立 reason（如 `forming_expired`），
+  不得复用 §3.2 的五个枚举值。
 
 ### 3.3 Repaint 安全红线
 
@@ -104,7 +142,13 @@ invalidation 是跨帧概念：单帧 `analyze_chanlun_signals` 恒按最新结�
 - 逐帧比较 confirmed 集合（键 = `point` + `signal_bi_id`）：某锚点从 confirmed 消失时，若该帧成立
   前提已破坏（`_signal_premise_broken`，按 §3.2 分族）→ 记 `invalidated` + `invalidated_reason`；
   否则记 `repaint_violations`（违反上面的 repaint 红线）。
-- 输出：`{timeline, invalidated, repaint_violations, rebased, superseded}`，既是失效发射，也是 repaint 自动护栏。
+- **forming 集合同口径回放（2026-11-14 新增）**：帧内 `lifecycle_state=forming` 的锚点也参与跨帧比较，
+  但归宿分四类（§2.8.3 spec）：`forming_confirmed` / `forming_reanchored` / `forming_invalidated` /
+  `forming_dropped`。只有 `forming_invalidated` 产出失效记录（`from_state=forming`）。
+- **事件时刻与价格**：帧需持久化 `last_bar_ts` / `last_bar_close`（判定帧末 bar）与
+  `prev_last_bar_ts`（上一帧末 bar，用于回扫起点）；失效记录附 `invalidated_at` / `invalidated_price`。
+- 输出：`{timeline, invalidated, repaint_violations, rebased, superseded, forming_invalidated,
+  forming_dropped, forming_reanchored}`，既是失效发射，也是 repaint 自动护栏。
 
 ### 3.5 `superseded` 自然更替分支（RS0 增量5，2026-09-12）
 
@@ -731,7 +775,7 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 - 回归：`tests/test_chanlun_analysis.py`（buy/sell 升级正例 + 结构未闭环反例）、
   `tests/test_analysis_contract.py`（新增枚举完整性与 label/note）。
 
-## 6. 契约字段草案（待评审）
+## 6. 契约字段草案（2026-11-14 更新：六字段已入契约）
 
 > 落 `src/chanlun/analysis_contract.py` + Markdown 契约页，遵循 spec-change-protocol 契约同步规则。
 
@@ -739,7 +783,15 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 | --- | --- | --- |
 | `lifecycle_state` | `forming | confirmed | invalidated` | 每个买卖点 payload |
 | `invalidated_reason` | 枚举（见 §3.2）/ null | 仅 `invalidated` 时非空 |
+| `invalidated_premise` | `price` / `structure` / null | 仅 `invalidated` 时非空 |
+| `from_state` | `forming` / `confirmed` / null | 仅 `invalidated` 时非空（区分直转来源） |
 | `forming_basis` | 复用现有 `SignalBasis` + 预备态标记 | 仅 `forming` 时 |
+| `forming_at` / `forming_price` | ISO 时间 / 收盘价 | `forming_at` = `detected_at` 结构口径（锚点笔确认时刻） |
+| `confirmed_at` / `confirmed_price` | ISO 时间 / 收盘价 | 仅 `confirmed` / `invalidated` 历史行非空 |
+| `invalidated_at` / `invalidated_price` | ISO 时间 / 收盘价 | 仅 `invalidated` 非空；终态保留 |
+
+不变量：`confirmed_at ≥ forming_at`；`invalidated_at ≥ confirmed_at`（forming 直转时 `confirmed_at` 为空）；
+价格取对应事件 K 线的 **close**，不得用锚点极值 / 当前价冒充。
 
 消费降级：新消费者优先读 `lifecycle_state`；`forming` → watch，`invalidated` → 不操作，
 `confirmed` 才允许按现有 `same_level_consumption_level` 档位输出。
@@ -758,6 +810,71 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 透出买卖点预备态，再逐步升级为结构化 `lifecycle_state` 角标。红线：`forming` 不得在页面上
 渲染成确认买卖点。
 
+> **2026-11-14 更新**：`normalize_signal_point` 已透出 `lifecycle_state` / `invalidated_reason`，
+> 本轮再补 `invalidated_premise` / `from_state` 与六字段（`forming_at/price`、`confirmed_at/price`、
+> `invalidated_at/price`）。六字段跨轮按 `point|time` 键取最早（`attach_signal_detected_at` 同一机制）。
+
+## 6.2 信号迁移历史存储（CloudBase 文档数据库，2026-11-14 新增）
+
+目标：保存**完整买卖点状态迁移历史**（`forming` / `confirmed` / `invalidated` 每一次迁移），
+小程序「买卖点」页面**不变**——继续读发布包里的最新信号，历史只存库，供回看与胜率统计。
+
+### 6.2.1 数据模型
+
+集合 `signal_events`（只追加，一条 = 一次状态迁移）：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `_id` | string | 幂等键：`symbol` + `timeframe` + `point` + `anchor_key` + `event`，以竖线连接；非法字符替换为 `-` |
+| `symbol` / `name` / `market` / `timeframe` | string | 标的信息 |
+| `point` / `label` | string | `buy_1` … `sell_2like` |
+| `event` | string | `forming` / `confirmed` / `invalidated` / `superseded` |
+| `from_state` / `to_state` | string | 迁移前后态（`forming → invalidated` 时为 `forming` / `invalidated`） |
+| `anchor_key` | string | `signal_bi_id`；为空（未确认笔）时退化为 `time` |
+| `event_at` | string(ISO) | 事件 K 线时间（= 对应 `forming_at` / `confirmed_at` / `invalidated_at`） |
+| `event_price` | number | 事件 K 线**收盘价** |
+| `anchor_time` / `anchor_price` | string / number | 锚点笔尾时间与极值（既有 `time` / `price`） |
+| `detected_at` / `confirmed_at` / `invalidated_at` | string | 六字段快照 |
+| `forming_price` / `confirmed_price` / `invalidated_price` | number | 六字段快照 |
+| `invalidated_reason` / `invalidated_premise` | string | 失效原因与前提类型 |
+| `basis` | string | `SignalBasis` 枚举值 |
+| `related_zs_id` / `related_zs_low` / `related_zs_high` | int / number | 点确认时固化的中枢身份与边沿 |
+| `data_window` / `code_fingerprint` / `run_id` | string | 复盘定位 |
+| `created_at` / `updated_at` | string | 写入时间 |
+
+集合 `signal_state`（可选派生）：`_id = ${symbol}|${timeframe}|${point}`，保存最新一版六字段，
+供将来小程序切换为「直查库」时使用。**MVP 先只写 `signal_events`**。
+
+### 6.2.2 幂等与去重
+
+- 写入采用 **upsert by `_id`**：同一迁移重复上传只更新 `updated_at`，不新增行。
+- `anchor_key` 选择：`signal_bi_id`；为空（forming 锚在未确认笔且无 id）时退化为 `time`。
+- **跨轮置底**：发布包只透出本轮出现的事件，历史库靠 `_id` 幂等，重复上传无副作用。
+- 零值陷阱：`signal_bi_id = 0` 是合法笔号，判空一律用 `is None` / `=== null`，**不得**用真假值判断。
+
+### 6.2.3 写入通道
+
+- 云函数 `signalHistory`（`westock/cloudfunctions/signalHistory`）：
+  - `upsertBatch`：入参 `{records:[...]}`，按 `_id` 批量 upsert，返回 `{inserted, updated}`；
+  - `list`：入参 `{symbol, timeframe, point?, limit?, before?}`，按 `event_at` 倒序分页。
+- Stock 侧脚本 `scripts/sync_signal_history_cloudbase.py`：
+  - 从发布包与 tech.json 汇总 → `build/miniapp-publish/signal-history.jsonl`；
+  - 通过云函数 HTTP 访问服务（`SIGNAL_HISTORY_URL` + `SIGNAL_HISTORY_TOKEN`）批量 POST；
+  - `--dry-run` 只落 jsonl；`--skip-upload` 跳过网络。
+- 失败策略：**不阻断**发布包上传（历史库最终一致）；退出码非 0 但仅告警。
+
+### 6.2.4 保留与规模
+
+- 永久保留（用户要求完整迁移历史）。单文档 < 1KB；500 标的 × 4 周期 × 每年 ~20 次迁移 ≈ 4 万条/年。
+- 建议索引：`symbol + timeframe + event_at(desc)`；`point`；`invalidated_at`。
+- 不含持仓 / 交易数据，仅公开行情派生信号。
+
+### 6.2.5 与页面契约的边界
+
+- 小程序页面**继续读发布包**（`latest_buy/sell/overall` + `signal_points` / `invalidated_points`），
+  本次不改任何 `wxml` / `js`。
+- 历史库不是前端数据源；将来若要「历史」页，再新增查询页并复用 `list`。
+
 ## 7. 实现顺序（评审通过后）
 
 1. RS0 契约 + 状态机 + repaint 回归护栏（横切前置）。
@@ -766,6 +883,7 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 4. RS2 多级别升级方向（已落地：小转大自动升级 + 区间套反向确认）。
 5. RS3 收口工程近似（与 RS0 失效条件联动）。
 6. RS4 增量重算稳健性（数据层，独立可并行）。
+7. RS6（2026-11-14）：六字段 + `forming → invalidated` + CloudBase 信号迁移历史库（§6.2）。
 
 ## 8. 关联
 

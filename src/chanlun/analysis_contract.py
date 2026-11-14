@@ -149,6 +149,18 @@ SIGNAL_INVALIDATED_REASON_LABELS = {
 }
 
 
+# spec §2.8.4：信号记录的三组「事件时间 + 事件 K 线收盘价」。
+# 六字段都是**迁移历史**（不是当前态）；`lifecycle_state` 才是当前态。
+SIGNAL_LIFECYCLE_EVENT_FIELDS = {
+    "forming_at": "预备事件时间（= 锚点笔确认的结构检出时刻，同 detected_at 口径）",
+    "forming_price": "forming_at 那根 K 线的收盘价",
+    "confirmed_at": "首次进入 confirmed 的结构时刻",
+    "confirmed_price": "confirmed_at 那根 K 线的收盘价",
+    "invalidated_at": "失效判据首次成立的 K 线时间",
+    "invalidated_price": "invalidated_at 那根 K 线的收盘价",
+}
+
+
 STRUCTURE_STATUS_LABELS = {
     StructureStatus.ONGOING_SAME_TYPE.value: "同类延伸中",
     StructureStatus.CANDIDATE_COMPLETED_WAITING_STABILITY.value: "候选完成待确认",

@@ -12,6 +12,7 @@ from chanlun.analysis_contract import (
     PRECISION_DYNAMIC_GRADE_NOTES,
     SIGNAL_BASIS_LABELS,
     SIGNAL_INVALIDATED_REASON_LABELS,
+    SIGNAL_LIFECYCLE_EVENT_FIELDS,
     SIGNAL_LIFECYCLE_STATE_LABELS,
     SIGNAL_LIFECYCLE_STATE_NOTES,
     SIGNAL_POINT_LABELS,
@@ -76,6 +77,19 @@ def test_signal_invalidated_reason_enum_is_stable_and_complete() -> None:
         "consolidation_divergence_lost",
         "gap_divergence_lost",
     }
+
+
+def test_signal_lifecycle_event_fields_cover_time_and_price_pairs() -> None:
+    """spec §2.8.4：三组「事件时间 + 事件 K 线收盘价」缺一不可。"""
+    assert set(SIGNAL_LIFECYCLE_EVENT_FIELDS) == {
+        "forming_at",
+        "forming_price",
+        "confirmed_at",
+        "confirmed_price",
+        "invalidated_at",
+        "invalidated_price",
+    }
+    assert all(label for label in SIGNAL_LIFECYCLE_EVENT_FIELDS.values())
 
 
 def test_structure_status_enum_is_stable_and_complete() -> None:

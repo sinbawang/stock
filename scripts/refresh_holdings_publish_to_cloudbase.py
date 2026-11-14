@@ -737,6 +737,23 @@ def _run_upload_in_process(argv: list[str]) -> None:
         raise RuntimeError(f"upload_miniapp_publish_bundle exited with code {exit_code}")
 
 
+def sync_signal_history(args: argparse.Namespace) -> None:
+    """spec §2.8.4 / design §6.2：把买卖点迁移历史同步到 CloudBase 文档库。
+
+    仅在 `SIGNAL_HISTORY_URL` 存在时由 `main()` 调用；失败不阻断发布包上传
+    （历史库为最终一致，下一轮可幂等重传）。
+    """
+    import sync_signal_history_cloudbase as history_module
+
+    argv = ["--reports-root", str(REPORTS_DIR)]
+    symbols = list(getattr(args, "symbols", None) or [])
+    if symbols:
+        argv.extend(["--symbols", *[str(value) for value in symbols]])
+    exit_code = history_module.main(argv)
+    if exit_code != 0:
+        raise RuntimeError(f"sync_signal_history_cloudbase exited with code {exit_code}")
+
+
 def _print_upload_verification_summary(manifest_path: Path, focus_symbols: list[str] | None) -> None:
     if not manifest_path.exists():
         print(f"upload_verification_manifest_missing={manifest_path}", flush=True)
@@ -939,6 +956,15 @@ def main() -> None:
             DEFAULT_UPLOAD_MANIFEST_PATH,
             list(args.symbols) if args.symbols else None,
         )
+        # spec §2.8.4 / design §6.2：买卖点迁移历史（可选，未配置 URL 时跳过）。
+        if os.environ.get("SIGNAL_HISTORY_URL"):
+            started_history = time.perf_counter()
+            try:
+                sync_signal_history(args)
+            except Exception as exc:  # noqa: BLE001 - 历史库不阻断发布包上传
+                print(f"signal_history_sync_warning={exc}", flush=True)
+            stage_seconds["signal_history_seconds"] = time.perf_counter() - started_history
+            print(f"timing signal_history_seconds={stage_seconds['signal_history_seconds']:.2f}", flush=True)
     stage_seconds["total_seconds"] = time.perf_counter() - started_total
     print(f"timing total_seconds={stage_seconds['total_seconds']:.2f}", flush=True)
 

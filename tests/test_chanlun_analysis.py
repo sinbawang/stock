@@ -18,7 +18,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from chanlun.analysis import _back_to_center_at, _build_zs_monitor_state, _has_reverse_turn_after, _is_first_reverse_hold, _segment_confirmed_ts, _signal_detect_ts, _signal_premise_broken, _structural_premise_broken, analyze_chanlun_signals, build_lower_timeframe_precision_entry, build_precision_window_display, build_signal_point_payloads, build_signal_summary_fields, build_structure_state, compute_segment_strengths, derive_signal_lifecycle_transitions, replay_confirmed_signal_lifecycle, to_lifecycle_frame
-from chanlun.models import Bi, BiDirection, Segment, Zhongshu
+from chanlun.models import Bar, Bi, BiDirection, Segment, Zhongshu
 from chanlun.zhongshu import identify_zhongshu
 
 # 历史注记：这些真实 replay 样本原本加载 `build/probe_intraday_prebreak_sample.py`，
@@ -2981,11 +2981,111 @@ def test_derive_signal_lifecycle_transitions_empty_on_first_frame() -> None:
     result = derive_signal_lifecycle_transitions(None, {"signal_points": []})
     assert result == {
         "invalidated_points": [],
+        "forming_invalidated_points": [],
+        "forming_dropped_points": [],
+        "forming_reanchored_points": [],
         "repaint_violations": [],
         "rebased_points": [],
         "superseded_points": [],
         "window_rebased": False,
     }
+
+
+def _forming_point(point: str, signal_bi_id: int, price: float, **extra: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "point": point,
+        "signal_bi_id": signal_bi_id,
+        "price": price,
+        "lifecycle_state": "forming",
+    }
+    payload.update(extra)
+    return payload
+
+
+def test_replay_marks_forming_invalidated_when_price_premise_broken() -> None:
+    """spec §2.8.5：forming 前提被破坏 → invalidated（from_state=forming，不报 repaint 违规）。"""
+    frame_a = _lifecycle_frame(
+        [_forming_point("buy1", 5, 9.8)],
+        latest_down=_bi(5, BiDirection.DOWN, high=11.0, low=9.8, day=5),
+    )
+    frame_b = _lifecycle_frame([], latest_down=_bi(7, BiDirection.DOWN, high=10.4, low=9.5, day=7))
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["repaint_violations"] == []
+    assert len(result["invalidated"]) == 1
+    inv = result["invalidated"][0]
+    assert inv["from_state"] == "forming"
+    assert inv["invalidated_reason"] == "first_class_extreme_broken"
+    assert inv["invalidated_premise"] == "price"
+    assert result["forming_invalidated"] == [inv]
+
+
+def test_replay_forming_dropped_when_premise_intact() -> None:
+    """forming 锚点被纯重绘抹掉、前提未破 → forming_dropped（仅审计），不得产出失效。"""
+    frame_a = _lifecycle_frame([_forming_point("buy1", 5, 9.8)])
+    frame_b = _lifecycle_frame([], latest_down=_bi(7, BiDirection.DOWN, high=10.4, low=10.0, day=7))
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["invalidated"] == []
+    assert result["forming_invalidated"] == []
+    assert [entry["kind"] for entry in result["forming_dropped"]] == ["forming_dropped"]
+
+
+def test_replay_forming_confirmed_is_not_invalidated() -> None:
+    """同 point 升 confirmed（哪怕换锚）→ 兑现，不得判 forming 失效。"""
+    frame_a = _lifecycle_frame([_forming_point("buy1", 5, 9.8)])
+    frame_b = _lifecycle_frame(
+        [_confirmed_point("buy1", 5, 9.8)],
+        latest_down=_bi(7, BiDirection.DOWN, high=10.4, low=9.5, day=7),
+    )
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["invalidated"] == []
+    assert any(event["transition"] == "forming_confirmed" for event in result["timeline"])
+
+
+def test_replay_forming_reanchored_is_not_invalidated() -> None:
+    """同 point 仍有 forming、仅锚点平移 → 顺延（forming_reanchored），不得判失效。"""
+    frame_a = _lifecycle_frame([_forming_point("buy1", 5, 9.8)])
+    frame_b = _lifecycle_frame(
+        [_forming_point("buy1", 9, 9.4)],
+        latest_down=_bi(9, BiDirection.DOWN, high=10.2, low=9.4, day=8),
+    )
+
+    result = replay_confirmed_signal_lifecycle([frame_a, frame_b])
+
+    assert result["invalidated"] == []
+    assert [entry["kind"] for entry in result["forming_reanchored"]] == ["forming_reanchored"]
+
+
+def test_derive_signal_lifecycle_transitions_locates_invalidated_at_by_bar_rescan() -> None:
+    """spec §2.8.4：invalidated_at 取「上一帧末 bar 之后逐根回扫首次命中」的 K 线，不取帧末。"""
+    previous_frame = {
+        "signal_points": [_confirmed_point("buy1", 5, 9.8)],
+        "data_window": None,
+        "last_bar_ts": "2026-08-05T09:30:00",
+    }
+    signals = {
+        "signal_points": [],
+        "latest_down": _bi(7, BiDirection.DOWN, high=10.4, low=9.3, day=7),
+    }
+    bars = [
+        Bar(datetime(2026, 8, 5, 9, 30), 9.9, 9.95, 9.85, 9.9),
+        Bar(datetime(2026, 8, 5, 9, 31), 9.9, 9.95, 9.85, 9.88),
+        Bar(datetime(2026, 8, 5, 9, 32), 9.88, 9.9, 9.4, 9.45),
+        Bar(datetime(2026, 8, 5, 9, 33), 9.45, 9.5, 9.3, 9.32),
+    ]
+
+    result = derive_signal_lifecycle_transitions(previous_frame, signals, raw_bars=bars)
+
+    assert len(result["invalidated_points"]) == 1
+    inv = result["invalidated_points"][0]
+    assert inv["invalidated_at"] == "2026-08-05T09:32:00"
+    assert inv["invalidated_price"] == 9.45
+    assert inv["from_state"] == "confirmed"
 
 
 def test_replay_marks_rebased_instead_of_repaint_when_data_window_changes() -> None:

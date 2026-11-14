@@ -669,6 +669,39 @@ def build_previous_confirmed_at_map(section: dict[str, Any] | None) -> dict[str,
     return _build_previous_signal_time_map(section, field_name="confirmed_at", camel_name="confirmedAt")
 
 
+def _build_previous_signal_value_map(
+    section: dict[str, Any] | None,
+    *,
+    field_name: str,
+    camel_name: str,
+) -> dict[str, Any]:
+    """与 `_build_previous_signal_time_map` 同结构，但保留原值类型（供事件价配对）。"""
+    previous_value_by_key: dict[str, Any] = {}
+    source = section if isinstance(section, dict) else {}
+    for field in SIGNAL_POINT_FIELDS:
+        for item in source.get(field) or []:
+            if not isinstance(item, dict):
+                continue
+            key = build_signal_detected_key(item)
+            value = first_non_empty(item.get(field_name), item.get(camel_name))
+            if key and value not in (None, "") and key not in previous_value_by_key:
+                previous_value_by_key[key] = value
+    return previous_value_by_key
+
+
+def _price_paired_with_event(
+    event_at: str,
+    previous_event_at: str,
+    previous_price: Any,
+    current_price: Any,
+) -> Any:
+    """事件时刻决定用哪一轮的价格：取到了更早的上一轮时刻 → 用上一轮价格，否则用本轮。"""
+    if event_at and previous_event_at and event_at == previous_event_at:
+        if previous_price not in (None, ""):
+            return previous_price
+    return current_price
+
+
 def is_confirmed_signal(signal: dict[str, Any] | None) -> bool:
     if not isinstance(signal, dict):
         return False
@@ -729,6 +762,15 @@ def attach_signal_detected_at(
 ) -> dict[str, Any]:
     previous_detected_at_by_key = build_previous_detected_at_map(fallback_section)
     previous_confirmed_at_by_key = build_previous_confirmed_at_map(fallback_section)
+    previous_forming_at_by_key = _build_previous_signal_time_map(
+        fallback_section, field_name="forming_at", camel_name="formingAt"
+    )
+    previous_forming_price_by_key = _build_previous_signal_value_map(
+        fallback_section, field_name="forming_price", camel_name="formingPrice"
+    )
+    previous_confirmed_price_by_key = _build_previous_signal_value_map(
+        fallback_section, field_name="confirmed_price", camel_name="confirmedPrice"
+    )
     default_value = safe_text(default_detected_at)
     merged = dict(section)
 
@@ -760,6 +802,32 @@ def attach_signal_detected_at(
             if detected_at:
                 normalized_item["detected_at"] = detected_at
 
+            # spec §2.8.4：forming_at = detected_at（同一结构时刻）；forming_price 取该事件 K 线收盘价。
+            # 事件时刻跨轮取最早后，价格必须跟着同一个时刻走（不得拿本轮价格配上一轮时刻）。
+            current_forming_at = first_non_empty(
+                normalized_item.get("forming_at"),
+                normalized_item.get("formingAt"),
+            ) or detected_at
+            previous_forming_at = previous_forming_at_by_key.get(key, "")
+            forming_at = _earliest_detected_at(
+                current_forming_at,
+                previous_forming_at,
+                safe_text(normalized_item.get("time")),
+            ) or detected_at
+            if forming_at:
+                normalized_item["forming_at"] = forming_at
+            forming_price = _price_paired_with_event(
+                forming_at,
+                previous_forming_at,
+                previous_forming_price_by_key.get(key),
+                first_non_empty(
+                    normalized_item.get("forming_price"),
+                    normalized_item.get("formingPrice"),
+                ),
+            )
+            if forming_price not in (None, ""):
+                normalized_item["forming_price"] = maybe_float(forming_price)
+
             # confirmed_at 只在点真正进入 confirmed 时落定；forming 阶段必须为空，
             # invalidated 时结构已不可重算，退回上一版发布包保留的确认时刻（用于“确认 → 失效”追溯）。
             # 类二取「首次确认帧的最后一根 K 线时间」，跨轮保留最早值保证稳定；
@@ -777,9 +845,22 @@ def attach_signal_detected_at(
             ) or (default_value if is_confirmed_signal(normalized_item) else "")
             if confirmed_at:
                 normalized_item["confirmed_at"] = confirmed_at
+                confirmed_price = _price_paired_with_event(
+                    confirmed_at,
+                    previous_confirmed_at_by_key.get(key, ""),
+                    previous_confirmed_price_by_key.get(key),
+                    first_non_empty(
+                        normalized_item.get("confirmed_price"),
+                        normalized_item.get("confirmedPrice"),
+                    ),
+                )
+                if confirmed_price not in (None, ""):
+                    normalized_item["confirmed_price"] = maybe_float(confirmed_price)
             else:
                 normalized_item.pop("confirmed_at", None)
                 normalized_item.pop("confirmedAt", None)
+                normalized_item.pop("confirmed_price", None)
+                normalized_item.pop("confirmedPrice", None)
 
             normalized_values.append(normalized_item)
 
@@ -869,6 +950,19 @@ def normalize_signal_point(signal: dict[str, Any] | None) -> dict[str, Any] | No
         "basis": signal.get("basis"),
         "lifecycle_state": signal.get("lifecycle_state"),
         "invalidated_reason": signal.get("invalidated_reason"),
+        "invalidated_premise": signal.get("invalidated_premise"),
+        "from_state": signal.get("from_state"),
+        # spec §2.8.4 六字段（时间 + 事件 K 线收盘价）。其中 forming_at/confirmed_at 跨轮取最早，
+        # 由 `attach_signal_detected_at` 与事件价配对合并。
+        "detected_at": signal.get("detected_at"),
+        "forming_at": signal.get("forming_at"),
+        "forming_price": maybe_float(signal.get("forming_price")),
+        "confirmed_at": signal.get("confirmed_at"),
+        "confirmed_price": maybe_float(signal.get("confirmed_price")),
+        "invalidated_at": signal.get("invalidated_at"),
+        "invalidated_price": maybe_float(signal.get("invalidated_price")),
+        "related_zs_low": maybe_float(signal.get("related_zs_low")),
+        "related_zs_high": maybe_float(signal.get("related_zs_high")),
     }
 
 

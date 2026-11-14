@@ -3972,3 +3972,40 @@ def test_attach_signal_detected_at_discards_legacy_confirmed_equal_to_detected()
     merged = module.attach_signal_detected_at(current, previous, "2026-10-20T15:40:00")
 
     assert merged["signal_points"][0]["confirmed_at"] == "2026-10-20T15:10:00"
+
+
+def test_attach_signal_detected_at_pairs_earliest_event_with_its_own_price() -> None:
+    """spec §2.8.4：跨轮取最早事件时刻时，价格必须配对**同一轮**，不得拿本轮价格配上一轮时刻。"""
+    previous = {
+        "signal_points": [
+            {
+                "point": "buy1",
+                "time": "2026-08-05T09:30:00",
+                "forming_at": "2026-08-05T09:31:00",
+                "forming_price": 9.8,
+                "confirmed_at": "2026-08-05T09:40:00",
+                "confirmed_price": 9.9,
+            }
+        ]
+    }
+    current = {
+        "signal_points": [
+            {
+                "point": "buy1",
+                "time": "2026-08-05T09:30:00",
+                "lifecycle_state": "confirmed",
+                "forming_at": "2026-08-05T09:32:00",
+                "forming_price": 9.7,
+                "confirmed_at": "2026-08-05T09:41:00",
+                "confirmed_price": 9.95,
+            }
+        ]
+    }
+
+    merged = module.attach_signal_detected_at(current, previous, "2026-08-05T10:00:00")
+
+    item = merged["signal_points"][0]
+    assert item["forming_at"] == "2026-08-05T09:31:00"
+    assert item["forming_price"] == 9.8
+    assert item["confirmed_at"] == "2026-08-05T09:40:00"
+    assert item["confirmed_price"] == 9.9
