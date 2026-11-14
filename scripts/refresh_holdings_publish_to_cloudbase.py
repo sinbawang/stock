@@ -738,10 +738,9 @@ def _run_upload_in_process(argv: list[str]) -> None:
 
 
 def sync_signal_history(args: argparse.Namespace) -> None:
-    """spec §2.8.4 / design §6.2：把买卖点迁移历史同步到 CloudBase 文档库。
+    """模式 B（可选）：通过 HTTP 访问服务直传历史事件。
 
-    仅在 `SIGNAL_HISTORY_URL` 存在时由 `main()` 调用；失败不阻断发布包上传
-    （历史库为最终一致，下一轮可幂等重传）。
+    仅在 `SIGNAL_HISTORY_URL` 存在时由 `main()` 调用；失败不阻断发布包上传。
     """
     import sync_signal_history_cloudbase as history_module
 
@@ -752,6 +751,31 @@ def sync_signal_history(args: argparse.Namespace) -> None:
     exit_code = history_module.main(argv)
     if exit_code != 0:
         raise RuntimeError(f"sync_signal_history_cloudbase exited with code {exit_code}")
+
+
+def write_signal_history_jsonl(args: argparse.Namespace, latest_dir: Path) -> Path:
+    """模式 A（默认）：把历史事件写成 `latest/signal-history.jsonl`，随发布包上传。
+
+    云函数 `signalHistory` 的定时触发器会从存储下载该文件并幂等导入，因此**不需要**
+    HTTP 访问服务与 token。失败不应阻断发布（下一轮会重写）。
+    """
+    import sync_signal_history_cloudbase as history_module
+
+    output_path = Path(latest_dir) / "signal-history.jsonl"
+    argv = [
+        "--reports-root",
+        str(REPORTS_DIR),
+        "--output",
+        str(output_path),
+        "--dry-run",
+    ]
+    symbols = list(getattr(args, "symbols", None) or [])
+    if symbols:
+        argv.extend(["--symbols", *[str(value) for value in symbols]])
+    exit_code = history_module.main(argv)
+    if exit_code != 0:
+        raise RuntimeError(f"sync_signal_history_cloudbase exited with code {exit_code}")
+    return output_path
 
 
 def _print_upload_verification_summary(manifest_path: Path, focus_symbols: list[str] | None) -> None:
@@ -948,6 +972,14 @@ def main() -> None:
             sync_kline_cache_backup(args)
             stage_seconds["sync_kline_cache_seconds"] = time.perf_counter() - started_sync_kline
             print(f"timing sync_kline_cache_seconds={stage_seconds['sync_kline_cache_seconds']:.2f}", flush=True)
+        # 模式 A：历史 jsonl 写入 latest，随发布包一起上传；云函数定时导入（无需 HTTP）。
+        started_history_jsonl = time.perf_counter()
+        try:
+            history_jsonl = write_signal_history_jsonl(args, latest_dir)
+            print(f"signal_history_jsonl= {history_jsonl}", flush=True)
+        except Exception as exc:  # noqa: BLE001 - 历史台账不阻断发布
+            print(f"signal_history_jsonl_warning={exc}", flush=True)
+        stage_seconds["signal_history_jsonl_seconds"] = time.perf_counter() - started_history_jsonl
         started_upload = time.perf_counter()
         upload_publish_bundle(args, latest_dir, publish_failures)
         stage_seconds["upload_seconds"] = time.perf_counter() - started_upload
@@ -956,7 +988,7 @@ def main() -> None:
             DEFAULT_UPLOAD_MANIFEST_PATH,
             list(args.symbols) if args.symbols else None,
         )
-        # spec §2.8.4 / design §6.2：买卖点迁移历史（可选，未配置 URL 时跳过）。
+        # 模式 B（可选）：配置了 HTTP 访问服务时额外直传一次（失败不阻断）。
         if os.environ.get("SIGNAL_HISTORY_URL"):
             started_history = time.perf_counter()
             try:

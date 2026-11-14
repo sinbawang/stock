@@ -855,18 +855,25 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 ### 6.2.3 写入通道
 
 - 云函数 `signalHistory`（`westock/cloudfunctions/signalHistory`，部署与配置见其 README）：
-  - `upsertBatch`：入参 `{records:[...]}`（单批 ≤100），按 `_id` 幂等 upsert，返回 `{upserted, failed}`；
-    写入必须带 `Authorization: Bearer <SIGNAL_HISTORY_TOKEN>`，函数未配该环境变量时 **fail closed** 拒绝写入；
-  - `list`：入参 `{symbol, timeframe, point?, limit?, before?}`，按 `event_at` 倒序分页（只读，不要求 token）；
-  - 同时支持 `wx.cloud.callFunction`（event 即业务参数）与 **HTTP 访问服务**（云函数 URL 化，
-    event 形如 `{httpMethod, headers, queryStringParameters, body}`）。
+  - **模式 A（默认，推荐；无需 HTTP 访问服务、无需 token）**：`importFromStorage` ——
+    `config.json` 声明定时触发器（每 10 分钟），用 `cloud.downloadFile` 读取发布包中的
+    `signal-history.jsonl` 并幂等 upsert；只允许导入该固定文件名；
+  - **模式 B（可选，近实时）**：`upsertBatch`（HTTP 访问服务直传，单批 ≤100，需
+    `Authorization: Bearer <SIGNAL_HISTORY_TOKEN>`；未配 token 时 fail closed）；
+  - `list`：`{symbol, timeframe, point?, limit?, before?}`，按 `event_at` 倒序分页（只读）；
+  - 同时支持 `wx.cloud.callFunction`（event 即业务参数）与 HTTP 访问服务事件结构。
 - **一次性配置**（细则见 `westock/cloudfunctions/signalHistory/README.md`）：
   1. 控制台建集合 `signal_events` 与索引；
-  2. 部署云函数；
-  3. 函数环境变量加 `SIGNAL_HISTORY_TOKEN=<强随机串>`，保存后重新部署 / 发布版本生效；
-  4. 腾讯云 CloudBase 控制台 →「HTTP 访问服务」把 `/signalHistory` 映射到该函数，得到
-     `https://<envId>.service.tcloudbase.com/signalHistory`（以控制台显示为准）；
-  5. 采集端（本机 / 容器）设置同名 `SIGNAL_HISTORY_URL` / `SIGNAL_HISTORY_TOKEN`，token 不得入库。
+  2. 部署云函数（`config.json` 自动带定时触发器）；
+  3. 函数环境变量 `SIGNAL_HISTORY_FILE_ID_PREFIX=cloud://<envId>.<bucket>/miniapp-publish/latest`
+     （= 小程序 `miniprogram/config/publish.js` 的 `INDEX_FILE_ID` 去掉 `/index.json`）；
+     未配置时导入 fail closed；
+  4. 仅模式 B 需要：腾讯云 CloudBase 控制台「HTTP 访问服务」映射 `/signalHistory`，
+     并配置 `SIGNAL_HISTORY_TOKEN`。
+- 采集端：
+  - 模式 A：`refresh_holdings_publish_to_cloudbase.py` 上传前把 `signal-history.jsonl` 写入
+    `build/miniapp-publish/latest/`，随发布包一起上传；
+  - 模式 B：另设 `SIGNAL_HISTORY_URL` / `SIGNAL_HISTORY_TOKEN`（token 不得入库）。
 - Stock 侧脚本 `scripts/sync_signal_history_cloudbase.py`：
   - 从发布包与 tech.json 汇总 → `build/miniapp-publish/signal-history.jsonl`；
   - 通过云函数 HTTP 访问服务（`SIGNAL_HISTORY_URL` + `SIGNAL_HISTORY_TOKEN`）批量 POST；
