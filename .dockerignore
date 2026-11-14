@@ -19,3 +19,7 @@ logs/
 .env
 *.md
 !README.md
+# 构建产物 / 测试不参与镜像构建，否则 tcb cloudrun deploy --source 会把
+# 几百 MB 的 build/ 一起上传（本地实测 build/ ≈ 926MB；data/ 已排除）。
+build/
+tests/
