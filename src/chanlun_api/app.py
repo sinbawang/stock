@@ -29,7 +29,13 @@ if str(SCRIPTS) not in sys.path:
 
 from batch_generate_and_send_portfolio_mixed_reports import load_holdings
 from batch_prepare_chanlun_reports import run_batch_prepare
-from refresh_holdings_publish_to_cloudbase import rebuild_publish_bundle, regenerate_holdings, upload_publish_bundle
+from refresh_holdings_publish_to_cloudbase import (
+    rebuild_publish_bundle,
+    regenerate_holdings,
+    sync_signal_history,
+    upload_publish_bundle,
+    write_signal_history_jsonl,
+)
 from storage_layout import DATA_META_DIR, HOLDINGS_FILE, REPORTS_DIR
 
 
@@ -380,7 +386,20 @@ def _publish_build_and_upload(args: Namespace) -> dict[str, Any]:
         )
         latest_dir = Path(str(build_summary["latest"]))
     if not args.skip_upload:
+        # 小程序 EOD 走的正是本函数（不会经过 refresh_holdings_publish_to_cloudbase.main），
+        # 因此历史 jsonl 必须在这里生成，否则「小程序跑完但库里没数据」。
+        try:
+            history_path = write_signal_history_jsonl(args, latest_dir)
+            print(f"signal_history_jsonl= {history_path}", flush=True)
+        except Exception as exc:  # noqa: BLE001 - 历史台账不阻断发布
+            print(f"signal_history_jsonl_warning={exc}", flush=True)
         upload_publish_bundle(args, latest_dir)
+        # 模式 B（可选）：配置了 HTTP 访问服务时发布成功后立即直传。
+        if os.environ.get("SIGNAL_HISTORY_URL"):
+            try:
+                sync_signal_history(args)
+            except Exception as exc:  # noqa: BLE001 - 历史库不阻断发布
+                print(f"signal_history_sync_warning={exc}", flush=True)
     result = {
         "publish_root": str(args.publish_root),
         "latest_dir": str(latest_dir),

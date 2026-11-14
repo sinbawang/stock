@@ -737,14 +737,19 @@ def _run_upload_in_process(argv: list[str]) -> None:
         raise RuntimeError(f"upload_miniapp_publish_bundle exited with code {exit_code}")
 
 
+def _history_reports_root(args: argparse.Namespace) -> str:
+    """历史事件从 tech.json 汇总；API/CLI 都可自定义 reports_root。"""
+    return str(getattr(args, "reports_root", None) or REPORTS_DIR)
+
+
 def sync_signal_history(args: argparse.Namespace) -> None:
     """模式 B（可选）：通过 HTTP 访问服务直传历史事件。
 
-    仅在 `SIGNAL_HISTORY_URL` 存在时由 `main()` 调用；失败不阻断发布包上传。
+    仅在 `SIGNAL_HISTORY_URL` 存在时由调用方调用；失败不阻断发布包上传。
     """
     import sync_signal_history_cloudbase as history_module
 
-    argv = ["--reports-root", str(REPORTS_DIR)]
+    argv = ["--reports-root", _history_reports_root(args)]
     symbols = list(getattr(args, "symbols", None) or [])
     if symbols:
         argv.extend(["--symbols", *[str(value) for value in symbols]])
@@ -758,13 +763,16 @@ def write_signal_history_jsonl(args: argparse.Namespace, latest_dir: Path) -> Pa
 
     云函数 `signalHistory` 的定时触发器会从存储下载该文件并幂等导入，因此**不需要**
     HTTP 访问服务与 token。失败不应阻断发布（下一轮会重写）。
+
+    注意：小程序 EOD 走 `chanlun_api._publish_build_and_upload`，与 CLI 共用本函数，
+    否则「小程序跑 EOD」不会生成该文件。
     """
     import sync_signal_history_cloudbase as history_module
 
     output_path = Path(latest_dir) / "signal-history.jsonl"
     argv = [
         "--reports-root",
-        str(REPORTS_DIR),
+        _history_reports_root(args),
         "--output",
         str(output_path),
         "--dry-run",

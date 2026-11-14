@@ -233,3 +233,51 @@ def test_run_publish_refresh_expands_day_request_to_lower_timeframes(monkeypatch
 
     assert captured["tech_timeframes"] == ("day", "30m", "5m", "1m")
     assert result["generated_timeframes"] == ["day", "30m", "5m", "1m"]
+
+
+def test_publish_build_and_upload_writes_signal_history_before_upload(monkeypatch, tmp_path) -> None:
+    """小程序 EOD 走 _publish_build_and_upload，必须先生成 signal-history.jsonl 再上传。"""
+    calls: list[str] = []
+
+    def fake_write(args, latest):
+        calls.append("write")
+        return latest / "signal-history.jsonl"
+
+    monkeypatch.setattr(module, "write_signal_history_jsonl", fake_write)
+    monkeypatch.setattr(module, "upload_publish_bundle", lambda args, latest: calls.append("upload"))
+    monkeypatch.setattr(module, "sync_signal_history", lambda args: calls.append("sync"))
+    monkeypatch.delenv("SIGNAL_HISTORY_URL", raising=False)
+
+    args = module.Namespace(
+        skip_build=True,
+        skip_upload=False,
+        publish_root=str(tmp_path),
+        cloud_prefix="miniapp-publish/latest",
+        publish_timeframes=None,
+    )
+
+    result = module._publish_build_and_upload(args)
+
+    assert calls == ["write", "upload"]
+    assert result["latest_dir"] == str(tmp_path / "latest")
+
+
+def test_publish_build_and_upload_syncs_signal_history_when_url_configured(monkeypatch, tmp_path) -> None:
+    calls: list[str] = []
+
+    monkeypatch.setattr(module, "write_signal_history_jsonl", lambda args, latest: calls.append("write") or latest)
+    monkeypatch.setattr(module, "upload_publish_bundle", lambda args, latest: calls.append("upload"))
+    monkeypatch.setattr(module, "sync_signal_history", lambda args: calls.append("sync"))
+    monkeypatch.setenv("SIGNAL_HISTORY_URL", "https://example.test/signalHistory")
+
+    args = module.Namespace(
+        skip_build=True,
+        skip_upload=False,
+        publish_root=str(tmp_path),
+        cloud_prefix="miniapp-publish/latest",
+        publish_timeframes=None,
+    )
+
+    module._publish_build_and_upload(args)
+
+    assert calls == ["write", "upload", "sync"]
