@@ -17,8 +17,9 @@ import sys
 import traceback
 from collections.abc import Mapping
 from contextvars import ContextVar, Token
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 VALID_SERVICES = frozenset({"eod-runner", "intraday-runner", "miniapp-api"})
 VALID_PERIODS = frozenset({"m1", "m5", "m30", "day", "eod"})
@@ -63,6 +64,17 @@ SENSITIVE_EXTRA_KEYS = frozenset(
 )
 
 MAX_STACK_CHARS = 2000
+
+
+def _resolve_log_timezone() -> Any:
+    name = os.getenv("LOG_TIMEZONE", "Asia/Shanghai").strip() or "Asia/Shanghai"
+    try:
+        return ZoneInfo(name)
+    except Exception:  # noqa: BLE001 - 容器缺少 tzdata 时退回固定 +08:00
+        return timezone(timedelta(hours=8))
+
+
+_LOG_TZ = _resolve_log_timezone()
 
 _LEVEL_MAP = {
     logging.DEBUG: "DEBUG",
@@ -188,7 +200,7 @@ def sanitize_extra(extra: Mapping[Any, Any] | None, *, mask_values: bool = False
 
 
 def _format_ts(created: float) -> str:
-    return datetime.fromtimestamp(created).astimezone().isoformat(timespec="milliseconds")
+    return datetime.fromtimestamp(created, tz=_LOG_TZ).isoformat(timespec="milliseconds")
 
 
 def build_log_dict(record: logging.LogRecord) -> dict[str, Any]:
@@ -367,13 +379,20 @@ def setup_logger(service: str, period: str | None = None) -> ContextAdapter:
     return ContextAdapter(logger, extra)
 
 
-def get_run_logger(service: str, period: str | None = None, run_id: str | None = None) -> ContextAdapter:
-    """返回额外预绑定 run_id 的 logger。"""
+def get_run_logger(
+    service: str,
+    period: str | None = None,
+    run_id: str | None = None,
+    trace_id: str | None = None,
+) -> ContextAdapter:
+    """返回额外预绑定 run_id / trace_id 的 logger。"""
 
     adapter = setup_logger(service, period)
     extra = dict(adapter.extra or {})
     if run_id:
         extra["run_id"] = run_id
+    if trace_id:
+        extra["trace_id"] = trace_id
     return ContextAdapter(adapter.logger, extra)
 
 

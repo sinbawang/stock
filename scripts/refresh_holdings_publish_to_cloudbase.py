@@ -951,11 +951,12 @@ def sync_kline_cache_restore(args: argparse.Namespace) -> None:
 def main() -> None:
     args = parse_args()
     os.environ.setdefault("CHANLUN_RUN_ID", uuid4().hex)
-    logger = get_run_logger("eod-runner", "eod", os.environ.get("CHANLUN_RUN_ID"))
+    logger = get_run_logger("eod-runner", "eod", os.environ.get("CHANLUN_RUN_ID"), trace_id=os.environ.get("CHANLUN_TRACE_ID"))
     logger.info(
-        "eod_started",
+        "eod refresh started",
         extra={
             "extra": {
+                "event": "eod_started",
                 "skip_regenerate": bool(args.skip_regenerate),
                 "skip_build": bool(args.skip_build),
                 "skip_upload": bool(args.skip_upload),
@@ -1034,11 +1035,12 @@ def main() -> None:
         publish_failures=publish_failures,
     )
     print(f"timing_report= {timing_report}", flush=True)
+    duration_ms = round((time.perf_counter() - started_total) * 1000, 1)
     logger.info(
-        "eod_finished",
+        f"eod refresh finished in {duration_ms:.0f}ms",
         extra={
-            "duration_ms": round((time.perf_counter() - started_total) * 1000, 1),
-            "extra": {"timing_report": str(timing_report)},
+            "duration_ms": duration_ms,
+            "extra": {"event": "eod_finished", "timing_report": str(timing_report)},
         },
     )
 
@@ -1048,8 +1050,8 @@ if __name__ == "__main__":
         main()
     except Exception as exc:  # noqa: BLE001 - 记录结构化失败日志后再抛出
         log_exc(
-            get_run_logger("eod-runner", "eod", os.environ.get("CHANLUN_RUN_ID")),
-            "eod_failed",
+            get_run_logger("eod-runner", "eod", os.environ.get("CHANLUN_RUN_ID"), trace_id=os.environ.get("CHANLUN_TRACE_ID")),
+            "eod refresh failed",
             exc,
             retryable=False,
         )

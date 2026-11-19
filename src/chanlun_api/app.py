@@ -47,6 +47,7 @@ from storage_layout import DATA_META_DIR, HOLDINGS_FILE, REPORTS_DIR
 from json_logger import (
     bind_trace_id,
     cls_status,
+    current_trace_id,
     get_run_logger,
     log_exc,
     reset_trace_id,
@@ -54,7 +55,7 @@ from json_logger import (
 )
 
 logger = setup_logger("miniapp-api")
-logger.info("service_started", extra={"extra": {"pid": os.getpid(), "cls": cls_status()}})
+logger.info("service started", extra={"extra": {"event": "service_started", "pid": os.getpid(), "cls": cls_status()}})
 
 
 Timeframe = Literal["day", "60m", "30m", "15m", "5m", "1m"]
@@ -287,6 +288,8 @@ class JobStateResponse(BaseModel):
     request: dict[str, Any]
     result: dict[str, Any] | None = None
     error: str | None = None
+    run_id: str | None = None
+    trace_id: str | None = None
 
 
 @dataclass
@@ -300,6 +303,8 @@ class _JobRecord:
     finished_at: str | None = None
     result: dict[str, Any] | None = None
     error: str | None = None
+    run_id: str | None = None
+    trace_id: str | None = None
 
 
 class _JobStore:
@@ -307,8 +312,21 @@ class _JobStore:
         self._jobs: dict[str, _JobRecord] = {}
         self._lock = threading.Lock()
 
-    def create(self, kind: JobKind, request: dict[str, Any]) -> _JobRecord:
-        job = _JobRecord(job_id=uuid4().hex, kind=kind, request=request)
+    def create(
+        self,
+        kind: JobKind,
+        request: dict[str, Any],
+        *,
+        run_id: str | None = None,
+        trace_id: str | None = None,
+    ) -> _JobRecord:
+        job = _JobRecord(
+            job_id=uuid4().hex,
+            kind=kind,
+            request=request,
+            run_id=run_id or uuid4().hex,
+            trace_id=trace_id,
+        )
         with self._lock:
             self._jobs[job.job_id] = job
         return job
@@ -544,11 +562,12 @@ def _run_publish_refresh(
         flush=True,
     )
     if run_logger is not None:
+        duration_ms = round(stage_seconds.get("total_seconds", 0.0) * 1000, 1)
         run_logger.info(
-            "publish_refresh_stage",
+            f"publish refresh finished in {duration_ms:.0f}ms",
             extra={
-                "duration_ms": round(stage_seconds.get("total_seconds", 0.0) * 1000, 1),
-                "extra": stage_seconds,
+                "duration_ms": duration_ms,
+                "extra": {"event": "publish_refresh_stage", **stage_seconds},
             },
         )
     result["stage_seconds"] = stage_seconds
@@ -634,11 +653,13 @@ def _run_technical_refresh(
         flush=True,
     )
     if run_logger is not None:
+        duration_ms = round(stage_seconds.get("total_seconds", 0.0) * 1000, 1)
+        period = _period_from_timeframes(tech_timeframes)
         run_logger.info(
-            "technical_refresh_stage",
+            f"technical refresh {period} finished in {duration_ms:.0f}ms",
             extra={
-                "duration_ms": round(stage_seconds.get("total_seconds", 0.0) * 1000, 1),
-                "extra": stage_seconds,
+                "duration_ms": duration_ms,
+                "extra": {"event": "technical_refresh_stage", **stage_seconds},
             },
         )
     publish_result.update(
@@ -668,6 +689,8 @@ def _serialize_job(job: _JobRecord) -> JobStateResponse:
         request=job.request,
         result=job.result,
         error=job.error,
+        run_id=job.run_id,
+        trace_id=job.trace_id,
     )
 
 
@@ -676,17 +699,18 @@ def _run_job(job_id: str, kind: JobKind) -> None:
     if job is None:
         return
     JOBS.update(job_id, status="running", started_at=_now_iso(), error=None)
-    run_id = uuid4().hex
+    run_id = job.run_id or uuid4().hex
+    trace_id = job.trace_id
     run_logger: Any | None = None
     started = time.perf_counter()
     try:
         if kind == "publish_refresh":
             payload = PublishRefreshRequest.model_validate(job.request)
             service, period = _publish_service_period(payload)
-            run_logger = get_run_logger(service, period, run_id)
+            run_logger = get_run_logger(service, period, run_id, trace_id=trace_id)
             run_logger.info(
-                "job_started",
-                extra={"extra": {"kind": kind, "job_id": job_id}},
+                f"{kind} job started",
+                extra={"extra": {"event": "job_started", "kind": kind, "job_id": job_id}},
             )
             result = _run_publish_refresh(payload, run_logger=run_logger)
         else:
@@ -695,23 +719,23 @@ def _run_job(job_id: str, kind: JobKind) -> None:
             period = _period_from_timeframes(
                 _resolve_technical_timeframes(payload.refresh_mode, payload.tech_timeframes)
             )
-            run_logger = get_run_logger(service, period, run_id)
+            run_logger = get_run_logger(service, period, run_id, trace_id=trace_id)
             run_logger.info(
-                "job_started",
-                extra={"extra": {"kind": kind, "job_id": job_id}},
+                f"{kind} job started",
+                extra={"extra": {"event": "job_started", "kind": kind, "job_id": job_id}},
             )
             result = _run_technical_refresh(payload, run_logger=run_logger)
         duration_ms = round((time.perf_counter() - started) * 1000, 1)
         JOBS.update(job_id, status="succeeded", finished_at=_now_iso(), result=result)
         run_logger.info(
-            "job_succeeded",
+            f"{kind} job succeeded in {duration_ms:.0f}ms",
             extra={
                 "duration_ms": duration_ms,
-                "extra": {"kind": kind, "job_id": job_id},
+                "extra": {"event": "job_succeeded", "kind": kind, "job_id": job_id},
             },
         )
     except Exception as exc:
-        log_exc(run_logger or logger, "job_failed", exc, retryable=False)
+        log_exc(run_logger or logger, f"{kind} job failed", exc, retryable=False)
         JOBS.update(job_id, status="failed", finished_at=_now_iso(), error=traceback.format_exc())
 
 
@@ -731,14 +755,20 @@ async def _log_request(request: Request, call_next):
         try:
             response = await call_next(request)
         except Exception as exc:  # noqa: BLE001 - 记录后继续抛出，交由框架处理
-            log_exc(logger, "http_request_failed", exc, retryable=False)
+            log_exc(
+                logger,
+                f"{request.method} {request.url.path} failed",
+                exc,
+                retryable=False,
+            )
             raise
         logger.info(
-            "http_request",
+            f"{request.method} {request.url.path} -> {response.status_code}",
             extra={
                 "trace_id": trace_id,
                 "duration_ms": round((time.perf_counter() - started) * 1000, 1),
                 "extra": {
+                    "event": "http_request",
                     "method": request.method,
                     "path": request.url.path,
                     "status": response.status_code,
@@ -767,14 +797,48 @@ def healthz() -> dict[str, Any]:
 
 @app.post("/jobs/publish-refresh", response_model=JobCreatedResponse)
 def submit_publish_refresh(request: PublishRefreshRequest) -> JobCreatedResponse:
-    job = JOBS.create("publish_refresh", request.model_dump())
+    trace_id = current_trace_id() or uuid4().hex
+    job = JOBS.create(
+        "publish_refresh",
+        request.model_dump(),
+        trace_id=trace_id,
+    )
+    logger.info(
+        f"publish_refresh job accepted (job_id={job.job_id})",
+        extra={
+            "trace_id": trace_id,
+            "extra": {
+                "event": "job_accepted",
+                "kind": job.kind,
+                "job_id": job.job_id,
+                "run_id": job.run_id,
+            },
+        },
+    )
     EXECUTOR.submit(_run_job, job.job_id, job.kind)
     return JobCreatedResponse(job_id=job.job_id, kind=job.kind, status=job.status, created_at=job.created_at)
 
 
 @app.post("/jobs/technical-refresh", response_model=JobCreatedResponse)
 def submit_technical_refresh(request: TechnicalRefreshRequest) -> JobCreatedResponse:
-    job = JOBS.create("technical_refresh", request.model_dump())
+    trace_id = current_trace_id() or uuid4().hex
+    job = JOBS.create(
+        "technical_refresh",
+        request.model_dump(),
+        trace_id=trace_id,
+    )
+    logger.info(
+        f"technical_refresh job accepted (job_id={job.job_id})",
+        extra={
+            "trace_id": trace_id,
+            "extra": {
+                "event": "job_accepted",
+                "kind": job.kind,
+                "job_id": job.job_id,
+                "run_id": job.run_id,
+            },
+        },
+    )
     EXECUTOR.submit(_run_job, job.job_id, job.kind)
     return JobCreatedResponse(job_id=job.job_id, kind=job.kind, status=job.status, created_at=job.created_at)
 

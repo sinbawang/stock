@@ -107,6 +107,33 @@ def test_run_job_binds_intraday_logger_with_period(monkeypatch) -> None:
     assert module.JOBS.get(job.job_id).status == "succeeded"
 
 
+def test_run_job_propagates_submission_trace_and_run_id(monkeypatch) -> None:
+    import json_logger
+
+    captured: dict[str, object] = {}
+
+    def fake_run_publish_refresh(request, run_logger=None):
+        captured["extra"] = dict(run_logger.extra)
+        return {"ok": True}
+
+    monkeypatch.setattr(module, "_run_publish_refresh", fake_run_publish_refresh)
+    job = module.JOBS.create(
+        "publish_refresh",
+        module.PublishRefreshRequest().model_dump(),
+        run_id="run-submit",
+        trace_id="trace-submit",
+    )
+    try:
+        module._run_job(job.job_id, job.kind)
+    finally:
+        json_logger._reset_loggers()
+
+    assert captured["extra"]["run_id"] == "run-submit"
+    assert captured["extra"]["trace_id"] == "trace-submit"
+    assert module.JOBS.get(job.job_id).run_id == "run-submit"
+    assert module.JOBS.get(job.job_id).trace_id == "trace-submit"
+
+
 def test_technical_refresh_request_defaults_to_5m_2000_and_1m_3500() -> None:
     request = module.TechnicalRefreshRequest()
 

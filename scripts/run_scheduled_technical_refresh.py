@@ -127,23 +127,28 @@ def maybe_notify_signals(args: argparse.Namespace) -> None:
 def main() -> int:
     args = parse_args()
     run_id = os.environ.get("CHANLUN_RUN_ID") or uuid4().hex
-    logger = get_run_logger("intraday-runner", resolve_period(args), run_id)
+    period = resolve_period(args)
+    logger = get_run_logger("intraday-runner", period, run_id, trace_id=os.environ.get("CHANLUN_TRACE_ID"))
     request = build_request(args)
     print("scheduled_technical_refresh_request", json.dumps(request.model_dump(), ensure_ascii=False), flush=True)
-    logger.info("refresh_started", extra={"extra": {"refresh_mode": args.refresh_mode}})
+    logger.info(
+        f"technical refresh {period} started",
+        extra={"extra": {"event": "refresh_started", "refresh_mode": args.refresh_mode}},
+    )
     started = time.perf_counter()
     try:
         result = _run_technical_refresh(request)
     except Exception as exc:
-        log_exc(logger, "refresh_failed", exc, retryable=False)
+        log_exc(logger, f"technical refresh {period} failed", exc, retryable=False)
         raise
     duration_ms = round((time.perf_counter() - started) * 1000, 1)
     print("scheduled_technical_refresh_result", json.dumps(result, ensure_ascii=False), flush=True)
     logger.info(
-        "refresh_finished",
+        f"technical refresh {period} finished in {duration_ms:.0f}ms",
         extra={
             "duration_ms": duration_ms,
             "extra": {
+                "event": "refresh_finished",
                 "failed_count": result.get("failed_count", 0),
                 "security_count": result.get("security_count", 0),
             },

@@ -308,6 +308,21 @@ def test_setup_logger_rejects_period_for_miniapp() -> None:
         setup_logger("miniapp-api", "m1")
 
 
+def test_get_run_logger_injects_trace_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ENABLE_CLS_LOG", raising=False)
+    json_logger._reset_loggers()
+    try:
+        run_logger = get_run_logger("intraday-runner", "m1", "run-1", trace_id="trace-1")
+        assert run_logger.extra == {
+            "service": "intraday-runner",
+            "period": "m1",
+            "run_id": "run-1",
+            "trace_id": "trace-1",
+        }
+    finally:
+        json_logger._reset_loggers()
+
+
 def test_log_exc_emits_error_with_err_object() -> None:
     logger, capture = _capture_logger("clstest.exc")
     adapter = ContextAdapter(logger, {"service": "eod-runner", "period": "eod"})

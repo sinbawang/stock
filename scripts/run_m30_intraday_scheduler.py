@@ -379,8 +379,8 @@ def run_scheduler(args: argparse.Namespace) -> int:
     service, period = resolve_service_period(args.profile)
     scheduler_logger = setup_logger(service, period)
     scheduler_logger.info(
-        "scheduler_started",
-        extra={"extra": {"profile": args.profile, "pid": os.getpid()}},
+        f"scheduler started ({args.profile})",
+        extra={"extra": {"event": "scheduler_started", "profile": args.profile, "pid": os.getpid()}},
     )
     log(f"starting profile={args.profile} pid={os.getpid()}", label=label)
     tz = resolve_timezone(args.timezone)
@@ -431,8 +431,8 @@ def run_scheduler(args: argparse.Namespace) -> int:
             run_id = os.environ.get("CHANLUN_RUN_ID") or uuid4().hex
             run_logger = get_run_logger(service, period, run_id)
             run_logger.info(
-                "slot_started",
-                extra={"extra": {"slot": slot_text, "reason": trigger_reason}},
+                f"slot {slot_text} started",
+                extra={"extra": {"event": "slot_started", "slot": slot_text, "reason": trigger_reason}},
             )
             child_env = os.environ.copy()
             child_env["CHANLUN_RUN_ID"] = run_id
@@ -450,13 +450,13 @@ def run_scheduler(args: argparse.Namespace) -> int:
                 last_triggered_slot = due_slot
                 save_last_triggered_slot(state_path, due_slot)
                 run_logger.info(
-                    "slot_finished",
-                    extra={"duration_ms": duration_ms, "extra": {"slot": slot_text}},
+                    f"slot {slot_text} finished in {duration_ms:.0f}ms",
+                    extra={"duration_ms": duration_ms, "extra": {"event": "slot_finished", "slot": slot_text}},
                 )
             else:
                 if start_error is not None:
                     run_logger.error(
-                        "slot_failed",
+                        f"slot {slot_text} failed",
                         extra={
                             "duration_ms": duration_ms,
                             "err": {
@@ -465,12 +465,12 @@ def run_scheduler(args: argparse.Namespace) -> int:
                                 "stack": "",
                                 "retryable": True,
                             },
-                            "extra": {"slot": slot_text, "retry_seconds": retry_seconds},
+                            "extra": {"event": "slot_failed", "slot": slot_text, "retry_seconds": retry_seconds},
                         },
                     )
                 else:
                     run_logger.error(
-                        "slot_failed",
+                        f"slot {slot_text} failed",
                         extra={
                             "duration_ms": duration_ms,
                             "err": {
@@ -479,7 +479,12 @@ def run_scheduler(args: argparse.Namespace) -> int:
                                 "stack": "",
                                 "retryable": True,
                             },
-                            "extra": {"slot": slot_text, "exit_code": returncode, "retry_seconds": retry_seconds},
+                            "extra": {
+                                "event": "slot_failed",
+                                "slot": slot_text,
+                                "exit_code": returncode,
+                                "retry_seconds": retry_seconds,
+                            },
                         },
                     )
                 log(f"slot failed; will retry in about {retry_seconds}s", label=label)
