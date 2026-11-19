@@ -1314,7 +1314,22 @@ $env:ENABLE_CLS_LOG = "false"
 | `/healthz` 返回 404 | 服务能发布，但健康检查不是 200 | 先确认服务实际启动的是当前 FastAPI 镜像，且容器端口仍是 `8000` |
 | `/healthz` 超时或 5xx | 服务域名可访问，但响应超时或网关报错 | 优先看容器启动日志、依赖安装是否成功、运行时环境变量是否缺失 |
 | 容器内后续发布失败 | API 服务起来了，但后续 CloudBase 上传链路报权限或 key 错误 | 核对 `CLOUDBASE_APIKEY` 是否已正确注入容器运行时 |
+| CloudBase 管理 API DNS 解析失败 | `Failed to resolve '<env>.<region>.tcb-api.tencentcloudapi.com' ([Errno -3] Temporary failure in name resolution)` | 先执行 `Resolve-DnsName <host>` 和 `Test-NetConnection <host> -Port 443`。本机可把 DNS 切到 `119.29.29.29` / `223.5.5.5` 后 `ipconfig /flushdns`；容器需检查 `/etc/resolv.conf` 与出网。部署 CLI 和上传脚本都会访问该地址，DNS 不通时部署/上传都不会完成，新镜像也不会生效。 |
 | `--set-env` 参数异常 | 发布命令在拼接环境变量时失败 | 检查 `KEY=VALUE` 里是否包含非法的 `&` |
+
+### CloudBase / CLS 出网要求
+
+部署 CLI、发布上传、CLS 直写都依赖容器或本机能访问以下公网域名：
+
+- `<env-id>.<region>.tcb-api.tencentcloudapi.com`（CloudBase 管理 API）
+- `cls.tencentcloudapi.com`（CLS `UploadLog`）
+
+如果服务在 VPC 内但没有 NAT 网关 / 公网出网，常见现象就是
+`Temporary failure in name resolution` 或连接超时。此时：
+
+- CLS 不会上传成功，只会写 `logs/cls_fallback_YYYYMMDD.jsonl`
+- CloudBase 发布/上传链路也会失败
+- 需要给 VPC 配置 NAT 网关或开启公网出网，并确保容器 DNS 可用
 
 如果第一次排查还不够，建议按这个顺序缩小范围：
 
