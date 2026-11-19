@@ -50,6 +50,63 @@ def test_publish_refresh_request_ignores_local_store_read_only_true() -> None:
     assert request.local_store_read_only is False
 
 
+def test_publish_service_period_defaults_to_eod() -> None:
+    request = module.PublishRefreshRequest()
+
+    assert module._publish_service_period(request) == ("eod-runner", "eod")
+
+
+def test_publish_service_period_reroutes_intraday_only_request() -> None:
+    request = module.PublishRefreshRequest(tech_timeframes=["1m"])
+
+    assert module._publish_service_period(request) == ("intraday-runner", "m1")
+
+
+def test_run_job_binds_eod_logger(monkeypatch) -> None:
+    import json_logger
+
+    captured: dict[str, object] = {}
+
+    def fake_run_publish_refresh(request, run_logger=None):
+        captured["extra"] = dict(run_logger.extra)
+        return {"ok": True}
+
+    monkeypatch.setattr(module, "_run_publish_refresh", fake_run_publish_refresh)
+    job = module.JOBS.create("publish_refresh", module.PublishRefreshRequest().model_dump())
+    try:
+        module._run_job(job.job_id, job.kind)
+    finally:
+        json_logger._reset_loggers()
+
+    assert captured["extra"]["service"] == "eod-runner"
+    assert captured["extra"]["period"] == "eod"
+    assert captured["extra"]["run_id"]
+    assert module.JOBS.get(job.job_id).status == "succeeded"
+
+
+def test_run_job_binds_intraday_logger_with_period(monkeypatch) -> None:
+    import json_logger
+
+    captured: dict[str, object] = {}
+
+    def fake_run_technical_refresh(request, run_logger=None):
+        captured["extra"] = dict(run_logger.extra)
+        return {"ok": True}
+
+    monkeypatch.setattr(module, "_run_technical_refresh", fake_run_technical_refresh)
+    request = module.TechnicalRefreshRequest(refresh_mode="m5_intraday", tech_timeframes=["1m"])
+    job = module.JOBS.create("technical_refresh", request.model_dump())
+    try:
+        module._run_job(job.job_id, job.kind)
+    finally:
+        json_logger._reset_loggers()
+
+    assert captured["extra"]["service"] == "intraday-runner"
+    assert captured["extra"]["period"] == "m1"
+    assert captured["extra"]["run_id"]
+    assert module.JOBS.get(job.job_id).status == "succeeded"
+
+
 def test_technical_refresh_request_defaults_to_5m_2000_and_1m_3500() -> None:
     request = module.TechnicalRefreshRequest()
 

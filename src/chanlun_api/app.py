@@ -44,9 +44,17 @@ from refresh_holdings_publish_to_cloudbase import (
 )
 from storage_layout import DATA_META_DIR, HOLDINGS_FILE, REPORTS_DIR
 
-from json_logger import bind_trace_id, log_exc, reset_trace_id, setup_logger
+from json_logger import (
+    bind_trace_id,
+    cls_status,
+    get_run_logger,
+    log_exc,
+    reset_trace_id,
+    setup_logger,
+)
 
 logger = setup_logger("miniapp-api")
+logger.info("service_started", extra={"extra": {"pid": os.getpid(), "cls": cls_status()}})
 
 
 Timeframe = Literal["day", "60m", "30m", "15m", "5m", "1m"]
@@ -100,6 +108,24 @@ def _resolve_technical_timeframes(mode: TechnicalRefreshMode, timeframes: list[T
     if mode == "m5_intraday":
         return ["5m", "1m"]
     return ["30m", "5m", "1m"]
+
+
+def _period_from_timeframes(timeframes: list[Timeframe] | None) -> str:
+    values = timeframes or []
+    if "30m" in values:
+        return "m30"
+    if "5m" in values:
+        return "m5"
+    if "1m" in values:
+        return "m1"
+    return "m30"
+
+
+def _publish_service_period(request: "PublishRefreshRequest") -> tuple[str, str]:
+    if _should_reroute_publish_refresh(request):
+        expanded = _expand_precision_timeframes(request.tech_timeframes)
+        return "intraday-runner", _period_from_timeframes(expanded)
+    return "eod-runner", "eod"
 
 
 def _should_reroute_publish_refresh(request: "PublishRefreshRequest") -> bool:
@@ -426,9 +452,15 @@ def _publish_build_and_upload(args: Namespace) -> dict[str, Any]:
     return result
 
 
-def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
+def _run_publish_refresh(
+    request: PublishRefreshRequest, run_logger: Any | None = None
+) -> dict[str, Any]:
     if _should_reroute_publish_refresh(request):
-        result = _run_technical_refresh(_build_intraday_request_from_publish(request))
+        intraday_request = _build_intraday_request_from_publish(request)
+        if run_logger is not None:
+            result = _run_technical_refresh(intraday_request, run_logger=run_logger)
+        else:
+            result = _run_technical_refresh(intraday_request)
         result["rerouted_from_publish_refresh"] = True
         result["generated_timeframes"] = _dedupe_timeframes(request.tech_timeframes)
         return result
@@ -511,6 +543,14 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
         + " ".join(f"{key}={value}" for key, value in stage_seconds.items()),
         flush=True,
     )
+    if run_logger is not None:
+        run_logger.info(
+            "publish_refresh_stage",
+            extra={
+                "duration_ms": round(stage_seconds.get("total_seconds", 0.0) * 1000, 1),
+                "extra": stage_seconds,
+            },
+        )
     result["stage_seconds"] = stage_seconds
     result["regenerated"] = not args.skip_regenerate
     result["generated_timeframes"] = list(args.tech_timeframes)
@@ -519,7 +559,9 @@ def _run_publish_refresh(request: PublishRefreshRequest) -> dict[str, Any]:
     return result
 
 
-def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
+def _run_technical_refresh(
+    request: TechnicalRefreshRequest, run_logger: Any | None = None
+) -> dict[str, Any]:
     tech_timeframes = _resolve_technical_timeframes(request.refresh_mode, request.tech_timeframes)
     publish_timeframes = _normalize_technical_publish_timeframes(request.publish_timeframes)
     stage_seconds: dict[str, float] = {}
@@ -591,6 +633,14 @@ def _run_technical_refresh(request: TechnicalRefreshRequest) -> dict[str, Any]:
         + " ".join(f"{key}={value}" for key, value in stage_seconds.items()),
         flush=True,
     )
+    if run_logger is not None:
+        run_logger.info(
+            "technical_refresh_stage",
+            extra={
+                "duration_ms": round(stage_seconds.get("total_seconds", 0.0) * 1000, 1),
+                "extra": stage_seconds,
+            },
+        )
     publish_result.update(
         {
             "stage_seconds": stage_seconds,
@@ -626,15 +676,42 @@ def _run_job(job_id: str, kind: JobKind) -> None:
     if job is None:
         return
     JOBS.update(job_id, status="running", started_at=_now_iso(), error=None)
+    run_id = uuid4().hex
+    run_logger: Any | None = None
+    started = time.perf_counter()
     try:
         if kind == "publish_refresh":
             payload = PublishRefreshRequest.model_validate(job.request)
-            result = _run_publish_refresh(payload)
+            service, period = _publish_service_period(payload)
+            run_logger = get_run_logger(service, period, run_id)
+            run_logger.info(
+                "job_started",
+                extra={"extra": {"kind": kind, "job_id": job_id}},
+            )
+            result = _run_publish_refresh(payload, run_logger=run_logger)
         else:
             payload = TechnicalRefreshRequest.model_validate(job.request)
-            result = _run_technical_refresh(payload)
+            service = "intraday-runner"
+            period = _period_from_timeframes(
+                _resolve_technical_timeframes(payload.refresh_mode, payload.tech_timeframes)
+            )
+            run_logger = get_run_logger(service, period, run_id)
+            run_logger.info(
+                "job_started",
+                extra={"extra": {"kind": kind, "job_id": job_id}},
+            )
+            result = _run_technical_refresh(payload, run_logger=run_logger)
+        duration_ms = round((time.perf_counter() - started) * 1000, 1)
         JOBS.update(job_id, status="succeeded", finished_at=_now_iso(), result=result)
-    except Exception:
+        run_logger.info(
+            "job_succeeded",
+            extra={
+                "duration_ms": duration_ms,
+                "extra": {"kind": kind, "job_id": job_id},
+            },
+        )
+    except Exception as exc:
+        log_exc(run_logger or logger, "job_failed", exc, retryable=False)
         JOBS.update(job_id, status="failed", finished_at=_now_iso(), error=traceback.format_exc())
 
 
@@ -684,6 +761,7 @@ def healthz() -> dict[str, Any]:
         "time": _now_iso(),
         "root": str(ROOT),
         "holdings_file": str(HOLDINGS_FILE),
+        "cls_log": cls_status(),
     }
 
 

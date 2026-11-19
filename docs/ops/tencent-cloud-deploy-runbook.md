@@ -1274,6 +1274,28 @@ $env:ENABLE_CLS_LOG = "false"
 
 开启真实上传前，可先只配置 `ENABLE_CLS_LOG=true` 与 4 个凭据变量，运行一次任务，再在 CLS 控制台按 `service` 字段检索。
 
+### 看不到日志时的排查顺序
+
+1. 先确认运行中的镜像包含本次改动：
+   ```powershell
+   Invoke-RestMethod https://<your-service-domain>/healthz
+   ```
+   返回里应有 `cls_log` 字段；没有该字段说明镜像还是旧版本，需要重新构建并发布。
+2. 看 `/healthz` 的 `cls_log`：
+   - `enabled=false`：容器没有设置 `ENABLE_CLS_LOG=true`。
+   - `handler_attached=false`：进程启动时没有挂载 CLSHandler（同样先确认环境变量在新版本里生效）。
+   - `handler_enabled=false`：`TENCENTCLS_TOPIC_ID` / `TENCENTCLOUD_SECRET_ID` / `TENCENTCLOUD_SECRET_KEY` 不完整，或 SDK 导入失败。
+   - `sdk_available=false`：镜像内没有 `tencentcloud-sdk-python-cls`，需要重建镜像。
+   - `region` 必须与 CLS 日志主题所在地域一致。
+3. 容器 stdout 搜索 `[cls-handler] WARN`：鉴权失败、Topic/凭据缺失、SDK 缺失都会打印在这里。
+4. 检查容器内 `logs/cls_fallback_YYYYMMDD.jsonl`：最终上传失败时会落到这里。
+5. 访问一次 `/healthz` 后等待 5 秒，在 CLS 搜索 `service: miniapp-api and msg: http_request`；能查到说明链路已通。
+6. API 触发的任务现在也会输出结构化日志：
+   - 盘后：`service=eod-runner, period=eod`
+   - 盘中：`service=intraday-runner, period=m30/m5/m1`
+   - 关键字：`job_started`、`publish_refresh_stage` / `technical_refresh_stage`、`job_succeeded` / `job_failed`
+7. 环境变量修改后需要重启或重新发布服务才会生效；仅改控制台变量但沿用旧实例时，进程内仍是旧配置。
+
 ## 已知限制
 
 1. 当前脚本仍不直接负责“首次创建 CloudBase Run 服务”；它只会在缺失时给出精确 bootstrap 提示。

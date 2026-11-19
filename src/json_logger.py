@@ -280,6 +280,35 @@ def _cls_enabled() -> bool:
     return os.getenv("ENABLE_CLS_LOG", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _cls_sdk_available() -> bool:
+    try:
+        import tencentcloud.cls.v20201016.cls_client  # noqa: F401
+    except Exception:  # noqa: BLE001 - 仅用于诊断
+        return False
+    return True
+
+
+def cls_status() -> dict[str, Any]:
+    """返回当前进程内 CLS 日志的配置/挂载状态，供启动日志和 /healthz 诊断。"""
+
+    status: dict[str, Any] = {
+        "enabled": _cls_enabled(),
+        "sdk_available": _cls_sdk_available(),
+        "handler_attached": False,
+        "handler_enabled": False,
+        "topic_configured": bool(os.getenv("TENCENTCLS_TOPIC_ID", "").strip()),
+        "region": os.getenv("CLOUDBASE_REGION", "").strip() or None,
+    }
+    for logger in _LOGGERS.values():
+        for handler in logger.handlers:
+            if getattr(handler, "_chanlun_cls", False):
+                status["handler_attached"] = True
+                status["handler_enabled"] = bool(getattr(handler, "_enabled", False))
+                status["topic_configured"] = bool(getattr(handler, "topic_id", ""))
+                status["region"] = getattr(handler, "region", None)
+    return status
+
+
 def _install_handlers(logger: logging.Logger) -> None:
     for handler in list(logger.handlers):
         if getattr(handler, "_chanlun_managed", False):
@@ -300,6 +329,7 @@ def _install_handlers(logger: logging.Logger) -> None:
         cls_handler = CLSHandler()
         cls_handler.setFormatter(StructuredFormatter())
         cls_handler._chanlun_managed = True  # type: ignore[attr-defined]
+        cls_handler._chanlun_cls = True  # type: ignore[attr-defined]
         logger.addHandler(cls_handler)
 
 
