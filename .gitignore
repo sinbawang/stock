@@ -9,6 +9,7 @@ tmp/
 _tmp_*
 .tmp_*
 build/
+logs/
 *.egg-info/
 dist/
 *.egg

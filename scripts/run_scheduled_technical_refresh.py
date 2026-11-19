@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
+from uuid import uuid4
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,7 +22,20 @@ from notify.feishu import FeishuConfigError
 from notify.signal_notifier import notify_from_reports
 from storage_layout import REPORTS_DIR, REPORTS_META_DIR
 
+from json_logger import get_run_logger, log_exc
+
 DEFAULT_NOTIFY_STATE_FILE = REPORTS_META_DIR / "notify_state.json"
+
+
+def resolve_period(args: argparse.Namespace) -> str:
+    timeframes = args.tech_timeframes or []
+    if "30m" in timeframes:
+        return "m30"
+    if "5m" in timeframes:
+        return "m5"
+    if "1m" in timeframes:
+        return "m1"
+    return "m30"
 
 
 def parse_args() -> argparse.Namespace:
@@ -111,10 +126,29 @@ def maybe_notify_signals(args: argparse.Namespace) -> None:
 
 def main() -> int:
     args = parse_args()
+    run_id = os.environ.get("CHANLUN_RUN_ID") or uuid4().hex
+    logger = get_run_logger("intraday-runner", resolve_period(args), run_id)
     request = build_request(args)
     print("scheduled_technical_refresh_request", json.dumps(request.model_dump(), ensure_ascii=False), flush=True)
-    result = _run_technical_refresh(request)
+    logger.info("refresh_started", extra={"extra": {"refresh_mode": args.refresh_mode}})
+    started = time.perf_counter()
+    try:
+        result = _run_technical_refresh(request)
+    except Exception as exc:
+        log_exc(logger, "refresh_failed", exc, retryable=False)
+        raise
+    duration_ms = round((time.perf_counter() - started) * 1000, 1)
     print("scheduled_technical_refresh_result", json.dumps(result, ensure_ascii=False), flush=True)
+    logger.info(
+        "refresh_finished",
+        extra={
+            "duration_ms": duration_ms,
+            "extra": {
+                "failed_count": result.get("failed_count", 0),
+                "security_count": result.get("security_count", 0),
+            },
+        },
+    )
     maybe_notify_signals(args)
     return 0
 

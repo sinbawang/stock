@@ -1215,6 +1215,65 @@ tcb --env-id ENV_ID cloudrun deploy -s SERVICE_NAME --port 8000 --source REPO_RO
 
 同理，若你启用了容器内调度，也建议把 `INTRADAY_SCHEDULER_ENABLED`、`M5_INTRADAY_SCHEDULER_ENABLED`、`M1_INTRADAY_SCHEDULER_ENABLED`、`EOD_SCHEDULER_ENABLED` 直接维护在控制台环境变量中，而不是依赖每次发布时注入。
 
+## CLS 直写日志（可选，不使用 CloudBase 日志投递）
+
+容器内 stdout 日志仍会保留（本地开发可见、容器日志兜底），开启后额外把结构化 JSON 异步批量写入腾讯云 CLS。
+
+### 新增运行时环境变量
+
+```text
+ENABLE_CLS_LOG=true
+CLOUDBASE_REGION=ap-guangzhou
+TENCENTCLS_TOPIC_ID=<CLS 日志主题 TopicId>
+TENCENTCLOUD_SECRET_ID=<子账号 SecretId>
+TENCENTCLOUD_SECRET_KEY=<子账号 SecretKey>
+```
+
+可选：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `LOG_LEVEL` | `INFO` | stdout / CLS 的最低日志级别 |
+| `CLS_FALLBACK_DIR` | `logs` | 上传失败时的兜底目录 |
+
+### 相关代码
+
+| 文件 | 作用 |
+| --- | --- |
+| [src/cls_handler.py](c:/sandbox/sinba/stock/src/cls_handler.py) | `CLSHandler`：本地缓冲、后台线程、批量上传、重试与 fallback |
+| [src/json_logger.py](c:/sandbox/sinba/stock/src/json_logger.py) | `setup_logger` / `get_run_logger` / `log_exc` / `mask`，统一字段规范 |
+| [src/chanlun_api/app.py](c:/sandbox/sinba/stock/src/chanlun_api/app.py) | `miniapp-api` 入口，每个请求自动生成 `trace_id` |
+| [scripts/run_m30_intraday_scheduler.py](c:/sandbox/sinba/stock/scripts/run_m30_intraday_scheduler.py) | 按 profile 绑定 `eod-runner` / `intraday-runner` 与 `period` |
+| [scripts/run_scheduled_technical_refresh.py](c:/sandbox/sinba/stock/scripts/run_scheduled_technical_refresh.py) | 盘中任务入口 |
+| [scripts/refresh_holdings_publish_to_cloudbase.py](c:/sandbox/sinba/stock/scripts/refresh_holdings_publish_to_cloudbase.py) | 收盘任务入口 |
+
+### 腾讯云控制台前置操作
+
+1. 开通日志服务 CLS（与 CloudBase 同地域，例如 `ap-guangzhou`）。
+2. 创建日志集，日志集内创建日志主题 `chanlun-stock`，保留期设为 7 天。
+3. 记录主题的 `TopicId`，填入 `TENCENTCLS_TOPIC_ID`。
+4. 创建子账号（建议只授予日志写入权限），在 CAM 授权 `QcloudCLSFullAccess`（或按主题最小权限）。
+5. 生成子账号 API 密钥，填入 `TENCENTCLOUD_SECRET_ID` / `TENCENTCLOUD_SECRET_KEY`。
+6. 在 CloudBase 控制台服务的环境变量中补齐上面 5 个变量；`CLOUDBASE_REGION` 已存在时直接复用。
+7. 三个 service 都写入同一主题 `chanlun-stock`，检索时用 `service` / `period` 字段区分。
+
+### 行为说明
+
+1. 缓冲满 `100` 条或超过 `5s` 触发一次批量上传，上传在后台线程完成，不阻塞业务。
+2. 网络类错误重试 2 次（1s、2s 指数退避）；鉴权类错误不重试并打印 WARN。
+3. 最终失败写入 `logs/cls_fallback_YYYYMMDD.jsonl`，不会向业务抛异常。
+4. 当前 SDK 使用 `UploadLog` 接口，日志时间通过 `Log.time`（毫秒）传递；旧版 SDK 的 `PutLogs` 路径会补 `__TIMESTAMP__` 字段。
+5. `service=miniapp-api` 时，`msg` 与 `extra` 会统一做脱敏（手机号 / openid 原文替换为 sha256 前 8 位）。
+
+### 本地验证
+
+```powershell
+$env:ENABLE_CLS_LOG = "false"
+& .\.venv\Scripts\python.exe -m pytest tests\test_cls_handler.py -q
+```
+
+开启真实上传前，可先只配置 `ENABLE_CLS_LOG=true` 与 4 个凭据变量，运行一次任务，再在 CLS 控制台按 `service` 字段检索。
+
 ## 已知限制
 
 1. 当前脚本仍不直接负责“首次创建 CloudBase Run 服务”；它只会在缺失时给出精确 bootstrap 提示。

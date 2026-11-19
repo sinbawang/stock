@@ -52,7 +52,7 @@ COPY config /app/config
 COPY src /app/src
 COPY scripts /app/scripts
 
-RUN mkdir -p /app/data /app/data/_meta /app/data/reports /app/data/reports/_meta /data/stock-kline-cache \
+RUN mkdir -p /app/data /app/data/_meta /app/data/reports /app/data/reports/_meta /app/logs /data/stock-kline-cache \
     && chmod +x /app/scripts/container_bootstrap_and_run.sh
 
 EXPOSE 8000

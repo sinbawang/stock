@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -26,6 +27,8 @@ from batch_generate_and_send_portfolio_mixed_reports import load_holdings
 import upload_miniapp_publish_bundle as upload_module
 from build_miniapp_publish_bundle import generate_bundle as build_publish_bundle
 from storage_layout import KLINE_CACHE_DIR, REPORTS_DIR, REPORTS_META_DIR, holdings_file
+
+from json_logger import get_run_logger, log_exc
 
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
@@ -947,6 +950,18 @@ def sync_kline_cache_restore(args: argparse.Namespace) -> None:
 
 def main() -> None:
     args = parse_args()
+    os.environ.setdefault("CHANLUN_RUN_ID", uuid4().hex)
+    logger = get_run_logger("eod-runner", "eod", os.environ.get("CHANLUN_RUN_ID"))
+    logger.info(
+        "eod_started",
+        extra={
+            "extra": {
+                "skip_regenerate": bool(args.skip_regenerate),
+                "skip_build": bool(args.skip_build),
+                "skip_upload": bool(args.skip_upload),
+            }
+        },
+    )
 
     started_total = time.perf_counter()
     started_at = datetime.now()
@@ -1019,7 +1034,23 @@ def main() -> None:
         publish_failures=publish_failures,
     )
     print(f"timing_report= {timing_report}", flush=True)
+    logger.info(
+        "eod_finished",
+        extra={
+            "duration_ms": round((time.perf_counter() - started_total) * 1000, 1),
+            "extra": {"timing_report": str(timing_report)},
+        },
+    )
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:  # noqa: BLE001 - 记录结构化失败日志后再抛出
+        log_exc(
+            get_run_logger("eod-runner", "eod", os.environ.get("CHANLUN_RUN_ID")),
+            "eod_failed",
+            exc,
+            retryable=False,
+        )
+        raise

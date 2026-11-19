@@ -10,10 +10,17 @@ import sys
 import time as time_module
 import traceback
 from typing import Literal
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from json_logger import get_run_logger, setup_logger
+
 DEFAULT_TIMEZONE = "Asia/Shanghai"
 DEFAULT_GRACE_SECONDS = 150
 DEFAULT_POLL_SECONDS = 30
@@ -224,6 +231,16 @@ def resolve_label(args: argparse.Namespace) -> str:
     return "intraday-scheduler"
 
 
+def resolve_service_period(profile: str) -> tuple[str, str]:
+    if profile == "eod":
+        return "eod-runner", "eod"
+    if profile == "m5_intraday":
+        return "intraday-runner", "m5"
+    if profile == "m1_intraday":
+        return "intraday-runner", "m1"
+    return "intraday-runner", "m30"
+
+
 def iter_session_slots(day: datetime, slots: tuple[time, ...]) -> list[datetime]:
     tzinfo = day.tzinfo
     return [datetime.combine(day.date(), slot, tzinfo=tzinfo) for slot in slots]
@@ -359,6 +376,12 @@ def build_command(args: argparse.Namespace) -> list[str]:
 
 def run_scheduler(args: argparse.Namespace) -> int:
     label = resolve_label(args)
+    service, period = resolve_service_period(args.profile)
+    scheduler_logger = setup_logger(service, period)
+    scheduler_logger.info(
+        "scheduler_started",
+        extra={"extra": {"profile": args.profile, "pid": os.getpid()}},
+    )
     log(f"starting profile={args.profile} pid={os.getpid()}", label=label)
     tz = resolve_timezone(args.timezone)
     slots = resolve_slots(args)
@@ -401,22 +424,64 @@ def run_scheduler(args: argparse.Namespace) -> int:
             due_slot = None
 
         if due_slot is not None and due_slot != last_triggered_slot:
-            log(
-                f"{trigger_reason} slot {due_slot.isoformat(timespec='minutes')}",
-                label=label,
-            )
+            slot_text = due_slot.isoformat(timespec="minutes")
+            log(f"{trigger_reason} slot {slot_text}", label=label)
             last_attempted_slot = due_slot
             last_attempt_at = now
+            run_id = os.environ.get("CHANLUN_RUN_ID") or uuid4().hex
+            run_logger = get_run_logger(service, period, run_id)
+            run_logger.info(
+                "slot_started",
+                extra={"extra": {"slot": slot_text, "reason": trigger_reason}},
+            )
+            child_env = os.environ.copy()
+            child_env["CHANLUN_RUN_ID"] = run_id
+            started = time_module.perf_counter()
+            start_error: BaseException | None = None
             try:
-                returncode = subprocess.run(command, cwd=ROOT).returncode
+                returncode = subprocess.run(command, cwd=ROOT, env=child_env).returncode
             except Exception as exc:  # noqa: BLE001 - 单次命令启动失败不应杀死调度器
                 returncode = -1
+                start_error = exc
                 log(f"slot command failed to start: {type(exc).__name__}: {exc}", label=label)
+            duration_ms = round((time_module.perf_counter() - started) * 1000, 1)
             log(f"slot finished with exit code {returncode}", label=label)
             if returncode == 0:
                 last_triggered_slot = due_slot
                 save_last_triggered_slot(state_path, due_slot)
+                run_logger.info(
+                    "slot_finished",
+                    extra={"duration_ms": duration_ms, "extra": {"slot": slot_text}},
+                )
             else:
+                if start_error is not None:
+                    run_logger.error(
+                        "slot_failed",
+                        extra={
+                            "duration_ms": duration_ms,
+                            "err": {
+                                "type": type(start_error).__name__,
+                                "message": str(start_error),
+                                "stack": "",
+                                "retryable": True,
+                            },
+                            "extra": {"slot": slot_text, "retry_seconds": retry_seconds},
+                        },
+                    )
+                else:
+                    run_logger.error(
+                        "slot_failed",
+                        extra={
+                            "duration_ms": duration_ms,
+                            "err": {
+                                "type": "SchedulerCommandError",
+                                "message": f"command exited with code {returncode}",
+                                "stack": "",
+                                "retryable": True,
+                            },
+                            "extra": {"slot": slot_text, "exit_code": returncode, "retry_seconds": retry_seconds},
+                        },
+                    )
                 log(f"slot failed; will retry in about {retry_seconds}s", label=label)
             continue
 

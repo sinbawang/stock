@@ -28,6 +28,8 @@ dependencies = [
     "browser-cookie3>=0.20.1",
     "pypdf>=5.0.0",
     "uvicorn>=0.30.0",
+    # CLS 直写日志（不走 CloudBase 日志投递），纯 Python 依赖。
+    "tencentcloud-sdk-python-cls>=3.1.0",
 ]
 
 [project.optional-dependencies]

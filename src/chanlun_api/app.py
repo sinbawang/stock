@@ -16,7 +16,7 @@ import traceback
 from typing import Any, Literal
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -43,6 +43,10 @@ from refresh_holdings_publish_to_cloudbase import (
     write_signal_history_jsonl,
 )
 from storage_layout import DATA_META_DIR, HOLDINGS_FILE, REPORTS_DIR
+
+from json_logger import bind_trace_id, log_exc, reset_trace_id, setup_logger
+
+logger = setup_logger("miniapp-api")
 
 
 Timeframe = Literal["day", "60m", "30m", "15m", "5m", "1m"]
@@ -639,6 +643,36 @@ app = FastAPI(
     version="0.1.0",
     summary="Container-friendly API for holdings analysis refresh and CloudBase publish.",
 )
+
+
+@app.middleware("http")
+async def _log_request(request: Request, call_next):
+    trace_id = uuid4().hex
+    token = bind_trace_id(trace_id)
+    started = time.perf_counter()
+    try:
+        try:
+            response = await call_next(request)
+        except Exception as exc:  # noqa: BLE001 - 记录后继续抛出，交由框架处理
+            log_exc(logger, "http_request_failed", exc, retryable=False)
+            raise
+        logger.info(
+            "http_request",
+            extra={
+                "trace_id": trace_id,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                "extra": {
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status": response.status_code,
+                },
+            },
+        )
+        return response
+    finally:
+        reset_trace_id(token)
+
+
 JOBS = _JobStore()
 EXECUTOR = ThreadPoolExecutor(max_workers=max(1, int(os.environ.get("CHANLUN_API_MAX_WORKERS", "2"))))
 
