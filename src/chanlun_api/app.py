@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from argparse import Namespace
+from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
@@ -55,7 +56,8 @@ from json_logger import (
 )
 
 logger = setup_logger("miniapp-api")
-logger.info("service started", extra={"extra": {"event": "service_started", "pid": os.getpid(), "cls": cls_status()}})
+
+API_MAX_WORKERS = max(1, int(os.environ.get("CHANLUN_API_MAX_WORKERS", "2")))
 
 
 Timeframe = Literal["day", "60m", "30m", "15m", "5m", "1m"]
@@ -739,10 +741,30 @@ def _run_job(job_id: str, kind: JobKind) -> None:
         JOBS.update(job_id, status="failed", finished_at=_now_iso(), error=traceback.format_exc())
 
 
+def _cls_log_mode(status: dict[str, Any]) -> str:
+    if status.get("handler_attached") and status.get("handler_enabled"):
+        return "direct"
+    if status.get("enabled"):
+        return "enabled"
+    return "off"
+
+
+@asynccontextmanager
+async def _service_lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    status = cls_status()
+    pid = os.getpid()
+    logger.info(
+        f"miniapp-api ready on pid {pid} (workers={API_MAX_WORKERS}, cls_log={_cls_log_mode(status)})",
+        extra={"extra": {"event": "service_started", "pid": pid, "workers": API_MAX_WORKERS, "cls": status}},
+    )
+    yield
+
+
 app = FastAPI(
     title="Chanlun Stock Service",
     version="0.1.0",
     summary="Container-friendly API for holdings analysis refresh and CloudBase publish.",
+    lifespan=_service_lifespan,
 )
 
 
@@ -781,7 +803,7 @@ async def _log_request(request: Request, call_next):
 
 
 JOBS = _JobStore()
-EXECUTOR = ThreadPoolExecutor(max_workers=max(1, int(os.environ.get("CHANLUN_API_MAX_WORKERS", "2"))))
+EXECUTOR = ThreadPoolExecutor(max_workers=API_MAX_WORKERS)
 
 
 @app.get("/healthz")

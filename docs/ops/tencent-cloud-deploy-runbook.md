@@ -1281,6 +1281,7 @@ $env:ENABLE_CLS_LOG = "false"
    Invoke-RestMethod https://<your-service-domain>/healthz
    ```
    返回里应有 `cls_log` 字段；没有该字段说明镜像还是旧版本，需要重新构建并发布。
+   容器 stdout 还应有且只有一条启动日志（`extra.event=service_started`，`msg` 形如 `miniapp-api ready on pid <pid> (workers=2, cls_log=direct|enabled|off)`），它在 uvicorn 真正拉起后打一次，可用来确认容器是否重启过、CLS 直写日志是否挂上。
 2. 看 `/healthz` 的 `cls_log`：
    - `enabled=false`：容器没有设置 `ENABLE_CLS_LOG=true`。
    - `handler_attached=false`：进程启动时没有挂载 CLSHandler（同样先确认环境变量在新版本里生效）。

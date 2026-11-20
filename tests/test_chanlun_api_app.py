@@ -1,8 +1,31 @@
 import importlib
+import os
 from types import SimpleNamespace
+
+from fastapi.testclient import TestClient
 
 module = importlib.import_module("chanlun_api.app")
 from chanlun_api.app import _normalize_technical_publish_timeframes
+
+
+def test_startup_log_reports_pid_workers_and_cls_mode(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_info(msg, **kwargs):
+        captured["msg"] = msg
+        captured["extra"] = kwargs.get("extra") or {}
+
+    monkeypatch.setattr(module.logger, "info", fake_info)
+    with TestClient(module.app):
+        pass
+
+    msg = str(captured["msg"])
+    assert "miniapp-api ready" in msg
+    assert f"pid {os.getpid()}" in msg
+    assert f"workers={module.API_MAX_WORKERS}" in msg
+    assert "cls_log=" in msg
+    assert captured["extra"]["extra"]["event"] == "service_started"
+    assert captured["extra"]["extra"]["pid"] == os.getpid()
 
 
 def test_normalize_technical_publish_timeframes_preserves_day() -> None:
