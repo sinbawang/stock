@@ -855,8 +855,10 @@ zs0 的陈旧 `sell3`**；且 cutoff 2860 起巨型段已确认消失（`giant=F
 | `data_window` / `code_fingerprint` / `run_id` | string | 复盘定位 |
 | `created_at` / `updated_at` | string | 写入时间 |
 
-集合 `signal_state`（可选派生）：`_id = ${symbol}|${timeframe}|${point}`，保存最新一版六字段，
-供将来小程序切换为「直查库」时使用。**MVP 先只写 `signal_events`**。
+集合 `signal_state`（派生投影）：`_id = ${symbol}|${timeframe}|${point}|${forming_at}`，
+一逻辑信号一行，保存最新一版六字段，供小程序确认率页读取。锚点（`signal_bi_id`）是窗口内序号，
+跨窗口重基会整体重排，故**不作为分析身份**；详见
+`docs/chanlun/signal-confirmation-rate-analysis-design.md` §2.1。
 
 ### 6.2.2 幂等与去重
 

@@ -2609,6 +2609,13 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
                         "point": key[0],
                         "signal_bi_id": key[1],
                         "kind": "forming_dropped",
+                        # 六字段快照：终态事件也要带形成时间，投影层才能按
+                        # symbol|timeframe|point|forming_at 归并到同一条信号。
+                        "forming_at": record.get("forming_at"),
+                        "forming_price": record.get("forming_price"),
+                        "price": record.get("price"),
+                        "related_zs_low": record.get("anchor_zs_low"),
+                        "related_zs_high": record.get("anchor_zs_high"),
                     }
                 )
                 timeline.append(
@@ -2784,6 +2791,14 @@ def replay_confirmed_signal_lifecycle(frames: list[dict[str, object]]) -> dict[s
                             "signal_bi_id": key[1],
                             "kind": "vanished_on_structure_advance",
                             "evidence": evidence,
+                            # 六字段快照：见 forming_dropped，保证投影归并可用。
+                            "forming_at": record.get("forming_at"),
+                            "forming_price": record.get("forming_price"),
+                            "price": price,
+                            "related_zs_low": record.get("anchor_zs_low"),
+                            "related_zs_high": record.get("anchor_zs_high"),
+                            "confirmed_at": record.get("confirmed_at"),
+                            "confirmed_price": record.get("confirmed_price"),
                         }
                     )
                     timeline.append(
@@ -2970,6 +2985,14 @@ def derive_signal_lifecycle_transitions(
             "point": entry.get("point"),
             "signal_bi_id": entry.get("signal_bi_id"),
             "superseded_evidence": entry.get("evidence"),
+            # 六字段快照：终态事件带形成时间，投影层才能归并到同一条信号。
+            "forming_at": entry.get("forming_at"),
+            "forming_price": entry.get("forming_price"),
+            "price": entry.get("price"),
+            "related_zs_low": entry.get("related_zs_low"),
+            "related_zs_high": entry.get("related_zs_high"),
+            "confirmed_at": entry.get("confirmed_at"),
+            "confirmed_price": entry.get("confirmed_price"),
         }
         for entry in lifecycle.get("superseded", [])
     ]

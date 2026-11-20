@@ -3033,6 +3033,39 @@ def test_replay_forming_dropped_when_premise_intact() -> None:
     assert [entry["kind"] for entry in result["forming_dropped"]] == ["forming_dropped"]
 
 
+def test_derive_forming_dropped_keeps_forming_at_for_projection_merge() -> None:
+    """终态事件也要带 forming_at：投影层按 symbol|timeframe|point|forming_at 归并跨锚点信号。"""
+    previous_frame = _lifecycle_frame(
+        [
+            _forming_point(
+                "buy1",
+                5,
+                9.8,
+                forming_at="2026-08-20T09:30:00",
+                forming_price=9.8,
+            )
+        ]
+    )
+    current_signals = {
+        "signal_points": [],
+        "latest_down": None,
+        "latest_confirmed_up": None,
+        "current_zs": None,
+    }
+
+    result = derive_signal_lifecycle_transitions(
+        previous_frame,
+        current_signals,
+        data_window="2026-08-21T09:30:00",
+    )
+
+    dropped = result["forming_dropped_points"]
+    assert len(dropped) == 1
+    assert dropped[0]["forming_at"] == "2026-08-20T09:30:00"
+    assert dropped[0]["forming_price"] == 9.8
+    assert dropped[0]["price"] == 9.8
+
+
 def test_replay_forming_confirmed_is_not_invalidated() -> None:
     """同 point 升 confirmed（哪怕换锚）→ 兑现，不得判 forming 失效。"""
     frame_a = _lifecycle_frame([_forming_point("buy1", 5, 9.8)])
@@ -3537,7 +3570,19 @@ def test_derive_signal_lifecycle_transitions_reports_superseded_points() -> None
     assert result["repaint_violations"] == []
     assert result["invalidated_points"] == []
     assert result["superseded_points"] == [
-        {"point": "sell2like", "signal_bi_id": 64, "superseded_evidence": "reanchored"}
+        {
+            "point": "sell2like",
+            "signal_bi_id": 64,
+            "superseded_evidence": "reanchored",
+            # 六字段快照：终态事件也要带 forming_at，投影层才能按形成时间归并。
+            "forming_at": None,
+            "forming_price": None,
+            "price": 12.0,
+            "related_zs_low": None,
+            "related_zs_high": None,
+            "confirmed_at": None,
+            "confirmed_price": None,
+        }
     ]
 
 

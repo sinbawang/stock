@@ -118,10 +118,23 @@ def test_invalidated_event_falls_back_to_confirmed_from_state() -> None:
 def test_build_event_records_emits_dropped_and_superseded_audit_events() -> None:
     payload = _payload()
     payload["summary"]["forming_dropped_points"] = [
-        {"point": "buy_2", "signal_bi_id": 31}
+        {
+            "point": "buy_2",
+            "signal_bi_id": 31,
+            "forming_at": "2026-11-13T10:00:00",
+            "forming_price": 26.5,
+            "price": 26.6,
+        }
     ]
     payload["summary"]["lifecycle_superseded_points"] = [
-        {"point": "sell_3", "signal_bi_id": 32, "superseded_evidence": "reanchored"}
+        {
+            "point": "sell_3",
+            "signal_bi_id": 32,
+            "superseded_evidence": "reanchored",
+            "forming_at": "2026-11-12T14:00:00",
+            "forming_price": 28.1,
+            "price": 28.2,
+        }
     ]
 
     records = module.build_event_records(payload, run_id="run-1")
@@ -131,9 +144,13 @@ def test_build_event_records_emits_dropped_and_superseded_audit_events() -> None
     assert dropped["from_state"] == "forming"
     assert dropped["event_at"] == "2026-11-14T15:30:00"
     assert dropped["anchor_key"] == "31"
+    # 终态事件也带 forming_at：投影层按形成时间归并跨锚点信号（design §2.1 P1）。
+    assert dropped["forming_at"] == "2026-11-13T10:00:00"
+    assert dropped["forming_price"] == 26.5
     assert superseded["from_state"] == "confirmed"
     assert superseded["event_at"] == "2026-11-14T15:30:00"
     assert superseded["anchor_key"] == "32"
+    assert superseded["forming_at"] == "2026-11-12T14:00:00"
 
 
 def test_records_clamp_confirmed_at_before_forming_at() -> None:

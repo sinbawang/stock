@@ -75,15 +75,17 @@
 一个信号的身份：
 
 ```
-signal_id = symbol | timeframe | point | anchor_key
+signal_id = symbol | timeframe | point | forming_at
 ```
 
-- `anchor_key` = `signal_bi_id`；缺失时退化为锚点 `time`。
-- 同一 `point` 换新锚点（`signal_bi_id` 变化）按**新信号**处理，不合并。
+- `forming_at` = 结构检出时刻（= `detected_at`），同一逻辑信号在整个生命周期内不变；缺失时退化到锚点 `time`，再退化到锚点 `signal_bi_id`。
+- **不再用 `signal_bi_id` 作为分析身份**：它是窗口内的笔序号（`bi.py` 中 `enumerate` 产生），`data_window` 变化（全量重抓 / 重算 / EOD 滚动窗口）时整条笔序列会重排，同一逻辑信号会以新旧两个锚点入库，在明细里表现为「同标的、同点、同形成时间」的重复行，并重复计入确认率分母。
+- 同一 `point` 换新锚点（`signal_bi_id` 变化）但 `forming_at` 相同 → **同一信号**，归并为一行；`forming_at` 不同才是新信号。
 - 同一信号的多条迁移事件（forming / confirmed / invalidated / dropped / superseded）在 `signal_state` 中合并为一行。
-- `signal_state._id` 与 `signal_events._id` 的前四段完全一致，只是去掉末尾的 `|event`。实现上直接对事件 `_id` 做一次 `lastIndexOf('|')` 截断，不要在原始字段上重新拼接，避免 sanitize 规则差异。
+- `signal_state._id = <symbol>|<timeframe>|<point>|<forming_at>`（各段按 `[^0-9A-Za-z_-]` 替换为 `-`，如 `00700|day|sell3|2026-08-05T00-00-00`）。它**不再**等于事件 `_id` 的前四段：`signal_events._id` 仍按锚点生成（事实源不动），投影层按逻辑身份归并。
+- 无快照的终态事件（只带 `point + signal_bi_id` 的旧 `dropped` / `superseded`）：投影层先按 `symbol|timeframe|point|anchor_key` 反查已有投影，命中即并入同一行，避免另起一行。新版发布链路已让 `forming_dropped_points` / `lifecycle_superseded_points` 携带 `forming_at`。
 
-> 这是对 design §6.2.1 中“可选 `signal_state`：`_id = symbol|timeframe|point`”的**有意偏离**：按 point 合并会把“同 point 换锚点重新形成”误并成一条，无法满足 spec §2.8.5 的“同 point 换新锚点 = 新信号”。
+> 这是对 design §6.2.1 中“可选 `signal_state`：`_id = symbol|timeframe|point`”的**有意偏离**：按 point 合并会把“同 point 换锚点重新形成”误并成一条，无法满足 spec §2.8.5 的“同 point 换新锚点 = 新信号”。改用 `forming_at` 后，锚点重编号不再产生新身份，只有真正的新检出（新的 `forming_at`）才会开新行。
 
 ### 2.2 状态定义
 
@@ -241,7 +243,7 @@ forming_b     = 该期尚未解决的信号数（不进柱高，进 tooltip / �
 - 六字段 2026-11-14 才落地；更早的 `tech.json` 可能没有 `forming_at` / `invalidated_at`。同一 `data_window` 内重跑 EOD 会以相同事件 `_id` 覆盖旧记录，可逐步补齐；跨窗口重基时 `signal_bi_id` 可能重排，不保证覆盖。
 - 若 P0b 未做，`forming_dropped` 不会落事件，历史 `forming` 可能偏高；P0b 落地后 `dropped` 会转为内部终态，不再计入「进行中」。
 - 确认后自然更替（`superseded`）在 P0b 前不会落事件，但仍按确认成功计；P0b 后会补 `superseded_at` 供审计。
-- **跨窗口重基的 anchor 漂移**：`signal_bi_id` 是窗口内笔编号，`data_window` 变化（全量重抓/重算）时可能整体重排。现有事件 `_id` 按 `signal_bi_id` 生成，同一逻辑信号可能以新旧两个 anchor 入库，造成重复计数。P0 沿用现有事件身份（与 design §6.2.2 一致）；P1 评估以锚点 `time` 作为分析身份，或在投影层按 `symbol|timeframe|point|time` 合并跨 anchor 事件，并回放 `lifecycle_rebased_points` 做对账。
+- **跨窗口重基的 anchor 漂移（已修，P1 落地）**：`signal_bi_id` 是窗口内笔编号，`data_window` 变化（全量重抓/重算）时可能整体重排，事件 `_id` 会以新旧两个锚点入库。`signal_state` 投影已改为按 `symbol|timeframe|point|forming_at` 归并，锚点重编号不再产生重复行；迁移存量需清空 `signal_state` 后重跑 `rebuildStates`（`prunedStates` 会报告顺带清掉的旧锚点行）。事件层仍保留锚点身份（design §6.2.2），不回溯改写历史事件。
 
 ---
 
@@ -284,7 +286,7 @@ flowchart LR
 - 可从 `signal_events` 幂等重建；
 - 分析页只读它，读接口无写权限。
 
-> design §6.2.1 已预留 `signal_state`（可选派生），本页是它的第一个正式消费者。本文把 `_id` 扩展为含 `anchor_key`，见 §2.1。
+> design §6.2.1 已预留 `signal_state`（可选派生），本页是它的第一个正式消费者。本文把 `_id` 扩展为含 `forming_at`（逻辑身份，跨锚点重基归并），见 §2.1。
 
 ### 3.3 目标链路
 
@@ -321,12 +323,12 @@ flowchart LR
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `_id` | string | `symbol / timeframe / point / anchor_key`（与事件 `_id` 前四段一致） |
+| `_id` | string | `<symbol>|<timeframe>|<point>|<forming_at>`（逻辑身份；各段非法字符替换为 `-`） |
 | `symbol` / `name` / `market` | string | 标的信息；`name` / `market` 取最新非空值 |
 | `timeframe` | string | `day` / `30m` / `5m` / `1m` |
 | `point` / `label` | string | 引擎点值（`buy1` / `buy2like` / `sell3` …）与中文标签 |
 | `side` | string | `buy` / `sell`（由 point 前缀派生） |
-| `anchor_key` | string | `signal_bi_id`；缺失时退化为锚点 `time` |
+| `anchor_key` | string | `signal_bi_id`；跨窗口重基归并后保留**最新一版**锚点（审计用，不参与身份） |
 | `state` | string | `forming` / `confirmed` / `invalidated` / `dropped`（内部） |
 | `outcome` | string | `forming` / `confirmed` / `invalidated`（分析用；`dropped` 为 null） |
 | `ever_confirmed` | boolean | 是否曾进入 confirmed（含确认后失效） |
@@ -447,11 +449,12 @@ function parseBeijingTs(text) {
 新增 `rebuildStates`（token 保护）：
 
 - 按 `signal_events._id` 升序分页读取（`batchSize` 默认 100，最大 200）；
-- 按 `signal_id` 分组合并；
+- 按逻辑 `signal_id`（`symbol|timeframe|point|forming_at`）分组合并，跨锚点事件归并为一行；
 - 幂等覆盖 `signal_state`；
-- 返回 `{ processedEvents, touchedSignals, nextCursor, done }`；
+- 顺带删除按旧「锚点」身份写下的投影行（`prunedStates` 报告条数）；
+- 返回 `{ processedEvents, touchedSignals, prunedStates, nextCursor, done }`；
 - 调用方重复调用直到 `done=true`；
-- 不删除集合；如需“从零重建”，先控制台清空 `signal_state` 再重跑。
+- 迁移（本次身份口径变更）：先控制台清空 `signal_state`，再重跑 `rebuildStates`，避免旧锚点行与逻辑身份行并存。
 - **并发安全**：定时导入与 `rebuildStates` 可能同时写同一状态文档；投影采用“读-合并-覆盖”，极端情况下可能丢一次更新。事件是事实源，重跑 `rebuildStates` 即可收敛。建议低峰期执行重建，完成后隔一个定时周期再跑一遍校验。
 
 #### 自检
@@ -1125,7 +1128,7 @@ function listSignals(filters, options) {} // -> { items, nextCursor }
 
 ### 8.0 实现核对（2026-11-20）
 
-- `westock`: `node --test test/*.test.js` → **74 pass / 0 fail**，覆盖状态投影、种子口径、趋势/MA、游标、页面 presenter、云函数服务封装，以及用内存版 CloudBase 假实现跑通真实 `index.js` 的 upsert / Mode A import → analyze（含筛选）→ listSignals 游标分页 → rebuildStates 游标续跑 → diagnose 全链路；同一链路还验证了 P0b 的 `superseded` 仍计确认、`dropped` 不进入分母。
+- `westock`: `node --test test/*.test.js` → **77 pass / 0 fail**，覆盖状态投影、种子口径、趋势/MA、游标、页面 presenter、云函数服务封装，以及用内存版 CloudBase 假实现跑通真实 `index.js` 的 upsert / Mode A import → analyze（含筛选）→ listSignals 游标分页 → rebuildStates 游标续跑 → diagnose 全链路；同一链路还验证了 P0b 的 `superseded` 仍计确认、`dropped` 不进入分母，以及窗口重基后的跨锚点归并（同一逻辑信号只留一行、旧锚点投影被清理）。
 - `stock`: `python -m pytest tests/test_signal_history_cloudbase.py -q` → **6 passed**；另跑 signal/publish/tech 相关子集 → **297 passed / 958 deselected**（跳过需要未安装 `httpx` 测试客户端的 `test_chanlun_api_app.py`）。
 - 静态校验：全部改动 JS `node --check` 通过；WXML 标签栈平衡；`app.json` / 页面 JSON / 云函数 `config.json` 解析通过；`git diff --check` 无空白错误。
 - 待人工验证（本轮无法在当前环境执行）：CloudBase 集合/索引创建、云函数部署与真实 `rebuildStates`、微信开发者工具/真机上的滚动、Canvas 触摸与返回栈行为。
@@ -1219,8 +1222,10 @@ function listSignals(filters, options) {} // -> { items, nextCursor }
 1. 按 README 创建 `signal_state` 与索引，部署 `signalHistory`。
 2. `diagnose` 返回 `state_collection_ok=true`、`state_count=0`。
 3. 用 body token 调 `rebuildStates` 直到 `done=true`；再次全量跑一遍，计数不变（幂等）。
-4. 用 §12.2 种子数据在测试环境写入事件，调 `analyze` / `listSignals` 验证。
-5. 在开发者工具中验证：
+4. **身份口径升级（按锚点 → 按 `forming_at`）**：先清空 `signal_state`（云函数 `resetStates` 循环到 `done=true`，或控制台手动清空），再重跑 `rebuildStates`；
+   完成后 `listSignals` 里不应再出现「同标的 / 同点 / 同形成时间」的重复行，`prunedStates` 报告清掉的旧锚点行数。
+5. 用 §12.2 种子数据在测试环境写入事件，调 `analyze` / `listSignals` 验证。
+6. 在开发者工具中验证：
    - 入口跳转；
    - 筛选多选与方向收敛；
    - 趋势点击、只看这一期；
@@ -1266,9 +1271,10 @@ function listSignals(filters, options) {} // -> { items, nextCursor }
 3. 部署 `signalHistory`（含新增 `lib/`）。
 4. 执行 `diagnose`，确认 `state_collection_ok=true`、`state_count=0`。
 5. 用 body token 调 `rebuildStates`，直到 `done=true`；再跑一遍确认计数不膨胀。
-6. 用种子数据（§12.2）验证 `analyze` / `listSignals`。
-7. 发布小程序（新页面 + 买卖点入口）。
-8. 观察定时导入日志中的 `stateFailed`；若有失败，重跑 `rebuildStates`。
+6. 已有环境升级：清空 `signal_state`（`resetStates` 循环到 `done=true`，或控制台清空）后重跑 `rebuildStates`，让旧锚点行收敛到逻辑身份行。
+7. 用种子数据（§12.2）验证 `analyze` / `listSignals`。
+8. 发布小程序（新页面 + 买卖点入口）。
+9. 观察定时导入日志中的 `stateFailed`；若有失败，重跑 `rebuildStates`。
 
 ---
 
@@ -1278,7 +1284,7 @@ function listSignals(filters, options) {} // -> { items, nextCursor }
 | --- | --- | --- |
 | 旧事件缺 `forming_at` | 样本少、确认率偏差 | 页面计数提示；同窗口重跑 EOD 覆盖同 `_id`；`rebuildStates` 重建 |
 | 自然消失的 forming 未落 `dropped` | 进行中虚高 | P0b 落 `dropped` 事件；页面标「长期未决」 |
-| `data_window` 重基导致 `signal_bi_id` 重排 | 同一逻辑信号重复计数 | P0 沿用事件身份并记录 `data_window`；P1 以锚点 `time` 合并 / 对账 `lifecycle_rebased_points` |
+| `data_window` 重基导致 `signal_bi_id` 重排 | 同一逻辑信号重复计数 / 明细重复行 | 投影按 `symbol|timeframe|point|forming_at` 归并（§2.1）；迁移清空 `signal_state` 后重跑 `rebuildStates`，`prunedStates` 报告清掉的旧锚点行 |
 | `confirmed → invalidated` 口径分歧 | 确认率与用户预期不一致 | §0 决策 1/2 明示；提供 `everConfirmedRate` 副指标 |
 | CloudBase 聚合结果上限 | 趋势/汇总失败 | 桶数 ≤180；分组结果小；失败返回 `trendError` 不拖垮 summary |
 | 中位数 `skip` 性能 | 大样本慢 | 当前年约 2 万信号；>1 万降级近似并标记 `medianApprox` |
