@@ -29,6 +29,7 @@
 ### 买卖点 / 实时化
 
 - [signal-realtime-lifecycle-design.md](signal-realtime-lifecycle-design.md)：买卖点信号生命周期状态机（forming/confirmed/invalidated）、实时预备态与多级别双向联立（草案，对应任务 RS0-RS4）。
+- [signal-confirmation-rate-analysis-design.md](signal-confirmation-rate-analysis-design.md)：买卖点确认率分析页（spec + design，已实现待复核）：口径、`signal_state` 投影、`analyze` / `listSignals` 接口、趋势图与游标分页明细。
 
 ## 关联
 

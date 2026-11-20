@@ -1,11 +1,12 @@
-"""把买卖点信号迁移历史（forming / confirmed / invalidated）同步到 CloudBase 文档数据库。
+"""把买卖点信号迁移历史（forming / confirmed / invalidated / dropped / superseded）同步到 CloudBase 文档数据库。
 
 口径见 `docs/chanlun/signal-realtime-lifecycle-design.md` §6.2 与
 `docs/chanlun/buy-sell-multi-level-spec.md` §2.8.4。
 
 输入：`data/reports/<symbol>/<timeframe>/tech.json`（由 `batch_prepare_chanlun_reports.py` 产出）。
 输出：
-1. `build/miniapp-publish/signal-history.jsonl`（始终写，便于审计 / 断点重放）；
+1. `build/miniapp-publish/signal-history.jsonl`（始终写，便于审计 / 断点重放；
+   含 `dropped` / `superseded` 审计事件，供 `signal_state` 区分自然终止与自然更替）；
 2. 可选：POST 到云函数 `signalHistory` 的 HTTP 访问服务（`SIGNAL_HISTORY_URL`）。
 
 幂等：每条事件 `_id = <symbol>|<timeframe>|<point>|<anchor_key>|<event>`（非法字符替换为 `-`，
@@ -152,7 +153,7 @@ def build_event_records(
     *,
     run_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """从单份 tech.json 载荷构造事件列表（forming / confirmed / invalidated）。
+    """从单份 tech.json 载荷构造事件列表（forming / confirmed / invalidated / dropped / superseded）。
 
     纯函数，供单测直接调用。`forming_at` 缺失时回退 `detected_at`（两者同口径，spec §2.8.4）。
     """
@@ -209,6 +210,40 @@ def build_event_records(
                 from_state=safe_text(point.get("from_state")) or "confirmed",
                 event_at=point.get("invalidated_at"),
                 event_price=point.get("invalidated_price"),
+                run_id=effective_run_id,
+            )
+        )
+
+    # P0b 审计事件：forming 自然终止 / confirmed 自然更替。
+    # 这两类不是失效，分析层不会把它们计入确认率分母；落库是为了让
+    # 「进行中」不再被自然消失的 forming 永久抬高，并保留更替证据。
+    # 事件时间取本轮 generated_at（不是行情 K 线时间），仅作审计定位。
+    run_event_at = safe_text(payload.get("generated_at")) or None
+    for point in summary.get("forming_dropped_points") or []:
+        if not isinstance(point, dict):
+            continue
+        _append(
+            _base_record(
+                payload,
+                point,
+                event="dropped",
+                from_state="forming",
+                event_at=run_event_at,
+                event_price=None,
+                run_id=effective_run_id,
+            )
+        )
+    for point in summary.get("lifecycle_superseded_points") or []:
+        if not isinstance(point, dict):
+            continue
+        _append(
+            _base_record(
+                payload,
+                point,
+                event="superseded",
+                from_state="confirmed",
+                event_at=run_event_at,
+                event_price=None,
                 run_id=effective_run_id,
             )
         )

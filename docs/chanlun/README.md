@@ -32,6 +32,7 @@
 - 线段：[segment-implementation-guide](segment-implementation-guide.md)、[segment-doc-map](segment-doc-map.md)、[segment-zhongshu-boundary](segment-zhongshu-boundary.md)、[segment-to-zhongshu-mode-protocol-draft](segment-to-zhongshu-mode-protocol-draft.md)
 - 中枢：[zhongshu-state-machine](zhongshu-state-machine.md)、[zhongshu-input-qualification](zhongshu-input-qualification.md)、[zhongshu-recompute-order](zhongshu-recompute-order.md)
 - 走势类型/背驰：[trend-type-decomposition](trend-type-decomposition.md)、[trend-ambiguity-combination-law](trend-ambiguity-combination-law.md)
+- 买卖点/实时化：[signal-realtime-lifecycle-design](signal-realtime-lifecycle-design.md)、[signal-confirmation-rate-analysis-design](signal-confirmation-rate-analysis-design.md)（已实现，待复核）
 
 ## 4. 任务层 tasks（总入口：[chanlun-spec-tasks](chanlun-spec-tasks.md)）
 

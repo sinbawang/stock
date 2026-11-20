@@ -115,6 +115,27 @@ def test_invalidated_event_falls_back_to_confirmed_from_state() -> None:
     assert invalidated["from_state"] == "confirmed"
 
 
+def test_build_event_records_emits_dropped_and_superseded_audit_events() -> None:
+    payload = _payload()
+    payload["summary"]["forming_dropped_points"] = [
+        {"point": "buy_2", "signal_bi_id": 31}
+    ]
+    payload["summary"]["lifecycle_superseded_points"] = [
+        {"point": "sell_3", "signal_bi_id": 32, "superseded_evidence": "reanchored"}
+    ]
+
+    records = module.build_event_records(payload, run_id="run-1")
+    dropped = next(record for record in records if record["event"] == "dropped")
+    superseded = next(record for record in records if record["event"] == "superseded")
+
+    assert dropped["from_state"] == "forming"
+    assert dropped["event_at"] == "2026-11-14T15:30:00"
+    assert dropped["anchor_key"] == "31"
+    assert superseded["from_state"] == "confirmed"
+    assert superseded["event_at"] == "2026-11-14T15:30:00"
+    assert superseded["anchor_key"] == "32"
+
+
 def test_records_clamp_confirmed_at_before_forming_at() -> None:
     """spec §2.8.4 不变量：确认不得早于检出（旧 tech.json 倒挂时夹紧 + 价格同源）。"""
     payload = _payload()
