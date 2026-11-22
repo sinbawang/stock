@@ -396,6 +396,13 @@ def test_registry_can_resolve_industrial_submodel_by_symbol():
     assert submodel.submodel_id == "industrial_automation_v1"
 
 
+def test_registry_can_resolve_semiconductor_submodel_by_symbol():
+    submodel = get_submodel_for_symbol("600584")
+
+    assert submodel is not None
+    assert submodel.submodel_id == "semiconductor_hardtech_v1"
+
+
 def test_registry_can_resolve_game_submodel_by_symbol():
     submodel = get_submodel_for_symbol("002555")
 
