@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
+from zoneinfo import ZoneInfo
 
 from chanlun.analysis_contract import SIGNAL_LIFECYCLE_STATE_LABELS, SIGNAL_POINT_LABELS
 
@@ -15,6 +16,10 @@ from .feishu import send_feishu_message
 
 DIRECTION_EMOJI = {"buy": "🟢", "sell": "🔴"}
 DEFAULT_MAX_STATE_KEYS = 3000
+# 新鲜度口径默认时区：买卖点事件时间戳为交易所本地时间（A 股 / 港股均 +08）。
+DEFAULT_SIGNAL_TIMEZONE = "Asia/Shanghai"
+# 入口层（CLI / 调度器）默认的新鲜度窗口：0 = 仅当前交易日。库层默认 None（不过滤）。
+DEFAULT_FRESHNESS_MAX_AGE_DAYS = 0
 # 飞书卡片只保留标题与结论/理由/建议，结构说明等长尾内容留在 tech.json/advice.txt 里。
 MARKET_ADVICE_KEEP_PREFIXES = ("结论：", "理由：", "建议：", "数据时间：")
 
@@ -250,6 +255,74 @@ def event_key(event: SignalEvent) -> str:
     )
 
 
+def _today_in_timezone(timezone: str = DEFAULT_SIGNAL_TIMEZONE) -> date:
+    try:
+        return datetime.now(ZoneInfo(timezone)).date()
+    except Exception:  # noqa: BLE001 - 时区库异常时退回本地日期，不阻断推送
+        return datetime.now().date()
+
+
+def event_freshness_date(event: SignalEvent) -> Optional[date]:
+    """取用于新鲜度判定的事件日期（Asia/Shanghai 本地）。
+
+    预备态按 ``forming_at``、确认态按 ``confirmed_at``；缺失时回退到锚点 ``time``
+    （用户口径 fallback_anchor）。连锚点时间也无法解析时返回 ``None``，调用方不拦截。
+    """
+
+    if event.lifecycle == "forming":
+        raw = event.forming_at or event.time
+    else:
+        raw = event.confirmed_at or event.time
+    text = str(raw or "").strip()
+    if len(text) < 10:
+        return None
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        return None
+
+
+def is_event_fresh(
+    event: SignalEvent,
+    *,
+    reference_date: date,
+    max_age_days: int = DEFAULT_FRESHNESS_MAX_AGE_DAYS,
+) -> bool:
+    """事件是否落在新鲜度窗口内：事件日期 ≥ ``reference_date - max_age_days``。
+
+    ``max_age_days == 0`` 表示仅当前交易日。无法判定日期（缺时间戳）时放行，避免误杀。
+    """
+
+    event_date = event_freshness_date(event)
+    if event_date is None:
+        return True
+    return event_date >= reference_date - timedelta(days=max(0, max_age_days))
+
+
+def filter_fresh_events(
+    events: Iterable[SignalEvent],
+    *,
+    max_age_days: Optional[int] = DEFAULT_FRESHNESS_MAX_AGE_DAYS,
+    reference_date: Optional[date] = None,
+    timezone: str = DEFAULT_SIGNAL_TIMEZONE,
+) -> list[SignalEvent]:
+    """按新鲜度窗口过滤事件。``max_age_days is None`` 时不过滤（原样返回）。
+
+    预备态按 ``forming_at``、确认态按 ``confirmed_at`` 判定，正好对应
+    「预备信号 forming_at 不是今天 / 确认信号 confirmed_at 不是今天即过时」。
+    """
+
+    event_list = list(events)
+    if max_age_days is None:
+        return event_list
+    reference = reference_date or _today_in_timezone(timezone)
+    return [
+        event
+        for event in event_list
+        if is_event_fresh(event, reference_date=reference, max_age_days=max_age_days)
+    ]
+
+
 def load_state(state_path: Path | str) -> dict[str, Any]:
     path = Path(state_path)
     if not path.exists():
@@ -368,12 +441,17 @@ def notify_from_reports(
     market_advice: Optional[str] = None,
     dry_run: bool = False,
     seed_only: bool = False,
+    freshness_max_age_days: Optional[int] = None,
+    reference_date: Optional[date] = None,
+    timezone: str = DEFAULT_SIGNAL_TIMEZONE,
     **send_kwargs: Any,
 ) -> list[SignalEvent]:
     """扫描报告目录收集买卖点并推送新信号的一站式封装。
 
     默认附带 ``reports_dir/HSTECH/1m/tech.json`` 的恒生科技指数 1M 技术面建议；
     显式传入 ``market_advice`` 时以传入值为准。
+
+    ``freshness_max_age_days`` 控制新鲜度窗口（``0`` = 仅当前交易日，``None`` = 不过滤）。
     """
 
     events = collect_signal_events_from_reports(
@@ -391,6 +469,9 @@ def notify_from_reports(
         market_advice=market_advice,
         dry_run=dry_run,
         seed_only=seed_only,
+        freshness_max_age_days=freshness_max_age_days,
+        reference_date=reference_date,
+        timezone=timezone,
         **send_kwargs,
     )
 
@@ -404,6 +485,9 @@ def notify_new_signals(
     market_advice: Optional[str] = None,
     dry_run: bool = False,
     seed_only: bool = False,
+    freshness_max_age_days: Optional[int] = None,
+    reference_date: Optional[date] = None,
+    timezone: str = DEFAULT_SIGNAL_TIMEZONE,
     max_state_keys: int = DEFAULT_MAX_STATE_KEYS,
     **send_kwargs: Any,
 ) -> list[SignalEvent]:
@@ -411,7 +495,17 @@ def notify_new_signals(
 
     :param dry_run: 只返回将要推送的新事件，不发送、不改状态。
     :param seed_only: 只把当前信号标记为「已通知」用于建立基线，不实际推送（首次运行防刷屏）。
+    :param freshness_max_age_days: 新鲜度窗口（天）。``0`` = 仅当前交易日；``None`` = 不过滤。
+        预备态按 ``forming_at``、确认态按 ``confirmed_at`` 判定，过滤掉前几日形成/确认、
+        至今仍挂在 tech.json 里的存量信号（尤其避免早盘首 run 刷屏过时信号）。
     """
+
+    events = filter_fresh_events(
+        events,
+        max_age_days=freshness_max_age_days,
+        reference_date=reference_date,
+        timezone=timezone,
+    )
 
     state = load_state(state_path)
     sent_keys: list[str] = list(state.get("sent_keys") or [])

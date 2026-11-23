@@ -19,13 +19,13 @@ import batch_generate_capital_flow_reports as capital_batch
 import generate_a_share_combined_overview as combined_overview
 from notify.feishu import FeishuConfigError
 from notify.signal_notifier import notify_from_reports
-from storage_layout import CAPITAL_FLOW_CACHE_DIR, REPORTS_DIR, REPORTS_META_DIR, holdings_file
+from storage_layout import CAPITAL_FLOW_CACHE_DIR, REPORTS_DIR, REPORTS_META_DIR, holdings_file, resolve_notify_state_file
 
 
 DEFAULT_HOLDINGS_FILE = holdings_file()
 DEFAULT_META_DIR = REPORTS_META_DIR
 DEFAULT_CACHE_DIR = CAPITAL_FLOW_CACHE_DIR
-DEFAULT_NOTIFY_STATE_FILE = REPORTS_META_DIR / "notify_state.json"
+DEFAULT_NOTIFY_STATE_FILE = resolve_notify_state_file()
 
 
 def maybe_notify_signals(args: argparse.Namespace) -> None:

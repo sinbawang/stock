@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -10,8 +11,11 @@ from notify.signal_notifier import (
     SignalEvent,
     build_signal_card,
     collect_signal_events_from_reports,
+    event_freshness_date,
     event_key,
     extract_signal_events,
+    filter_fresh_events,
+    is_event_fresh,
     load_market_index_advice,
     notify_from_reports,
     notify_new_signals,
@@ -377,6 +381,96 @@ def test_extract_signal_events_clamps_inverted_confirmed_at() -> None:
     assert event.confirmed_price == 33.7
     content = build_signal_card([event])["card"]["elements"][0]["text"]["content"]
     assert "检出 33.7 @ 2026-09-02 13:30:00 → 确认 33.7 @ 2026-09-02 13:30:00" in content
+
+
+def _fresh_event(
+    *,
+    point: str = "buy1",
+    lifecycle: str = "confirmed",
+    time: str = "",
+    forming_at: str = "",
+    confirmed_at: str = "",
+) -> SignalEvent:
+    direction = "buy" if point.startswith("buy") else "sell"
+    return SignalEvent(
+        symbol="000591",
+        name="太阳能",
+        timeframe="30m",
+        point=point,
+        point_label=point,
+        direction=direction,
+        lifecycle=lifecycle,
+        lifecycle_label="确认" if lifecycle == "confirmed" else "预备",
+        time=time,
+        price=4.2,
+        forming_at=forming_at,
+        confirmed_at=confirmed_at,
+    )
+
+
+def test_event_freshness_date_uses_lifecycle_timestamp() -> None:
+    confirmed = _fresh_event(lifecycle="confirmed", confirmed_at="2026-11-23T10:05:00", forming_at="2026-11-20T14:00:00")
+    forming = _fresh_event(lifecycle="forming", forming_at="2026-11-23T09:35:00")
+    # 确认态按 confirmed_at、预备态按 forming_at 判定新鲜度
+    assert event_freshness_date(confirmed) == date(2026, 11, 23)
+    assert event_freshness_date(forming) == date(2026, 11, 23)
+
+
+def test_event_freshness_date_falls_back_to_anchor_time() -> None:
+    # 生命周期时间戳缺失时回退到锚点 time（用户口径 fallback_anchor）
+    confirmed = _fresh_event(lifecycle="confirmed", confirmed_at="", time="2026-11-23T14:00:00")
+    assert event_freshness_date(confirmed) == date(2026, 11, 23)
+    # 连锚点时间也缺失 → 无法判定，返回 None（调用方不拦截）
+    assert event_freshness_date(_fresh_event(confirmed_at="", time="")) is None
+
+
+def test_is_event_fresh_current_trading_day_only() -> None:
+    today = date(2026, 11, 23)
+    fresh = _fresh_event(confirmed_at="2026-11-23T10:00:00")
+    stale = _fresh_event(confirmed_at="2026-11-20T10:00:00")
+    assert is_event_fresh(fresh, reference_date=today, max_age_days=0) is True
+    assert is_event_fresh(stale, reference_date=today, max_age_days=0) is False
+    # 放宽到 3 天则周五(11-20)的信号在周一(11-23)仍算新鲜
+    assert is_event_fresh(stale, reference_date=today, max_age_days=3) is True
+
+
+def test_filter_fresh_events_disabled_when_max_age_none() -> None:
+    today = date(2026, 11, 23)
+    events = [
+        _fresh_event(point="buy1", confirmed_at="2026-11-23T10:00:00"),
+        _fresh_event(point="buy2", confirmed_at="2026-08-06T10:00:00"),
+    ]
+    # None = 不过滤
+    assert filter_fresh_events(events, max_age_days=None, reference_date=today) == events
+    # 0 = 仅当日
+    kept = filter_fresh_events(events, max_age_days=0, reference_date=today)
+    assert [event.point for event in kept] == ["buy1"]
+
+
+def test_notify_new_signals_drops_stale_before_dedup(tmp_path: Path) -> None:
+    """早盘首 run：存量过时信号被新鲜度过滤拦下，不推送也不污染去重基线。"""
+    state = tmp_path / "state.json"
+    sent: list = []
+    today = date(2026, 11, 23)
+    events = [
+        _fresh_event(point="buy1", confirmed_at="2026-11-23T10:05:00"),
+        _fresh_event(point="buy2", confirmed_at="2026-11-18T14:30:00"),
+        _fresh_event(point="sell3", lifecycle="forming", forming_at="2026-11-19T10:31:00"),
+    ]
+
+    new = notify_new_signals(
+        events,
+        state_path=state,
+        sender=lambda payload, **kwargs: sent.append(payload),
+        freshness_max_age_days=0,
+        reference_date=today,
+    )
+
+    assert [event.point for event in new] == ["buy1"]
+    assert len(sent) == 1
+    # 仅当日信号进入基线；过时信号未记录，后续也不会因基线存在而被误判
+    persisted = json.loads(state.read_text(encoding="utf-8"))
+    assert len(persisted["sent_keys"]) == 1
 
 
 def test_sign_feishu_request_is_deterministic() -> None:

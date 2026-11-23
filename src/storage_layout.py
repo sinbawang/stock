@@ -56,6 +56,28 @@ def ensure_reports_meta_dir() -> Path:
     return REPORTS_META_DIR
 
 
+def resolve_notify_state_file() -> Path:
+    """买卖点通知去重状态文件路径（跨重启持久化优先）。
+
+    ``data/reports/_meta`` 是容器内临时目录，隔夜缩容/重启后会丢失，导致早盘首 run
+    把存量信号重新推一遍。若设置了 ``STOCK_LOCAL_STORE_ROOT``（随 CloudBase 备份 / 恢复
+    的 K 线缓存卷根目录），就把状态落到该卷下的 ``notify/`` 子目录，让去重基线跨重启存活。
+    可用 ``NOTIFY_STATE_FILE`` 显式覆盖。
+    """
+
+    override = os.getenv("NOTIFY_STATE_FILE", "").strip()
+    if override:
+        path = Path(override).expanduser()
+        return path if path.is_absolute() else ROOT / path
+    root = os.getenv("STOCK_LOCAL_STORE_ROOT", "").strip()
+    if root:
+        base = Path(root).expanduser()
+        if not base.is_absolute():
+            base = ROOT / base
+        return base / "notify" / "notify_state.json"
+    return REPORTS_META_DIR / "notify_state.json"
+
+
 def normalize_hk_symbol(symbol: str) -> str:
     text = symbol.strip().upper()
     if not text:

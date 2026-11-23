@@ -23,14 +23,15 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from notify.signal_notifier import (  # noqa: E402
+    DEFAULT_FRESHNESS_MAX_AGE_DAYS,
     collect_signal_events_from_reports,
     load_market_index_advice,
     notify_new_signals,
 )
-from storage_layout import REPORTS_DIR, REPORTS_META_DIR  # noqa: E402
+from storage_layout import REPORTS_DIR, resolve_notify_state_file  # noqa: E402
 
 
-DEFAULT_STATE_FILE = REPORTS_META_DIR / "notify_state.json"
+DEFAULT_STATE_FILE = resolve_notify_state_file()
 
 
 def parse_args() -> argparse.Namespace:
@@ -42,6 +43,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-forming", action="store_true", help="只推确认买卖点，不推预备/迹象")
     parser.add_argument("--dry-run", action="store_true", help="只打印将要推送的新信号，不发送、不改状态")
     parser.add_argument("--seed-only", action="store_true", help="只把当前信号标记为已通知以建立基线，不实际推送")
+    parser.add_argument(
+        "--max-age-days",
+        type=int,
+        default=DEFAULT_FRESHNESS_MAX_AGE_DAYS,
+        help="新鲜度窗口（天）：0=仅当前交易日（默认），N=当日及前 N 个自然日；预备按 forming_at、确认按 confirmed_at 判定",
+    )
+    parser.add_argument("--no-freshness", action="store_true", help="关闭新鲜度过滤，推送全部仍在生效的买卖点（含存量过时信号）")
     return parser.parse_args()
 
 
@@ -58,6 +66,7 @@ def run(args: argparse.Namespace) -> list:
         market_advice=load_market_index_advice(args.reports_dir),
         dry_run=args.dry_run,
         seed_only=args.seed_only,
+        freshness_max_age_days=None if args.no_freshness else args.max_age_days,
     )
     return new_events
 

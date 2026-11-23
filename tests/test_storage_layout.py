@@ -68,6 +68,26 @@ def test_kline_cache_dir_honors_local_store_root_env(monkeypatch) -> None:
     assert reloaded.KLINE_CACHE_DIR == override_dir
 
 
+def test_resolve_notify_state_file_prefers_persistent_store_root(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("NOTIFY_STATE_FILE", raising=False)
+    monkeypatch.setenv("STOCK_LOCAL_STORE_ROOT", str(tmp_path))
+    # 设了持久化卷根目录 → 状态文件落到该卷下 notify/，跨重启存活
+    assert storage_layout.resolve_notify_state_file() == tmp_path / "notify" / "notify_state.json"
+
+
+def test_resolve_notify_state_file_honors_explicit_override(tmp_path, monkeypatch) -> None:
+    override = tmp_path / "custom" / "notify_state.json"
+    monkeypatch.setenv("NOTIFY_STATE_FILE", str(override))
+    monkeypatch.setenv("STOCK_LOCAL_STORE_ROOT", str(tmp_path / "ignored"))
+    assert storage_layout.resolve_notify_state_file() == override
+
+
+def test_resolve_notify_state_file_falls_back_to_reports_meta(monkeypatch) -> None:
+    monkeypatch.delenv("NOTIFY_STATE_FILE", raising=False)
+    monkeypatch.delenv("STOCK_LOCAL_STORE_ROOT", raising=False)
+    assert storage_layout.resolve_notify_state_file() == storage_layout.REPORTS_META_DIR / "notify_state.json"
+
+
 def test_cn_build_paths_routes_analysis_outputs_under_analyze_dir() -> None:
     paths = cn_module.build_paths("601328", "交通银行", _bars())
 

@@ -19,12 +19,12 @@ if str(SCRIPTS) not in sys.path:
 
 from chanlun_api.app import TechnicalRefreshRequest, _run_technical_refresh
 from notify.feishu import FeishuConfigError
-from notify.signal_notifier import notify_from_reports
-from storage_layout import REPORTS_DIR, REPORTS_META_DIR
+from notify.signal_notifier import DEFAULT_FRESHNESS_MAX_AGE_DAYS, notify_from_reports
+from storage_layout import REPORTS_DIR, resolve_notify_state_file
 
 from json_logger import get_run_logger, log_exc
 
-DEFAULT_NOTIFY_STATE_FILE = REPORTS_META_DIR / "notify_state.json"
+DEFAULT_NOTIFY_STATE_FILE = resolve_notify_state_file()
 
 
 def resolve_period(args: argparse.Namespace) -> str:
@@ -63,6 +63,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--notify-no-forming", action=argparse.BooleanOptionalAction, default=False, help="只推确认买卖点，不推预备/迹象")
     parser.add_argument("--notify-dry-run", action=argparse.BooleanOptionalAction, default=False, help="只预览将推送的买卖点，不发送、不改状态")
     parser.add_argument("--notify-seed-only", action=argparse.BooleanOptionalAction, default=False, help="只把当前买卖点记为基线，不实际推送")
+    parser.add_argument(
+        "--notify-max-age-days",
+        type=int,
+        default=DEFAULT_FRESHNESS_MAX_AGE_DAYS,
+        help="买卖点新鲜度窗口（天）：0=仅当前交易日（默认），N=当日及前 N 个自然日；预备按 forming_at、确认按 confirmed_at 判定",
+    )
+    parser.add_argument(
+        "--notify-no-freshness",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="关闭新鲜度过滤，推送全部仍在生效的买卖点（含存量过时信号）",
+    )
     return parser.parse_args()
 
 
@@ -103,6 +115,7 @@ def maybe_notify_signals(args: argparse.Namespace) -> None:
     reports_dir = Path(args.reports_root) if args.reports_root else REPORTS_DIR
     state_file = Path(args.notify_state_file) if args.notify_state_file else DEFAULT_NOTIFY_STATE_FILE
     timeframes = args.notify_timeframes or args.tech_timeframes
+    freshness_max_age_days = None if args.notify_no_freshness else args.notify_max_age_days
     try:
         new_events = notify_from_reports(
             reports_dir,
@@ -111,6 +124,7 @@ def maybe_notify_signals(args: argparse.Namespace) -> None:
             include_forming=not args.notify_no_forming,
             dry_run=args.notify_dry_run,
             seed_only=args.notify_seed_only,
+            freshness_max_age_days=freshness_max_age_days,
         )
     except FeishuConfigError as error:
         print(f"scheduled_technical_refresh_notify_skip {error}", flush=True)
@@ -119,6 +133,7 @@ def maybe_notify_signals(args: argparse.Namespace) -> None:
         "new": len(new_events),
         "dry_run": args.notify_dry_run,
         "seed_only": args.notify_seed_only,
+        "max_age_days": freshness_max_age_days,
         "timeframes": list(timeframes) if timeframes else None,
     }
     print("scheduled_technical_refresh_notify", json.dumps(summary, ensure_ascii=False), flush=True)
